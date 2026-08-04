@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudVault | Staging Room Access Terminal</title>
+    <link rel="icon" type="image/png" href="logo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #030712;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.15) 0%, transparent 70%),
+                radial-gradient(circle at 50% 100%, rgba(16, 185, 129, 0.08) 0%, transparent 60%);
+            color: #f9fafb;
+        }
+        .keypad-btn {
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .keypad-btn:active {
+            transform: scale(0.92);
+            background-color: rgba(59, 130, 246, 0.3);
+        }
+        .pin-dot {
+            transition: all 0.2s ease;
+        }
+        .pin-dot.filled {
+            background-color: #3b82f6;
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.8);
+            border-color: #60a5fa;
+        }
+        @keyframes pulse-success {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.9; }
+        }
+        .pulse-unlock {
+            animation: pulse-success 1.5s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-4 sm:p-8 selection:bg-blue-600 selection:text-white">
+
+    <!-- Top Header & Facility Indicator -->
+    <header class="max-w-md w-full mx-auto flex justify-between items-center bg-gray-900/80 border border-gray-800 rounded-2xl p-4 backdrop-blur-md shadow-2xl">
+        <div class="flex items-center space-x-3">
+            <img src="logo.png" alt="CloudVault Logo" class="w-7 h-7 rounded">
+            <div>
+                <h1 class="text-sm font-extrabold tracking-tight text-white flex items-center gap-1.5">
+                    CloudVault <span class="text-[10px] font-mono font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full">STAGING KIOSK</span>
+                </h1>
+                <p class="text-[10px] text-gray-400 font-mono">Door Keypad Terminal v2.4</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+            <span class="text-xs font-bold font-mono text-emerald-400">ONLINE</span>
+        </div>
+    </header>
+
+    <!-- Main Terminal Display & Keypad -->
+    <main class="max-w-md w-full mx-auto my-auto py-6">
+        
+        <!-- Door Unlocked Success Screen -->
+        <div id="unlock-screen" class="hidden bg-emerald-950/90 border-2 border-emerald-500 rounded-3xl p-8 text-center space-y-6 shadow-[0_0_50px_rgba(16,185,129,0.25)] backdrop-blur-xl fade-in">
+            <div class="w-20 h-20 bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400 rounded-full flex items-center justify-center mx-auto pulse-unlock">
+                <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+            </div>
+            
+            <div class="space-y-2">
+                <span class="text-xs font-mono font-extrabold text-emerald-400 uppercase tracking-widest bg-emerald-500/20 border border-emerald-500/30 px-3 py-1 rounded-full inline-block">ACCESS GRANTED</span>
+                <h2 class="text-3xl font-extrabold text-white tracking-tight">Door Unlocked</h2>
+                <p class="text-sm text-emerald-200 font-medium" id="unlock-user-greeting">Welcome, Customer!</p>
+            </div>
+
+            <div class="bg-gray-900/80 border border-emerald-800/60 rounded-2xl p-4 text-xs space-y-2 text-left font-mono">
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Totes Staged for You:</span>
+                    <span class="font-bold text-emerald-400" id="unlock-tote-count">0 Totes</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Access Event ID:</span>
+                    <span class="font-bold text-gray-300" id="unlock-request-id">#REQ-----</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Door Lock Timer:</span>
+                    <span class="font-bold text-amber-400" id="unlock-countdown">Auto-locking in 30s</span>
+                </div>
+            </div>
+
+            <button onclick="resetKeypad()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 rounded-2xl transition shadow-lg shadow-emerald-600/30">
+                Lock Door &amp; Return to Keypad
+            </button>
+        </div>
+
+        <!-- Keypad Terminal Card -->
+        <div id="keypad-card" class="bg-gray-900/90 border border-gray-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-6">
+            
+            <!-- PIN Code Display Box -->
+            <div class="bg-gray-950 border border-gray-800 rounded-2xl p-5 text-center space-y-3">
+                <span class="text-[10px] font-mono font-extrabold uppercase tracking-widest text-gray-400">ENTER 4-DIGIT KEYPAD PIN</span>
+                
+                <!-- Digit Boxes -->
+                <div class="flex justify-center space-x-3 my-2">
+                    <div id="digit-0" class="w-12 h-14 border-2 border-gray-800 bg-gray-900 rounded-xl flex items-center justify-center text-2xl font-mono font-bold text-white pin-dot"></div>
+                    <div id="digit-1" class="w-12 h-14 border-2 border-gray-800 bg-gray-900 rounded-xl flex items-center justify-center text-2xl font-mono font-bold text-white pin-dot"></div>
+                    <div id="digit-2" class="w-12 h-14 border-2 border-gray-800 bg-gray-900 rounded-xl flex items-center justify-center text-2xl font-mono font-bold text-white pin-dot"></div>
+                    <div id="digit-3" class="w-12 h-14 border-2 border-gray-800 bg-gray-900 rounded-xl flex items-center justify-center text-2xl font-mono font-bold text-white pin-dot"></div>
+                </div>
+
+                <p id="kiosk-status-msg" class="text-xs font-semibold text-gray-400 min-h-[20px]">Enter your PIN code to open the staging room.</p>
+            </div>
+
+            <!-- Number Keypad Grid -->
+            <div class="grid grid-cols-3 gap-3 font-mono font-bold text-xl">
+                <button onclick="pressDigit('1')" class="keypad-btn bg-gray-800/80 hover:bg-gray-700 text-white py-4 rounded-2xl border border-gray-700/50 shadow-md">1</button>
+                <button onclick="pressDigit('2')" class="keypad-btn bg-gray-800/80 hover:bg-gray-700 text-white py-4 rounded-2xl border border-gray-700/50 shadow-md">2</button>
+                <button onclick="pressDigit('3')" class="keypad-btn bg-gray-800/80 hover:bg-gray-700 text-white py-4 rounded-2xl border border-gray-700/50 shadow-md">3</button>
+                
+                <button onclick="pressDigit('4')" class="keypad-btn bg-gray-800/80 hover:bg-gray-700 text-white py-4 rounded-2xl border border-gray-700/50 shadow-md">4</button>
+                <button onclick="pressDigit('5')" class="keypad-btn bg-gray-800/80 hover:bg-gray-700 text-white py-4 rounded-2xl border border-gray-700/50 shadow-md">5</button>
+                <button onclick="pressDigit('6')" class="keypad-btn bg-gray-800/80 hover:bg-gray-700 text-white py-4 rounded-2xl border border-gray-700/50 shadow-md">6</button>
+                
+                <button onclick="pressDigit('7')" class="keypad-btn bg-gray-800/80 hover:bg-gray-700 text-white py-4 rounded-2xl border border-gray-700/50 shadow-md">7</button>
+                <button onclick="pressDigit('8')" class="keypad-btn bg-gray-800/80 hover:bg-gray-700 text-white py-4 rounded-2xl border border-gray-700/50 shadow-md">8</button>
+                <button onclick="pressDigit('9')" class="keypad-btn bg-gray-800/80 hover:bg-gray-700 text-white py-4 rounded-2xl border border-gray-700/50 shadow-md">9</button>
+                
+                <button onclick="clearPin()" class="keypad-btn bg-red-950/40 hover:bg-red-900/60 text-red-400 py-4 rounded-2xl border border-red-800/50 text-sm font-sans font-bold">CLEAR</button>
+                <button onclick="pressDigit('0')" class="keypad-btn bg-gray-800/80 hover:bg-gray-700 text-white py-4 rounded-2xl border border-gray-700/50 shadow-md">0</button>
+                <button onclick="submitPin()" id="btn-submit-pin" class="keypad-btn bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl border border-blue-500 text-sm font-sans font-bold shadow-lg shadow-blue-600/30">UNLOCK</button>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Kiosk Footer Info -->
+    <footer class="max-w-md w-full mx-auto text-center text-xs text-gray-500 font-mono space-y-1">
+        <p>CloudVault Staging Facility Security System</p>
+        <p class="text-[10px] text-gray-600">Need help? Press door intercom button or call 1-800-555-0199</p>
+    </footer>
+
+    <!-- Supabase SDK & Config -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+
+    <script>
+        let currentPin = "";
+        let autoLockTimer = null;
+        let countdownSeconds = 30;
+
+        function pressDigit(digit) {
+            if (currentPin.length < 4) {
+                currentPin += digit;
+                updatePinDisplay();
+                if (currentPin.length === 4) {
+                    submitPin();
+                }
+            }
+        }
+
+        function clearPin() {
+            currentPin = "";
+            updatePinDisplay();
+            setKioskStatus("Enter your PIN code to open the staging room.", "gray");
+        }
+
+        function updatePinDisplay() {
+            for (let i = 0; i < 4; i++) {
+                const dot = document.getElementById(`digit-${i}`);
+                if (i < currentPin.length) {
+                    dot.textContent = "•";
+                    dot.classList.add("filled");
+                } else {
+                    dot.textContent = "";
+                    dot.classList.remove("filled");
+                }
+            }
+        }
+
+        function setKioskStatus(msg, color = "gray") {
+            const el = document.getElementById("kiosk-status-msg");
+            el.textContent = msg;
+            if (color === "red") {
+                el.className = "text-xs font-bold text-red-400 min-h-[20px] animate-pulse";
+            } else if (color === "green") {
+                el.className = "text-xs font-bold text-emerald-400 min-h-[20px]";
+            } else {
+                el.className = "text-xs font-semibold text-gray-400 min-h-[20px]";
+            }
+        }
+
+        async function submitPin() {
+            if (currentPin.length < 4) {
+                setKioskStatus("Please enter all 4 digits of your Keypad PIN.", "red");
+                return;
+            }
+
+            const btn = document.getElementById("btn-submit-pin");
+            btn.disabled = true;
+            setKioskStatus("Verifying Keypad PIN...", "gray");
+
+            try {
+                const { data, error } = await supabase.rpc('verify_staging_pin', {
+                    p_pin: currentPin
+                });
+
+                if (error) throw error;
+
+                if (data && data.success) {
+                    setKioskStatus("Access Granted! Unlocking door...", "green");
+                    showUnlockScreen(data);
+                } else {
+                    setKioskStatus(data.message || "Invalid or expired Keypad PIN.", "red");
+                    shakePinDisplay();
+                }
+            } catch (err) {
+                console.error("PIN verification failed:", err);
+                setKioskStatus("Verification error: " + (err.message || "Invalid PIN"), "red");
+                shakePinDisplay();
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function shakePinDisplay() {
+            const card = document.getElementById("keypad-card");
+            card.classList.add("translate-x-2");
+            setTimeout(() => card.classList.remove("translate-x-2"), 100);
+            setTimeout(() => card.classList.add("-translate-x-2"), 200);
+            setTimeout(() => card.classList.remove("-translate-x-2"), 300);
+        }
+
+        function showUnlockScreen(data) {
+            document.getElementById("keypad-card").classList.add("hidden");
+            document.getElementById("unlock-screen").classList.remove("hidden");
+
+            document.getElementById("unlock-user-greeting").textContent = `Welcome, ${data.userName || 'Customer'}!`;
+            document.getElementById("unlock-tote-count").textContent = `${data.toteCount || 0} Tote${data.toteCount !== 1 ? 's' : ''}`;
+            document.getElementById("unlock-request-id").textContent = `#${(data.requestId || 'REQ').substring(0, 8)}`;
+
+            countdownSeconds = 30;
+            updateCountdownText();
+
+            if (autoLockTimer) clearInterval(autoLockTimer);
+            autoLockTimer = setInterval(() => {
+                countdownSeconds--;
+                updateCountdownText();
+                if (countdownSeconds <= 0) {
+                    clearInterval(autoLockTimer);
+                    resetKeypad();
+                }
+            }, 1000);
+        }
+
+        function updateCountdownText() {
+            const el = document.getElementById("unlock-countdown");
+            if (el) el.textContent = `Auto-locking in ${countdownSeconds}s`;
+        }
+
+        function resetKeypad() {
+            if (autoLockTimer) clearInterval(autoLockTimer);
+            document.getElementById("unlock-screen").classList.add("hidden");
+            document.getElementById("keypad-card").classList.remove("hidden");
+            clearPin();
+        }
+
+        // Listen for physical keyboard input
+        window.addEventListener("keydown", (e) => {
+            if (e.key >= "0" && e.key <= "9") {
+                pressDigit(e.key);
+            } else if (e.key === "Backspace" || e.key === "Escape") {
+                clearPin();
+            } else if (e.key === "Enter") {
+                submitPin();
+            }
+        });
+    </script>
+</body>
+</html>

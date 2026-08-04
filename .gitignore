@@ -1,0 +1,10 @@
+# .gitignore
+.firebase/
+node_modules/
+package/
+*.tgz
+*.log
+repomix-output.xml
+graphify-out/
+temp*.js
+.DS_Store

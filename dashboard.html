@@ -1,0 +1,3144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudVault | Your Digital Catalog</title>
+    <link rel="icon" type="image/png" href="logo.png">
+    <!-- PostHog Analytics -->
+    <script>
+        !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}var c=e;for(void 0!==a?c=e[a]=[]:a="posthog",c.people=c.people||[],c.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},c.people.toString=function(){return c.toString(1)+".people (stub)"},p="capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures onSessionId".split(" "),r=0;r<p.length;r++)g(c,p[r]);e._i.push([i,s,a])},e.__SV=1.0,o=t.createElement("script"),o.type="text/javascript",o.async=!0,o.src="https://us-assets.i.posthog.com/static/array.js",n=t.getElementsByTagName("script")[0],n.parentNode.insertBefore(o,n))}(document,window.posthog||[]);
+        posthog.init('phc_njX2MWz7DdzYxHY87sdEtymMMmA2kHK9oxyG8T4XwWzb', {api_host: 'https://us.posthog.com', person_profiles: 'identified_only'});
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #0f172a; }
+        .tote-card { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+        .tote-card:hover { border-color: #60a5fa; transform: translateY(-3px); box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.12); }
+        .tote-card.selected { border-color: #2563eb; background-color: #eff6ff; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2); }
+        input.label-input { transition: all 0.2s; border-bottom: 2px solid transparent; }
+        input.label-input:focus { outline: none; border-bottom-color: #2563eb; background-color: #fff; }
+        .bar-hidden { transform: translateY(120%); }
+        .bar-visible { transform: translateY(0); }
+        .action-bar-glass {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-top: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        .fade-in { animation: fadeIn 0.4s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .saving-indicator { transition: opacity 0.3s; }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col pb-24">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <a href="index.html" class="flex items-center space-x-2 text-2xl font-bold tracking-tighter text-blue-600">
+                <img src="logo.png" alt="CloudVault Logo" class="h-8 w-8 rounded">
+                <span>CloudVault</span>
+            </a>
+            <div class="relative inline-block text-left">
+                <div id="user-avatar" onclick="toggleDropdown()" class="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-sm cursor-pointer select-none border-2 border-transparent hover:border-blue-300 transition">
+                    --
+                </div>
+                <!-- Dropdown Menu -->
+                <div id="user-dropdown" class="origin-top-right absolute right-0 mt-2 w-48 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 hidden z-50 overflow-hidden">
+                    <div class="py-1 flex flex-col" role="menu" aria-orientation="vertical">
+                        <button onclick="openSettingsModal()" class="w-full text-left px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50" role="menuitem">Profile Color</button>
+                        <button onclick="openBillingModal()" class="w-full text-left px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50" role="menuitem">Billing & Plan</button>
+                        <div class="border-t border-gray-100 my-1"></div>
+                        <button onclick="triggerCancelFlowUser()" class="w-full text-left px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50" role="menuitem">Cancel Subscription</button>
+                        <button onclick="handleSignOut()" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-900 hover:bg-gray-50" role="menuitem">Sign Out</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Loading State -->
+    <div id="loading-state" class="flex-grow flex items-center justify-center">
+        <div class="text-center space-y-4">
+            <div class="animate-spin w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full mx-auto"></div>
+            <p class="text-gray-500 font-medium">Loading your vault...</p>
+        </div>
+    </div>
+
+    <!-- Main Content (hidden until auth confirmed) -->
+    <main id="main-content" class="hidden flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full fade-in">
+        
+        <!-- Developer Test Console HUD (Hidden in production unless ?dev=true or executive) -->
+        <div id="dev-console-wrapper" class="hidden mb-8 bg-amber-50 border border-amber-300 rounded-3xl p-6 shadow-sm">
+            <div class="flex justify-between items-center cursor-pointer select-none" onclick="toggleDevConsole()">
+                <div class="flex items-center space-x-3">
+                    <div class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></div>
+                    <h2 class="text-sm font-extrabold text-amber-900 uppercase tracking-wider">Developer Test Console</h2>
+                </div>
+                <span id="dev-console-arrow" class="text-amber-700 font-bold transition-transform duration-200">▼</span>
+            </div>
+            
+            <div id="dev-console-content" class="mt-5 pt-5 border-t border-amber-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-xs text-amber-900 hidden">
+                <!-- Onboarding Simulation -->
+                <div class="bg-white/60 p-4 rounded-xl border border-amber-200/50 flex flex-col justify-between">
+                    <div>
+                        <p class="font-bold mb-1">1. Simulate Onboarding</p>
+                        <p class="text-[10px] text-amber-700/80 mb-3">Transitions user to active, populates empty inventory, and sets physical totes held count.</p>
+                    </div>
+                    <button onclick="runSimulateOnboarding(this)" class="w-full bg-amber-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-amber-700 transition">
+                        Onboard &amp; Load Totes
+                    </button>
+                </div>
+                
+                <!-- Tote Returns Simulation -->
+                <div class="bg-white/60 p-4 rounded-xl border border-amber-200/50 flex flex-col justify-between">
+                    <div>
+                        <p class="font-bold mb-1">2. Simulate Tote Return</p>
+                        <p class="text-[10px] text-amber-700/80 mb-2">Simulate physically returning totes to the staging warehouse to protect your card.</p>
+                        <div class="flex items-center space-x-2 my-2 justify-center">
+                            <span class="font-bold">Active Totes Held:</span>
+                            <span id="dev-totes-held" class="font-extrabold text-sm text-gray-900 bg-white px-2 py-0.5 rounded border">0</span>
+                        </div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="updateTotesHeldSim(-1)" class="flex-1 bg-amber-600 text-white font-bold py-2 rounded-lg hover:bg-amber-700 transition">-1</button>
+                        <button onclick="updateTotesHeldSim(1)" class="flex-1 bg-amber-600 text-white font-bold py-2 rounded-lg hover:bg-amber-700 transition">+1</button>
+                        <button onclick="returnAllTotesSim()" class="flex-1 bg-green-600 text-white font-bold py-2 rounded-lg hover:bg-green-700 transition">All</button>
+                    </div>
+                </div>
+                
+                <!-- Account Cancellation -->
+                <div class="bg-white/60 p-4 rounded-xl border border-amber-200/50 flex flex-col justify-between">
+                    <div>
+                        <p class="font-bold mb-1">3. Cancel Account</p>
+                        <p class="text-[10px] text-amber-700/80 mb-2">Cancels active subscription and starts the 14-day return countdown.</p>
+                        <div class="flex items-center space-x-2 my-2 cursor-pointer select-none">
+                            <input type="checkbox" id="dev-simulate-expiry" class="rounded border-amber-300 text-amber-600 focus:ring-amber-500">
+                            <label for="dev-simulate-expiry" class="text-[10px] font-bold text-amber-800">Set deadline in past (simulate instant 14 days)</label>
+                        </div>
+                    </div>
+                    <button onclick="runCancelSubscription(this)" class="w-full bg-red-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-red-700 transition">
+                        Cancel Subscription
+                    </button>
+                </div>
+                
+                <!-- Audit Run -->
+                <div class="bg-white/60 p-4 rounded-xl border border-amber-200/50 flex flex-col justify-between">
+                    <div>
+                        <p class="font-bold mb-1">4. Run Billing Audit</p>
+                        <p class="text-[10px] text-amber-700/80 mb-3">Triggers billing audit. Assesses a $15/tote fee on cards-on-file for unreturned assets.</p>
+                    </div>
+                    <button onclick="runBillingAuditTrigger(this)" class="w-full bg-gray-900 text-white font-bold py-2 px-3 rounded-lg hover:bg-black transition">
+                        Run Audit Job Now
+                </div>
+            </div>
+        </div>
+
+        <!-- Cancellation Return Alert Banner (Visible when user cancelled & holds physical totes) -->
+        <div id="cancellation-alert-banner" class="hidden mb-8 bg-red-950/90 border-2 border-red-500 rounded-3xl p-6 text-white shadow-xl backdrop-blur-md fade-in">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div class="flex items-start space-x-4">
+                    <div class="w-12 h-12 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center flex-shrink-0 text-xl font-bold">
+                        ⚠️
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-mono font-extrabold uppercase tracking-widest text-red-400 bg-red-500/20 border border-red-500/30 px-2.5 py-0.5 rounded-full">ACTION REQUIRED</span>
+                            <span class="text-xs font-bold text-gray-300 font-mono" id="canc-totes-held-badge">0 Totes Physical Storage</span>
+                        </div>
+                        <h3 class="text-lg font-bold text-white mt-1">Return Physical Totes to Avoid Penalty Charge</h3>
+                        <p class="text-xs text-red-200 mt-0.5 leading-relaxed">
+                            Your subscription is cancelled. Please return all empty physical totes to our staging room within your 14-day window. Unreturned totes are billed at $15.00/tote.
+                        </p>
+                    </div>
+                </div>
+                <button onclick="openCancelReturnModal()" class="w-full sm:w-auto bg-red-600 hover:bg-red-500 text-white font-bold text-sm px-5 py-3 rounded-2xl transition shadow-lg flex-shrink-0 flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    Schedule Tote Return
+                </button>
+            </div>
+        </div>        <!-- ============================================================ -->
+        <!-- FLOW 1: NEW / LAPSED ONBOARDING WIZARD -->
+        <!-- ============================================================ -->
+        <div id="flow-onboarding-wizard" class="hidden max-w-2xl mx-auto bg-white border border-gray-200 rounded-3xl p-8 sm:p-10 shadow-lg space-y-8 fade-in">
+            <div class="text-center">
+                <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">Set Up Your CloudVault</h1>
+                <p class="text-gray-500 mt-2 text-sm" id="wizard-onboarding-desc">Verify your ZIP code to check if we service your area.</p>
+            </div>
+
+            <!-- Wizard Section: ZIP Verification -->
+            <div id="wizard-zip-check-container" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">ZIP Code</label>
+                    <input type="text" id="wizard-zip-input" placeholder="e.g. 90210" class="w-full px-4 py-4 border border-gray-300 rounded-xl text-lg font-medium" maxlength="5">
+                    <p id="wizard-zip-error" class="text-red-500 text-sm mt-2 hidden font-medium"></p>
+                </div>
+                <button id="btn-wizard-zip-check" onclick="checkWizardZip()" class="w-full bg-blue-600 text-white px-4 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition mt-6 shadow-md">Check Availability</button>
+            </div>
+
+            <!-- Wizard Section: Subscription Config (Hidden by default) -->
+            <div id="wizard-subscription-container" class="hidden space-y-8">
+                <!-- Wizard Step 1: Select Plan Tier -->
+                <div class="space-y-4">
+                    <label class="block font-extrabold text-gray-900 text-sm uppercase tracking-wider">1. Select Your Storage Plan</label>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div id="wizard-tier-1" class="border-2 border-blue-600 bg-blue-50/50 rounded-2xl p-4 text-center cursor-pointer transition transform hover:scale-[1.02]" onclick="selectWizardTotes(5)">
+                            <span class="block font-bold text-gray-800 text-sm">5 Totes</span>
+                            <span class="block font-extrabold text-blue-600 text-lg mt-1">$5.00<span class="text-xs font-normal text-gray-500">/tote</span></span>
+                            <span class="block text-[10px] text-gray-400 mt-1">Tier 1 Plan</span>
+                        </div>
+                        <div id="wizard-tier-2" class="border border-gray-200 bg-white rounded-2xl p-4 text-center cursor-pointer transition transform hover:scale-[1.02]" onclick="selectWizardTotes(10)">
+                            <span class="block font-bold text-gray-800 text-sm">10 Totes</span>
+                            <span class="block font-extrabold text-gray-900 text-lg mt-1">$3.50<span class="text-xs font-normal text-gray-500">/tote</span></span>
+                            <span class="block text-[10px] text-gray-400 mt-1">Tier 2 Plan</span>
+                        </div>
+                        <div id="wizard-tier-3" class="border border-gray-200 bg-white rounded-2xl p-4 text-center cursor-pointer transition transform hover:scale-[1.02]" onclick="selectWizardTotes(25)">
+                            <span class="block font-bold text-gray-800 text-sm">25 Totes</span>
+                            <span class="block font-extrabold text-gray-900 text-lg mt-1">$2.00<span class="text-xs font-normal text-gray-500">/tote</span></span>
+                            <span class="block text-[10px] text-gray-400 mt-1">Tier 3 Plan</span>
+                        </div>
+                        <div id="wizard-tier-4" class="border border-gray-200 bg-white rounded-2xl p-4 text-center cursor-pointer transition transform hover:scale-[1.02]" onclick="selectWizardTotes(50)">
+                            <span class="block font-bold text-gray-800 text-sm">50 Totes</span>
+                            <span class="block font-extrabold text-gray-900 text-lg mt-1">$1.00<span class="text-xs font-normal text-gray-500">/tote</span></span>
+                            <span class="block text-[10px] text-gray-400 mt-1">Tier 4 Plan</span>
+                        </div>
+                    </div>
+
+                    <!-- Custom input inside wizard -->
+                    <div class="bg-gray-50 border border-gray-150 rounded-2xl p-4 flex items-center justify-between">
+                        <span class="text-sm font-semibold text-gray-700">Or type custom quantity:</span>
+                        <div class="flex items-center space-x-2">
+                            <input type="number" id="wizard-custom-totes" value="5" min="1" max="500" class="w-24 text-center font-bold text-lg py-1.5 border border-gray-300 rounded-xl" oninput="handleWizardCustomInput()">
+                            <span class="text-sm text-gray-500 font-medium">totes</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wizard Step 2: Pickup Logistics -->
+                <div class="space-y-4">
+                    <label class="block font-extrabold text-gray-900 text-sm uppercase tracking-wider">2. Choose Delivery Logistics</label>
+                    <div class="space-y-3">
+                        <div id="wizard-opt-self" class="flex items-center p-4 rounded-2xl border-2 border-blue-600 bg-blue-50 cursor-pointer" onclick="selectWizardLogistics('self_service')">
+                            <div class="w-4 h-4 rounded-full border-4 border-blue-600 bg-white mr-4 flex-shrink-0" id="wizard-dot-self"></div>
+                            <div>
+                                <div class="font-bold text-sm text-gray-900">Self-Serve Drop-off <span class="text-green-600 ml-1">Free</span></div>
+                                <div class="text-xs text-gray-500 mt-0.5">Collect and drop off your empty/packed totes at our local staging warehouse.</div>
+                            </div>
+                        </div>
+                        <div id="wizard-opt-valet" class="flex items-center p-4 rounded-2xl border border-gray-200 bg-white cursor-pointer" onclick="selectWizardLogistics('valet_pickup')">
+                            <div class="w-4 h-4 rounded-full border border-gray-300 bg-white mr-4 flex-shrink-0" id="wizard-dot-valet"></div>
+                            <div>
+                                <div class="font-bold text-sm text-gray-900">Valet Delivery <span class="text-gray-500 ml-1" id="wizard-valet-label">$20.00</span></div>
+                                <div class="text-xs text-gray-500 mt-0.5">We deliver empty totes to your door and pick them up when packed ($15 base + $1/tote).</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wizard Step 3: Card on File Authorization Terms -->
+                <div class="space-y-4 bg-amber-50/50 border border-amber-200/50 rounded-2xl p-5">
+                    <label class="block font-extrabold text-amber-900 text-sm uppercase tracking-wider">3. Terms &amp; Asset Protection</label>
+                    <div class="flex items-start space-x-3 cursor-pointer">
+                        <input type="checkbox" id="wizard-tos-checkbox" class="w-5 h-5 rounded text-blue-600 border-gray-300 mt-1 cursor-pointer">
+                        <label for="wizard-tos-checkbox" class="text-xs text-gray-600 leading-relaxed select-none">
+                            I authorize CloudVault to securely tokenize and save my card on file. I agree to the active monthly subscription fees and acknowledge a **$15.00 per tote replacement fee** if physical totes are not returned within **14 days of account cancellation**.
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Cost Summary Ledger Card -->
+                <div class="bg-gray-900 text-white rounded-3xl p-6 shadow-inner space-y-3">
+                    <div class="flex justify-between text-sm text-gray-400">
+                        <span>Monthly Storage Plan</span>
+                        <span class="font-bold text-white">$<span id="ledger-monthly">25.00</span>/mo</span>
+                    </div>
+                    <div class="flex justify-between text-sm text-gray-400">
+                        <span>Setup &amp; Logistics Fee</span>
+                        <span class="font-bold text-white" id="ledger-logistics">Free</span>
+                    </div>
+                    <div class="h-px bg-gray-800 my-2"></div>
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <span class="block text-sm font-bold">First Month Total</span>
+                            <span class="text-[10px] text-gray-400">Billed immediately on activation</span>
+                        </div>
+                        <span class="text-2xl font-extrabold text-blue-400">$<span id="ledger-total">25.00</span></span>
+                    </div>
+                </div>
+
+                <p id="wizard-error-msg" class="text-red-500 text-sm hidden font-semibold text-center"></p>
+
+                <button id="wizard-activate-btn" onclick="activateOnboardingSubscription()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl text-lg hover:bg-blue-700 transition shadow-md">
+                    Start My Storage Subscription
+                </button>
+            </div>
+
+            <!-- Wizard Section: Waitlist (Hidden by default) -->
+            <div id="wizard-waitlist-container" class="hidden space-y-6">
+                <div class="bg-gradient-to-br from-blue-50 to-indigo-50/50 rounded-3xl p-6 sm:p-8 border border-blue-200/80 shadow-inner space-y-6">
+                    <div class="flex items-center justify-between border-b border-blue-200/60 pb-4">
+                        <div class="flex items-center space-x-3">
+                            <div class="p-3 bg-blue-600 text-white rounded-2xl shadow-md">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            </div>
+                            <div>
+                                <span class="bg-blue-600/10 text-blue-700 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-widest">Expansion Priority Pass</span>
+                                <h3 class="text-xl font-black text-gray-950 mt-0.5">Secure Legacy Price Lock</h3>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-2xl font-black text-gray-900">$25.00</span>
+                            <span class="block text-[10px] text-gray-500 font-bold uppercase">Fully Refundable</span>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-gray-600 leading-relaxed">
+                        CloudVault hasn't launched in your ZIP code yet. Place a <strong>$25.00 deposit</strong> to lock in launch pricing and receive priority tote delivery upon facility opening.
+                    </p>
+
+                    <!-- Feature Badges -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div class="bg-white/80 border border-blue-200/60 p-3.5 rounded-2xl flex items-start space-x-3">
+                            <div class="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg flex-shrink-0 mt-0.5">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                            </div>
+                            <div>
+                                <h4 class="font-extrabold text-gray-900 text-xs">5-Year Price Guarantee</h4>
+                                <p class="text-[11px] text-gray-500 mt-0.5">Locks your monthly tier rates for up to 5 years from facility opening.</p>
+                            </div>
+                        </div>
+                        <div class="bg-white/80 border border-blue-200/60 p-3.5 rounded-2xl flex items-start space-x-3">
+                            <div class="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg flex-shrink-0 mt-0.5">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                            </div>
+                            <div>
+                                <h4 class="font-extrabold text-gray-900 text-xs">100% 1-Year Refund Guarantee</h4>
+                                <p class="text-[11px] text-gray-500 mt-0.5">If a facility does not open in your region within 1 year, receive a full $25 refund.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="btn-wizard-waitlist-submit" onclick="submitWizardWaitlist()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-extrabold py-4 rounded-2xl text-base transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    Place $25 Deposit &amp; Lock Legacy Rates
+                </button>
+                <div id="wizard-waitlist-success" class="hidden bg-emerald-50 text-emerald-900 px-5 py-4 rounded-2xl text-center font-bold border border-emerald-200 mt-4 shadow-sm space-y-1">
+                    <div class="text-emerald-700 text-base font-extrabold">✓ Legacy Price Lock Deposit Reserved!</div>
+                    <p class="text-xs text-emerald-600 font-normal">Your $25 deposit is secured. You will receive priority notification and guaranteed rate locking upon facility launch.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- FLOW 2: ACTIVE CUSTOMER VAULT DASHBOARD -->
+        <!-- ============================================================ -->
+        <div id="flow-active-dashboard" class="hidden space-y-8 fade-in">
+            
+            <!-- Vault Subscription Plan Header Summary Card -->
+            <div class="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div class="flex items-center space-x-5">
+                    <div class="p-4 bg-blue-50 text-blue-600 rounded-2xl">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500 uppercase tracking-wide font-bold">Active Space Plan</p>
+                        <h2 class="text-2xl font-extrabold text-gray-900 mt-0.5" id="active-plan-header">Loading plan...</h2>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-3">
+                    <button onclick="openAddTotesPanel()" class="bg-blue-600 text-white px-5 py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition shadow-sm flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+                        Rent More Totes
+                </div>
+            </div>
+
+            <!-- Setup Progress Timeline Stepper -->
+            <div id="onboarding-tracker" class="bg-white p-8 sm:p-10 rounded-3xl border border-gray-150 shadow-sm max-w-4xl mx-auto">
+                <h3 class="text-lg font-extrabold text-gray-950 mb-6 text-center">Your CloudVault Setup Progress</h3>
+                
+                <div class="relative flex flex-col md:flex-row justify-between items-center md:items-start gap-8 md:gap-4">
+                    <!-- Progress Connection line -->
+                    <div class="hidden md:block absolute top-6 left-[16%] right-[16%] h-0.5 bg-gray-200 -z-10" id="tracker-line"></div>
+                    
+                    <!-- Step 1 -->
+                    <div class="flex flex-col items-center text-center w-full md:w-1/3">
+                        <div id="step1-badge" class="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-lg mb-3">✓</div>
+                        <h4 class="font-bold text-gray-900 text-sm">1. Reservation Received</h4>
+                        <p class="text-xs text-gray-500 mt-1 px-4">Payment verified &amp; space secured.</p>
+                    </div>
+                    
+                    <!-- Step 2 -->
+                    <div class="flex flex-col items-center text-center w-full md:w-1/3">
+                        <div id="step2-badge" class="w-12 h-12 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center font-bold text-lg mb-3">2</div>
+                        <h4 class="font-bold text-gray-900 text-sm">2. Totes Preparing</h4>
+                        <p class="text-xs text-gray-500 mt-1 px-4" id="step2-desc">Staging your empty barcodes.</p>
+                    </div>
+                    
+                    <!-- Step 3 -->
+                    <div class="flex flex-col items-center text-center w-full md:w-1/3">
+                        <div id="step3-badge" class="w-12 h-12 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center font-bold text-lg mb-3">3</div>
+                        <h4 class="font-bold text-gray-900 text-sm">3. Ready for Pickup</h4>
+                        <p class="text-xs text-gray-500 mt-1 px-4" id="step3-desc">We'll notify you when ready.</p>
+                    </div>
+                </div>
+                
+                <!-- Large PIN Code Card -->
+                <div id="pickup-pin-container" class="hidden mt-8 pt-8 border-t border-gray-100 text-center space-y-4">
+                    <div class="max-w-md mx-auto bg-gray-900 text-white rounded-3xl p-6 shadow-inner space-y-3">
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Staging Room Access PIN</p>
+                        <div class="text-4xl font-mono font-bold tracking-[0.2em] text-blue-400" id="pickup-pin">----</div>
+                        <button onclick="copyStagingPin()" class="text-xs font-bold text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg transition inline-flex items-center">
+                            Copy PIN Code
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 leading-relaxed max-w-md mx-auto">
+                        Drive to our staging facility, type this PIN at the door keypad, and retrieve your empty totes. Pack them at your leisure, and return them whenever ready!
+                    </p>
+                </div>
+            </div>
+
+            <!-- Cutoff Banner -->
+            <div id="cutoff-banner" class="hidden bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-2xl text-xs font-semibold flex items-center max-w-2xl mx-auto">
+                <svg class="w-4 h-4 mr-2.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                <span>Today's 6:00 PM cutoff has passed. Retrieval staging requests will be processed tomorrow.</span>
+            </div>
+
+            <!-- Active Retrievals / Staging Requests Panel -->
+            <div id="active-requests-panel" class="hidden space-y-4 max-w-4xl mx-auto mt-6">
+                <h3 class="text-sm font-extrabold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                    <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Scheduled Retrievals & Access Keypad PINs
+                </h3>
+                <div id="active-requests-list" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+            </div>
+
+            <!-- Empty Inventory State -->
+            <div id="empty-state" class="hidden text-center py-16 bg-white border border-gray-150 rounded-3xl">
+                <div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                </div>
+                <h4 class="text-lg font-bold text-gray-900">No active totes in your vault</h4>
+                <p class="text-gray-500 text-xs mt-1">Your registered totes will populate here once you drop them off at the staging room.</p>
+            </div>
+
+            <!-- Search & Filter Bar -->
+            <div class="flex flex-col sm:flex-row justify-between items-center bg-white rounded-2xl shadow-sm border border-gray-150 p-4 mb-4 gap-4">
+                <div class="relative w-full sm:w-1/2">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <input type="text" id="search-input" placeholder="Search by label or ID (e.g. CV-1004)..." class="block w-full pl-11 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors sm:text-sm" oninput="handleSearchFilter()">
+                </div>
+                <div class="w-full sm:w-auto">
+                    <select id="status-filter" class="block w-full pl-4 pr-10 py-3 text-base border border-gray-200 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-xl bg-gray-50 text-gray-700 font-semibold cursor-pointer" onchange="handleSearchFilter()">
+                        <option value="all">All Totes</option>
+                        <option value="stored">In Storage</option>
+                        <option value="staged">Ready for Pickup</option>
+                        <option value="pending-stage">Retrieval Pending</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Category Quick-Filter Pills -->
+            <div id="category-filter-bar" class="flex items-center gap-2 overflow-x-auto pb-2 mb-6 scrollbar-none">
+                <span class="text-xs font-extrabold uppercase text-gray-400 tracking-wider whitespace-nowrap mr-1">Filter:</span>
+                <button onclick="setCategoryFilter('all')" data-category-pill="all" class="cat-pill bg-blue-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all shadow-sm whitespace-nowrap">All</button>
+                <button onclick="setCategoryFilter('Clothing')" data-category-pill="Clothing" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Clothing</button>
+                <button onclick="setCategoryFilter('Documents')" data-category-pill="Documents" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Documents</button>
+                <button onclick="setCategoryFilter('Holiday')" data-category-pill="Holiday" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Holiday</button>
+                <button onclick="setCategoryFilter('Tools')" data-category-pill="Tools" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Tools</button>
+                <button onclick="setCategoryFilter('Kitchen')" data-category-pill="Kitchen" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Kitchen</button>
+                <button onclick="setCategoryFilter('Electronics')" data-category-pill="Electronics" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Electronics</button>
+            </div>
+
+            <!-- Tote Grid (populated by Supabase Realtime) -->
+            <div id="tote-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+        </div>
+
+        <!-- Add Totes Panel Overlay -->
+        <div id="add-totes-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-40 z-40 hidden" onclick="closeAddTotesPanel()"></div>
+
+        <!-- Add Totes Slide-In Panel -->
+        <div id="add-totes-panel" class="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300 ease-in-out overflow-y-auto">
+            <div class="p-8">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-2xl font-bold text-gray-900">Rent More Totes</h2>
+                    <button onclick="closeAddTotesPanel()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+
+                <!-- Live Totes count picker -->
+                <div class="mb-6 space-y-3">
+                    <label class="block font-extrabold text-gray-900 text-sm uppercase tracking-wider">How many additional totes?</label>
+                    
+                    <!-- Preset Quick Select Buttons -->
+                    <div class="grid grid-cols-4 gap-2">
+                        <button onclick="setAddTotesVal(1)" class="py-2 border border-gray-200 rounded-xl text-xs font-bold bg-white text-gray-700 hover:border-blue-500 transition focus:outline-none focus:ring-1 focus:ring-blue-500">+1</button>
+                        <button onclick="setAddTotesVal(5)" class="py-2 border border-gray-200 rounded-xl text-xs font-bold bg-white text-gray-700 hover:border-blue-500 transition focus:outline-none focus:ring-1 focus:ring-blue-500">+5</button>
+                        <button onclick="setAddTotesVal(10)" class="py-2 border border-gray-200 rounded-xl text-xs font-bold bg-white text-gray-700 hover:border-blue-500 transition focus:outline-none focus:ring-1 focus:ring-blue-500">+10</button>
+                        <button onclick="setAddTotesVal(25)" class="py-2 border border-gray-200 rounded-xl text-xs font-bold bg-white text-gray-700 hover:border-blue-500 transition focus:outline-none focus:ring-1 focus:ring-blue-500">+25</button>
+                    </div>
+
+                    <div class="flex items-center space-x-4">
+                        <div class="w-10 h-10 bg-gray-100 hover:bg-gray-250 cursor-pointer rounded-xl flex items-center justify-center font-bold text-xl select-none" onclick="updateAddTotes(-1)">-</div>
+                        <input type="number" id="add-totes-count" value="1" min="1" max="100" class="w-20 text-center font-extrabold text-lg py-2 border border-gray-300 rounded-xl" oninput="handleAddTotesInput()">
+                        <div class="w-10 h-10 bg-gray-100 hover:bg-gray-250 cursor-pointer rounded-xl flex items-center justify-center font-bold text-xl select-none" onclick="updateAddTotes(1)">+</div>
+                    </div>
+                </div>
+
+                <!-- Transparent Comparison Ledger -->
+                <div class="bg-gray-50 rounded-2xl p-5 border border-gray-200 mb-6 space-y-3">
+                    <p class="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Detailed Ledger Comparison</p>
+                    
+                    <!-- Current Plan row -->
+                    <div class="flex justify-between text-xs text-gray-600">
+                        <span>Current Plan</span>
+                        <span id="preview-current-summary" class="font-medium text-gray-900">-</span>
+                    </div>
+                    <!-- Renting row -->
+                    <div class="flex justify-between text-xs text-gray-600">
+                        <span>New Rent Totes</span>
+                        <span id="preview-added-count" class="font-medium text-blue-600">+1 tote</span>
+                    </div>
+                    <div class="h-px bg-gray-200"></div>
+                    <!-- New total rate -->
+                    <div class="flex justify-between text-xs text-gray-600">
+                        <span>New Storage Rate</span>
+                        <span id="preview-new-rate" class="font-bold text-gray-900">-</span>
+                    </div>
+                    <!-- New monthly billing total -->
+                    <div class="flex justify-between text-xs text-gray-600">
+                        <span>New Monthly storage bill</span>
+                        <span id="preview-new-monthly" class="font-bold text-gray-900">-</span>
+                    </div>
+                    
+                    <div class="h-px bg-gray-200"></div>
+
+                    <!-- Visual Incremental Monthly Change -->
+                    <div class="flex justify-between items-center bg-blue-50 p-3.5 rounded-xl border border-blue-100">
+                        <div>
+                            <span class="block text-xs font-bold text-blue-900">Additional Monthly Cost</span>
+                            <span class="text-[9px] text-blue-500">Subscribed billing delta</span>
+                        </div>
+                        <span id="preview-incremental-cost" class="text-xl font-extrabold text-blue-600">+$5.00/mo</span>
+                    </div>
+                </div>
+
+                <!-- Tier Crossing Alert -->
+                <div id="tier-change-banner" class="hidden bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold px-4 py-3.5 rounded-xl mb-6">
+                    🎉 Crossing tiers! Your monthly rate drops across ALL totes in your vault.
+                </div>
+
+                <!-- Logistics Option -->
+                <div class="mb-6 space-y-3">
+                    <label class="block font-extrabold text-gray-900 text-sm uppercase tracking-wider">Delivery for new totes</label>
+                    <div class="space-y-2">
+                        <div id="add-opt-self" class="flex items-center p-3 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer" onclick="selectAddLogistics('self_service')">
+                            <div class="w-4 h-4 rounded-full border-4 border-blue-600 bg-white mr-3 flex-shrink-0" id="add-dot-self"></div>
+                            <div><div class="font-bold text-sm">Self-Serve Drop-off <span class="text-green-600 ml-1">Free</span></div></div>
+                        </div>
+                        <div id="add-opt-valet" class="flex items-center p-3 rounded-xl border-2 border-gray-200 bg-white cursor-pointer" onclick="selectAddLogistics('valet_pickup')">
+                            <div class="w-4 h-4 rounded-full border-2 border-gray-300 bg-white mr-3 flex-shrink-0" id="add-dot-valet"></div>
+                            <div>
+                                <div class="font-bold text-sm">Valet Delivery <span class="text-gray-600 ml-1" id="add-valet-fee-label">$16+</span></div>
+                                <div class="text-xs text-gray-500 mt-0.5">$15 base + $1/new tote delivered</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactive Fulfillment Staging / Delivery Reservation Calendar -->
+                <div class="mb-6 p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-extrabold uppercase text-gray-800 tracking-wider flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            Delivery / Drop-Off Slot Date
+                        </label>
+                        <span id="fulfillment-surge-badge" class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase">Standard Rate ($0)</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3">
+                        <div>
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">Target Date:</span>
+                            <input type="date" id="fulfillment-target-date" onchange="handleFulfillmentDateChange()" class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-white focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">Time Window:</span>
+                            <select id="fulfillment-time-slot" onchange="handleFulfillmentSlotChange()" class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-white focus:outline-none focus:border-blue-500">
+                                <option value="09:00 AM - 12:00 PM">Morning (9 AM - 12 PM)</option>
+                                <option value="12:00 PM - 03:00 PM">Afternoon (12 PM - 3 PM)</option>
+                                <option value="03:00 PM - 06:00 PM">Evening Peak (3 PM - 6 PM)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="fulfillment-surge-fee-banner" class="bg-blue-50/70 p-3 rounded-xl border border-blue-100 flex items-center justify-between text-xs">
+                        <div>
+                            <span class="font-bold text-gray-900 block text-xs" id="fulfillment-surge-banner-title">Standard Access Reserved</span>
+                            <span class="text-[10px] text-gray-500 block" id="fulfillment-surge-banner-desc">Scheduled in advance. No surge fees apply.</span>
+                        </div>
+                        <span class="font-extrabold text-xs text-gray-900" id="fulfillment-surge-fee-amount">$0.00</span>
+                    </div>
+                </div>
+
+                <!-- Terms disclaimer -->
+                <div class="text-[10px] text-gray-500 leading-relaxed mb-6 bg-gray-50 p-3 rounded-xl border border-gray-150">
+                    * By confirming, you authorize CloudVault to update your subscription billing and agree to the <strong>$15.00/tote</strong> replacement fee for the additional physical assets.
+                </div>
+
+                <p id="add-totes-error" class="text-red-500 text-sm mb-4 hidden font-semibold"></p>
+                <button id="add-totes-confirm-btn" onclick="confirmAddTotes()" class="w-full bg-blue-600 text-white px-4 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition">
+                    Confirm &amp; Add Totes
+                </button>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="fixed bottom-6 right-6 bg-gray-900 text-white px-6 py-4 rounded-xl shadow-2xl font-semibold text-sm z-50 transform translate-y-20 opacity-0 transition-all duration-300">
+            <span id="toast-msg"></span>
+        </div>     </div>
+
+    </main>
+
+    <!-- Action Bar (Sticky Bottom) -->
+    <div id="action-bar" class="fixed bottom-0 left-0 right-0 action-bar-glass shadow-[0_-8px_25px_-5px_rgba(0,0,0,0.08)] p-4 transition-transform duration-300 bar-hidden z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+            <div class="text-lg font-bold text-gray-900">
+                <span id="selected-count" class="text-blue-600">0</span> Items Selected
+            </div>
+            <button id="request-btn" onclick="requestRetrieval()" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-md flex items-center">
+                Request Retrieval
+                <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- PIN Confirmation Modal -->
+    <div id="pin-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
+            <div class="w-16 h-16 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">Staging Requested</h2>
+            <p class="text-gray-600 mb-6">Your items will be ready in the staging room. Use this PIN at the door:</p>
+            <div class="bg-gray-900 text-white text-5xl font-mono font-bold py-6 px-8 rounded-xl tracking-[0.3em] mb-4" id="pin-display">
+                ----
+            </div>
+            <p class="text-sm text-gray-500 mb-6">This PIN expires in <strong>24 hours</strong>.</p>
+            <button onclick="closeModal()" class="w-full bg-gray-100 text-gray-800 font-bold py-3 rounded-xl hover:bg-gray-200 transition">Return to Vault</button>
+        </div>
+    </div>
+
+    <!-- Retrieval Options Modal -->
+    <div id="retrieval-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            <!-- Header -->
+            <div class="bg-blue-600 px-6 py-5 text-white flex justify-between items-center">
+                <h2 class="text-xl font-bold">Retrieval Options</h2>
+                <button onclick="closeRetrievalModal()" class="text-blue-100 hover:text-white transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6 overflow-y-auto">
+                <p class="text-gray-600 mb-6 font-medium">How would you like to receive your <span id="retrieval-tote-count" class="font-bold text-gray-900">0</span> items?</p>
+                
+                <div class="space-y-4">
+                    <!-- Option 1: Self-Service -->
+                    <div id="retrieval-opt-staging" class="flex items-center p-4 rounded-xl border-2 border-blue-500 bg-blue-50 cursor-pointer transition-all" onclick="selectRetrievalLogistics('staging')">
+                        <div class="w-5 h-5 rounded-full border-[5px] border-blue-600 bg-white mr-4 flex-shrink-0" id="retrieval-dot-staging"></div>
+                        <div>
+                            <div class="font-bold text-gray-900 text-lg">Self-Service Pickup <span class="text-green-600 ml-2 text-sm">Included</span></div>
+                            <div class="text-sm text-gray-500 mt-1">We'll stage it at your local facility.</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Option 2: Valet Delivery -->
+                    <div id="retrieval-opt-valet" class="flex items-center p-4 rounded-xl border-2 border-gray-200 bg-white cursor-pointer transition-all" onclick="selectRetrievalLogistics('valet_delivery')">
+                        <div class="w-5 h-5 rounded-full border-2 border-gray-300 bg-white mr-4 flex-shrink-0" id="retrieval-dot-valet"></div>
+                        <div>
+                            <div class="font-bold text-gray-900 text-lg">Valet Delivery <span class="text-gray-600 ml-2 text-sm" id="retrieval-valet-fee-label">...</span></div>
+                            <div class="text-sm text-gray-500 mt-1">We'll deliver it to your door.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Interactive Staging Room Reservation Calendar -->
+                <div class="mt-6 pt-4 border-t border-gray-150 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-extrabold uppercase text-gray-800 tracking-wider flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            Reserve Staging Slot Date
+                        </label>
+                        <span id="surge-badge" class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase">Standard Rate ($0)</span>
+                    </div>
+
+                    <!-- Date & Time Slot Inputs -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">Target Retrieval Date:</span>
+                            <input type="date" id="retrieval-target-date" onchange="handleReservationDateChange()" class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">Staging Time Window:</span>
+                            <select id="retrieval-time-slot" onchange="handleReservationSlotChange()" class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                                <option value="09:00 AM - 12:00 PM">Morning (9 AM - 12 PM)</option>
+                                <option value="12:00 PM - 03:00 PM">Afternoon (12 PM - 3 PM)</option>
+                                <option value="03:00 PM - 06:00 PM">Evening Peak (3 PM - 6 PM)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Demand & Surge Fee Summary Banner -->
+                    <div id="surge-fee-banner" class="bg-gradient-to-r from-blue-50 to-indigo-50/60 p-3.5 rounded-2xl border border-blue-100/80 flex items-center justify-between text-xs">
+                        <div class="flex items-center space-x-2.5">
+                            <div class="p-2 bg-blue-600 text-white rounded-xl shadow-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            </div>
+                            <div>
+                                <span class="font-extrabold text-gray-900 block text-xs" id="surge-banner-title">Standard Access Reserved</span>
+                                <span class="text-[10px] text-gray-500 block" id="surge-banner-desc">Scheduled 48+ hours in advance. No surge fees apply.</span>
+                            </div>
+                        </div>
+                        <span class="font-black text-sm text-gray-900" id="surge-fee-amount">$0.00</span>
+                    </div>
+                </div>
+                
+                <!-- Valet Delivery Notes Input -->
+                <div id="valet-notes-container" class="hidden mt-4 space-y-2 fade-in">
+                    <label for="valet-delivery-notes" class="block text-xs font-extrabold uppercase text-gray-700 tracking-wider">
+                        Delivery Notes &amp; Drop-Off Instructions <span class="text-gray-400 font-normal lowercase">(optional)</span>
+                    </label>
+                    <textarea id="valet-delivery-notes" rows="3" placeholder="Gate codes, porch drop-off instructions, etc." class="w-full p-3.5 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-gray-50 text-gray-900 font-medium placeholder-gray-400 transition-all"></textarea>
+                </div>
+                
+                <!-- Terms disclaimer -->
+                <div class="text-[10px] text-gray-500 leading-relaxed mt-6 bg-gray-50 p-3 rounded-xl border border-gray-150 hidden" id="retrieval-valet-terms">
+                    * By confirming, you authorize CloudVault to charge the valet delivery fee to your card on file for this service.
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-5 bg-gray-50 border-t border-gray-100">
+                <button id="confirm-retrieval-btn" onclick="confirmRetrieval()" class="w-full bg-blue-600 text-white px-4 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition shadow-lg">
+                    Confirm Request
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cancellation Confirmation Modal -->
+    <div id="cancel-modal" class="fixed inset-0 bg-gray-900 bg-opacity-40 z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl space-y-6">
+            <h2 class="text-2xl font-bold text-gray-900">Cancel Subscription?</h2>
+            <p class="text-sm text-gray-600 leading-relaxed">
+                You are canceling your monthly subscription. You currently physically hold <span id="cancel-totes-count-modal" class="font-bold text-gray-900">0</span> totes.
+            </p>
+            <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-800 leading-relaxed">
+                <strong>⚠️ Asset Return Requirement:</strong> You must return all physical totes to our staging room within <strong>14 days</strong> of cancellation. After 14 days, your card-on-file will be automatically billed <strong>$15.00 per unreturned tote</strong>.
+            </div>
+            <div class="flex items-center space-x-2 cursor-pointer select-none">
+                <input type="checkbox" id="user-cancel-simulate-expiry" class="rounded text-blue-600 border-gray-300">
+                <label for="user-cancel-simulate-expiry" class="text-xs text-gray-600 font-semibold">Simulate immediate deadline expiry (sets deadline in past)</label>
+            </div>
+            <div class="flex space-x-4">
+                <button onclick="closeCancelModal()" class="flex-1 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-200 transition">Keep Subscription</button>
+                <button onclick="confirmCancelSubscriptionFlow()" id="confirm-cancel-btn" class="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 transition">Confirm Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-gray-900 bg-opacity-40 z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl space-y-6">
+            <h2 class="text-2xl font-bold text-gray-900">Profile Settings</h2>
+            <div class="space-y-3">
+                <label class="block text-sm font-semibold text-gray-700">Avatar Color</label>
+                <div class="flex space-x-4">
+                    <button onclick="selectColor('blue')" id="color-blue" class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 border-2 border-transparent hover:border-blue-300 flex items-center justify-center font-bold transition"></button>
+                    <button onclick="selectColor('green')" id="color-green" class="w-10 h-10 rounded-full bg-green-100 text-green-600 border-2 border-transparent hover:border-green-300 flex items-center justify-center font-bold transition"></button>
+                    <button onclick="selectColor('purple')" id="color-purple" class="w-10 h-10 rounded-full bg-purple-100 text-purple-600 border-2 border-transparent hover:border-purple-300 flex items-center justify-center font-bold transition"></button>
+                    <button onclick="selectColor('rose')" id="color-rose" class="w-10 h-10 rounded-full bg-rose-100 text-rose-600 border-2 border-transparent hover:border-rose-300 flex items-center justify-center font-bold transition"></button>
+                    <button onclick="selectColor('orange')" id="color-orange" class="w-10 h-10 rounded-full bg-orange-100 text-orange-600 border-2 border-transparent hover:border-orange-300 flex items-center justify-center font-bold transition"></button>
+                </div>
+            </div>
+            <div class="flex space-x-4 pt-4">
+                <button onclick="closeSettingsModal()" class="flex-1 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-200 transition">Cancel</button>
+                <button onclick="saveProfileColor()" id="save-color-btn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Photo Modal -->
+    <div id="photo-modal" class="fixed inset-0 bg-gray-900 bg-opacity-40 z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl space-y-6">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold text-gray-900">Tote Contents Photo</h2>
+                <button onclick="closePhotoModal()" class="text-gray-400 hover:text-gray-600 transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <p class="text-xs text-gray-500">Choose a category tag &amp; photo to help identify your tote contents.</p>
+                
+                <!-- Category Tag Selector -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold uppercase text-gray-400">Category Tag</label>
+                    <div class="flex flex-wrap gap-1.5" id="photo-category-chips">
+                        <button type="button" onclick="selectPhotoCategory('Clothing')" data-cat="Clothing" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Clothing</button>
+                        <button type="button" onclick="selectPhotoCategory('Documents')" data-cat="Documents" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Documents</button>
+                        <button type="button" onclick="selectPhotoCategory('Holiday')" data-cat="Holiday" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Holiday</button>
+                        <button type="button" onclick="selectPhotoCategory('Tools')" data-cat="Tools" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Tools</button>
+                        <button type="button" onclick="selectPhotoCategory('Kitchen')" data-cat="Kitchen" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Kitchen</button>
+                        <button type="button" onclick="selectPhotoCategory('Electronics')" data-cat="Electronics" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Electronics</button>
+                        <button type="button" onclick="selectPhotoCategory('Other')" data-cat="Other" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Other</button>
+                    </div>
+                </div>
+
+                <!-- Presets Grid -->
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-400 mb-2">Preset Categories</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1540221652346-e5dd6b50f3e7?w=300&auto=format&fit=crop&q=60')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1540221652346-e5dd6b50f3e7?w=300&auto=format&fit=crop&q=60" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Clothes</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=300&auto=format&fit=crop&q=60')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=300&auto=format&fit=crop&q=60" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Books</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1544816155-12df9643f363?w=300&auto=format&fit=crop&q=60')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1544816155-12df9643f363?w=300&auto=format&fit=crop&q=60" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Holiday</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=300&auto=format&fit=crop&q=60')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=300&auto=format&fit=crop&q=60" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Kitchen</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1581244904349-864286be521b?w=300&auto=format&fit=crop&q=60')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1581244904349-864286be521b?w=300&auto=format&fit=crop&q=60" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Tools</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1471864190281-a93a3070b6de?w=300&auto=format&fit=crop&q=60')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1471864190281-a93a3070b6de?w=300&auto=format&fit=crop&q=60" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Documents</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Custom URL / File Upload input -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold uppercase text-gray-400">Custom Image</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="photo-url-input" placeholder="Paste image URL..." class="flex-1 bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition">
+                        
+                        <input type="file" id="photo-file-input" accept="image/*" class="hidden" onchange="handleFileChange(event)">
+                        <button onclick="document.getElementById('photo-file-input').click()" class="bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-700 font-bold px-4 py-3 rounded-xl text-xs transition flex items-center gap-1.5 whitespace-nowrap">
+                            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                            Upload File
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Preview Area -->
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="block text-xs font-bold uppercase text-gray-400">Preview</label>
+                        <span class="text-[10px] text-blue-600 font-semibold cursor-pointer hover:underline" onclick="triggerLightboxFromPreview()">Zoom Preview</span>
+                    </div>
+                    <div class="h-28 w-full rounded-2xl bg-gray-50 border border-gray-200 overflow-hidden relative">
+                        <img id="photo-preview-img" src="" class="w-full h-full object-cover hidden cursor-pointer hover:opacity-90 transition" onclick="triggerLightboxFromPreview()" title="Click to zoom image">
+                        <div id="photo-preview-placeholder" class="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-semibold">No Image Selected</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex space-x-4 pt-2">
+                <button onclick="closePhotoModal()" class="flex-1 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-200 transition">Cancel</button>
+                <button onclick="saveTotePhoto()" id="save-photo-btn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition">Save Photo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Billing & Invoices Command Center Modal -->
+    <div id="billing-modal" class="fixed inset-0 bg-gray-900 bg-opacity-40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-xl w-full mx-4 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-gray-100 pb-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900">Billing &amp; Subscription</h2>
+                    <p class="text-xs text-gray-500 font-medium">Manage your active plan, payment methods, and invoice history.</p>
+                </div>
+                <button onclick="closeBillingModal()" class="text-gray-400 hover:text-gray-600 transition p-2 rounded-xl hover:bg-gray-100">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Plan Overview Card -->
+            <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg space-y-4">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-[10px] font-bold uppercase tracking-widest text-blue-200 bg-white/10 px-2.5 py-1 rounded-full border border-white/20">ACTIVE PLAN</span>
+                        <h3 class="text-2xl font-extrabold mt-2 text-white" id="billing-plan-name">Loading...</h3>
+                    </div>
+                    <span class="text-2xl font-extrabold text-white" id="billing-monthly-amount">$0.00<span class="text-xs font-normal text-blue-200">/mo</span></span>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 pt-2 border-t border-white/20 text-xs text-blue-100">
+                    <div>
+                        <span class="text-[10px] font-bold uppercase text-blue-200 block">Tote Rate Tier</span>
+                        <span id="billing-tier-label" class="font-bold text-white text-sm">--</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold uppercase text-blue-200 block">Next Renewal Date</span>
+                        <span id="billing-next-date" class="font-bold text-white text-sm">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Method Card (Stripe Customer Portal Ready) -->
+            <div class="bg-gray-50 rounded-2xl p-5 border border-gray-200 space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-500 font-extrabold uppercase tracking-wider">Payment Method on File</span>
+                    <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full">Primary</span>
+                </div>
+                <div class="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-7 bg-blue-900 text-white rounded flex items-center justify-center font-bold text-[10px] font-mono shadow-sm">VISA</div>
+                        <div>
+                            <p class="text-sm font-bold text-gray-900">•••• •••• •••• 4242</p>
+                            <p class="text-[11px] text-gray-500 font-medium">Expires 12/2028</p>
+                        </div>
+                    </div>
+                    <button onclick="launchStripePortalMock()" class="text-blue-600 hover:text-blue-700 text-xs font-bold bg-blue-50 hover:bg-blue-100 px-3.5 py-2 rounded-xl transition border border-blue-200">
+                        Update Card
+                    </button>
+                </div>
+            </div>
+
+            <!-- Invoice & Charges History Table -->
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-extrabold uppercase tracking-wider text-gray-500">Recent Invoices &amp; Receipts</span>
+                    <span class="text-xs font-bold text-gray-400" id="billing-charge-count">0 Records</span>
+                </div>
+                <div class="border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                    <div class="max-h-48 overflow-y-auto divide-y divide-gray-100" id="billing-charges-list">
+                        <div class="p-4 text-center text-xs text-gray-400">Loading invoice history...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-2 flex justify-between items-center border-t border-gray-100">
+                <button onclick="triggerCancelFlowUser()" class="text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-xl border border-red-200 transition">
+                    Cancel Subscription
+                </button>
+                <button onclick="closeBillingModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold px-6 py-2.5 rounded-xl transition text-sm">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schedule Cancellation Tote Return Modal -->
+    <div id="cancel-return-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full mx-4 shadow-2xl space-y-6">
+            <div class="flex justify-between items-center border-b border-gray-100 pb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900">Return Empty Totes</h2>
+                    <p class="text-xs text-gray-500 font-medium">Drop off your empty totes to complete cancellation.</p>
+                </div>
+                <button onclick="closeCancelReturnModal()" class="text-gray-400 hover:text-gray-600 transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 leading-relaxed">
+                    <strong>📦 Empty Tote Drop-Off:</strong> Once you return all empty physical totes to our staging room, your account penalty holds will be completely released!
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-700 mb-2">Drop-Off Option</label>
+                    <div class="space-y-2">
+                        <div id="return-opt-staging" class="flex items-center p-3.5 rounded-2xl border-2 border-blue-600 bg-blue-50 cursor-pointer" onclick="selectReturnLogistics('staging')">
+                            <div class="w-4 h-4 rounded-full border-4 border-blue-600 bg-white mr-3 flex-shrink-0" id="return-dot-staging"></div>
+                            <div>
+                                <div class="font-bold text-sm text-gray-900">Self-Service Staging Room Drop-Off <span class="text-green-600 font-bold ml-1">Free</span></div>
+                                <div class="text-xs text-gray-500">Drop off at facility door using keypad return PIN</div>
+                            </div>
+                        </div>
+                        <div id="return-opt-valet" class="flex items-center p-3.5 rounded-2xl border-2 border-gray-200 bg-white cursor-pointer" onclick="selectReturnLogistics('valet_pickup')">
+                            <div class="w-4 h-4 rounded-full border-2 border-gray-300 bg-white mr-3 flex-shrink-0" id="return-dot-valet"></div>
+                            <div>
+                                <div class="font-bold text-sm text-gray-900">Valet Return Pickup <span class="text-gray-600 font-bold ml-1">$15.00</span></div>
+                                <div class="text-xs text-gray-500">We pick up empty totes from your doorstep</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="return-pin-result" class="hidden bg-gray-900 text-white rounded-2xl p-5 text-center space-y-2 font-mono">
+                    <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block">STAGING DOOR RETURN PIN</span>
+                    <span id="return-pin-code" class="text-3xl font-bold text-blue-400 tracking-[0.25em]">----</span>
+                    <span class="text-[10px] text-gray-400 block font-sans">Use this PIN at kiosk door to deposit empty totes.</span>
+                </div>
+            </div>
+
+            <div class="flex space-x-3 pt-2">
+                <button onclick="closeCancelReturnModal()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition text-sm">Cancel</button>
+                <button onclick="confirmScheduleToteReturn()" id="btn-confirm-tote-return" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition text-sm shadow-md">
+                    Generate Return PIN
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Image Zoom & Inspection Lightbox Modal -->
+    <div id="image-lightbox-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden flex flex-col items-center justify-center p-4 sm:p-6 transition-opacity duration-300" onclick="closeLightboxModal(event)">
+        <div class="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center bg-gray-900/95 border border-gray-700/60 rounded-3xl overflow-hidden shadow-2xl p-4 sm:p-6" onclick="event.stopPropagation()">
+            <div class="w-full flex justify-between items-center mb-4 pb-3 border-b border-gray-800">
+                <div class="flex items-center space-x-3">
+                    <span class="p-2 bg-blue-600/20 text-blue-400 rounded-xl">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"></path></svg>
+                    </span>
+                    <div>
+                        <h3 id="lightbox-tote-code" class="text-xs font-extrabold text-blue-400 uppercase tracking-widest">TOTE PHOTO</h3>
+                        <p id="lightbox-tote-label" class="text-base font-bold text-white leading-tight">Contents Preview</p>
+                    </div>
+                </div>
+                <button onclick="closeLightboxModal()" class="text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 p-2.5 rounded-xl transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="w-full flex-grow flex items-center justify-center overflow-hidden bg-black/60 rounded-2xl min-h-[300px] max-h-[70vh] p-2">
+                <img id="lightbox-image" src="" alt="Tote Contents Full Photo" class="max-w-full max-h-[68vh] object-contain rounded-xl shadow-2xl">
+            </div>
+        </div>
+    </div>
+
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+
+    <script>
+        // ============================================================
+        // Utilities
+        // ============================================================
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
+
+        // ============================================================
+        // State
+        // ============================================================
+        let currentUser = null;
+        let currentUserColor = 'blue';
+        let selectedItems = new Set();
+        let currentInventory = [];
+        let systemPricing = { valet_base: 15.00, valet_tote_adder: 1.00 };
+        let retrievalLogisticsType = 'staging';
+        let unsubscribeInventory = null;
+        let unsubscribeUsers = null;
+        let unsubscribeSubs = null;
+        let unsubscribeRequests = null;
+        let globalFetchInventory = null;
+        let currentRequests = [];
+
+        // Wizard & Totes State
+        let wizardTotes = 5;
+        let wizardLogistics = 'self_service';
+        let wizardZip = '';
+        let additionalToteCount = 1;
+        let addTotesLogistics = 'self_service';
+        let currentSubscription = null;
+
+        // Categories & Lightbox State
+        let currentCategoryFilter = 'all';
+        let selectedPhotoCategory = null;
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function getItemCategory(item) {
+            if (item.category) return item.category;
+            if (item.label) {
+                const match = item.label.match(/#(Clothing|Documents|Holiday|Tools|Kitchen|Electronics|Other)/i);
+                if (match) {
+                    const word = match[1];
+                    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+                }
+            }
+            return null;
+        }
+
+        function getCategoryBadgeClass(category) {
+            switch ((category || '').toLowerCase()) {
+                case 'clothing':
+                    return 'bg-blue-50 text-blue-700 border-blue-200';
+                case 'documents':
+                    return 'bg-slate-100 text-slate-700 border-slate-200';
+                case 'holiday':
+                    return 'bg-rose-50 text-rose-700 border-rose-200';
+                case 'tools':
+                    return 'bg-amber-50 text-amber-700 border-amber-200';
+                case 'kitchen':
+                    return 'bg-orange-50 text-orange-700 border-orange-200';
+                case 'electronics':
+                    return 'bg-purple-50 text-purple-700 border-purple-200';
+                default:
+                    return 'bg-gray-100 text-gray-700 border-gray-200';
+            }
+        }
+
+        // ============================================================
+        // Pricing & Wizard Functions
+        // ============================================================
+        function getAddTierRate(count) {
+            if (count >= 50) return { rate: 1.00, tier: 4, label: 'Tier 4 — $1.00/tote' };
+            if (count >= 25) return { rate: 2.00, tier: 3, label: 'Tier 3 — $2.00/tote' };
+            if (count >= 10) return { rate: 3.50, tier: 2, label: 'Tier 2 — $3.50/tote' };
+            return { rate: 5.00, tier: 1, label: 'Tier 1 — $5.00/tote' };
+        }
+
+        function updateAddTotesPreview() {
+            if (!currentSubscription) return;
+            const currentTotes = currentSubscription.total_totes || 0;
+            const currentRate = Number(currentSubscription.tote_rate) || 5.00;
+            const currentMonthly = Number(currentSubscription.recurring_storage) || 0.00;
+
+            const newTotal = currentTotes + additionalToteCount;
+            const { rate: newRate, label: rateLabel } = getAddTierRate(newTotal);
+            const newMonthly = Math.round(newTotal * newRate * 100) / 100;
+            const delta = Math.round((newMonthly - currentMonthly) * 100) / 100;
+
+            document.getElementById('preview-current-summary').textContent = `${currentTotes} Tote${currentTotes > 1 ? 's' : ''} @ $${currentRate.toFixed(2)} = $${currentMonthly.toFixed(2)}/mo`;
+            document.getElementById('preview-added-count').textContent = `+${additionalToteCount} Tote${additionalToteCount > 1 ? 's' : ''}`;
+            document.getElementById('preview-new-rate').textContent = rateLabel;
+            document.getElementById('preview-new-monthly').textContent = `$${newMonthly.toFixed(2)}/mo`;
+            
+            const incrementalCostEl = document.getElementById('preview-incremental-cost');
+            incrementalCostEl.textContent = delta >= 0 ? `+$${delta.toFixed(2)}/mo` : `-$${Math.abs(delta).toFixed(2)}/mo`;
+            incrementalCostEl.className = delta < 0 ? 'text-lg font-extrabold text-green-600' : 'text-lg font-extrabold text-blue-600';
+
+            const tierBanner = document.getElementById('tier-change-banner');
+            if (newRate < currentRate) {
+                tierBanner.classList.remove('hidden');
+            } else {
+                tierBanner.classList.add('hidden');
+            }
+
+            document.getElementById('add-valet-fee-label').textContent = `$${(15.00 + additionalToteCount * 1.00).toFixed(2)}`;
+        }
+
+        function selectAddLogistics(type) {
+            addTotesLogistics = type;
+            const selfEl = document.getElementById('add-opt-self');
+            const valetEl = document.getElementById('add-opt-valet');
+            const dotSelf = document.getElementById('add-dot-self');
+            const dotValet = document.getElementById('add-dot-valet');
+            if (type === 'self_service') {
+                selfEl.className = 'flex items-center p-3 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
+                valetEl.className = 'flex items-center p-3 rounded-xl border-2 border-gray-200 bg-white cursor-pointer';
+                dotSelf.className = 'w-4 h-4 rounded-full border-4 border-blue-600 bg-white mr-3 flex-shrink-0';
+                dotValet.className = 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mr-3 flex-shrink-0';
+            } else {
+                valetEl.className = 'flex items-center p-3 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
+                selfEl.className = 'flex items-center p-3 rounded-xl border-2 border-gray-200 bg-white cursor-pointer';
+                dotValet.className = 'w-4 h-4 rounded-full border-4 border-blue-600 bg-white mr-3 flex-shrink-0';
+                dotSelf.className = 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mr-3 flex-shrink-0';
+            }
+            updateAddTotesPreview();
+        }
+
+        async function confirmAddTotes() {
+            const btn = document.getElementById('add-totes-confirm-btn');
+            const errEl = document.getElementById('add-totes-error');
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+            errEl.classList.add('hidden');
+
+            try {
+                const dateInput = document.getElementById('fulfillment-target-date');
+                const slotInput = document.getElementById('fulfillment-time-slot');
+                const targetDate = dateInput ? dateInput.value : null;
+                const timeSlot = slotInput ? slotInput.value : '09:00 AM - 12:00 PM';
+
+                const { data, error } = await supabase.rpc('add_totes', {
+                    p_additional_totes: additionalToteCount,
+                    p_logistics_type: addTotesLogistics,
+                    p_target_date: targetDate,
+                    p_time_slot: timeSlot
+                });
+                if (error) throw error;
+
+                closeAddTotesPanel();
+                showToast(`${additionalToteCount} tote${additionalToteCount > 1 ? 's' : ''} added! New monthly: $${data.newMonthly.toFixed(2)}/mo`);
+            } catch (err) {
+                console.error('Add totes failed:', err);
+                errEl.textContent = err.message || 'Something went wrong. Please try again.';
+                errEl.classList.remove('hidden');
+                btn.textContent = 'Confirm & Add Totes';
+                btn.disabled = false;
+            }
+        }
+
+        let globalFetchRequests = null;
+
+        // ============================================================
+        // Active Staging Requests Listener & Rendering
+        // ============================================================
+        function attachRequestsListener(uid) {
+            if (unsubscribeRequests) supabase.removeChannel(unsubscribeRequests);
+
+            const fetchRequests = async () => {
+                const { data, error } = await supabase
+                    .from('access_requests')
+                    .select('*')
+                    .eq('uid', uid)
+                    .eq('status', 'pending')
+                    .order('target_date', { ascending: true });
+
+                if (!error && data) {
+                    currentRequests = data;
+                } else {
+                    currentRequests = [];
+                }
+                renderActiveRequests();
+                renderInventory(); // Rerender inventory to update disabled/selectable states
+            };
+
+            globalFetchRequests = fetchRequests;
+
+            fetchRequests();
+
+            unsubscribeRequests = supabase.channel(`requests_changes_${uid}_${Date.now()}`)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'access_requests', filter: `uid=eq.${uid}` }, () => {
+                    fetchRequests();
+                })
+                .subscribe();
+        }
+
+        function renderActiveRequests() {
+            const panel = document.getElementById('active-requests-panel');
+            const list = document.getElementById('active-requests-list');
+
+            if (!panel || !list) return;
+
+            // Only display requests that represent actual customer-initiated retrievals
+            const retrievalRequests = currentRequests.filter(req => req.requested_items && req.requested_items.length > 0);
+
+            if (retrievalRequests.length === 0) {
+                panel.classList.add('hidden');
+                list.innerHTML = '';
+                return;
+            }
+
+            panel.classList.remove('hidden');
+            list.innerHTML = '';
+
+            retrievalRequests.forEach(req => {
+                const itemDetails = (req.requested_items || []).map(itemId => {
+                    const item = currentInventory.find(i => i.id === itemId);
+                    if (!item) return `Tote (${itemId.substring(0, 8)})`;
+                    return `${item.tote_code}${item.label ? ` — ${item.label}` : ''}`;
+                });
+
+                const dateObj = req.target_date ? new Date(req.target_date + 'T00:00:00') : new Date();
+                const fullDateStr = req.target_date ? dateObj.toLocaleDateString(undefined, {
+                    weekday: 'long',
+                    month: 'short',
+                    day: 'numeric'
+                }) : 'TBD';
+
+                const shortDateStr = req.target_date ? dateObj.toLocaleDateString(undefined, {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric'
+                }) : 'TBD';
+
+                const isValet = req.fulfillment_type === 'valet_delivery';
+                const typeBadge = isValet 
+                    ? `<span class="bg-blue-50 text-blue-600 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-blue-100 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg> Valet Door Delivery</span>`
+                    : `<span class="bg-indigo-50 text-indigo-600 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-indigo-100 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg> Self-Service Pickup</span>`;
+
+                const allStaged = (req.requested_items || []).every(itemId => {
+                    const item = currentInventory.find(i => i.id === itemId);
+                    return item && item.status === 'staged';
+                });
+                const isStaged = req.status === 'staged' || allStaged;
+
+                // Step 3 badge HTML
+                const step3Badge = isStaged
+                    ? `<div class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">✓</div>`
+                    : `<div class="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-md shadow-blue-500/30 animate-pulse flex-shrink-0">3</div>`;
+
+                // Step 4 badge HTML & subtitle
+                let step4Badge = '';
+                let step4Subtitle = '';
+                if (isStaged) {
+                    if (isValet) {
+                        step4Badge = `<div class="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">🚚</div>`;
+                        step4Subtitle = `<span class="text-blue-600 font-bold">Dispatched</span>`;
+                    } else {
+                        step4Badge = `<div class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">🔑</div>`;
+                        step4Subtitle = `<span class="text-emerald-600 font-bold">PIN Ready</span>`;
+                    }
+                } else {
+                    step4Badge = `<div class="w-7 h-7 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center font-bold text-xs flex-shrink-0">4</div>`;
+                    step4Subtitle = `Pending`;
+                }
+
+                const progressPercent = isStaged ? 100 : 66;
+
+                let notesHtml = '';
+                if (isValet && req.delivery_notes) {
+                    notesHtml = `
+                        <div class="bg-amber-50/80 border border-amber-200/70 rounded-2xl p-3.5 text-xs text-amber-900 flex items-start space-x-3">
+                            <div class="p-1.5 bg-amber-100 text-amber-700 rounded-lg flex-shrink-0 mt-0.5">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </div>
+                            <div>
+                                <span class="font-extrabold text-[10px] uppercase tracking-wider text-amber-800 block">Valet Delivery &amp; Drop-off Notes:</span>
+                                <p class="font-medium text-amber-900 mt-0.5">${escapeHtml(req.delivery_notes)}</p>
+                            </div>
+                        </div>`;
+                }
+
+                let pinSection = '';
+                if (!isValet && req.pin) {
+                    if (isStaged) {
+                        pinSection = `
+                            <div class="bg-gray-900 text-white rounded-2xl p-4 flex flex-col items-center justify-center space-y-1 select-none border border-emerald-500/40 shadow-inner">
+                                <span class="text-[9px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> Keypad Access PIN (Ready)</span>
+                                <span class="text-2xl font-mono font-bold tracking-[0.2em] text-blue-400">${req.pin}</span>
+                                <button onclick="navigator.clipboard.writeText('${req.pin}'); showToast('PIN code copied!');" class="text-[10px] font-bold text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 px-2.5 py-1 rounded-lg transition mt-1">Copy PIN</button>
+                            </div>`;
+                    } else {
+                        pinSection = `
+                            <div class="bg-gray-950 text-gray-400 rounded-2xl p-4 flex flex-col items-center justify-center space-y-1.5 select-none border border-dashed border-gray-800">
+                                <span class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Keypad PIN</span>
+                                <span class="text-[10px] font-semibold text-gray-500 text-center px-4">PIN will be active once totes are prepped in staging room on ${shortDateStr}.</span>
+                            </div>`;
+                    }
+                }
+
+                const div = document.createElement('div');
+                div.className = "bg-white border border-gray-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between gap-6 relative overflow-hidden";
+                div.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-start border-b border-gray-100 pb-3">
+                            <div>
+                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Scheduled Target Date</span>
+                                <h4 class="text-base font-extrabold text-gray-900 mt-0.5">${fullDateStr}</h4>
+                            </div>
+                            ${typeBadge}
+                        </div>
+
+                        <!-- Live 4-Step Retrieval Progress Timeline Tracker -->
+                        <div class="bg-gray-50/80 border border-gray-150 rounded-2xl p-4 space-y-3">
+                            <div class="flex justify-between items-center text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">
+                                <span>Retrieval Progress Timeline</span>
+                                <span class="text-blue-600 font-bold">${isStaged ? 'Stage 4 of 4' : 'Stage 3 of 4'}</span>
+                            </div>
+
+                            <div class="relative py-1">
+                                <div class="hidden sm:block absolute top-3.5 left-6 right-6 h-1 bg-gray-200 -z-0 rounded-full"></div>
+                                <div class="hidden sm:block absolute top-3.5 left-6 h-1 bg-blue-600 -z-0 rounded-full transition-all duration-500" style="width: ${progressPercent}%;"></div>
+
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 relative z-10">
+                                    <!-- Step 1 -->
+                                    <div class="flex items-center sm:flex-col sm:items-center text-left sm:text-center gap-2">
+                                        <div class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">✓</div>
+                                        <div>
+                                            <h5 class="font-extrabold text-xs text-gray-900">1. Received</h5>
+                                            <p class="text-[9px] text-gray-500 font-semibold">Request Logged</p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Step 2 -->
+                                    <div class="flex items-center sm:flex-col sm:items-center text-left sm:text-center gap-2">
+                                        <div class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">✓</div>
+                                        <div>
+                                            <h5 class="font-extrabold text-xs text-gray-900">2. Scheduled</h5>
+                                            <p class="text-[9px] text-blue-600 font-bold">${shortDateStr}</p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Step 3 -->
+                                    <div class="flex items-center sm:flex-col sm:items-center text-left sm:text-center gap-2">
+                                        ${step3Badge}
+                                        <div>
+                                            <h5 class="font-extrabold text-xs ${isStaged ? 'text-gray-900' : 'text-blue-600'}">3. Staging</h5>
+                                            <p class="text-[9px] text-gray-500 font-semibold">${isStaged ? '✓ Complete' : 'In Progress'}</p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Step 4 -->
+                                    <div class="flex items-center sm:flex-col sm:items-center text-left sm:text-center gap-2">
+                                        ${step4Badge}
+                                        <div>
+                                            <h5 class="font-extrabold text-xs ${isStaged ? 'text-emerald-700' : 'text-gray-400'}">4. ${isValet ? 'Delivery' : 'Pickup'}</h5>
+                                            <p class="text-[9px] text-gray-500 font-semibold">${step4Subtitle}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        ${notesHtml}
+
+                        <div class="space-y-1.5">
+                            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Requested Totes</span>
+                            <div class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                                ${itemDetails.map(name => `
+                                    <span class="bg-gray-50 border border-gray-150 text-gray-600 text-xs px-2.5 py-1 rounded-xl font-bold flex items-center">
+                                        <svg class="w-3.5 h-3.5 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                                        ${escapeHtml(name)}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-center pt-3 border-t border-gray-100">
+                            ${!isStaged ? `
+                                <span class="text-xs text-gray-400 font-medium">Changed your mind?</span>
+                                <button onclick="cancelActiveRequest('${req.id}')" class="text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-red-200 transition flex items-center gap-1">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    Cancel Request
+                                </button>
+                            ` : `
+                                <span class="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                                    <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                                    Staged & Ready in Room
+                                </span>
+                                <span class="text-[10px] text-gray-400 font-medium font-mono">PIN Active Above</span>
+                            `}
+                        </div>
+                    </div>
+
+                    ${pinSection}
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        async function cancelActiveRequest(requestId) {
+            if (!confirm('Are you sure you want to cancel this retrieval request? Your items will remain safely stored in the facility.')) {
+                return;
+            }
+
+            try {
+                const { data, error } = await supabase.rpc('cancel_retrieval_request', {
+                    p_request_id: requestId
+                });
+                if (error) throw error;
+
+                showToast('Retrieval request cancelled. Your totes remain safely stored.');
+
+                if (typeof globalFetchRequests === 'function') globalFetchRequests();
+                if (typeof globalFetchInventory === 'function') globalFetchInventory();
+            } catch (err) {
+                console.error('Cancel request failed:', err);
+                alert('Failed to cancel request: ' + (err.message || 'Unknown error'));
+            }
+        }
+
+        // ============================================================
+        // Tote Contents Photo Modal Management
+        // ============================================================
+        let activePhotoToteId = null;
+
+        function handleFileChange(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const max_size = 300;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > max_size) {
+                            height *= max_size / width;
+                            width = max_size;
+                        }
+                    } else {
+                        if (height > max_size) {
+                            width *= max_size / height;
+                            height = max_size;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    
+                    const urlInput = document.getElementById('photo-url-input');
+                    const previewImg = document.getElementById('photo-preview-img');
+                    const previewPlaceholder = document.getElementById('photo-preview-placeholder');
+
+                    urlInput.value = compressedDataUrl;
+                    previewImg.src = compressedDataUrl;
+                    previewImg.classList.remove('hidden');
+                    previewPlaceholder.classList.add('hidden');
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function openLightboxModal(imageUrl, toteCode, label) {
+            if (!imageUrl) return;
+            const modal = document.getElementById('image-lightbox-modal');
+            const img = document.getElementById('lightbox-image');
+            const codeEl = document.getElementById('lightbox-tote-code');
+            const labelEl = document.getElementById('lightbox-tote-label');
+
+            img.src = imageUrl;
+            codeEl.textContent = toteCode || 'TOTE PHOTO';
+            labelEl.textContent = label || 'Contents Inspection';
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeLightboxModal(event) {
+            if (event && event.target && event.target.id !== 'image-lightbox-modal' && !event.target.closest('button')) {
+                return;
+            }
+            document.getElementById('image-lightbox-modal').classList.add('hidden');
+        }
+
+        function triggerLightboxFromPreview() {
+            const previewImg = document.getElementById('photo-preview-img');
+            if (previewImg && previewImg.src && !previewImg.classList.contains('hidden')) {
+                const item = activePhotoToteId ? currentInventory.find(i => i.id === activePhotoToteId) : null;
+                openLightboxModal(previewImg.src, item ? item.tote_code : 'PREVIEW', item ? item.label : 'Contents Photo');
+            }
+        }
+
+        window.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const lightbox = document.getElementById('image-lightbox-modal');
+                if (lightbox && !lightbox.classList.contains('hidden')) {
+                    lightbox.classList.add('hidden');
+                }
+            }
+        });
+
+        function selectPhotoCategory(cat) {
+            selectedPhotoCategory = cat;
+            document.querySelectorAll('.cat-chip-btn').forEach(btn => {
+                if (btn.dataset.cat === cat) {
+                    btn.className = "cat-chip-btn text-xs font-bold px-3 py-1.5 rounded-xl border-2 border-blue-600 bg-blue-50 text-blue-700 shadow-sm transition";
+                } else {
+                    btn.className = "cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition";
+                }
+            });
+        }
+
+        function setCategoryFilter(cat) {
+            currentCategoryFilter = cat;
+            document.querySelectorAll('.cat-pill').forEach(pill => {
+                if (pill.dataset.categoryPill === cat) {
+                    pill.className = "cat-pill bg-blue-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all shadow-sm whitespace-nowrap";
+                } else {
+                    pill.className = "cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap";
+                }
+            });
+            renderInventory();
+        }
+
+        function openPhotoModal(toteId, event) {
+            if (event) event.stopPropagation();
+            activePhotoToteId = toteId;
+            
+            const item = currentInventory.find(i => i.id === toteId);
+            const urlInput = document.getElementById('photo-url-input');
+            const previewImg = document.getElementById('photo-preview-img');
+            const previewPlaceholder = document.getElementById('photo-preview-placeholder');
+
+            resetPhotoPresetsHighlight();
+
+            const cat = item ? getItemCategory(item) : null;
+            selectPhotoCategory(cat);
+
+            if (item && item.image_url) {
+                urlInput.value = item.image_url;
+                previewImg.src = item.image_url;
+                previewImg.classList.remove('hidden');
+                previewPlaceholder.classList.add('hidden');
+            } else {
+                urlInput.value = '';
+                previewImg.src = '';
+                previewImg.classList.add('hidden');
+                previewPlaceholder.classList.remove('hidden');
+            }
+
+            urlInput.oninput = () => {
+                const val = urlInput.value.trim();
+                if (val) {
+                    previewImg.src = val;
+                    previewImg.classList.remove('hidden');
+                    previewPlaceholder.classList.add('hidden');
+                } else {
+                    previewImg.src = '';
+                    previewImg.classList.add('hidden');
+                    previewPlaceholder.classList.remove('hidden');
+                }
+            };
+
+            document.getElementById('photo-modal').classList.remove('hidden');
+        }
+
+        function closePhotoModal() {
+            document.getElementById('photo-modal').classList.add('hidden');
+            activePhotoToteId = null;
+        }
+
+        function selectPhotoPreset(url) {
+            const urlInput = document.getElementById('photo-url-input');
+            const previewImg = document.getElementById('photo-preview-img');
+            const previewPlaceholder = document.getElementById('photo-preview-placeholder');
+
+            urlInput.value = url;
+            previewImg.src = url;
+            previewImg.classList.remove('hidden');
+            previewPlaceholder.classList.add('hidden');
+            
+            resetPhotoPresetsHighlight();
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('border-blue-500', 'ring-2', 'ring-blue-100');
+            }
+        }
+
+        function resetPhotoPresetsHighlight() {
+            document.querySelectorAll('.preset-photo-btn').forEach(btn => {
+                btn.className = "preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16";
+            });
+        }
+
+        async function saveTotePhoto() {
+            if (!activePhotoToteId) return;
+            const btn = document.getElementById('save-photo-btn');
+            const url = document.getElementById('photo-url-input').value.trim();
+            
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            try {
+                const item = currentInventory.find(i => i.id === activePhotoToteId);
+                let newLabel = item ? (item.label || '') : '';
+
+                if (selectedPhotoCategory) {
+                    newLabel = newLabel.replace(/#(Clothing|Documents|Holiday|Tools|Kitchen|Electronics|Other)/gi, '').trim();
+                }
+
+                const updateData = {
+                    image_url: url || null,
+                    category: selectedPhotoCategory || null
+                };
+
+                if (newLabel) {
+                    updateData.label = newLabel;
+                }
+
+                let { error } = await supabase.from('inventory')
+                    .update(updateData)
+                    .eq('id', activePhotoToteId);
+
+                if (error && error.message && error.message.includes('category')) {
+                    delete updateData.category;
+                    if (selectedPhotoCategory) {
+                        updateData.label = (newLabel ? `${newLabel} #${selectedPhotoCategory}` : `#${selectedPhotoCategory}`).trim();
+                    }
+                    const { error: err2 } = await supabase.from('inventory')
+                        .update(updateData)
+                        .eq('id', activePhotoToteId);
+                    if (err2) throw err2;
+                } else if (error) {
+                    throw error;
+                }
+
+                showToast("Tote contents photo & category updated!");
+                closePhotoModal();
+                if (globalFetchInventory) {
+                    globalFetchInventory();
+                }
+            } catch (err) {
+                console.error("Failed to save photo", err);
+                alert("Failed to save photo: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Save Photo';
+            }
+        }
+
+        function initWizardState() {
+            selectWizardTotes(wizardTotes);
+            selectWizardLogistics(wizardLogistics);
+            document.getElementById('wizard-zip-check-container').classList.remove('hidden');
+            document.getElementById('wizard-subscription-container').classList.add('hidden');
+            document.getElementById('wizard-waitlist-container').classList.add('hidden');
+            document.getElementById('wizard-onboarding-desc').textContent = 'Verify your ZIP code to check if we service your area.';
+            document.getElementById('wizard-zip-input').value = '';
+            document.getElementById('wizard-zip-error').classList.add('hidden');
+            wizardZip = '';
+        }
+
+        async function checkWizardZip() {
+            const zipInput = document.getElementById('wizard-zip-input');
+            const zipError = document.getElementById('wizard-zip-error');
+            const zip = zipInput.value.trim();
+            const zipRegex = /^\d{5}$/;
+
+            zipError.classList.add('hidden');
+
+            if (!zipRegex.test(zip)) {
+                zipError.textContent = 'Please enter a valid 5-digit ZIP code.';
+                zipError.classList.remove('hidden');
+                return;
+            }
+
+            const btn = document.getElementById('btn-wizard-zip-check');
+            const originalText = btn.textContent;
+            btn.textContent = 'Checking...';
+            btn.disabled = true;
+
+            try {
+                let area = null;
+                const { data: sa } = await supabase.from('service_areas').select('*').eq('zip_code', zip).eq('active', true).maybeSingle();
+                if (sa) {
+                    area = sa;
+                } else {
+                    const { data: zones } = await supabase.from('operational_zones').select('*').eq('active', true);
+                    if (zones) {
+                        const matchingZone = zones.find(z => (z.zip_codes || []).includes(zip));
+                        if (matchingZone) {
+                            area = {
+                                zip_code: zip,
+                                city: matchingZone.city,
+                                facility_id: matchingZone.facility_id || `facility_${matchingZone.city.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+                                active: true
+                            };
+                        }
+                    }
+                }
+
+                btn.textContent = originalText;
+                btn.disabled = false;
+
+                if (!area) {
+                    // ZIP not active -> show waitlist
+                    wizardZip = zip;
+                    document.getElementById('wizard-zip-check-container').classList.add('hidden');
+                    document.getElementById('wizard-waitlist-container').classList.remove('hidden');
+                    document.getElementById('wizard-onboarding-desc').textContent = 'We\'re not in your area yet.';
+                    return;
+                }
+
+                // ZIP is active -> fetch regional facility rates and proceed to subscription wizard
+                wizardZip = zip;
+                let activeFacId = area.facility_id || 'facility_seattle_north';
+                const { data: facData } = await supabase.from('facilities').select('*').eq('id', activeFacId).maybeSingle();
+                if (facData) {
+                    window.regionalRates = {
+                        tier1: Number(facData.tier1_rate) || 5.00,
+                        tier2: Number(facData.tier2_rate) || 3.50,
+                        tier3: Number(facData.tier3_rate) || 2.00,
+                        tier4: Number(facData.tier4_rate) || 1.00,
+                        valetBase: Number(facData.valet_base) || 15.00,
+                        valetAdder: Number(facData.valet_tote_adder) || 1.00
+                    };
+                }
+
+                document.getElementById('wizard-zip-check-container').classList.add('hidden');
+                document.getElementById('wizard-subscription-container').classList.remove('hidden');
+                document.getElementById('wizard-onboarding-desc').textContent = `Plan Configuration — Servicing ${area.city || zip}`;
+            } catch (err) {
+                console.error("Error checking zip:", err);
+                btn.textContent = originalText;
+                btn.disabled = false;
+                zipError.textContent = 'Unable to check ZIP code. Please try again.';
+                zipError.classList.remove('hidden');
+            }
+        }
+
+        async function submitWizardWaitlist() {
+            const btn = document.getElementById('btn-wizard-waitlist-submit');
+            btn.textContent = 'Processing $25 Deposit...';
+            btn.disabled = true;
+
+            try {
+                await supabase.from('waitlist').insert({
+                    email: currentUser.email,
+                    zip_code: wizardZip,
+                    requested_totes: wizardTotes || 5,
+                    deposit_amount: 25.00,
+                    price_lock_years: 5,
+                    refund_guarantee_days: 365,
+                    payment_status: 'deposit_paid'
+                });
+                document.getElementById('wizard-waitlist-success').classList.remove('hidden');
+                btn.classList.add('hidden');
+            } catch (err) {
+                console.error("Error joining waitlist:", err);
+                alert("Something went wrong processing your deposit. Please try again.");
+                btn.textContent = 'Place $25 Deposit & Lock Legacy Rates';
+                btn.disabled = false;
+            }
+        }
+
+        function getWizardTierRate(count) {
+            const rates = window.regionalRates || { tier1: 5.00, tier2: 3.50, tier3: 2.00, tier4: 1.00 };
+            if (count >= 50) return { rate: rates.tier4, tier: 4, label: `Tier 4 — $${rates.tier4.toFixed(2)}/tote` };
+            if (count >= 25) return { rate: rates.tier3, tier: 3, label: `Tier 3 — $${rates.tier3.toFixed(2)}/tote` };
+            if (count >= 10) return { rate: rates.tier2, tier: 2, label: `Tier 2 — $${rates.tier2.toFixed(2)}/tote` };
+            return { rate: rates.tier1, tier: 1, label: `Tier 1 — $${rates.tier1.toFixed(2)}/tote` };
+        }
+
+        function selectWizardTotes(count) {
+            wizardTotes = count;
+            document.getElementById('wizard-custom-totes').value = count;
+            updateWizardLedger();
+        }
+
+        function handleWizardCustomInput() {
+            const input = document.getElementById('wizard-custom-totes');
+            let val = parseInt(input.value) || 1;
+            if (val < 1) val = 1;
+            if (val > 500) val = 500;
+            wizardTotes = val;
+            updateWizardLedger();
+        }
+
+        function selectWizardLogistics(type) {
+            wizardLogistics = type;
+            const selfEl = document.getElementById('wizard-opt-self');
+            const valetEl = document.getElementById('wizard-opt-valet');
+            const dotSelf = document.getElementById('wizard-dot-self');
+            const dotValet = document.getElementById('wizard-dot-valet');
+            if (type === 'self_service') {
+                selfEl.className = 'flex items-center p-4 rounded-2xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
+                valetEl.className = 'flex items-center p-4 rounded-2xl border border-gray-200 bg-white cursor-pointer';
+                dotSelf.className = 'w-4 h-4 rounded-full border-4 border-blue-600 bg-white mr-4 flex-shrink-0';
+                dotValet.className = 'w-4 h-4 rounded-full border border-gray-300 bg-white mr-4 flex-shrink-0';
+            } else {
+                valetEl.className = 'flex items-center p-4 rounded-2xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
+                selfEl.className = 'flex items-center p-4 rounded-2xl border border-gray-200 bg-white cursor-pointer';
+                dotValet.className = 'w-4 h-4 rounded-full border-4 border-blue-600 bg-white mr-4 flex-shrink-0';
+                dotSelf.className = 'w-4 h-4 rounded-full border border-gray-300 bg-white mr-4 flex-shrink-0';
+            }
+            updateWizardLedger();
+        }
+
+        function updateWizardLedger() {
+            const { rate, tier } = getWizardTierRate(wizardTotes);
+            
+            for (let i = 1; i <= 4; i++) {
+                const card = document.getElementById(`wizard-tier-${i}`);
+                if (card) {
+                    const presetCount = i === 1 ? 5 : i === 2 ? 10 : i === 3 ? 25 : 50;
+                    if (wizardTotes === presetCount) {
+                        card.className = 'border-2 border-blue-600 bg-blue-50/50 rounded-2xl p-4 text-center cursor-pointer transition transform hover:scale-[1.02] shadow-sm';
+                        const badge = card.querySelector('.text-lg');
+                        if (badge) badge.className = 'block font-extrabold text-blue-600 text-lg mt-1';
+                    } else {
+                        card.className = 'border border-gray-200 bg-white rounded-2xl p-4 text-center cursor-pointer transition transform hover:scale-[1.02] opacity-70';
+                        const badge = card.querySelector('.text-lg');
+                        if (badge) badge.className = 'block font-extrabold text-gray-900 text-lg mt-1';
+                    }
+                }
+            }
+
+            const rates = window.regionalRates || { valetBase: 15.00, valetAdder: 1.00 };
+            const monthly = wizardTotes * rate;
+            const logisticsFee = wizardLogistics === 'valet_pickup' ? rates.valetBase + (wizardTotes * rates.valetAdder) : 0;
+            const total = monthly + logisticsFee;
+
+            document.getElementById('ledger-monthly').textContent = monthly.toFixed(2);
+            document.getElementById('ledger-logistics').textContent = logisticsFee === 0 ? 'Free' : `$${logisticsFee.toFixed(2)}`;
+            document.getElementById('ledger-total').textContent = total.toFixed(2);
+
+            document.getElementById('wizard-valet-label').textContent = `$${(rates.valetBase + wizardTotes * rates.valetAdder).toFixed(2)}`;
+        }
+
+        async function activateOnboardingSubscription() {
+            const tosCheckbox = document.getElementById('wizard-tos-checkbox');
+            const errorMsg = document.getElementById('wizard-error-msg');
+            const btn = document.getElementById('wizard-activate-btn');
+
+            errorMsg.classList.add('hidden');
+            if (!tosCheckbox.checked) {
+                errorMsg.textContent = 'You must authorize card-on-file billing and agree to the terms to activate your space.';
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+
+            try {
+                let zipCode = wizardZip || '98101';
+
+                const { data, error } = await supabase.rpc('create_customer_profile', {
+                    p_name: currentUser.user_metadata?.name || currentUser.email.split('@')[0],
+                    p_phone: currentUser.user_metadata?.phone || '(555) 555-5555',
+                    p_zip: zipCode,
+                    p_tote_count: wizardTotes,
+                    p_logistics_type: wizardLogistics
+                });
+                if (error) throw error;
+
+
+
+                showToast('Subscription activated successfully!');
+            } catch (err) {
+                console.error('Failed to activate subscription:', err);
+                errorMsg.textContent = err.message || 'Activation failed. Please try again.';
+                errorMsg.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = 'Start My Storage Subscription';
+            }
+        }
+
+        function copyStagingPin() {
+            const pinEl = document.getElementById('pickup-pin');
+            if (!pinEl) return;
+            const text = pinEl.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast("PIN code copied to clipboard!");
+            }).catch(err => {
+                console.error("Failed to copy PIN:", err);
+            });
+        }
+
+        const STAFF_ROLES = ['executive', 'warehouse_manager', 'warehouse_worker'];
+
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            if (!session) {
+                window.location.href = 'login.html';
+                return;
+            }
+            currentUser = session.user;
+
+            try {
+                const profile = await getCachedUserProfile(currentUser.id);
+                if (profile && STAFF_ROLES.includes(profile.role)) {
+                    window.location.href = 'admin.html';
+                    return;
+                }
+            } catch (e) {
+                console.warn('Role check failed, continuing as customer:', e);
+            }
+
+            const initials = (currentUser.user_metadata?.name || currentUser.email || '--')
+                .split(' ').map(s => s[0]).join('').toUpperCase().slice(0, 2);
+            document.getElementById('user-avatar').textContent = initials;
+
+            try {
+                const { data: pricing } = await supabase.from('settings').select('valet_base, valet_tote_adder').eq('id', 'pricing').single();
+                if (pricing) {
+                    systemPricing.valet_base = Number(pricing.valet_base);
+                    systemPricing.valet_tote_adder = Number(pricing.valet_tote_adder);
+                }
+            } catch (err) {
+                console.warn('Could not fetch pricing, using defaults.', err);
+            }
+
+            if (isPastCutoff()) {
+                const nextDay = new Date();
+                nextDay.setDate(nextDay.getDate() + 2); // 2 days out because cutoff passed
+                const weekday = nextDay.toLocaleDateString(undefined, { weekday: 'long' });
+                
+                const textSpan = document.querySelector('#cutoff-banner span');
+                if (textSpan) {
+                    textSpan.textContent = `Today's 6:00 PM cutoff has passed. New retrieval requests will be scheduled for ${weekday} delivery/pickup.`;
+                }
+                document.getElementById('cutoff-banner').classList.remove('hidden');
+            }
+
+            // Real-time listener on user profile
+            if (unsubscribeUsers) supabase.removeChannel(unsubscribeUsers);
+            
+            const handleProfileUpdate = (profileData) => {
+                document.getElementById('loading-state').classList.add('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+                
+                if (profileData) {
+                    sessionStorage.setItem(`cv_user_${currentUser.id}`, JSON.stringify(profileData));
+                    if (profileData.name) {
+                        const pi = profileData.name.split(' ').map(s => s[0]).join('').toUpperCase().slice(0, 2);
+                        document.getElementById('user-avatar').textContent = pi;
+                    }
+                    if (profileData.avatar_color) {
+                        currentUserColor = profileData.avatar_color;
+                        applyAvatarColor(currentUserColor);
+                    }
+                    const devHeld = document.getElementById('dev-totes-held');
+                    if (devHeld) {
+                        devHeld.textContent = profileData.active_totes_held || 0;
+                    }
+                    // Unhide Dev Console HUD only for executives or when ?dev=true URL flag is present
+                    const devConsoleWrapper = document.getElementById('dev-console-wrapper');
+                    if (devConsoleWrapper) {
+                        const isDevUrl = window.location.search.includes('dev=true');
+                        const isExec = profileData && profileData.role === 'executive';
+                        if (isDevUrl || isExec) {
+                            devConsoleWrapper.classList.remove('hidden');
+                        } else {
+                            devConsoleWrapper.classList.add('hidden');
+                        }
+                    }
+
+                    renderOnboardingTracker(profileData);
+                } else {
+                    attachInventoryListener(currentUser.id);
+                }
+            };
+
+            // Get initial user profile
+            const { data: initialUser } = await supabase.from('users').select('*').eq('id', currentUser.id).maybeSingle();
+            handleProfileUpdate(initialUser);
+
+            if (unsubscribeUsers) supabase.removeChannel(unsubscribeUsers);
+            unsubscribeUsers = supabase.channel(`users_changes_${currentUser.id}_${Date.now()}`)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `id=eq.${currentUser.id}` }, payload => {
+                    handleProfileUpdate(payload.new);
+                })
+                .subscribe();
+
+            // Real-time listener on subscription
+            if (unsubscribeSubs) supabase.removeChannel(unsubscribeSubs);
+
+            const handleSubsUpdate = (sub) => {
+                const onboardingWizard = document.getElementById('flow-onboarding-wizard');
+                const activeDashboard = document.getElementById('flow-active-dashboard');
+                const cancBanner = document.getElementById('cancellation-alert-banner');
+                
+                if (!sub || sub.status !== 'active') {
+                    onboardingWizard.classList.remove('hidden');
+                    activeDashboard.classList.add('hidden');
+                    currentSubscription = null;
+                    initWizardState();
+
+                    // Check if user has pending cancellation tote return
+                    supabase.from('cancellations')
+                        .select('*')
+                        .eq('uid', currentUser.id)
+                        .eq('account_status', 'pending_tote_return')
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle()
+                        .then(({ data: canc }) => {
+                            if (canc) {
+                                document.getElementById('canc-totes-held-badge').textContent = `${canc.active_totes_held || 0} Totes Physical Storage`;
+                                if (cancBanner) cancBanner.classList.remove('hidden');
+                            } else {
+                                if (cancBanner) cancBanner.classList.add('hidden');
+                            }
+                        });
+                } else {
+                    if (cancBanner) cancBanner.classList.add('hidden');
+                    currentSubscription = sub;
+                    onboardingWizard.classList.add('hidden');
+                    activeDashboard.classList.remove('hidden');
+                    
+                    const headerPlan = document.getElementById('active-plan-header');
+                    if (headerPlan) {
+                        headerPlan.textContent = `${sub.total_totes} Totes Plan ($${Number(sub.tote_rate).toFixed(2)}/tote — $${Number(sub.recurring_storage).toFixed(2)}/mo)`;
+                    }
+                    updateAddTotesPreview();
+                }
+            };
+
+            const { data: initialSubs } = await supabase.from('subscriptions').select('*').eq('uid', currentUser.id).limit(1);
+            if (initialSubs && initialSubs.length > 0) {
+                handleSubsUpdate(initialSubs[0]);
+            } else {
+                handleSubsUpdate(null);
+            }
+
+            unsubscribeSubs = supabase.channel(`subscriptions_changes_${currentUser.id}_${Date.now()}`)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions', filter: `uid=eq.${currentUser.id}` }, payload => {
+                    handleSubsUpdate(payload.new);
+                })
+                .subscribe();
+        });
+
+        // ============================================================
+        // Onboarding Progress Tracker UI Renderer
+        // ============================================================
+        function renderOnboardingTracker(profile) {
+            const tracker = document.getElementById('onboarding-tracker');
+            const grid = document.getElementById('tote-grid');
+            const empty = document.getElementById('empty-state');
+            const cutoffBanner = document.getElementById('cutoff-banner');
+            const actionBar = document.getElementById('action-bar');
+            
+            const status = profile.onboarding_status || 'pending';
+            
+            if (status === 'active') {
+                tracker.classList.add('hidden');
+                grid.classList.remove('hidden');
+                attachInventoryListener(currentUser.id);
+                attachRequestsListener(currentUser.id);
+            } else {
+                grid.classList.add('hidden');
+                empty.classList.add('hidden');
+                cutoffBanner.classList.add('hidden');
+                actionBar.className = "fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 transition-transform duration-300 bar-hidden z-40";
+                
+                tracker.classList.remove('hidden');
+                
+                const step2Badge = document.getElementById('step2-badge');
+                const step3Badge = document.getElementById('step3-badge');
+                const step3Desc = document.getElementById('step3-desc');
+                const pinContainer = document.getElementById('pickup-pin-container');
+                const pinDisplay = document.getElementById('pickup-pin');
+                
+                if (status === 'pending') {
+                    step2Badge.className = "w-12 h-12 rounded-full bg-blue-50 text-blue-600 border-2 border-blue-600 flex items-center justify-center font-bold text-lg mb-3";
+                    step2Badge.innerHTML = '<span class="animate-pulse">●</span>';
+                    
+                    step3Badge.className = "w-12 h-12 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center font-bold text-lg mb-3";
+                    step3Badge.textContent = "3";
+                    step3Desc.textContent = "We'll notify you when ready.";
+                    pinContainer.classList.add('hidden');
+                } else if (status === 'totes-ready') {
+                    step2Badge.className = "w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-lg mb-3";
+                    step2Badge.textContent = "✓";
+                    
+                    step3Badge.className = "w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg mb-3 shadow-md";
+                    step3Badge.textContent = "3";
+                    step3Desc.innerHTML = "<span class='text-blue-600 font-bold'>Totes staged!</span>";
+                    
+                    pinContainer.classList.remove('hidden');
+                    pinDisplay.textContent = profile.onboarding_pin || '----';
+                }
+            }
+        }
+
+        // ============================================================
+        // Real-time listener for Inventory
+        // ============================================================
+        function attachInventoryListener(uid) {
+            if (unsubscribeInventory) supabase.removeChannel(unsubscribeInventory);
+
+            const fetchInventory = async () => {
+                const { data, error } = await supabase
+                    .from('inventory')
+                    .select('*')
+                    .eq('uid', uid)
+                    .order('created_at', { ascending: false });
+
+                if (!error && data) {
+                    currentInventory = data;
+                } else {
+                    currentInventory = [];
+                }
+                renderInventory();
+            };
+            globalFetchInventory = fetchInventory;
+
+            fetchInventory();
+
+            unsubscribeInventory = supabase.channel(`inventory_changes_${uid}_${Date.now()}`)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory', filter: `uid=eq.${uid}` }, () => {
+                    fetchInventory();
+                })
+                .subscribe();
+        }
+
+        function handleSearchFilter() {
+            renderInventory();
+        }
+
+        function renderInventory() {
+            const grid = document.getElementById('tote-grid');
+            const empty = document.getElementById('empty-state');
+            const tracker = document.getElementById('onboarding-tracker');
+
+            // Get filter values
+            const searchInput = document.getElementById('search-input');
+            const statusSelect = document.getElementById('status-filter');
+            const query = searchInput ? searchInput.value.toLowerCase() : '';
+            const statusFilter = statusSelect ? statusSelect.value : 'all';
+
+            const filteredData = currentInventory.filter(item => {
+                const matchesSearch = (item.label || '').toLowerCase().includes(query) || (item.tote_code || '').toLowerCase().includes(query);
+                const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+
+                const itemCategory = getItemCategory(item);
+                const matchesCategory = currentCategoryFilter === 'all' || 
+                    (itemCategory && itemCategory.toLowerCase() === currentCategoryFilter.toLowerCase());
+
+                return matchesSearch && matchesStatus && matchesCategory;
+            });
+
+            tracker.classList.add('hidden');
+            grid.classList.remove('hidden');
+
+            if (currentInventory.length === 0) {
+                grid.innerHTML = '';
+                empty.classList.remove('hidden');
+                document.getElementById('search-input').parentElement.parentElement.classList.add('hidden');
+                return;
+            }
+
+            document.getElementById('search-input').parentElement.parentElement.classList.remove('hidden');
+            empty.classList.add('hidden');
+            grid.innerHTML = '';
+
+            if (filteredData.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-500 font-semibold">No totes match your search &amp; filter criteria.</div>';
+                return;
+            }
+
+            filteredData.forEach((item) => {
+                const id = item.id;
+                const isSelected = selectedItems.has(id);
+                const isStored = item.status === 'stored';
+                const isBulky = item.item_type === 'bulky';
+
+                const itemCat = getItemCategory(item);
+                const catBadgeHtml = itemCat ? `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${getCategoryBadgeClass(itemCat)}">#${itemCat.toLowerCase()}</span>` : '';
+
+                const card = document.createElement('div');
+                card.className = `tote-card bg-white border-2 rounded-2xl p-6 relative overflow-hidden cursor-pointer ${isSelected ? 'selected border-blue-600' : 'border-gray-100'}`;
+                card.onclick = () => { if (isStored) toggleTote(id); };
+
+                const iconHolderContent = item.image_url
+                    ? `<img src="${item.image_url}" class="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-85 transition transform hover:scale-105" onclick="openLightboxModal('${item.image_url}', '${item.tote_code}', '${escapeHtml(item.label || '')}'); event.stopPropagation();" title="Click to inspect full image">`
+                    : (isBulky
+                        ? '<span class="text-purple-500 font-bold text-xs uppercase tracking-wider">Bulky</span>'
+                        : '<svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>'
+                      );
+
+                let actionHTML = '';
+                if (item.activated === false) {
+                    actionHTML = '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">Processing Intake Tag</span>';
+                } else if (item.status === 'pending-stage') {
+                    const activeReq = currentRequests.find(r => r.requested_items && r.requested_items.includes(id));
+                    const isValet = activeReq && activeReq.fulfillment_type === 'valet_delivery';
+                    actionHTML = isValet
+                        ? '<span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded border border-blue-200">Valet Delivery Pending</span>'
+                        : '<span class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded border border-amber-200">Staging Pending</span>';
+                } else if (item.status === 'staged') {
+                    const activeReq = currentRequests.find(r => r.requested_items && r.requested_items.includes(id));
+                    const isValet = activeReq && activeReq.fulfillment_type === 'valet_delivery';
+                    actionHTML = isValet
+                        ? '<span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-200">Out for Delivery</span>'
+                        : '<span class="text-[10px] font-bold text-green-600 bg-green-50 px-2.5 py-1 rounded border border-green-200">Staged (Ready)</span>';
+                } else if (item.status === 'with-customer') {
+                    actionHTML = '<span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded border border-blue-200">With You</span>';
+                } else {
+                    actionHTML = `<div class="w-6 h-6 rounded border-2 flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300'}">
+                                    ${isSelected ? '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>' : ''}
+                                   </div>`;
+                }
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-12 h-12 rounded-lg flex items-center justify-center border overflow-hidden ${isBulky ? 'bg-purple-50 border-purple-100' : 'bg-gray-50 border-gray-100'}">
+                            ${iconHolderContent}
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="openPhotoModal('${id}', event); event.stopPropagation();" class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Add contents photo & category">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            </button>
+                            ${actionHTML}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xs font-bold text-gray-400 tracking-wider">${item.tote_code || 'TOTE'}</span>
+                        ${catBadgeHtml}
+                    </div>
+                    <input type="text"
+                        value="${item.label || ''}"
+                        class="label-input w-full bg-transparent font-bold text-gray-900 text-lg placeholder-gray-300 pb-1"
+                        placeholder="Add a label..."
+                        data-id="${id}"
+                        data-original="${item.label || ''}"
+                        onclick="event.stopPropagation()"
+                    >
+                    <div class="saving-indicator text-xs text-green-600 mt-1 opacity-0" id="save-${id}">✓ Saved</div>
+                `;
+
+                grid.appendChild(card);
+            });
+
+            attachLabelListeners();
+        }
+
+        // ============================================================
+        // Save Label updates
+        // ============================================================
+        function attachLabelListeners() {
+            document.querySelectorAll('.label-input').forEach(input => {
+                const debouncedSave = debounce(async (el) => {
+                    const id = el.dataset.id;
+                    const newLabel = el.value.trim();
+                    const original = el.dataset.original;
+
+                    if (newLabel === original) return;
+
+                    const { error } = await supabase.from('inventory').update({ label: newLabel }).eq('id', id);
+                    if (!error) {
+                        el.dataset.original = newLabel;
+                        const indicator = document.getElementById(`save-${id}`);
+                        if (indicator) {
+                            indicator.classList.remove('opacity-0');
+                            setTimeout(() => indicator.classList.add('opacity-0'), 1500);
+                        }
+                    } else {
+                        console.error('Failed to save label:', error);
+                    }
+                }, 1500);
+
+                input.addEventListener('input', (e) => debouncedSave(e.target));
+            });
+        }
+
+        // ============================================================
+        // Selection Logic
+        // ============================================================
+        function toggleTote(id) {
+            if (selectedItems.has(id)) {
+                selectedItems.delete(id);
+            } else {
+                selectedItems.add(id);
+            }
+            document.querySelectorAll('.tote-card').forEach(card => {
+                const input = card.querySelector('.label-input');
+                if (!input) return;
+                const cardId = input.dataset.id;
+                const isSelected = selectedItems.has(cardId);
+                card.classList.toggle('selected', isSelected);
+                card.classList.toggle('border-blue-600', isSelected);
+                card.classList.toggle('border-gray-100', !isSelected);
+
+                const checkbox = card.querySelector('.w-6.h-6.rounded');
+                if (checkbox) {
+                    checkbox.className = `w-6 h-6 rounded border-2 flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300'}`;
+                    checkbox.innerHTML = isSelected ? '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>' : '';
+                }
+            });
+            updateActionBar();
+        }
+
+        function updateActionBar() {
+            const count = selectedItems.size;
+            document.getElementById('selected-count').innerText = count;
+            const bar = document.getElementById('action-bar');
+            if (count > 0) {
+                bar.classList.remove('bar-hidden');
+                bar.classList.add('bar-visible');
+            } else {
+                bar.classList.remove('bar-visible');
+                bar.classList.add('bar-hidden');
+            }
+        }
+
+        // ============================================================
+        // Staging Reservation Calendar & Surge Demand Pricing Engine
+        // ============================================================
+        let selectedReservationSurge = { fee: 0.00, tier: 'standard' };
+
+        function calculateSurgeFee(targetDateStr, slotStr) {
+            if (!targetDateStr) return { fee: 0.00, tier: 'standard', desc: 'Standard Access Reserved. Scheduled in advance.' };
+            
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const target = new Date(targetDateStr + 'T00:00:00');
+            const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
+            const isPeakSlot = slotStr && slotStr.includes('03:00 PM');
+
+            if (diffDays <= 0) {
+                return {
+                    fee: isPeakSlot ? 24.99 : 19.99,
+                    tier: 'same_day_surge',
+                    title: 'Same-Day Express Staging Access',
+                    desc: 'High demand same-day priority handling fee applied.'
+                };
+            } else if (diffDays === 1) {
+                return {
+                    fee: isPeakSlot ? 14.99 : 9.99,
+                    tier: 'next_day_surge',
+                    title: 'Next-Day Fast Access',
+                    desc: 'Next-day expedited staging slot reserved.'
+                };
+            } else if (isPeakSlot) {
+                return {
+                    fee: 4.99,
+                    tier: 'peak_time_surge',
+                    title: 'Evening Peak Slot Demand',
+                    desc: 'High traffic evening staging window requested.'
+                };
+            } else {
+                return {
+                    fee: 0.00,
+                    tier: 'standard',
+                    title: 'Standard Access Reserved',
+                    desc: 'Scheduled 48+ hours in advance. No surge fees apply.'
+                };
+            }
+        }
+
+        function updateReservationSurgeUI() {
+            const dateInput = document.getElementById('retrieval-target-date');
+            const slotInput = document.getElementById('retrieval-time-slot');
+            if (!dateInput || !slotInput) return;
+
+            const calc = calculateSurgeFee(dateInput.value, slotInput.value);
+            selectedReservationSurge = calc;
+
+            const badge = document.getElementById('surge-badge');
+            const titleEl = document.getElementById('surge-banner-title');
+            const descEl = document.getElementById('surge-banner-desc');
+            const amountEl = document.getElementById('surge-fee-amount');
+
+            if (amountEl) amountEl.textContent = `$${calc.fee.toFixed(2)}`;
+            if (titleEl) titleEl.textContent = calc.title;
+            if (descEl) descEl.textContent = calc.desc;
+
+            if (badge) {
+                if (calc.fee > 0) {
+                    badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 uppercase";
+                    badge.textContent = `Surge +$${calc.fee.toFixed(2)}`;
+                } else {
+                    badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase";
+                    badge.textContent = "Standard Rate ($0)";
+                }
+            }
+        }
+
+        let selectedFulfillmentSurge = { fee: 0.00, tier: 'standard' };
+
+        // Capacity Checker: Queries active access_requests for a target date & disables full slots
+        async function checkSlotAvailability(facilityId, dateStr, selectId) {
+            const selectEl = document.getElementById(selectId);
+            if (!selectEl || !dateStr) return;
+
+            const targetFacId = facilityId || 'facility_seattle_north';
+            let stagingCap = 2; // Default limit
+
+            try {
+                const { data: fac } = await supabase.from('facilities').select('staging_rooms').eq('id', targetFacId).maybeSingle();
+                if (fac && fac.staging_rooms) stagingCap = fac.staging_rooms;
+            } catch (e) {
+                console.warn('Could not fetch staging rooms capacity:', e);
+            }
+
+            try {
+                const { data: reqs } = await supabase.from('access_requests')
+                    .select('time_slot')
+                    .eq('facility_id', targetFacId)
+                    .eq('target_date', dateStr)
+                    .eq('status', 'pending');
+
+                const counts = {};
+                (reqs || []).forEach(r => {
+                    const slot = r.time_slot || '09:00 AM - 12:00 PM';
+                    counts[slot] = (counts[slot] || 0) + 1;
+                });
+
+                Array.from(selectEl.options).forEach(opt => {
+                    const cleanVal = opt.value;
+                    const baseLabel = cleanVal.includes('09:00') ? 'Morning (9 AM - 12 PM)' :
+                                      cleanVal.includes('12:00') ? 'Afternoon (12 PM - 3 PM)' :
+                                      'Evening Peak (3 PM - 6 PM)';
+                    
+                    const booked = counts[cleanVal] || 0;
+                    if (booked >= stagingCap) {
+                        opt.disabled = true;
+                        opt.textContent = `${baseLabel} — 🔴 FULL (${booked}/${stagingCap})`;
+                    } else {
+                        opt.disabled = false;
+                        opt.textContent = `${baseLabel} (${booked}/${stagingCap} booked)`;
+                    }
+                });
+
+                // Auto-switch selected value if currently disabled
+                if (selectEl.selectedOptions[0] && selectEl.selectedOptions[0].disabled) {
+                    const availableOpt = Array.from(selectEl.options).find(o => !o.disabled);
+                    if (availableOpt) selectEl.value = availableOpt.value;
+                }
+            } catch (err) {
+                console.warn('Error checking slot capacity:', err);
+            }
+        }
+
+        function updateFulfillmentSurgeUI() {
+            const dateInput = document.getElementById('fulfillment-target-date');
+            const slotInput = document.getElementById('fulfillment-time-slot');
+            if (!dateInput || !slotInput) return;
+
+            const calc = calculateSurgeFee(dateInput.value, slotInput.value);
+            selectedFulfillmentSurge = calc;
+
+            const badge = document.getElementById('fulfillment-surge-badge');
+            const titleEl = document.getElementById('fulfillment-surge-banner-title');
+            const descEl = document.getElementById('fulfillment-surge-banner-desc');
+            const amountEl = document.getElementById('fulfillment-surge-fee-amount');
+
+            if (amountEl) amountEl.textContent = `$${calc.fee.toFixed(2)}`;
+            if (titleEl) titleEl.textContent = calc.title;
+            if (descEl) descEl.textContent = calc.desc;
+
+            if (badge) {
+                if (calc.fee > 0) {
+                    badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 uppercase";
+                    badge.textContent = `Surge +$${calc.fee.toFixed(2)}`;
+                } else {
+                    badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase";
+                    badge.textContent = "Standard Rate ($0)";
+                }
+            }
+        }
+
+        async function handleReservationDateChange() {
+            const dateInput = document.getElementById('retrieval-target-date');
+            if (dateInput) {
+                const profile = currentUser ? await getCachedUserProfile(currentUser.id) : null;
+                const facId = profile?.assigned_facility_id || 'facility_seattle_north';
+                await checkSlotAvailability(facId, dateInput.value, 'retrieval-time-slot');
+            }
+            updateReservationSurgeUI();
+        }
+
+        function handleReservationSlotChange() {
+            updateReservationSurgeUI();
+        }
+
+        async function handleFulfillmentDateChange() {
+            const dateInput = document.getElementById('fulfillment-target-date');
+            if (dateInput) {
+                const profile = currentUser ? await getCachedUserProfile(currentUser.id) : null;
+                const facId = profile?.assigned_facility_id || 'facility_seattle_north';
+                await checkSlotAvailability(facId, dateInput.value, 'fulfillment-time-slot');
+            }
+            updateFulfillmentSurgeUI();
+        }
+
+        function handleFulfillmentSlotChange() {
+            updateFulfillmentSurgeUI();
+        }
+
+        // ============================================================
+        // STAGING REQUEST: Call Postgres RPC
+        // ============================================================
+        function requestRetrieval() {
+            if (selectedItems.size === 0) return;
+            
+            // Populate modal counts and pricing
+            const count = selectedItems.size;
+            document.getElementById('retrieval-tote-count').textContent = count;
+            
+            const valetFee = systemPricing.valet_base + (count * systemPricing.valet_tote_adder);
+            document.getElementById('retrieval-valet-fee-label').textContent = `$${valetFee.toFixed(2)}`;
+            
+            // Set default date to 2 days out
+            const defaultDate = new Date();
+            defaultDate.setDate(defaultDate.getDate() + 2);
+            const dateStr = defaultDate.toISOString().split('T')[0];
+            const dateInput = document.getElementById('retrieval-target-date');
+            if (dateInput) {
+                dateInput.value = dateStr;
+                dateInput.min = new Date().toISOString().split('T')[0];
+            }
+
+            // Reset to default logistics & refresh surge pricing UI
+            selectRetrievalLogistics('staging');
+            updateReservationSurgeUI();
+            document.getElementById('retrieval-modal').classList.remove('hidden');
+        }
+
+        function closeRetrievalModal() {
+            document.getElementById('retrieval-modal').classList.add('hidden');
+        }
+
+        function selectRetrievalLogistics(type) {
+            retrievalLogisticsType = type;
+            
+            const stagingOpt = document.getElementById('retrieval-opt-staging');
+            const stagingDot = document.getElementById('retrieval-dot-staging');
+            const valetOpt = document.getElementById('retrieval-opt-valet');
+            const valetDot = document.getElementById('retrieval-dot-valet');
+            const termsBox = document.getElementById('retrieval-valet-terms');
+            const valetNotesContainer = document.getElementById('valet-notes-container');
+
+            if (type === 'staging') {
+                stagingOpt.classList.replace('border-gray-200', 'border-blue-500');
+                stagingOpt.classList.replace('bg-white', 'bg-blue-50');
+                stagingDot.classList.replace('border-gray-300', 'border-blue-600');
+                stagingDot.classList.add('border-[5px]');
+                stagingDot.classList.remove('border-2');
+                
+                valetOpt.classList.replace('border-blue-500', 'border-gray-200');
+                valetOpt.classList.replace('bg-blue-50', 'bg-white');
+                valetDot.classList.replace('border-blue-600', 'border-gray-300');
+                valetDot.classList.remove('border-[5px]');
+                valetDot.classList.add('border-2');
+                
+                termsBox.classList.add('hidden');
+                if (valetNotesContainer) valetNotesContainer.classList.add('hidden');
+            } else {
+                valetOpt.classList.replace('border-gray-200', 'border-blue-500');
+                valetOpt.classList.replace('bg-white', 'bg-blue-50');
+                valetDot.classList.replace('border-gray-300', 'border-blue-600');
+                valetDot.classList.add('border-[5px]');
+                valetDot.classList.remove('border-2');
+                
+                stagingOpt.classList.replace('border-blue-500', 'border-gray-200');
+                stagingOpt.classList.replace('bg-blue-50', 'bg-white');
+                stagingDot.classList.replace('border-blue-600', 'border-gray-300');
+                stagingDot.classList.remove('border-[5px]');
+                stagingDot.classList.add('border-2');
+                
+                termsBox.classList.remove('hidden');
+                if (valetNotesContainer) valetNotesContainer.classList.remove('hidden');
+            }
+        }
+
+        async function confirmRetrieval() {
+            const btn = document.getElementById('confirm-retrieval-btn');
+            btn.disabled = true;
+            btn.textContent = 'Submitting Request...';
+
+            const deliveryNotes = retrievalLogisticsType === 'valet_delivery' 
+                ? (document.getElementById('valet-delivery-notes')?.value.trim() || '') 
+                : '';
+
+            const dateInput = document.getElementById('retrieval-target-date');
+            const slotInput = document.getElementById('retrieval-time-slot');
+            const targetDate = dateInput ? dateInput.value : null;
+            const timeSlot = slotInput ? slotInput.value : '09:00 AM - 12:00 PM';
+
+            try {
+                let { data, error } = await supabase.rpc('request_staging', {
+                    p_tote_ids: Array.from(selectedItems),
+                    p_fulfillment_type: retrievalLogisticsType,
+                    p_delivery_notes: deliveryNotes,
+                    p_target_date: targetDate,
+                    p_time_slot: timeSlot,
+                    p_surge_fee: selectedReservationSurge.fee,
+                    p_surge_tier: selectedReservationSurge.tier
+                });
+
+                if (error && error.message && error.message.includes('function')) {
+                    // Resilient fallback for pre-existing RPC signatures on live Supabase instances
+                    const fallbackRes = await supabase.rpc('request_staging', {
+                        p_tote_ids: Array.from(selectedItems),
+                        p_fulfillment_type: retrievalLogisticsType,
+                        p_delivery_notes: deliveryNotes
+                    });
+                    data = fallbackRes.data;
+                    error = fallbackRes.error;
+                }
+
+                if (error) throw error;
+
+                closeRetrievalModal();
+                const notesInput = document.getElementById('valet-delivery-notes');
+                if (notesInput) notesInput.value = '';
+
+                if (typeof globalFetchInventory === 'function') globalFetchInventory();
+                if (typeof globalFetchRequests === 'function') globalFetchRequests();
+
+                if (retrievalLogisticsType === 'valet_delivery') {
+                    showToast('Valet delivery requested successfully!');
+                } else {
+                    document.getElementById('pin-display').textContent = data.pin;
+                    document.getElementById('pin-modal').classList.remove('hidden');
+                }
+
+                selectedItems.clear();
+                updateActionBar();
+            } catch (err) {
+                console.error('Staging request failed:', err);
+                alert('Request failed: ' + (err.message || 'Please try again.'));
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Confirm Request';
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('pin-modal').classList.add('hidden');
+        }
+
+        function handleSignOut() {
+            clearUserCache();
+            supabase.auth.signOut().then(() => {
+                window.location.href = 'index.html';
+            });
+        }
+
+        // ============================================================
+        // Add Totes Panel Logic
+        // ============================================================
+        function openAddTotesPanel() {
+            const panel = document.getElementById('add-totes-panel');
+            const overlay = document.getElementById('add-totes-overlay');
+            additionalToteCount = 1;
+            document.getElementById('add-totes-count').value = 1;
+            selectAddLogistics('self_service');
+            
+            // Set default date to 2 days out
+            const defaultDate = new Date();
+            defaultDate.setDate(defaultDate.getDate() + 2);
+            const dateStr = defaultDate.toISOString().split('T')[0];
+            const dateInput = document.getElementById('fulfillment-target-date');
+            if (dateInput) {
+                dateInput.value = dateStr;
+                dateInput.min = new Date().toISOString().split('T')[0];
+                handleFulfillmentDateChange();
+            }
+
+            panel.classList.remove('translate-x-full');
+            overlay.classList.remove('hidden');
+        }
+
+        function closeAddTotesPanel() {
+            document.getElementById('add-totes-panel').classList.add('translate-x-full');
+            document.getElementById('add-totes-overlay').classList.add('hidden');
+        }
+
+        function handleAddTotesInput() {
+            const input = document.getElementById('add-totes-count');
+            let val = parseInt(input.value) || 1;
+            if (val < 1) val = 1;
+            if (val > 100) val = 100;
+            input.value = val;
+            additionalToteCount = val;
+            updateAddTotesPreview();
+        }
+
+        function setAddTotesVal(val) {
+            document.getElementById('add-totes-count').value = val;
+            additionalToteCount = val;
+            updateAddTotesPreview();
+        }
+
+        function updateAddTotes(delta) {
+            additionalToteCount = Math.max(1, Math.min(100, additionalToteCount + delta));
+            document.getElementById('add-totes-count').value = additionalToteCount;
+            updateAddTotesPreview();
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').textContent = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3500);
+        }
+
+        // ============================================================
+        // Developer Test Console HUD Logic
+        // ============================================================
+        function toggleDevConsole() {
+            const content = document.getElementById('dev-console-content');
+            const arrow = document.getElementById('dev-console-arrow');
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                arrow.textContent = '▲';
+            } else {
+                content.classList.add('hidden');
+                arrow.textContent = '▼';
+            }
+        }
+
+        async function runSimulateOnboarding(btn) {
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Processing...';
+            }
+            showToast("Simulating onboarding setup...");
+            try {
+                const { data, error } = await supabase.rpc('simulate_onboarding_complete');
+                if (error) throw error;
+                showToast(`Setup complete! Loaded ${data.totesActivated} inventory totes.`);
+            } catch (err) {
+                console.error("Simulation failed:", err);
+                alert("Simulation failed: " + err.message);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Onboard & Load Totes';
+                }
+            }
+        }
+
+        async function updateTotesHeldSim(amount) {
+            if (!currentUser) return;
+            try {
+                const { error } = await supabase.rpc('update_totes_held_sim', { p_amount: amount });
+                if (error) throw error;
+                showToast("Simulated totes held count update.");
+            } catch (err) {
+                console.error("Failed to update active totes held:", err);
+            }
+        }
+
+        async function returnAllTotesSim() {
+            if (!currentUser) return;
+            try {
+                const { error } = await supabase.rpc('return_all_totes_sim');
+                if (error) throw error;
+                showToast("Simulated return of all totes.");
+            } catch (err) {
+                console.error("Failed to reset totes:", err);
+            }
+        }
+
+        async function runCancelSubscription(btn) {
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Processing...';
+            }
+            const simulateExpiry = document.getElementById('dev-simulate-expiry').checked;
+            showToast("Processing cancellation...");
+            try {
+                const { data, error } = await supabase.rpc('cancel_subscription', { p_simulate_expiry: simulateExpiry });
+                if (error) throw error;
+                showToast(`Cancelled! Totes at cancellation: ${data.totesHeld}. Deadline: ${new Date(data.deadline).toLocaleTimeString()}`);
+            } catch (err) {
+                console.error("Cancellation failed:", err);
+                alert("Cancellation failed: " + err.message);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Cancel Subscription';
+                }
+            }
+        }
+
+        async function runBillingAuditTrigger(btn) {
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Processing...';
+            }
+            showToast("Running billing audit task...");
+            try {
+                const { data, error } = await supabase.rpc('trigger_tote_audit_test');
+                if (error) throw error;
+                const processed = data.processed || [];
+                if (processed.length === 0) {
+                    showToast("Audit run complete: 0 accounts expired.");
+                } else {
+                    const summary = processed.map(p => `User ${p.uid.substring(0, 6)}: billed $${p.charged.toFixed(2)} (${p.unreturnedTotes} unreturned)`).join('\n');
+                    alert(`Audit Job Succeeded!\n\n${summary}`);
+                }
+            } catch (err) {
+                console.error("Audit trigger failed:", err);
+                alert("Audit failed: " + err.message);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Run Audit Job Now';
+                }
+            }
+        }
+
+        // ============================================================
+        // User Cancellation Flow Modal
+        // ============================================================
+        function triggerCancelFlowUser() {
+            if (!currentUser) return;
+            
+            let totesHeld = 0;
+            const cachedProfile = sessionStorage.getItem(`cv_user_${currentUser.id}`);
+            if (cachedProfile) {
+                const profile = JSON.parse(cachedProfile);
+                totesHeld = profile.active_totes_held || 0;
+            }
+            
+            document.getElementById('cancel-totes-count-modal').textContent = totesHeld;
+            document.getElementById('cancel-modal').classList.remove('hidden');
+        }
+
+        function closeCancelModal() {
+            document.getElementById('cancel-modal').classList.add('hidden');
+        }
+
+        async function confirmCancelSubscriptionFlow() {
+            const btn = document.getElementById('confirm-cancel-btn');
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+            const simulateExpiry = document.getElementById('user-cancel-simulate-expiry').checked;
+            try {
+                const { error } = await supabase.rpc('cancel_subscription', { p_simulate_expiry: simulateExpiry });
+                if (error) throw error;
+                closeCancelModal();
+                showToast("Your subscription has been cancelled.");
+            } catch (err) {
+                console.error("Cancellation failed:", err);
+                alert("Failed to cancel subscription: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Confirm Cancel';
+            }
+        }
+        // ============================================================
+        // Dropdown & Modals
+        // ============================================================
+        function toggleDropdown() {
+            document.getElementById('user-dropdown').classList.toggle('hidden');
+        }
+
+        window.addEventListener('click', function(e) {
+            const avatar = document.getElementById('user-avatar');
+            const dropdown = document.getElementById('user-dropdown');
+            if (avatar && dropdown) {
+                if (!avatar.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                }
+            }
+        });
+
+        function openSettingsModal() {
+            document.getElementById('user-dropdown').classList.add('hidden');
+            document.getElementById('settings-modal').classList.remove('hidden');
+            if (currentUserColor) selectColor(currentUserColor);
+        }
+        function closeSettingsModal() {
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+
+        let tempColor = 'blue';
+        function selectColor(color) {
+            tempColor = color;
+            const colors = ['blue', 'green', 'purple', 'rose', 'orange'];
+            colors.forEach(c => {
+                const btn = document.getElementById('color-' + c);
+                if (c === color) {
+                    btn.classList.add('border-' + c + '-600');
+                    btn.classList.remove('border-transparent');
+                    btn.innerHTML = '✓';
+                } else {
+                    btn.classList.remove('border-' + c + '-600');
+                    btn.classList.add('border-transparent');
+                    btn.innerHTML = '';
+                }
+            });
+        }
+
+        async function saveProfileColor() {
+            const btn = document.getElementById('save-color-btn');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            try {
+                const { error } = await supabase.from('users').update({ avatar_color: tempColor }).eq('id', currentUser.id);
+                if (error) throw error;
+                currentUserColor = tempColor;
+                applyAvatarColor(currentUserColor);
+                closeSettingsModal();
+                showToast("Profile color updated!");
+            } catch (err) {
+                console.error("Failed to update color", err);
+                alert("Failed to update color: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+            }
+        }
+
+        function applyAvatarColor(color) {
+            if (!color) color = 'blue';
+            const avatar = document.getElementById('user-avatar');
+            avatar.className = 'w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm cursor-pointer select-none border-2 border-transparent transition ' + 
+                (color === 'blue' ? 'bg-blue-100 text-blue-600 hover:border-blue-300' :
+                 color === 'green' ? 'bg-green-100 text-green-600 hover:border-green-300' :
+                 color === 'purple' ? 'bg-purple-100 text-purple-600 hover:border-purple-300' :
+                 color === 'rose' ? 'bg-rose-100 text-rose-600 hover:border-rose-300' :
+                 'bg-orange-100 text-orange-600 hover:border-orange-300');
+        }
+
+        async function openBillingModal() {
+            document.getElementById('user-dropdown').classList.add('hidden');
+            document.getElementById('billing-modal').classList.remove('hidden');
+            
+            const planNameEl = document.getElementById('billing-plan-name');
+            const monthlyAmountEl = document.getElementById('billing-monthly-amount');
+            const tierLabelEl = document.getElementById('billing-tier-label');
+            const nextDateEl = document.getElementById('billing-next-date');
+            
+            planNameEl.textContent = 'Loading...';
+            monthlyAmountEl.textContent = '...';
+            tierLabelEl.textContent = '...';
+            nextDateEl.textContent = 'Loading...';
+
+            if (currentSubscription) {
+                const totalTotes = currentSubscription.total_totes || 0;
+                const toteRate = Number(currentSubscription.tote_rate) || 5.00;
+                const monthly = Number(currentSubscription.recurring_storage) || 0;
+
+                planNameEl.textContent = `${totalTotes} Tote${totalTotes !== 1 ? 's' : ''} Storage Plan`;
+                monthlyAmountEl.innerHTML = `$${monthly.toFixed(2)}<span class="text-xs font-normal text-blue-200">/mo</span>`;
+                tierLabelEl.textContent = `Tier @ $${toteRate.toFixed(2)}/tote`;
+
+                if (currentSubscription.current_period_end) {
+                    const d = new Date(currentSubscription.current_period_end);
+                    nextDateEl.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+                } else {
+                    nextDateEl.textContent = 'Auto-Renews Monthly';
+                }
+            } else {
+                planNameEl.textContent = 'No Active Plan';
+                monthlyAmountEl.textContent = '$0.00';
+                tierLabelEl.textContent = 'Inactive';
+                nextDateEl.textContent = 'N/A';
+            }
+
+            loadInvoiceHistory();
+        }
+
+        async function loadInvoiceHistory() {
+            const listEl = document.getElementById('billing-charges-list');
+            const countEl = document.getElementById('billing-charge-count');
+            if (!listEl) return;
+
+            try {
+                const { data: charges, error } = await supabase
+                    .from('charges')
+                    .select('*')
+                    .eq('uid', currentUser.id)
+                    .order('charged_at', { ascending: false });
+
+                if (error) throw error;
+
+                if (!charges || charges.length === 0) {
+                    countEl.textContent = '0 Records';
+                    listEl.innerHTML = `
+                        <div class="p-6 text-center text-xs text-gray-400 space-y-1">
+                            <p class="font-bold text-gray-500">No Billing Receipts Yet</p>
+                            <p>Monthly subscription invoices will appear here after billing run.</p>
+                        </div>`;
+                    return;
+                }
+
+                countEl.textContent = `${charges.length} Invoice${charges.length !== 1 ? 's' : ''}`;
+                listEl.innerHTML = charges.map(ch => {
+                    const d = new Date(ch.charged_at);
+                    const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                    const isSuccess = (ch.status || 'success') === 'success';
+                    return `
+                        <div class="p-3.5 sm:p-4 flex justify-between items-center bg-white hover:bg-gray-50/80 transition">
+                            <div class="space-y-0.5">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-bold text-gray-900">${escapeHtml(ch.charge_type || 'Monthly Storage Subscription')}</span>
+                                    <span class="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isSuccess ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-red-100 text-red-700 border border-red-200'}">
+                                        ${isSuccess ? 'Paid' : 'Failed'}
+                                    </span>
+                                </div>
+                                <p class="text-[10px] text-gray-400 font-mono">${dateStr} • Charge ID #${ch.id.substring(0, 8)}</p>
+                            </div>
+                            <div class="text-right space-y-1">
+                                <span class="text-sm font-bold text-gray-900 block">$${Number(ch.amount).toFixed(2)}</span>
+                                <button onclick="showToast('Receipt downloaded for #${ch.id.substring(0, 8)}!')" class="text-[10px] text-blue-600 font-bold hover:underline">Receipt PDF</button>
+                            </div>
+                        </div>`;
+                }).join('');
+            } catch (err) {
+                console.error("Failed to load invoice history:", err);
+                listEl.innerHTML = `<div class="p-4 text-center text-xs text-red-500">Failed to load invoices.</div>`;
+            }
+        }
+
+        function launchStripePortalMock() {
+            showToast("Opening Stripe Customer Portal... (Integration Ready)");
+        }
+
+        function closeBillingModal() {
+            document.getElementById('billing-modal').classList.add('hidden');
+        }
+
+        // ============================================================
+        // Cancellation Tote Return Workflow
+        // ============================================================
+        let returnLogisticsType = 'staging';
+
+        function openCancelReturnModal() {
+            document.getElementById('cancel-return-modal').classList.remove('hidden');
+            document.getElementById('return-pin-result').classList.add('hidden');
+            selectReturnLogistics('staging');
+        }
+
+        function closeCancelReturnModal() {
+            document.getElementById('cancel-return-modal').classList.add('hidden');
+        }
+
+        function selectReturnLogistics(type) {
+            returnLogisticsType = type;
+            const selfEl = document.getElementById('return-opt-staging');
+            const valetEl = document.getElementById('return-opt-valet');
+            const dotSelf = document.getElementById('return-dot-staging');
+            const dotValet = document.getElementById('return-dot-valet');
+
+            if (type === 'staging') {
+                selfEl.className = 'flex items-center p-3.5 rounded-2xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
+                valetEl.className = 'flex items-center p-3.5 rounded-2xl border-2 border-gray-200 bg-white cursor-pointer';
+                dotSelf.className = 'w-4 h-4 rounded-full border-4 border-blue-600 bg-white mr-3 flex-shrink-0';
+                dotValet.className = 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mr-3 flex-shrink-0';
+            } else {
+                valetEl.className = 'flex items-center p-3.5 rounded-2xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
+                selfEl.className = 'flex items-center p-3.5 rounded-2xl border-2 border-gray-200 bg-white cursor-pointer';
+                dotValet.className = 'w-4 h-4 rounded-full border-4 border-blue-600 bg-white mr-3 flex-shrink-0';
+                dotSelf.className = 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mr-3 flex-shrink-0';
+            }
+        }
+
+        async function confirmScheduleToteReturn() {
+            const btn = document.getElementById('btn-confirm-tote-return');
+            btn.disabled = true;
+            btn.textContent = 'Generating PIN...';
+
+            try {
+                const { data, error } = await supabase.rpc('schedule_cancellation_tote_return', {
+                    p_fulfillment_type: returnLogisticsType
+                });
+
+                if (error) throw error;
+
+                if (returnLogisticsType === 'staging') {
+                    document.getElementById('return-pin-code').textContent = data.pin;
+                    document.getElementById('return-pin-result').classList.remove('hidden');
+                    showToast(`Staging Drop-Off scheduled! PIN: ${data.pin}`);
+                } else {
+                    showToast('Valet return pickup scheduled!');
+                    closeCancelReturnModal();
+                }
+
+                if (typeof globalFetchRequests === 'function') globalFetchRequests();
+            } catch (err) {
+                console.error("Failed to schedule tote return:", err);
+                alert("Failed to schedule tote return: " + (err.message || "Unknown error"));
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate Return PIN';
+            }
+        }
+    </script>
+</body>
+</html>

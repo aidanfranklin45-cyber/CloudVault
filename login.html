@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudVault | Sign In</title>
+    <link rel="icon" type="image/png" href="logo.png">
+    <!-- PostHog Analytics -->
+    <script>
+        !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}var c=e;for(void 0!==a?c=e[a]=[]:a="posthog",c.people=c.people||[],c.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},c.people.toString=function(){return c.toString(1)+".people (stub)"},p="capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures onSessionId".split(" "),r=0;r<p.length;r++)g(c,p[r]);e._i.push([i,s,a])},e.__SV=1.0,o=t.createElement("script"),o.type="text/javascript",o.async=!0,o.src="https://us-assets.i.posthog.com/static/array.js",n=t.getElementsByTagName("script")[0],n.parentNode.insertBefore(o,n))}(document,window.posthog||[]);
+        posthog.init('phc_njX2MWz7DdzYxHY87sdEtymMMmA2kHK9oxyG8T4XwWzb', {api_host: 'https://us.posthog.com', person_profiles: 'identified_only'});
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #0f172a; }
+        input { transition: all 0.2s; }
+        input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2); }
+        .fade-in { animation: fadeIn 0.4s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <a href="index.html" class="text-2xl font-bold tracking-tighter text-blue-600">CloudVault</a>
+            <a href="index.html" class="text-sm font-semibold text-gray-500 hover:text-gray-900">← Back to Home</a>
+        </div>
+    </header>
+
+    <main class="flex-grow flex items-center justify-center px-4 py-16 fade-in">
+        <div class="bg-white p-8 sm:p-10 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
+            
+            <div class="text-center mb-8">
+                <h1 id="auth-title" class="text-2xl font-bold text-gray-900">Welcome Back</h1>
+                <p id="auth-subtitle" class="text-gray-500 text-sm mt-2">Sign in to access your vault.</p>
+            </div>
+
+            <!-- Auth Form -->
+            <div class="space-y-4">
+                <!-- Name field (sign-up only) -->
+                <div id="name-field" class="hidden">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Full Name</label>
+                    <input type="text" id="auth-name" placeholder="Jane Doe" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Email</label>
+                    <input type="email" id="auth-email" placeholder="jane@example.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Password</label>
+                    <input type="password" id="auth-password" placeholder="••••••••" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium">
+                </div>
+
+                <!-- Phone field (sign-up only) -->
+                <div id="phone-field" class="hidden">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Phone</label>
+                    <input type="tel" id="auth-phone" placeholder="(555) 123-4567" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium">
+                </div>
+
+                <p id="auth-error" class="text-red-500 text-sm font-medium hidden"></p>
+
+                <button id="auth-submit" onclick="handleAuth()" class="w-full bg-blue-600 text-white px-4 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition mt-4">
+                    Sign In
+                </button>
+            </div>
+
+            <div class="mt-6 text-center">
+                <p class="text-sm text-gray-500">
+                    <span id="toggle-text">Don't have an account?</span>
+                    <button onclick="toggleMode()" class="text-blue-600 font-semibold hover:underline ml-1" id="toggle-btn">Sign Up</button>
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+
+    <script>
+        let isSignUp = false;
+
+        // Role-based routing: staff → admin.html, customers → dashboard.html
+        const STAFF_ROLES = ['executive', 'warehouse_manager', 'warehouse_worker'];
+
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            if (!session) return;
+            try {
+                const profile = await getCachedUserProfile(session.user.id);
+                if (profile && STAFF_ROLES.includes(profile.role)) {
+                    window.location.href = 'admin.html';
+                } else {
+                    window.location.href = 'dashboard.html';
+                }
+            } catch (e) {
+                // If profile fetch fails, default to customer dashboard
+                window.location.href = 'dashboard.html';
+            }
+        });
+
+        function toggleMode() {
+            isSignUp = !isSignUp;
+            document.getElementById('auth-title').textContent = isSignUp ? 'Create Your Vault' : 'Welcome Back';
+            document.getElementById('auth-subtitle').textContent = isSignUp ? 'Sign up to get started.' : 'Sign in to access your vault.';
+            document.getElementById('auth-submit').textContent = isSignUp ? 'Create Account' : 'Sign In';
+            document.getElementById('toggle-text').textContent = isSignUp ? 'Already have an account?' : "Don't have an account?";
+            document.getElementById('toggle-btn').textContent = isSignUp ? 'Sign In' : 'Sign Up';
+            document.getElementById('name-field').classList.toggle('hidden', !isSignUp);
+            document.getElementById('phone-field').classList.toggle('hidden', !isSignUp);
+            document.getElementById('auth-error').classList.add('hidden');
+        }
+
+        async function handleAuth() {
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value.trim();
+            const errEl = document.getElementById('auth-error');
+            errEl.classList.add('hidden');
+
+            if (!email || !password) {
+                errEl.textContent = 'Please fill in all required fields.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                if (isSignUp) {
+                    const name = document.getElementById('auth-name').value.trim();
+                    const phone = document.getElementById('auth-phone').value.trim();
+
+                    if (!name) {
+                        errEl.textContent = 'Please enter your name.';
+                        errEl.classList.remove('hidden');
+                        return;
+                    }
+
+                    // Create Supabase Auth account.
+                    // The trigger `on_auth_user_created` will create the user profile in public.users automatically.
+                    const { data, error } = await supabase.auth.signUp({
+                        email: email,
+                        password: password,
+                        options: {
+                            data: {
+                                name: name,
+                                phone: phone
+                            }
+                        }
+                    });
+                    if (error) throw error;
+                } else {
+                    const { data, error } = await supabase.auth.signInWithPassword({
+                        email: email,
+                        password: password
+                    });
+                    if (error) throw error;
+                }
+            } catch (err) {
+                console.error(err);
+                let msg = err.message || 'Something went wrong. Please try again.';
+                errEl.textContent = msg;
+                errEl.classList.remove('hidden');
+            }
+        }
+
+        // Phone formatting
+        document.getElementById('auth-phone').addEventListener('input', function (e) {
+            let x = e.target.value.replace(/\D/g, '').match(/(\d{0,3})(\d{0,3})(\d{0,4})/);
+            e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : '');
+        });
+    </script>
+</body>
+</html>
