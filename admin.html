@@ -168,6 +168,24 @@
 </head>
 <body class="antialiased min-h-screen flex flex-col">
 
+    <!-- Full-Screen Scanner Feedback Overlay (Industrial Terminal) -->
+    <div id="scan-overlay" class="fixed inset-0 z-[100] hidden flex flex-col items-center justify-center p-6 text-center transition-all duration-200">
+        <div id="scan-overlay-card" class="bg-gray-950 border-4 border-emerald-500 rounded-3xl p-8 max-w-lg w-full shadow-2xl space-y-6">
+            <div id="scan-overlay-icon" class="w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border-2 border-emerald-500">
+                <i data-lucide="check-circle" class="w-10 h-10"></i>
+            </div>
+            <div class="space-y-2">
+                <h2 id="scan-overlay-title" class="text-2xl font-black text-emerald-400 uppercase tracking-wider">SCAN SUCCESSFUL</h2>
+                <p id="scan-overlay-msg" class="text-sm font-mono text-gray-300 font-bold">CV-SEA-49AK &bull; Activated</p>
+            </div>
+            <div id="scan-overlay-actions" class="hidden pt-4">
+                <button onclick="dismissScanOverlay()" class="w-full min-h-[60px] bg-red-600 hover:bg-red-500 text-white font-black text-base uppercase tracking-wider rounded-2xl border-2 border-red-400 shadow-2xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-95">
+                    <i data-lucide="x-circle" class="w-6 h-6"></i> DISMISS ERROR (PRESS ESC OR TAP)
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Top Navigation Bar -->
     <header class="glass-panel sticky top-0 z-50 border-b border-gray-800">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -964,10 +982,33 @@
 
         </div>
 
-        <!-- VIEW 3: WAREHOUSE WORKER ROLE (LOWEST CLEARANCE) -->
+        <!-- VIEW 3: WAREHOUSE WORKER ROLE (HARDWARE-OPTIMIZED INDUSTRIAL TERMINAL) -->
 
-        <div id="view-worker" class="space-y-8 hidden animate-fade-in">
+        <div id="view-worker" class="space-y-6 hidden animate-fade-in">
             
+            <!-- SLA-Driven Cutoff Banner (Past 18:00 Cutoff Alert) -->
+            <div id="sla-cutoff-banner" class="hidden bg-gradient-to-r from-red-600 via-red-700 to-rose-600 text-white p-4 rounded-2xl border-2 border-red-400 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-bounce">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-full bg-black/30 flex items-center justify-center text-white shrink-0">
+                        <i data-lucide="alert-triangle" class="w-6 h-6 text-yellow-300"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-black text-sm uppercase tracking-wider">⚠️ CUTOFF PASSED (18:00 SLA): CLEAR STAGING QUEUE IMMEDIATELY</h4>
+                        <p class="text-xs text-red-100">Same-day pickup SLA cutoff expired. All pending vault retrieval requests must be staged in rooms now.</p>
+                    </div>
+                </div>
+                <span class="bg-black/50 text-yellow-300 font-mono font-bold text-xs px-3.5 py-1.5 rounded-xl border border-yellow-400/40 shrink-0">CRITICAL PRIORITY</span>
+            </div>
+
+            <!-- Offline Queue Indicator Badge -->
+            <div id="offline-queue-badge" class="hidden bg-amber-500/20 border border-amber-500/40 text-amber-300 p-3 rounded-2xl text-xs font-mono font-bold flex items-center justify-between">
+                <span class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                    <span>📶 Offline Mode Active — Scans are queued locally in browser</span>
+                </span>
+                <button onclick="syncOfflineQueue()" class="bg-amber-500 hover:bg-amber-400 text-black font-extrabold px-3 py-1 rounded-lg transition text-[10px] uppercase cursor-pointer">Sync Queue Now</button>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 
                 <!-- Worker Scan/Actions Module -->
@@ -978,7 +1019,7 @@
                                 <i data-lucide="qr-code" class="w-5 h-5 text-emerald-400"></i>
                                 <h3 class="font-bold text-white text-lg">Instant Tote Scanner</h3>
                             </div>
-                            <button onclick="openPrintLabelModal('CV-1002')" class="bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer" title="Generate printable QR & CODE128 barcode labels">
+                            <button onclick="openPrintLabelModal()" class="bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer" title="Generate printable QR & CODE128 barcode labels">
                                 <i data-lucide="printer" class="w-3.5 h-3.5"></i>
                                 <span>Print Labels</span>
                             </button>
@@ -986,14 +1027,14 @@
 
                         <div class="space-y-4 mt-6">
                             <div>
-                                <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Scan Barcode / SKU</label>
+                                <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Scan Barcode / SKU (Hardware Laser Auto-Intercept)</label>
                                 <div class="relative">
                                     <input type="text" id="scan-barcode" placeholder="Click & Scan Barcode..." onkeydown="handleScanKey(event)" class="w-full bg-gray-950 border-2 border-gray-850 focus:border-blue-500 rounded-xl py-3.5 px-4 pl-10 text-sm text-white font-mono outline-none transition">
                                     <div class="absolute left-3.5 top-4 text-gray-500">
                                         <i data-lucide="scan-line" class="w-4 h-4 animate-pulse"></i>
                                     </div>
                                 </div>
-                                <p class="text-[10px] text-gray-500 mt-1">Press Enter or use barcode gun to scan.</p>
+                                <p class="text-[10px] text-gray-500 mt-1">Global gun listener active. Press Enter or scan laser barcode.</p>
                             </div>
 
                             <!-- Live Scan Status Indicator Feed -->
@@ -1008,13 +1049,13 @@
                             <div class="bg-gray-900/50 p-4 border border-gray-850 rounded-2xl space-y-2 text-xs text-gray-400">
                                 <p class="font-bold text-gray-300 uppercase text-[9px]">Auto-lifecycle mapping:</p>
                                 <div class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
-                                    <span>Pending Staging</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-amber-400 font-medium">Staged in Room</span>
+                                    <span>Un-activated</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-emerald-400 font-medium">In Vault</span>
                                 </div>
                                 <div class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
-                                    <span>Staged in Room</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-blue-400 font-medium">With Customer</span>
+                                    <span>In Vault</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-amber-400 font-medium">Staged in Room</span>
                                 </div>
                                 <div class="flex justify-between items-center text-[10px]">
-                                    <span>With Customer</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-emerald-400 font-medium">Back in Vault</span>
+                                    <span>In Room</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-blue-400 font-medium">With Customer</span>
                                 </div>
                             </div>
                         </div>
@@ -1022,7 +1063,7 @@
 
                     <div class="mt-6 pt-4 border-t border-gray-850 text-[10px] text-gray-500 text-center flex items-center justify-center gap-1.5">
                         <i data-lucide="help-circle" class="w-3.5 h-3.5 text-blue-500"></i>
-                        <span>Click rows in queue for one-click staging.</span>
+                        <span>Tap cards for gloved 60px touch action execution.</span>
                     </div>
                 </div>
 
@@ -1066,7 +1107,22 @@
                     </div>
 
                     <!-- Phase 1: New Intake (stored, un-activated → QR barcode scan to activate) -->
-                    <div id="wview-activate" class="worker-phase-view overflow-x-auto space-y-6">
+                    <div id="wview-activate" class="worker-phase-view space-y-5">
+                        
+                        <!-- Contextual Bulk Printing Action Bar -->
+                        <div class="bg-gradient-to-r from-blue-950/80 to-indigo-950/80 border border-blue-500/30 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+                            <div class="space-y-1 text-center sm:text-left">
+                                <h4 class="text-sm font-extrabold text-blue-300 uppercase tracking-wider flex items-center justify-center sm:justify-start gap-2">
+                                    <i data-lucide="tag" class="w-4 h-4 text-emerald-400"></i> New Intake Queue
+                                </h4>
+                                <p class="text-xs text-gray-400">Un-activated totes waiting for initial thermal tag printing and vault storage activation.</p>
+                            </div>
+                            <button onclick="printAllIntakeLabels()" class="w-full sm:w-auto min-h-[54px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs px-6 py-3 rounded-xl border border-blue-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-95">
+                                <i data-lucide="printer" class="w-4 h-4"></i>
+                                <span>🖨️ Print All [<span id="print-intake-count">0</span>] Intake Labels</span>
+                            </button>
+                        </div>
+
                         <!-- Incoming Scheduled Deliveries Table -->
                         <div class="bg-gray-950/60 p-4 border border-gray-800 rounded-2xl space-y-3">
                             <div class="flex items-center justify-between">
@@ -1089,110 +1145,81 @@
                             </table>
                         </div>
 
-                        <div class="bg-emerald-950/30 border border-emerald-500/20 p-3 rounded-xl mb-3 flex items-center justify-between text-xs">
-                            <span class="text-gray-300"><strong class="text-emerald-400">Current Location:</strong> New Vault Intake (Un-activated Totes)</span>
-                            <span class="text-emerald-300 font-mono text-[11px] font-bold">Target Action: Scan QR Code to Activate</span>
-                        </div>
-                        <table class="w-full text-left border-collapse">
-                            <thead><tr class="text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-850">
-                                <th class="pb-3">Tote Code</th>
-                                <th class="pb-3">Customer</th>
-                                <th class="pb-3">Current State</th>
-                                <th class="pb-3 text-right">Target Transition</th>
-                            </tr></thead>
-                            <tbody class="divide-y divide-gray-850" id="wbody-activate"></tbody>
-                        </table>
+                        <!-- Grouped Customer Cards Container for New Intake -->
+                        <div id="wbody-activate" class="space-y-4"></div>
                     </div>
 
-                    <!-- Phase 2: In Vault Storage (pending-stage → scan to move to staging room) -->
-                    <div id="wview-stage" class="worker-phase-view overflow-x-auto hidden">
-                        <div class="bg-amber-950/30 border border-amber-500/20 p-3 rounded-xl mb-3 flex items-center justify-between text-xs">
+                    <!-- Phase 2: In Vault Storage (pending-stage → move to staging room) -->
+                    <div id="wview-stage" class="worker-phase-view space-y-4 hidden">
+                        <div class="bg-amber-950/30 border border-amber-500/20 p-4 rounded-2xl flex items-center justify-between text-xs">
                             <span class="text-gray-300"><strong class="text-amber-400">Current Location:</strong> Vault Storage (Retrieval Requested)</span>
                             <span class="text-amber-300 font-mono text-[11px] font-bold">Target Action: Retrieve & Move to Staging Room</span>
                         </div>
-                        <table class="w-full text-left border-collapse">
-                            <thead><tr class="text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-850">
-                                <th class="pb-3">Tote Code</th>
-                                <th class="pb-3">Customer</th>
-                                <th class="pb-3">Access PIN</th>
-                                <th class="pb-3">Reserved For</th>
-                                <th class="pb-3">Type</th>
-                                <th class="pb-3 text-right">Target Transition</th>
-                            </tr></thead>
-                            <tbody class="divide-y divide-gray-850" id="wbody-stage"></tbody>
-                        </table>
+                        <!-- Grouped Customer Cards Container for In Vault -->
+                        <div id="wbody-stage" class="space-y-4"></div>
                     </div>
 
                     <!-- Phase 3: In Staging Room (staged → scan to hand off to customer/driver) -->
-                    <div id="wview-customer" class="worker-phase-view overflow-x-auto hidden">
-                        <div class="bg-blue-950/30 border border-blue-500/20 p-3 rounded-xl mb-3 flex items-center justify-between text-xs">
+                    <div id="wview-customer" class="worker-phase-view space-y-4 hidden">
+                        <div class="bg-blue-950/30 border border-blue-500/20 p-4 rounded-2xl flex items-center justify-between text-xs">
                             <span class="text-gray-300"><strong class="text-blue-400">Current Location:</strong> Staging Room (Ready for Pickup / Valet)</span>
                             <span class="text-blue-300 font-mono text-[11px] font-bold">Target Action: Hand Off to Customer or Driver</span>
                         </div>
-                        <table class="w-full text-left border-collapse">
-                            <thead><tr class="text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-850">
-                                <th class="pb-3">Tote Code</th>
-                                <th class="pb-3">Customer</th>
-                                <th class="pb-3">Current Location</th>
-                                <th class="pb-3 text-right">Target Transition</th>
-                            </tr></thead>
-                            <tbody class="divide-y divide-gray-850" id="wbody-customer"></tbody>
-                        </table>
+                        <!-- Grouped Customer Cards Container for In Staging Room -->
+                        <div id="wbody-customer" class="space-y-4"></div>
                     </div>
 
                     <!-- Phase 4: Out With Customer (with-customer → scan return back to vault) -->
-                    <div id="wview-returned" class="worker-phase-view overflow-x-auto hidden">
-                        <div class="bg-purple-950/30 border border-purple-500/20 p-3 rounded-xl mb-3 flex items-center justify-between text-xs">
+                    <div id="wview-returned" class="worker-phase-view space-y-4 hidden">
+                        <div class="bg-purple-950/30 border border-purple-500/20 p-4 rounded-2xl flex items-center justify-between text-xs">
                             <span class="text-gray-300"><strong class="text-purple-400">Current Location:</strong> Out With Customer (Drop-off Return Pending)</span>
                             <span class="text-purple-300 font-mono text-[11px] font-bold">Target Action: Scan Return Back to Vault</span>
                         </div>
-                        <table class="w-full text-left border-collapse">
-                            <thead><tr class="text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-850">
-                                <th class="pb-3">Tote Code</th>
-                                <th class="pb-3">Customer</th>
-                                <th class="pb-3">Label / Contents</th>
-                                <th class="pb-3 text-right">Target Transition</th>
-                            </tr></thead>
-                            <tbody class="divide-y divide-gray-850" id="wbody-returned"></tbody>
-                        </table>
+                        <!-- Grouped Customer Cards Container for Out With Customer -->
+                        <div id="wbody-returned" class="space-y-4"></div>
                     </div>
 
                 </div>
             </div>
 
-            <!-- Logistics Routing Maps (Delivery coordination) -->
+            <!-- Logistics Routing Maps (Delivery coordination with Google Maps Routes API) -->
             <div class="glass-panel p-6 rounded-3xl space-y-4">
-                <div class="flex items-center space-x-2 border-b border-gray-800 pb-4">
-                    <i data-lucide="navigation" class="w-5 h-5 text-blue-400"></i>
-                    <h3 class="font-bold text-white text-lg">Active Logistics Routing</h3>
+                <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="navigation" class="w-5 h-5 text-blue-400"></i>
+                        <h3 class="font-bold text-white text-lg">Active Logistics Routing</h3>
+                    </div>
+                    <span id="map-stops-count" class="text-xs font-bold text-gray-400 font-mono bg-gray-900 px-3 py-1 rounded-xl border border-gray-800">0 Active Valet Stops</span>
                 </div>
+                
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    <!-- Text Map list -->
+                    <!-- Delivery Stops List -->
                     <div class="lg:col-span-4 space-y-3">
-                        <h4 class="text-xs font-bold uppercase text-gray-400 tracking-wider">Scheduled Pickups Today</h4>
-                        <div class="space-y-3" id="delivery-stops-list">
+                        <h4 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center justify-between">
+                            <span>Scheduled Pickups Today</span>
+                            <span class="text-[10px] text-emerald-400 font-mono">Optimized Waypoints</span>
+                        </h4>
+                        <div class="space-y-3 max-h-[320px] overflow-y-auto pr-1" id="delivery-stops-list">
                             <!-- Populated dynamically -->
                         </div>
                     </div>
-                    <!-- Mock Map canvas/visual element -->
-                    <div class="lg:col-span-8 bg-gray-950 rounded-2xl border border-gray-800 h-64 overflow-hidden relative flex items-center justify-center">
-                        <div class="absolute inset-0 bg-blue-500/5 grid grid-cols-6 grid-rows-4 pointer-events-none">
-                            <!-- Grid lines -->
-                            <div class="border-r border-b border-gray-900/50"></div>
-                            <div class="border-r border-b border-gray-900/50"></div>
-                            <div class="border-r border-b border-gray-900/50"></div>
-                            <div class="border-r border-b border-gray-900/50"></div>
-                            <div class="border-r border-b border-gray-900/50"></div>
-                            <div class="border-r border-b border-gray-900/50 flex items-center justify-center text-[10px] text-gray-700">Sector E</div>
-                        </div>
-                        <div class="z-10 text-center space-y-2">
-                            <div class="w-10 h-10 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center mx-auto border border-blue-500/30">
-                                <i data-lucide="map" class="w-5 h-5"></i>
-                            </div>
-                            <p class="text-xs text-gray-400 font-medium">Staging Facilities Routing Map Simulator</p>
-                            <div class="flex items-center justify-center gap-4 text-[10px] text-gray-500 mt-2">
-                                <span class="flex items-center gap-1"><span class="w-2 h-2 bg-indigo-500 rounded-full"></span> Facility Hub</span>
-                                <span class="flex items-center gap-1"><span class="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span> Active Stops</span>
+                    
+                    <!-- Live Map Canvas / Route Viewer -->
+                    <div class="lg:col-span-8 bg-gray-950 rounded-2xl border border-gray-800 min-h-[320px] overflow-hidden relative flex flex-col">
+                        <div id="google-maps-container" class="w-full h-full min-h-[320px] relative">
+                            <!-- Google Maps Route Embed Iframe -->
+                            <iframe id="google-maps-iframe" class="w-full h-full min-h-[320px] border-0 rounded-2xl filter saturate-150 contrast-125 opacity-90"
+                                loading="lazy" allowfullscreen
+                                src="https://maps.google.com/maps?q=Seattle%2C+WA&t=&z=12&ie=UTF8&iwloc=&output=embed">
+                            </iframe>
+                            
+                            <!-- Floating Map Telemetry Overlay -->
+                            <div class="absolute bottom-3 left-3 bg-gray-950/90 border border-gray-800 backdrop-blur-md px-3 py-2 rounded-xl text-[10px] text-gray-300 font-mono space-y-1 shadow-2xl">
+                                <div class="flex items-center gap-1.5 text-blue-400 font-bold">
+                                    <span class="w-2 h-2 rounded-full bg-blue-500 animate-ping"></span>
+                                    <span id="map-hub-label">Hub: Seattle North Facility</span>
+                                </div>
+                                <div id="map-telemetry-stops" class="text-gray-400">Waypoints: ZIPs 98101, 98109, 98122</div>
                             </div>
                         </div>
                     </div>
@@ -2120,8 +2147,209 @@
             }
         }
 
-        // Switch focused worker phase tab
+        // =========================================================================
+        // Hardware Barcode Scanner & Audio/Visual Overlay Feedback Engine
+        // =========================================================================
+
+        let audioCtx = null;
+        function getAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        function playSuccessSound() {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, now);
+                osc.frequency.setValueAtTime(1760, now + 0.08);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } catch (e) { console.warn("Audio cue error:", e); }
+        }
+
+        function playErrorSound() {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.setValueAtTime(110, now + 0.15);
+                gain.gain.setValueAtTime(0.5, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.45);
+            } catch (e) { console.warn("Audio cue error:", e); }
+        }
+
+        function triggerScanFeedbackOverlay(success, message, code = '') {
+            const overlay = document.getElementById('scan-overlay');
+            const card = document.getElementById('scan-overlay-card');
+            const icon = document.getElementById('scan-overlay-icon');
+            const title = document.getElementById('scan-overlay-title');
+            const msg = document.getElementById('scan-overlay-msg');
+            const actions = document.getElementById('scan-overlay-actions');
+
+            if (!overlay) return;
+            overlay.classList.remove('hidden');
+
+            if (success) {
+                playSuccessSound();
+                overlay.className = "fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 text-center bg-emerald-950/90 backdrop-blur-md";
+                card.className = "bg-gray-950 border-4 border-emerald-500 rounded-3xl p-8 max-w-lg w-full shadow-2xl space-y-6";
+                icon.className = "w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border-2 border-emerald-500";
+                icon.innerHTML = `<i data-lucide="check-circle" class="w-10 h-10 text-emerald-400"></i>`;
+                title.textContent = "SCAN SUCCESSFUL";
+                title.className = "text-2xl font-black text-emerald-400 uppercase tracking-wider";
+                msg.textContent = `${code ? code + ' • ' : ''}${message}`;
+                actions.classList.add('hidden');
+
+                clearTimeout(window.scanOverlayTimer);
+                window.scanOverlayTimer = setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 500);
+            } else {
+                playErrorSound();
+                clearTimeout(window.scanOverlayTimer);
+                overlay.className = "fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 text-center bg-red-950/95 backdrop-blur-md";
+                card.className = "bg-gray-950 border-4 border-red-500 rounded-3xl p-8 max-w-lg w-full shadow-2xl space-y-6 animate-pulse";
+                icon.className = "w-20 h-20 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center mx-auto border-2 border-red-500";
+                icon.innerHTML = `<i data-lucide="alert-octagon" class="w-10 h-10 text-red-500"></i>`;
+                title.textContent = "SCAN ERROR / REJECTED";
+                title.className = "text-2xl font-black text-red-400 uppercase tracking-wider";
+                msg.textContent = message || "Invalid barcode scan or state transition rejected.";
+                actions.classList.remove('hidden');
+            }
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function dismissScanOverlay() {
+            const overlay = document.getElementById('scan-overlay');
+            if (overlay) overlay.classList.add('hidden');
+            const input = document.getElementById('scan-barcode');
+            if (input) input.focus();
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') dismissScanOverlay();
+        });
+
+        // Global Hardware Laser Barcode Scanner Listener
+        let scannerBuffer = "";
+        let lastKeyTime = Date.now();
+
+        window.addEventListener('keydown', (e) => {
+            const workerView = document.getElementById('view-worker');
+            if (!workerView || workerView.classList.contains('hidden')) return;
+
+            const currentTime = Date.now();
+            const timeDiff = currentTime - lastKeyTime;
+            lastKeyTime = currentTime;
+
+            if (e.key === 'Enter') {
+                if (scannerBuffer.length > 3) {
+                    e.preventDefault();
+                    const input = document.getElementById('scan-barcode');
+                    if (input) input.value = scannerBuffer.trim();
+                    simulateScan();
+                    scannerBuffer = "";
+                }
+            } else if (e.key.length === 1) {
+                if (timeDiff > 100) {
+                    scannerBuffer = e.key;
+                } else {
+                    scannerBuffer += e.key;
+                }
+            }
+        });
+
+        // =========================================================================
+        // Offline-First Queue System
+        // =========================================================================
+
+        function getOfflineScanQueue() {
+            try {
+                return JSON.parse(localStorage.getItem('cv_offline_scan_queue') || '[]');
+            } catch (e) { return []; }
+        }
+
+        function saveOfflineScanQueue(queue) {
+            localStorage.setItem('cv_offline_scan_queue', JSON.stringify(queue));
+            updateOfflineQueueBadge();
+        }
+
+        function updateOfflineQueueBadge() {
+            const queue = getOfflineScanQueue();
+            const badge = document.getElementById('offline-queue-badge');
+            if (badge) {
+                if (queue.length > 0) {
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+        }
+
+        async function syncOfflineQueue() {
+            const queue = getOfflineScanQueue();
+            if (queue.length === 0) return;
+
+            const remaining = [];
+            for (const scan of queue) {
+                try {
+                    const { error } = await supabase.rpc('scan_tote', {
+                        p_tote_code: scan.barcode,
+                        p_expected_status: scan.expectedStatus
+                    });
+                    if (error) remaining.push(scan);
+                } catch (err) {
+                    remaining.push(scan);
+                }
+            }
+
+            saveOfflineScanQueue(remaining);
+            if (remaining.length === 0) {
+                triggerScanFeedbackOverlay(true, "All offline scans synced successfully!");
+                loadWorkerQueues();
+            }
+        }
+
+        window.addEventListener('online', syncOfflineQueue);
+
+        // =========================================================================
+        // Contextual Bulk Action: Direct Intake Label Printing
+        // =========================================================================
+
+        async function printAllIntakeLabels() {
+            await selectBatchPreset('activate');
+            openPrintLabelModal();
+            setTimeout(() => {
+                triggerPrintLabels();
+            }, 400);
+        }
+
+        // =========================================================================
+        // Switch Worker Phase Tab
+        // =========================================================================
+
         function switchWorkerPhase(phase) {
+            window.hasManuallySwitchedPhase = true;
             const phases = ['activate', 'stage', 'customer', 'returned'];
             const colors = {
                 activate: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
@@ -2136,18 +2364,23 @@
                 const view = document.getElementById(`wview-${p}`);
                 if (p === phase) {
                     btn.className = `worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border transition-all ${colors[p]}`;
-                    view.classList.remove('hidden');
+                    if (view) view.classList.remove('hidden');
                 } else {
                     btn.className = `worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border ${inactive} hover:${colors[p].split(' ').slice(0,3).join(' hover:')} transition-all`;
-                    view.classList.add('hidden');
+                    if (view) view.classList.add('hidden');
                 }
             });
         }
 
-        // Warehouse Worker Queues Rendering
         function loadWorkerQueues() {
+            updateOfflineQueueBadge();
             loadWorkerLiveData();
+            loadWorkerLogisticsRouting();
         }
+
+        // =========================================================================
+        // Industrial Customer-Grouped Ergonomic Queue Rendering
+        // =========================================================================
 
         async function loadWorkerLiveData() {
             try {
@@ -2157,6 +2390,21 @@
                 } else {
                     const select = document.getElementById('manager-facility-select');
                     if (select && select.value) facilityId = select.value;
+                }
+
+                // Evaluate SLA Cutoff Time (Past 18:00)
+                const now = new Date();
+                const isPastCutoff = now.getHours() >= 18;
+                const cutoffBanner = document.getElementById('sla-cutoff-banner');
+                const stageTabBtn = document.getElementById('wtab-stage');
+
+                if (isPastCutoff) {
+                    if (cutoffBanner) cutoffBanner.classList.remove('hidden');
+                    if (stageTabBtn) stageTabBtn.classList.add('animate-pulse', 'border-2', 'border-red-500', 'bg-red-950/40', 'text-red-300');
+                    if (!window.hasManuallySwitchedPhase) switchWorkerPhase('stage');
+                } else {
+                    if (cutoffBanner) cutoffBanner.classList.add('hidden');
+                    if (stageTabBtn) stageTabBtn.classList.remove('animate-pulse', 'border-2', 'border-red-500', 'bg-red-950/40', 'text-red-300');
                 }
 
                 // Fetch all inventory for this facility across all relevant statuses
@@ -2215,102 +2463,216 @@
                     });
                 }
 
-                // Helper: render a reservation badge cell
-                function buildReservationCell(res) {
-                    if (!res || !res.target_date) return `<span class="text-gray-600 text-xs">—</span>`;
-                    const d = new Date(res.target_date.split('T')[0] + 'T12:00:00');
-                    const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-                    const slotStr = res.time_slot || '';
-                    const tier = res.surge_tier || 'standard';
-                    const surgeColors = {
-                        same_day_surge: 'text-red-400 bg-red-500/10 border-red-500/30',
-                        next_day_surge: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-                        standard:       'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                    };
-                    const surgeLabel = {
-                        same_day_surge: '🔴 Same-Day',
-                        next_day_surge: '🟡 Next-Day',
-                        standard:       '✅ Scheduled'
-                    };
-                    const colorClass = surgeColors[tier] || surgeColors.standard;
-                    const label = surgeLabel[tier] || '✅ Scheduled';
-                    const feeNote = (res.surge_fee && res.surge_fee > 0) ? ` +$${Number(res.surge_fee).toFixed(2)}` : '';
-                    return `
-                        <div class="space-y-0.5">
-                            <div class="text-white text-xs font-semibold font-mono">${dateStr}${slotStr ? ' · ' + slotStr : ''}</div>
-                            <span class="inline-flex items-center px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wide ${colorClass}">${label}${feeNote}</span>
-                        </div>`;
+                // Group totes by Customer UID helper
+                function groupTotesByCustomer(items) {
+                    const groups = {};
+                    (items || []).forEach(item => {
+                        const key = item.uid || 'unassigned';
+                        if (!groups[key]) groups[key] = [];
+                        groups[key].push(item);
+                    });
+                    return groups;
                 }
 
-                const noRow = (cols) => `<tr><td colspan="${cols}" class="py-6 text-center text-xs text-gray-500 font-mono">No totes currently in this queue.</td></tr>`;
-                const makeScanBtn = (code, fromStatus, btnText, btnColor) => `
-                    <div class="flex items-center justify-end space-x-1.5">
-                        <button onclick="openPrintLabelModal('${code}')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 text-[10px] font-bold px-2 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1" title="Print Barcode Tag">
-                            <i data-lucide="printer" class="w-3 h-3"></i> Label
-                        </button>
-                        <button onclick="document.getElementById('scan-barcode').value='${code}';simulateScan('${fromStatus}')" class="${btnColor} border text-[10px] font-bold px-3 py-1.5 rounded-xl transition cursor-pointer">${btnText}</button>
-                    </div>
-                `;
-
-                // ── Tab 1: NEW INTAKE (stored, activated = false) ──
+                // ── Tab 1: NEW INTAKE CARDS ──
                 const activateItems = (allItems || []).filter(i => i.status === 'stored' && i.activated === false);
                 document.getElementById('wtab-activate-count').textContent = activateItems.length;
-                const bodyActivate = document.getElementById('wbody-activate');
-                bodyActivate.innerHTML = activateItems.length === 0 ? noRow(4) :
-                    activateItems.map(i => `<tr class="border-b border-gray-850 hover:bg-gray-900/20 transition">
-                        <td class="py-3 text-sm text-white font-mono font-bold">${i.tote_code}</td>
-                        <td class="py-3 text-xs text-gray-300">${i.users?.name || i.uid.substring(0,8)}</td>
-                        <td class="py-3"><span class="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded font-mono text-[10px]">Un-activated Intake</span></td>
-                        <td class="py-3 text-right">${makeScanBtn(i.tote_code, 'stored', 'Activate Code →', 'bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border-emerald-500/30')}</td>
-                    </tr>`).join('');
+                const printIntakeBadge = document.getElementById('print-intake-count');
+                if (printIntakeBadge) printIntakeBadge.textContent = activateItems.length;
 
-                // ── Tab 2: IN VAULT (pending-stage → move to staging room) ──
+                const bodyActivate = document.getElementById('wbody-activate');
+                const activateGrouped = groupTotesByCustomer(activateItems);
+                
+                if (activateItems.length === 0) {
+                    bodyActivate.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
+                        <i data-lucide="check-circle" class="w-8 h-8 text-emerald-500 mx-auto"></i>
+                        <p class="text-sm text-gray-300 font-bold">Intake Queue Clear</p>
+                        <p class="text-xs text-gray-500 font-mono">All incoming totes are activated.</p>
+                    </div>`;
+                } else {
+                    bodyActivate.innerHTML = Object.entries(activateGrouped).map(([uid, totes]) => {
+                        const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0,8)}`;
+                        const firstCode = totes[0].tote_code;
+                        return `
+                            <div class="bg-gray-950 border-2 border-emerald-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-emerald-500/60 transition">
+                                <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-sm border border-emerald-500/30 font-mono">
+                                            ${customerName.substring(0,2).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
+                                            <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Un-activated Tote(s)</p>
+                                        </div>
+                                    </div>
+                                    <button onclick="openPrintLabelModal('${firstCode}')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
+                                        <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print Batch Tag
+                                    </button>
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
+                                        <span class="text-white font-bold">${t.tote_code}</span>
+                                        <span class="text-emerald-400 text-[10px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-sans">Un-activated</span>
+                                    </div>`).join('')}
+                                </div>
+
+                                <!-- Full-Width 60px Ergonomic Industrial Action Button -->
+                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('stored')" class="w-full min-h-[60px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                    <i data-lucide="qr-code" class="w-6 h-6"></i>
+                                    <span>ACTIVATE TOTE (${firstCode}) →</span>
+                                </button>
+                            </div>`;
+                    }).join('');
+                }
+
+                // ── Tab 2: IN VAULT CARDS ──
                 const stageItems = (allItems || []).filter(i => i.status === 'pending-stage');
                 document.getElementById('wtab-stage-count').textContent = stageItems.length;
                 const bodyStage = document.getElementById('wbody-stage');
-                bodyStage.innerHTML = stageItems.length === 0 ? noRow(5) :
-                    stageItems.map(i => {
-                        const pin = pinByUid[i.uid] || '—';
-                        const type = typeByUid[i.uid] || 'staging';
-                        const reservation = reservationByUid[i.uid] || null;
-                        const typeBadge = type === 'valet_delivery'
-                            ? `<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">Valet</span>`
-                            : `<span class="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">Self-Service</span>`;
-                        const isSameDay = reservation?.surge_tier === 'same_day_surge';
-                        const rowHighlight = isSameDay ? 'bg-red-950/10 hover:bg-red-950/20' : 'hover:bg-gray-900/20';
-                        return `<tr class="border-b border-gray-850 transition ${rowHighlight}">
-                            <td class="py-3 text-sm text-white font-mono font-bold">${i.tote_code}</td>
-                            <td class="py-3 text-xs text-gray-300">${i.users?.name || i.uid.substring(0,8)}</td>
-                            <td class="py-3 text-sm text-blue-400 font-mono font-bold tracking-widest">${pin}</td>
-                            <td class="py-3">${buildReservationCell(reservation)}</td>
-                            <td class="py-3">${typeBadge}</td>
-                            <td class="py-3 text-right">${makeScanBtn(i.tote_code, 'pending-stage', 'Move to Room →', 'bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border-amber-500/30')}</td>
-                        </tr>`;
-                    }).join('');
+                const stageGrouped = groupTotesByCustomer(stageItems);
 
-                // ── Tab 3: IN STAGING ROOM (staged → handoff to customer) ──
+                if (stageItems.length === 0) {
+                    bodyStage.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
+                        <i data-lucide="archive" class="w-8 h-8 text-amber-500 mx-auto"></i>
+                        <p class="text-sm text-gray-300 font-bold">No Retrieval Requests Pending</p>
+                        <p class="text-xs text-gray-500 font-mono">Vault storage is operating normally.</p>
+                    </div>`;
+                } else {
+                    bodyStage.innerHTML = Object.entries(stageGrouped).map(([uid, totes]) => {
+                        const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0,8)}`;
+                        const pin = pinByUid[uid] || '—';
+                        const firstCode = totes[0].tote_code;
+                        const res = reservationByUid[uid];
+                        const isSameDay = res?.surge_tier === 'same_day_surge';
+                        const borderStyle = isSameDay ? 'border-red-500/70 bg-red-950/20' : 'border-amber-500/30 bg-gray-950';
+
+                        return `
+                            <div class="border-2 ${borderStyle} rounded-3xl p-5 shadow-xl space-y-4 hover:border-amber-500/60 transition">
+                                <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center text-sm border border-amber-500/30 font-mono">
+                                            ${customerName.substring(0,2).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
+                                            <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Tote(s)</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-3 py-1 rounded-xl">PIN: ${pin}</span>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
+                                        <span class="text-white font-bold">${t.tote_code}</span>
+                                        <span class="text-amber-400 text-[10px] bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-sans">Pending Staging</span>
+                                    </div>`).join('')}
+                                </div>
+
+                                <!-- Full-Width 60px Ergonomic Industrial Action Button -->
+                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('pending-stage')" class="w-full min-h-[60px] bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-amber-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                    <i data-lucide="archive-restore" class="w-6 h-6"></i>
+                                    <span>MOVE TOTES TO STAGING ROOM (${firstCode}) →</span>
+                                </button>
+                            </div>`;
+                    }).join('');
+                }
+
+                // ── Tab 3: IN STAGING ROOM CARDS ──
                 const customerItems = (allItems || []).filter(i => i.status === 'staged');
                 document.getElementById('wtab-customer-count').textContent = customerItems.length;
                 const bodyCustomer = document.getElementById('wbody-customer');
-                bodyCustomer.innerHTML = customerItems.length === 0 ? noRow(4) :
-                    customerItems.map(i => `<tr class="border-b border-gray-850 hover:bg-gray-900/20 transition">
-                        <td class="py-3 text-sm text-white font-mono font-bold">${i.tote_code}</td>
-                        <td class="py-3 text-xs text-gray-300">${i.users?.name || i.uid.substring(0,8)}</td>
-                        <td class="py-3"><span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-mono text-[10px]">In Staging Room</span></td>
-                        <td class="py-3 text-right">${makeScanBtn(i.tote_code, 'staged', 'Hand Off to Customer →', 'bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border-blue-500/30')}</td>
-                    </tr>`).join('');
+                const customerGrouped = groupTotesByCustomer(customerItems);
 
-                // ── Tab 4: WITH CUSTOMER (with-customer → return back to vault) ──
+                if (customerItems.length === 0) {
+                    bodyCustomer.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
+                        <i data-lucide="user-check" class="w-8 h-8 text-blue-500 mx-auto"></i>
+                        <p class="text-sm text-gray-300 font-bold">Staging Rooms Empty</p>
+                        <p class="text-xs text-gray-500 font-mono">No staged totes currently waiting for pickup.</p>
+                    </div>`;
+                } else {
+                    bodyCustomer.innerHTML = Object.entries(customerGrouped).map(([uid, totes]) => {
+                        const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0,8)}`;
+                        const firstCode = totes[0].tote_code;
+                        return `
+                            <div class="bg-gray-950 border-2 border-blue-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-blue-500/60 transition">
+                                <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 rounded-2xl bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center text-sm border border-blue-500/30 font-mono">
+                                            ${customerName.substring(0,2).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
+                                            <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Staged Tote(s)</p>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 px-3 py-1 rounded-xl border border-blue-500/30">In Staging Room</span>
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
+                                        <span class="text-white font-bold">${t.tote_code}</span>
+                                        <span class="text-blue-400 text-[10px] bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 font-sans">Ready for Handoff</span>
+                                    </div>`).join('')}
+                                </div>
+
+                                <!-- Full-Width 60px Ergonomic Industrial Action Button -->
+                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('staged')" class="w-full min-h-[60px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-blue-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                    <i data-lucide="user-check" class="w-6 h-6"></i>
+                                    <span>HAND OFF TOTES TO CUSTOMER (${firstCode}) →</span>
+                                </button>
+                            </div>`;
+                    }).join('');
+                }
+
+                // ── Tab 4: WITH CUSTOMER CARDS ──
                 const returnedItems = (allItems || []).filter(i => i.status === 'with-customer');
                 document.getElementById('wtab-returned-count').textContent = returnedItems.length;
                 const bodyReturned = document.getElementById('wbody-returned');
-                bodyReturned.innerHTML = returnedItems.length === 0 ? noRow(4) :
-                    returnedItems.map(i => `<tr class="border-b border-gray-850 hover:bg-gray-900/20 transition">
-                        <td class="py-3 text-sm text-white font-mono font-bold">${i.tote_code}</td>
-                        <td class="py-3 text-xs text-gray-300">${i.users?.name || i.uid.substring(0,8)}</td>
-                        <td class="py-3 text-xs text-purple-300 font-mono"><span class="text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded font-mono text-[10px]">With Customer</span> (${i.label || 'Standard Tote'})</td>
-                        <td class="py-3 text-right">${makeScanBtn(i.tote_code, 'with-customer', 'Return to Vault →', 'bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border-purple-500/30')}</td>
-                    </tr>`).join('');
+                const returnedGrouped = groupTotesByCustomer(returnedItems);
+
+                if (returnedItems.length === 0) {
+                    bodyReturned.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
+                        <i data-lucide="package-check" class="w-8 h-8 text-purple-500 mx-auto"></i>
+                        <p class="text-sm text-gray-300 font-bold">No Totes Out With Customers</p>
+                        <p class="text-xs text-gray-500 font-mono">All totes are stored inside vault.</p>
+                    </div>`;
+                } else {
+                    bodyReturned.innerHTML = Object.entries(returnedGrouped).map(([uid, totes]) => {
+                        const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0,8)}`;
+                        const firstCode = totes[0].tote_code;
+                        return `
+                            <div class="bg-gray-950 border-2 border-purple-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-purple-500/60 transition">
+                                <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-400 font-bold flex items-center justify-center text-sm border border-purple-500/30 font-mono">
+                                            ${customerName.substring(0,2).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
+                                            <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Tote(s) Out</p>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs font-mono font-bold text-purple-400 bg-purple-500/10 px-3 py-1 rounded-xl border border-purple-500/30">With Customer</span>
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
+                                        <span class="text-white font-bold">${t.tote_code}</span>
+                                        <span class="text-purple-400 text-[10px] bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 font-sans">Return Pending</span>
+                                    </div>`).join('')}
+                                </div>
+
+                                <!-- Full-Width 60px Ergonomic Industrial Action Button -->
+                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('with-customer')" class="w-full min-h-[60px] bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-purple-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                    <i data-lucide="package-check" class="w-6 h-6"></i>
+                                    <span>SCAN RETURN BACK TO VAULT (${firstCode}) →</span>
+                                </button>
+                            </div>`;
+                    }).join('');
+                }
 
             } catch (e) {
                 console.error("Worker data loading failed:", e);
@@ -2324,27 +2686,40 @@
             }
         }
 
-        // Simulate Barcode Scan in Worker Dashboard
+        // Simulate Barcode Scan in Worker Dashboard (with Offline Queue + Visual Overlay)
         async function simulateScan(expectedStatus = null) {
             const barcodeInput = document.getElementById('scan-barcode');
-            const barcode = barcodeInput.value.trim();
+            const barcode = barcodeInput ? barcodeInput.value.trim() : '';
             const terminalOutput = document.getElementById('terminal-output');
 
             if (!barcode) {
-                terminalOutput.innerHTML = `
-                    <span class="text-amber-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="alert-circle" class="w-4 h-4"></i> Empty Input</span>
-                    <span class="text-[10px] text-gray-500 mt-1">Please scan or input a tote barcode.</span>
-                `;
-                lucide.createIcons();
-                barcodeInput.focus();
+                triggerScanFeedbackOverlay(false, "Please scan or enter a valid tote barcode.");
+                if (terminalOutput) {
+                    terminalOutput.innerHTML = `
+                        <span class="text-amber-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="alert-circle" class="w-4 h-4"></i> Empty Input</span>
+                        <span class="text-[10px] text-gray-500 mt-1">Please scan or input a tote barcode.</span>
+                    `;
+                }
+                if (barcodeInput) barcodeInput.focus();
                 return;
             }
 
-            terminalOutput.innerHTML = `
-                <span class="text-blue-400 font-semibold flex items-center justify-center gap-1.5"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Processing Scan</span>
-                <span class="text-[10px] font-mono text-gray-500 mt-1">Identifying ${barcode}...</span>
-            `;
-            lucide.createIcons();
+            if (terminalOutput) {
+                terminalOutput.innerHTML = `
+                    <span class="text-blue-400 font-semibold flex items-center justify-center gap-1.5"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Processing Scan</span>
+                    <span class="text-[10px] font-mono text-gray-500 mt-1">Identifying ${barcode}...</span>
+                `;
+            }
+
+            // Offline-first queue intercept
+            if (!navigator.onLine) {
+                const queue = getOfflineScanQueue();
+                queue.push({ barcode, expectedStatus, timestamp: Date.now() });
+                saveOfflineScanQueue(queue);
+                triggerScanFeedbackOverlay(true, `Offline Scan Queued (${queue.length} pending sync)`, barcode);
+                if (barcodeInput) barcodeInput.value = "";
+                return;
+            }
 
             try {
                 const { data, error } = await supabase.rpc('scan_tote', {
@@ -2355,29 +2730,116 @@
                 const nextStatus = data.nextStatus;
 
                 let transitionDesc = nextStatus;
-                if (nextStatus === 'pending-stage') transitionDesc = "✅ Activated — Ready to Stage";
-                if (nextStatus === 'staged') transitionDesc = "✅ Staged in Room";
-                if (nextStatus === 'with-customer') transitionDesc = "✅ Released to Customer";
-                if (nextStatus === 'stored') transitionDesc = "✅ Returned to Storage";
+                if (nextStatus === 'pending-stage') transitionDesc = "Activated — Ready in Vault";
+                if (nextStatus === 'staged') transitionDesc = "Staged in Room";
+                if (nextStatus === 'with-customer') transitionDesc = "Released to Customer";
+                if (nextStatus === 'stored') transitionDesc = "Returned to Storage";
 
-                terminalOutput.innerHTML = `
-                    <span class="text-emerald-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> Scan Successful!</span>
-                    <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">${barcode} &bull; ${transitionDesc}</span>
-                `;
-                lucide.createIcons();
+                triggerScanFeedbackOverlay(true, transitionDesc, barcode);
 
-                barcodeInput.value = "";
-                barcodeInput.focus();
+                if (terminalOutput) {
+                    terminalOutput.innerHTML = `
+                        <span class="text-emerald-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> Scan Successful!</span>
+                        <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">${barcode} &bull; ${transitionDesc}</span>
+                    `;
+                }
+
+                if (barcodeInput) {
+                    barcodeInput.value = "";
+                    barcodeInput.focus();
+                }
                 loadWorkerQueues();
             } catch (e) {
                 console.error("Live scan failed:", e);
-                terminalOutput.innerHTML = `
-                    <span class="text-red-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="alert-octagon" class="w-4 h-4 text-red-500"></i> Scan Failed</span>
-                    <span class="text-[9px] font-mono text-red-300 mt-1 text-center">${e.message}</span>
-                `;
-                lucide.createIcons();
-                barcodeInput.value = "";
-                barcodeInput.focus();
+                triggerScanFeedbackOverlay(false, e.message || "Failed to transition tote state.");
+                if (terminalOutput) {
+                    terminalOutput.innerHTML = `
+                        <span class="text-red-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="alert-octagon" class="w-4 h-4 text-red-500"></i> Scan Failed</span>
+                        <span class="text-[9px] font-mono text-red-300 mt-1 text-center">${e.message}</span>
+                    `;
+                }
+                if (barcodeInput) barcodeInput.focus();
+            }
+        }
+
+        // =========================================================================
+        // Google Maps Routes API Logistics Routing Renderer
+        // =========================================================================
+
+        async function loadWorkerLogisticsRouting(facilityId = 'facility_seattle_north') {
+            try {
+                const { data: requests } = await supabase.from('access_requests')
+                    .select('*, users(name, zip)')
+                    .eq('facility_id', facilityId)
+                    .eq('fulfillment_type', 'valet_delivery')
+                    .eq('status', 'pending');
+
+                const stopsListEl = document.getElementById('delivery-stops-list');
+                const countBadge = document.getElementById('map-stops-count');
+                const mapIframe = document.getElementById('google-maps-iframe');
+                const telemetryStops = document.getElementById('map-telemetry-stops');
+                const hubLabel = document.getElementById('map-hub-label');
+
+                const cityByFacility = {
+                    facility_seattle_north: "Seattle, WA",
+                    facility_portland_central: "Portland, OR",
+                    facility_denver_hub: "Denver, CO",
+                    facility_yakima_valley: "Yakima, WA"
+                };
+                const nameByFacility = {
+                    facility_seattle_north: "Seattle North Hub",
+                    facility_portland_central: "Portland Central Hub",
+                    facility_denver_hub: "Denver Logistics Hub",
+                    facility_yakima_valley: "Yakima Valley Station"
+                };
+
+                const activeCity = cityByFacility[facilityId] || "Seattle, WA";
+                if (hubLabel) hubLabel.textContent = `Hub: ${nameByFacility[facilityId] || activeCity}`;
+
+                const stops = requests || [];
+                if (countBadge) countBadge.textContent = `${stops.length} Active Valet Stops`;
+
+                if (stopsListEl) {
+                    if (stops.length === 0) {
+                        stopsListEl.innerHTML = `
+                            <div class="bg-gray-900/50 p-4 rounded-2xl border border-gray-850 text-center space-y-1">
+                                <p class="text-xs text-gray-400 font-bold">No Valet Deliveries Scheduled</p>
+                                <p class="text-[10px] text-gray-500 font-mono">Hub operating in stationary intake mode.</p>
+                            </div>`;
+                    } else {
+                        stopsListEl.innerHTML = stops.map((s, idx) => {
+                            const name = s.users?.name || `Customer ${s.uid.substring(0,6)}`;
+                            const zip = s.users?.zip || '98101';
+                            const slot = s.time_slot || '09:00 AM - 12:00 PM';
+                            return `
+                                <div class="bg-gray-950 border border-gray-850 p-3 rounded-2xl flex items-center justify-between hover:border-blue-500/40 transition">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-7 h-7 rounded-xl bg-blue-600/20 text-blue-400 font-bold text-xs flex items-center justify-center border border-blue-500/30 font-mono">
+                                            #${idx + 1}
+                                        </div>
+                                        <div>
+                                            <h5 class="text-xs font-bold text-white">${name}</h5>
+                                            <p class="text-[10px] font-mono text-gray-400">ZIP ${zip} &bull; ${slot}</p>
+                                        </div>
+                                    </div>
+                                    <span class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">${s.additional_totes || 1} Tote(s)</span>
+                                </div>`;
+                        }).join('');
+                    }
+                }
+
+                if (mapIframe) {
+                    const zips = stops.map(s => s.users?.zip).filter(Boolean);
+                    const mapQuery = encodeURIComponent(`${activeCity} ${zips.slice(0,3).join(' ')}`);
+                    mapIframe.src = `https://maps.google.com/maps?q=${mapQuery}&t=&z=12&ie=UTF8&iwloc=&output=embed`;
+                }
+
+                if (telemetryStops) {
+                    const zips = stops.map(s => s.users?.zip).filter(Boolean);
+                    telemetryStops.textContent = zips.length > 0 ? `Waypoints: ZIPs ${zips.join(', ')}` : `Hub Station: ${activeCity}`;
+                }
+            } catch (e) {
+                console.error("Logistics routing load failed:", e);
             }
         }
 
