@@ -55,6 +55,15 @@
                 margin: 0.5cm;
             }
         }
+        select option {
+            background-color: #0b0f19 !important;
+            color: #ffffff !important;
+            padding: 8px 12px;
+        }
+        select option:hover, select option:focus, select option:checked {
+            background-color: #1d4ed8 !important;
+            color: #ffffff !important;
+        }
         body {
             font-family: 'Outfit', sans-serif;
             background-color: #060913;
@@ -207,6 +216,16 @@
             <!-- Dashboard Mode Controllers -->
             <div class="flex flex-wrap items-center gap-3">
 
+                <!-- Global Facility Selection Switcher (Executive & Manager Controls) -->
+                <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2 shadow-sm" id="global-facility-select-container">
+                    <i data-lucide="building-2" class="w-3.5 h-3.5 text-blue-400"></i>
+                    <label class="text-xs text-gray-400 font-medium hidden sm:inline">Facility:</label>
+                    <select id="global-facility-select" onchange="onGlobalFacilityChange(this.value)" class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
+                        <option value="facility_seattle_north" class="bg-gray-950 text-white">Seattle North Fulfillment Center</option>
+                        <option value="facility_yakima_central" class="bg-gray-950 text-white">Yakima Fulfillment Center</option>
+                        <option value="facility_portland_central" class="bg-gray-950 text-white">Portland Central Hub</option>
+                    </select>
+                </div>
 
                 <!-- Role Impersonation Switcher -->
                 <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2" id="role-select-container">
@@ -599,14 +618,10 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-3">
-                        <select id="exec-facility-select" onchange="loadExecutiveFacilitySpecs(this.value)" class="bg-gray-950 border border-gray-800 text-xs text-white font-bold py-2.5 px-4 rounded-xl outline-none cursor-pointer focus:border-blue-500 transition">
-                            <option value="facility_seattle_north">Seattle North Fulfillment Center</option>
-                            <option value="facility_portland_central">Portland Central Hub</option>
-                        </select>
-                        <button onclick="saveFacilitySpecs()"
-                            class="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition flex items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer">
-                            <i data-lucide="save" class="w-4 h-4"></i> Save Specifications
-                        </button>
+                        <div class="bg-blue-950/60 border border-blue-500/30 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-inner">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                            <span class="text-xs font-mono font-bold text-blue-300 uppercase tracking-wider" id="active-facility-name-pill">Seattle North Fulfillment Center</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1138,7 +1153,7 @@
                                 </h4>
                                 <p class="text-xs text-gray-400">Un-activated totes waiting for initial thermal tag printing and vault storage activation.</p>
                             </div>
-                            <button onclick="printAllIntakeLabels()" class="w-full sm:w-auto min-h-[54px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs px-6 py-3 rounded-xl border border-blue-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-95">
+                            <button id="btn-print-all-intake" onclick="printAllIntakeLabels()" class="hidden w-full sm:w-auto min-h-[54px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs px-6 py-3 rounded-xl border border-blue-400/40 shadow-xl items-center justify-center gap-2 cursor-pointer transition transform active:scale-95">
                                 <i data-lucide="printer" class="w-4 h-4"></i>
                                 <span>🖨️ Print All [<span id="print-intake-count">0</span>] Intake Labels</span>
                             </button>
@@ -1608,38 +1623,35 @@
         }
 
         async function onGlobalFacilityChange(facilityId) {
-            const execSel = document.getElementById('exec-facility-select');
-            const mgrSel = document.getElementById('manager-facility-select');
-
             let facId = facilityId;
-            if (execSel && execSel.value) {
-                if (facilityId) execSel.value = facilityId;
-                facId = execSel.value;
-            } else if (mgrSel && mgrSel.value) {
-                if (facilityId) mgrSel.value = facilityId;
-                facId = mgrSel.value;
-            } else {
-                facId = 'facility_seattle_north';
+            if (!facId) {
+                facId = document.getElementById('global-facility-select')?.value || 
+                        document.getElementById('exec-facility-select')?.value || 
+                        document.getElementById('manager-facility-select')?.value || 
+                        'facility_seattle_north';
             }
 
-            if (mgrSel && mgrSel.value !== facId) mgrSel.value = facId;
+            window.currentSelectedFacilityId = facId;
+
+            // Sync all facility dropdowns across admin panels
+            ['global-facility-select', 'exec-facility-select', 'manager-facility-select', 'pricing-facility-select', 'emp-facility'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    if (Array.from(el.options).some(opt => opt.value === facId)) {
+                        el.value = facId;
+                    }
+                }
+            });
 
             // Sync active facility status pill
             const activePill = document.getElementById('active-facility-name-pill');
-            if (activePill) {
-                let selectedText = null;
-                if (execSel && execSel.selectedIndex >= 0) {
-                    selectedText = execSel.options[execSel.selectedIndex]?.text;
-                }
-                if (!selectedText && mgrSel && mgrSel.selectedIndex >= 0) {
-                    selectedText = mgrSel.options[mgrSel.selectedIndex]?.text;
-                }
-                if (selectedText) activePill.textContent = selectedText;
+            const globalSel = document.getElementById('global-facility-select') || document.getElementById('exec-facility-select');
+            if (activePill && globalSel && globalSel.selectedIndex >= 0) {
+                activePill.textContent = globalSel.options[globalSel.selectedIndex]?.text || '';
             }
 
             await loadRegionalPricing(facId);
-            await loadWorkerLiveData(facId);
-            await loadWorkerLogisticsRouting(facId);
+            await loadWorkerQueues(facId);
         }
 
         function loadExecutiveFacilitySpecs(facilityId) {
@@ -1769,11 +1781,11 @@
                         const isExec = actualUserRole === 'executive';
                         const preferredFacId = (!isExec && actualAssignedFacilityId) ? actualAssignedFacilityId : null;
 
-                        ['pricing-facility-select', 'manager-facility-select', 'exec-facility-select', 'emp-facility'].forEach(id => {
+                        ['global-facility-select', 'pricing-facility-select', 'manager-facility-select', 'exec-facility-select', 'emp-facility'].forEach(id => {
                             const el = document.getElementById(id);
                             if (el) {
                                 const curVal = el.value;
-                                el.innerHTML = safeFacs.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
+                                el.innerHTML = safeFacs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
                                 // Non-executives: default to assigned facility
                                 if (preferredFacId && safeFacs.some(f => f.id === preferredFacId)) {
                                     el.value = preferredFacId;
@@ -2542,10 +2554,10 @@
             });
         }
 
-        function loadWorkerQueues() {
+        function loadWorkerQueues(facilityId = null) {
             updateOfflineQueueBadge();
-            loadWorkerLiveData();
-            loadWorkerLogisticsRouting();
+            loadWorkerLiveData(facilityId);
+            loadWorkerLogisticsRouting(facilityId);
         }
 
         // =========================================================================
@@ -2554,11 +2566,12 @@
 
         async function loadWorkerLiveData(facilityId = null) {
             try {
-                let facId = facilityId;
+                let facId = facilityId || window.currentSelectedFacilityId;
                 if (!facId) {
+                    const globalSel = document.getElementById('global-facility-select');
                     const execSel = document.getElementById('exec-facility-select');
                     const mgrSel = document.getElementById('manager-facility-select');
-                    facId = execSel?.value || mgrSel?.value || actualAssignedFacilityId || 'facility_seattle_north';
+                    facId = globalSel?.value || execSel?.value || mgrSel?.value || actualAssignedFacilityId || 'facility_seattle_north';
                 }
                 const queryFacilityId = facId;
 
@@ -2675,6 +2688,17 @@
                 document.getElementById('wtab-activate-count').textContent = activateItems.length;
                 const printIntakeBadge = document.getElementById('print-intake-count');
                 if (printIntakeBadge) printIntakeBadge.textContent = activateItems.length;
+
+                const printIntakeBtn = document.getElementById('btn-print-all-intake');
+                if (printIntakeBtn) {
+                    if (activateItems.length === 0) {
+                        printIntakeBtn.classList.add('hidden');
+                        printIntakeBtn.classList.remove('flex');
+                    } else {
+                        printIntakeBtn.classList.remove('hidden');
+                        printIntakeBtn.classList.add('flex');
+                    }
+                }
 
                 const bodyActivate = document.getElementById('wbody-activate');
                 const activateGrouped = groupTotesByCustomer(activateItems);
@@ -2798,8 +2822,14 @@
                                           : isValet ? 'border-orange-500/30 bg-gray-950' 
                                           : 'border-amber-500/30 bg-gray-950';
 
-                        const actionLabel = isValet ? `LOAD ONTO DRIVER VEHICLE (${firstCode})` : `MOVE TO STAGING ROOM #${assignedRoomNum} (${firstCode})`;
-                        const actionGradient = isValet ? 'from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 border-orange-400/40' : 'from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 border-amber-400/40';
+                        const actionLabel = isValet 
+                            ? `LOAD ONTO DRIVER VEHICLE (${firstCode})` 
+                            : `MOVE TO STAGING ROOM #${assignedRoomNum} (${firstCode})`;
+
+                        const actionGradient = isValet 
+                            ? 'from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 border-orange-400/40' 
+                            : 'from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 border-amber-400/40';
+                        
                         const actionIcon = isValet ? 'truck' : 'archive-restore';
                         const expectedScanStatus = isValet ? 'pending-dispatch' : 'pending-stage';
 
@@ -2811,7 +2841,7 @@
                                             ${customerName.substring(0,2).toUpperCase()}
                                         </div>
                                         <div>
-                                            <h4 class="text-sm font-extrabold text-white flex items-center gap-2">
+                                            <h4 class="text-sm font-extrabold text-white flex items-center gap-2 flex-wrap">
                                                 ${customerName}
                                                 ${isValet ? '<span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 VALET DELIVERY</span>' : '<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE STAGING</span>'}
                                             </h4>
@@ -2834,8 +2864,12 @@
                                         const isValetItem = t.status === 'pending-dispatch';
                                         const sLabel = isValetItem ? 'Pending Driver Load' : 'Pending Staging';
                                         const sColor = isValetItem ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                                        const itemLabel = t.label ? ` &bull; ${escapeHtml(t.label)}` : '';
                                         return `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
-                                            <span class="text-white font-bold">${t.tote_code}</span>
+                                            <div>
+                                                <span class="text-white font-bold">${t.tote_code}</span>
+                                                <span class="text-[11px] text-gray-400 font-sans font-medium">${itemLabel}</span>
+                                            </div>
                                             <span class="${sColor} text-[10px] px-2 py-0.5 rounded border font-sans font-semibold">${sLabel}</span>
                                         </div>`;
                                     }).join('')}
@@ -3128,33 +3162,18 @@
 
         // =========================================================================
         // Google Maps Routes API Logistics Routing Renderer
-        // =========================================================================
-
-        async function loadWorkerLogisticsRouting(facilityId = null) {
+async function loadWorkerLogisticsRouting(facilityId = null) {
             try {
-                if (!facilityId) {
-                    const select = document.getElementById('manager-facility-select');
-                    if (select && select.value) {
-                        facilityId = select.value;
-                    } else if (actualAssignedFacilityId) {
-                        facilityId = actualAssignedFacilityId;
-                    } else {
-                        facilityId = 'facility_seattle_north';
-                    }
+                let facId = facilityId || window.currentSelectedFacilityId;
+                if (!facId) {
+                    const globalSel = document.getElementById('global-facility-select');
+                    const execSel = document.getElementById('exec-facility-select');
+                    const mgrSel = document.getElementById('manager-facility-select');
+                    facId = globalSel?.value || execSel?.value || mgrSel?.value || actualAssignedFacilityId || 'facility_seattle_north';
                 }
-                const { data: requests } = await supabase.from('access_requests')
-                    .select('*, users(name, zip)')
-                    .eq('facility_id', facilityId)
-                    .eq('fulfillment_type', 'valet_delivery')
-                    .eq('status', 'pending');
+                const queryFacilityId = facId;
 
-                const stopsListEl = document.getElementById('delivery-stops-list');
-                const countBadge = document.getElementById('map-stops-count');
-                const mapIframe = document.getElementById('google-maps-iframe');
-                const telemetryStops = document.getElementById('map-telemetry-stops');
-                const hubLabel = document.getElementById('map-hub-label');
-
-                const fid = (facilityId || '').toLowerCase();
+                const fid = (queryFacilityId || '').toLowerCase();
                 let activeCity = "Seattle, WA";
                 let hubName = "Seattle North Hub";
 
@@ -3164,6 +3183,15 @@
                 } else if (fid.includes('portland') || fid.includes('pdx')) {
                     activeCity = "Portland, OR";
                     hubName = "Portland Central Hub";
+                } else if (fid.includes('spokane')) {
+                    activeCity = "Spokane, WA";
+                    hubName = "Spokane Regional Hub";
+                } else if (fid.includes('tacoma')) {
+                    activeCity = "Tacoma, WA";
+                    hubName = "Tacoma South Hub";
+                } else if (fid.includes('boise')) {
+                    activeCity = "Boise, ID";
+                    hubName = "Boise Main Hub";
                 } else if (fid.includes('denver')) {
                     activeCity = "Denver, CO";
                     hubName = "Denver Logistics Hub";
@@ -3175,22 +3203,41 @@
                     hubName = "Seattle North Hub";
                 }
 
-                if (hubLabel) hubLabel.textContent = `Hub: ${hubName}`;
+                const { data: requests } = await supabase.from('access_requests')
+                    .select('*, users(name, zip, active_zone)')
+                    .eq('fulfillment_type', 'valet_delivery')
+                    .neq('status', 'completed')
+                    .neq('status', 'cancelled');
 
-                const stops = requests || [];
+                // Filter stops matching this facility/city context
+                const stops = (requests || []).filter(r => {
+                    if (r.facility_id === queryFacilityId) return true;
+                    if (fid.includes('yakima') && ((r.facility_id || '').includes('yakima') || (r.users?.active_zone || '').includes('yakima'))) return true;
+                    if (fid.includes('portland') && ((r.facility_id || '').includes('portland') || (r.users?.active_zone || '').includes('portland'))) return true;
+                    if (fid.includes('seattle') && ((r.facility_id || '').includes('seattle') || (r.users?.active_zone || '').includes('seattle'))) return true;
+                    return r.facility_id === queryFacilityId;
+                });
+
+                const stopsListEl = document.getElementById('delivery-stops-list');
+                const countBadge = document.getElementById('map-stops-count');
+                const mapIframe = document.getElementById('google-maps-iframe');
+                const telemetryStops = document.getElementById('map-telemetry-stops');
+                const hubLabel = document.getElementById('map-hub-label');
+
+                if (hubLabel) hubLabel.textContent = `Hub: ${hubName}`;
                 if (countBadge) countBadge.textContent = `${stops.length} Active Valet Stops`;
 
                 if (stopsListEl) {
                     if (stops.length === 0) {
                         stopsListEl.innerHTML = `
                             <div class="bg-gray-900/50 p-4 rounded-2xl border border-gray-850 text-center space-y-1">
-                                <p class="text-xs text-gray-400 font-bold">No Valet Deliveries Scheduled</p>
-                                <p class="text-[10px] text-gray-500 font-mono">Hub operating in stationary intake mode.</p>
+                                <p class="text-xs text-gray-400 font-bold">No Valet Deliveries Scheduled for ${hubName}</p>
+                                <p class="text-[10px] text-gray-500 font-mono">Hub operating in stationary intake mode in ${activeCity}.</p>
                             </div>`;
                     } else {
                         stopsListEl.innerHTML = stops.map((s, idx) => {
                             const name = s.users?.name || `Customer ${s.uid.substring(0,6)}`;
-                            const zip = s.users?.zip || '98101';
+                            const zip = s.users?.zip || s.users?.active_zone || 'Local Area';
                             const slot = s.time_slot || '09:00 AM - 12:00 PM';
                             return `
                                 <div class="bg-gray-950 border border-gray-850 p-3 rounded-2xl flex items-center justify-between hover:border-blue-500/40 transition">
@@ -3203,21 +3250,21 @@
                                             <p class="text-[10px] font-mono text-gray-400">ZIP ${zip} &bull; ${slot}</p>
                                         </div>
                                     </div>
-                                    <span class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">${s.additional_totes || 1} Tote(s)</span>
+                                    <span class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">${(s.requested_items || s.requested_tote_codes || []).length || 1} Tote(s)</span>
                                 </div>`;
                         }).join('');
                     }
                 }
 
                 if (mapIframe) {
-                    const zips = stops.map(s => s.users?.zip).filter(Boolean);
-                    const mapQuery = encodeURIComponent(`${activeCity} ${zips.slice(0,3).join(' ')}`);
+                    const zips = stops.map(s => s.users?.zip || s.users?.active_zone).filter(Boolean);
+                    const mapQuery = encodeURIComponent(`${activeCity} ${zips.slice(0,3).join(' ')}`.trim());
                     mapIframe.src = `https://maps.google.com/maps?q=${mapQuery}&t=&z=12&ie=UTF8&iwloc=&output=embed`;
                 }
 
                 if (telemetryStops) {
-                    const zips = stops.map(s => s.users?.zip).filter(Boolean);
-                    telemetryStops.textContent = zips.length > 0 ? `Waypoints: ZIPs ${zips.join(', ')}` : `Hub Station: ${activeCity}`;
+                    const zips = stops.map(s => s.users?.zip || s.users?.active_zone).filter(Boolean);
+                    telemetryStops.textContent = zips.length > 0 ? `Waypoints: ${activeCity} (ZIPs ${zips.join(', ')})` : `Hub Station: ${activeCity}`;
                 }
             } catch (e) {
                 console.error("Logistics routing load failed:", e);
@@ -3743,18 +3790,103 @@
         let currentLoadedFac = null;
 
         async function loadExecutiveFacilitySpecs(facilityId) {
-            const select = document.getElementById('exec-facility-select');
-            const selectedId = facilityId || (select ? select.value : 'facility_seattle_north');
-            if (select && selectedId) select.value = selectedId;
+            const globalSel = document.getElementById('global-facility-select');
+            const selectedId = facilityId || window.currentSelectedFacilityId || (globalSel ? globalSel.value : 'facility_seattle_north');
+            if (globalSel && globalSel.value !== selectedId) globalSel.value = selectedId;
+
+            const activePill = document.getElementById('active-facility-name-pill');
+            const fid = (selectedId || '').toLowerCase();
+
+            const facilityDefaults = {
+                'facility_seattle_north': {
+                    id: 'facility_seattle_north',
+                    name: 'Seattle North Fulfillment Center',
+                    manager_name: 'Alex Rivera',
+                    address: '4821 Aurora Ave N',
+                    city: 'Seattle',
+                    state: 'WA',
+                    zip: '98103',
+                    usable_warehouse_sqft: 20000,
+                    sqft_per_tote: 1.0,
+                    tote_capacity: 2000,
+                    num_staging_rooms: 2,
+                    monthly_rent_cost: 8500,
+                    monthly_labor_cost: 14000,
+                    monthly_utilities_cost: 1200,
+                    monthly_insurance_cost: 650
+                },
+                'facility_yakima_central': {
+                    id: 'facility_yakima_central',
+                    name: 'Yakima Fulfillment Center',
+                    manager_name: 'Jordan Miller',
+                    address: '1200 S 1st St',
+                    city: 'Yakima',
+                    state: 'WA',
+                    zip: '98901',
+                    usable_warehouse_sqft: 15000,
+                    sqft_per_tote: 1.0,
+                    tote_capacity: 1500,
+                    num_staging_rooms: 2,
+                    monthly_rent_cost: 4500,
+                    monthly_labor_cost: 8000,
+                    monthly_utilities_cost: 800,
+                    monthly_insurance_cost: 450
+                },
+                'facility_yakima': {
+                    id: 'facility_yakima',
+                    name: 'Yakima Fulfillment Center',
+                    manager_name: 'Jordan Miller',
+                    address: '1200 S 1st St',
+                    city: 'Yakima',
+                    state: 'WA',
+                    zip: '98901',
+                    usable_warehouse_sqft: 15000,
+                    sqft_per_tote: 1.0,
+                    tote_capacity: 1500,
+                    num_staging_rooms: 2,
+                    monthly_rent_cost: 4500,
+                    monthly_labor_cost: 8000,
+                    monthly_utilities_cost: 800,
+                    monthly_insurance_cost: 450
+                },
+                'facility_portland_central': {
+                    id: 'facility_portland_central',
+                    name: 'Portland Central Hub',
+                    manager_name: 'Sarah Jenkins',
+                    address: '700 NW 11th Ave',
+                    city: 'Portland',
+                    state: 'OR',
+                    zip: '97209',
+                    usable_warehouse_sqft: 18000,
+                    sqft_per_tote: 1.0,
+                    tote_capacity: 1800,
+                    num_staging_rooms: 2,
+                    monthly_rent_cost: 7200,
+                    monthly_labor_cost: 12500,
+                    monthly_utilities_cost: 1100,
+                    monthly_insurance_cost: 550
+                }
+            };
+
+            let specToLoad = facilityDefaults[selectedId];
+
+            if (!specToLoad) {
+                if (fid.includes('yakima')) specToLoad = facilityDefaults['facility_yakima_central'];
+                else if (fid.includes('portland')) specToLoad = facilityDefaults['facility_portland_central'];
+                else specToLoad = facilityDefaults['facility_seattle_north'];
+            }
 
             try {
-                const { data: fac } = await supabase.from('facilities').select('*').eq('id', selectedId).single();
-                if (fac) {
-                    loadFacilitySpecs(fac);
+                const { data: fac } = await supabase.from('facilities').select('*').or(`id.eq.${selectedId},id.eq.facility_yakima,id.eq.facility_yakima_central`).single();
+                if (fac && fac.name) {
+                    specToLoad = { ...specToLoad, ...fac };
                 }
-            } catch (err) {
-                console.error("Failed to load facility specs for executive:", err);
+            } catch (e) {
+                // Fallback to default preset
             }
+
+            if (activePill) activePill.textContent = specToLoad.name;
+            loadFacilitySpecs(specToLoad);
         }
 
         function loadFacilitySpecs(fac) {
