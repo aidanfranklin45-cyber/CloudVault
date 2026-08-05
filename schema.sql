@@ -1131,7 +1131,7 @@ BEGIN
   FROM public.access_requests ar
   WHERE ar.uid = v_item.uid
     AND ar.status = 'pending'
-    AND (v_item.id = ANY(ar.requested_items) OR p_tote_code = ANY(ar.requested_tote_codes))
+    AND v_item.id = ANY(ar.requested_items)
   ORDER BY ar.requested_at DESC
   LIMIT 1;
 
