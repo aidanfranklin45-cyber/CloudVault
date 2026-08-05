@@ -201,16 +201,31 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
             
             <!-- Brand & Tag -->
-            <div class="flex items-center space-x-3">
-                <div class="bg-white p-1 rounded-xl shadow-lg shadow-blue-500/20">
-                    <img src="logo.png" alt="CloudVault Logo" class="h-8 w-8 rounded-lg">
+            <div class="flex items-center space-x-6">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-white p-1 rounded-xl shadow-lg shadow-blue-500/20">
+                        <img src="logo.png" alt="CloudVault Logo" class="h-8 w-8 rounded-lg">
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                            CloudVault <span class="bg-blue-500/10 text-blue-400 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-blue-500/20">Ops Center</span>
+                        </h1>
+                        <p class="text-xs text-gray-400">Enterprise Logistics &amp; BI Dashboard</p>
+                    </div>
                 </div>
-                <div>
-                    <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                        CloudVault <span class="bg-blue-500/10 text-blue-400 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-blue-500/20">Ops Center</span>
-                    </h1>
-                    <p class="text-xs text-gray-400">Enterprise Logistics & BI Dashboard</p>
-                </div>
+
+                <!-- Navigation Tabs -->
+                <nav class="hidden md:flex items-center space-x-1 pl-6 border-l border-gray-800">
+                    <a href="admin.html" class="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600/20 border border-blue-500/30 transition flex items-center gap-1.5 shadow-sm">
+                        <i data-lucide="layout-dashboard" class="w-3.5 h-3.5 text-blue-400"></i> BI Analytics
+                    </a>
+                    <a href="admin-facilities.html" class="px-3 py-1.5 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
+                        <i data-lucide="building-2" class="w-3.5 h-3.5 text-gray-400"></i> Facility Configuration
+                    </a>
+                    <a href="admin-logistics.html" class="px-3 py-1.5 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
+                        <i data-lucide="truck" class="w-3.5 h-3.5 text-gray-400"></i> Logistics Operations
+                    </a>
+                </nav>
             </div>
 
             <!-- Dashboard Mode Controllers -->
@@ -671,82 +686,77 @@
                         </div>
                     </div>
 
-                    <!-- Col 2: Physical Specs & Operating Costs Form Inputs (4 cols) -->
-                    <div class="lg:col-span-4 space-y-4">
-                        <p class="text-[10px] font-bold uppercase text-gray-400 tracking-widest flex items-center gap-1">
-                            <i data-lucide="sliders" class="w-3.5 h-3.5 text-blue-400"></i> Facility Specs &amp; Lease Costs
-                        </p>
+                    <!-- Col 2: Read-Only Facility Specs & Operating Costs Telemetry (4 cols) -->
+                    <div class="lg:col-span-4 bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-4">
+                        <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                            <h4 class="text-xs font-extrabold uppercase text-blue-400 tracking-wider flex items-center gap-1.5">
+                                <i data-lucide="building-2" class="w-4 h-4"></i> Facility Specs &amp; Lease Costs
+                            </h4>
+                            <a href="admin-facilities.html" id="btn-edit-fac-config" class="text-[10px] font-bold text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-600 px-2.5 py-1 rounded-xl border border-blue-500/20 transition flex items-center gap-1">
+                                <i data-lucide="settings" class="w-3 h-3"></i> Executive Config →
+                            </a>
+                        </div>
 
                         <div class="space-y-3 text-xs">
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Facility Name</label>
-                                    <input type="text" id="fspec-name" class="fspec-input w-full" placeholder="Seattle North Center">
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Manager Name</label>
-                                    <input type="text" id="fspec-manager-name" class="fspec-input w-full" placeholder="Alex Rivera">
-                                </div>
-                            </div>
-
-                            <div>
-                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Street Address</label>
-                                <input type="text" id="fspec-address" class="fspec-input w-full" placeholder="4821 Aurora Ave N">
+                            <div class="bg-gray-900/60 p-3 rounded-xl border border-gray-800 space-y-1">
+                                <p class="text-[9px] font-bold uppercase text-gray-400">Facility Location &amp; Manager</p>
+                                <p class="text-sm font-extrabold text-white" id="fspec-display-name">Seattle North Fulfillment Center</p>
+                                <p class="text-[11px] text-gray-400 font-medium" id="fspec-display-address">4821 Aurora Ave N, Seattle, WA 98103</p>
+                                <p class="text-[10px] text-blue-400 font-mono font-bold mt-1">Manager: <span id="fspec-display-manager" class="text-gray-200">Alex Rivera</span></p>
                             </div>
 
                             <div class="grid grid-cols-3 gap-2">
-                                <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">City</label>
-                                    <input type="text" id="fspec-city" class="fspec-input w-full" placeholder="Seattle">
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">Total SQFT</p>
+                                    <p class="text-sm font-extrabold text-white mt-0.5" id="fspec-display-sqft">20,000</p>
                                 </div>
-                                <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">State</label>
-                                    <input type="text" id="fspec-state" class="fspec-input w-full" placeholder="WA">
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">SQFT / Tote</p>
+                                    <p class="text-sm font-extrabold text-white mt-0.5" id="fspec-display-sqft-per-tote">1.0</p>
                                 </div>
-                                <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">ZIP</label>
-                                    <input type="text" id="fspec-zip" class="fspec-input w-full" placeholder="98103">
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-3 gap-2">
-                                <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Total Sq Ft</label>
-                                    <input type="number" id="fspec-sqft" class="fspec-input w-full" placeholder="20000" oninput="recalcFacilityProfit()">
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Sq Ft / Tote</label>
-                                    <input type="number" id="fspec-sqft-per-tote" class="fspec-input w-full" placeholder="1.0" step="0.1" oninput="recalcFacilityProfit()">
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Max Cap</label>
-                                    <input type="number" id="fspec-tote-capacity" class="fspec-input w-full" placeholder="2000" oninput="recalcFacilityProfit()">
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">Max Cap</p>
+                                    <p class="text-sm font-extrabold text-blue-400 mt-0.5" id="fspec-display-capacity">2,000</p>
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-3 pt-1 border-t border-gray-800">
-                                <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Rent / Lease ($)</label>
-                                    <input type="number" id="fspec-rent" class="fspec-input w-full" placeholder="8500" oninput="recalcFacilityProfit()">
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">Rent / Lease</p>
+                                    <p class="text-sm font-extrabold text-amber-400 mt-0.5" id="fspec-display-rent">$8,500.00</p>
                                 </div>
-                                <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Labor Cost ($)</label>
-                                    <input type="number" id="fspec-labor" class="fspec-input w-full" placeholder="14000" oninput="recalcFacilityProfit()">
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Utilities ($)</label>
-                                    <input type="number" id="fspec-utilities" class="fspec-input w-full" placeholder="1200" oninput="recalcFacilityProfit()">
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Insurance ($)</label>
-                                    <input type="number" id="fspec-insurance" class="fspec-input w-full" placeholder="650" oninput="recalcFacilityProfit()">
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">Labor Cost</p>
+                                    <p class="text-sm font-extrabold text-amber-400 mt-0.5" id="fspec-display-labor">$14,000.00</p>
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-3 hidden">
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">Utilities</p>
+                                    <p class="text-sm font-extrabold text-gray-300 mt-0.5" id="fspec-display-utilities">$1,200.00</p>
+                                </div>
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">Insurance</p>
+                                    <p class="text-sm font-extrabold text-gray-300 mt-0.5" id="fspec-display-insurance">$650.00</p>
+                                </div>
+                            </div>
+
+                            <!-- Hidden backing inputs to maintain full backward compatibility for profit calculation scripts -->
+                            <div class="hidden">
+                                <input type="text" id="fspec-name">
+                                <input type="text" id="fspec-manager-name">
+                                <input type="text" id="fspec-address">
+                                <input type="text" id="fspec-city">
+                                <input type="text" id="fspec-state">
+                                <input type="text" id="fspec-zip">
+                                <input type="number" id="fspec-sqft">
+                                <input type="number" id="fspec-sqft-per-tote">
+                                <input type="number" id="fspec-tote-capacity">
+                                <input type="number" id="fspec-rent">
+                                <input type="number" id="fspec-labor">
+                                <input type="number" id="fspec-utilities">
+                                <input type="number" id="fspec-insurance">
                                 <input type="number" id="fspec-staging-rooms" value="2">
                                 <input type="email" id="fspec-manager-email">
                             </div>
@@ -1664,12 +1674,14 @@
         async function onGlobalFacilityChange(facilityId) {
             let facId = facilityId;
             if (!facId) {
-                facId = document.getElementById('global-facility-select')?.value || 
+                facId = localStorage.getItem('cloudvault_selected_facility') ||
+                        document.getElementById('global-facility-select')?.value || 
                         document.getElementById('exec-facility-select')?.value || 
                         document.getElementById('manager-facility-select')?.value || 
-                        'facility_seattle_north';
+                        'facility_yakima_central';
             }
 
+            localStorage.setItem('cloudvault_selected_facility', facId);
             window.currentSelectedFacilityId = facId;
 
             // Sync all facility dropdowns across admin panels
@@ -1689,8 +1701,88 @@
                 activePill.textContent = globalSel.options[globalSel.selectedIndex]?.text || '';
             }
 
+            await fetchAndRenderFacilitySpecs(facId);
             await loadRegionalPricing(facId);
             await loadWorkerQueues(facId);
+        }
+
+        async function fetchAndRenderFacilitySpecs(selectedId) {
+            const fid = (selectedId || '').toLowerCase();
+            const facilityDefaults = {
+                'facility_seattle_north': {
+                    id: 'facility_seattle_north',
+                    name: 'Seattle North Fulfillment Center',
+                    manager_name: 'Alex Rivera',
+                    address: '4821 Aurora Ave N',
+                    city: 'Seattle',
+                    state: 'WA',
+                    zip: '98103',
+                    usable_warehouse_sqft: 20000,
+                    sqft_per_tote: 1.0,
+                    tote_capacity: 2000,
+                    num_staging_rooms: 2,
+                    monthly_rent_cost: 8500,
+                    monthly_labor_cost: 14000,
+                    monthly_utilities_cost: 1200,
+                    monthly_insurance_cost: 650
+                },
+                'facility_yakima_central': {
+                    id: 'facility_yakima_central',
+                    name: 'Yakima Fulfillment Center',
+                    manager_name: 'Jordan Miller',
+                    address: '1200 S 1st St',
+                    city: 'Yakima',
+                    state: 'WA',
+                    zip: '98901',
+                    usable_warehouse_sqft: 15000,
+                    sqft_per_tote: 1.0,
+                    tote_capacity: 1500,
+                    num_staging_rooms: 2,
+                    monthly_rent_cost: 4500,
+                    monthly_labor_cost: 8000,
+                    monthly_utilities_cost: 800,
+                    monthly_insurance_cost: 450
+                },
+                'facility_portland_central': {
+                    id: 'facility_portland_central',
+                    name: 'Portland Central Hub',
+                    manager_name: 'Sarah Jenkins',
+                    address: '700 NW 11th Ave',
+                    city: 'Portland',
+                    state: 'OR',
+                    zip: '97209',
+                    usable_warehouse_sqft: 18000,
+                    sqft_per_tote: 1.0,
+                    tote_capacity: 1800,
+                    num_staging_rooms: 2,
+                    monthly_rent_cost: 7200,
+                    monthly_labor_cost: 12500,
+                    monthly_utilities_cost: 1100,
+                    monthly_insurance_cost: 550
+                }
+            };
+
+            let specToLoad = facilityDefaults[selectedId];
+
+            if (!specToLoad) {
+                if (fid.includes('yakima')) specToLoad = facilityDefaults['facility_yakima_central'];
+                else if (fid.includes('portland')) specToLoad = facilityDefaults['facility_portland_central'];
+                else specToLoad = facilityDefaults['facility_seattle_north'];
+            }
+
+            try {
+                const { data: facs } = await supabase.from('facilities').select('*');
+                if (facs && facs.length > 0) {
+                    const matchedFac = facs.find(f => f.id === selectedId || (fid.includes('yakima') && f.id.includes('yakima')) || (fid.includes('portland') && f.id.includes('portland')));
+                    if (matchedFac) {
+                        specToLoad = { ...specToLoad, ...matchedFac };
+                    }
+                }
+            } catch (e) {
+                // Fallback to default preset
+            }
+
+            loadFacilitySpecs(specToLoad);
         }
 
         function loadExecutiveFacilitySpecs(facilityId) {
@@ -1737,8 +1829,8 @@
         // Load Real Supabase Data
         async function loadLiveData() {
             try {
-                // Get regional pricing settings for active facility selector
-                await loadRegionalPricing();
+                const currentFac = localStorage.getItem('cloudvault_selected_facility') || 'facility_yakima_central';
+                await onGlobalFacilityChange(currentFac);
 
                 // Get operational zones
                 const { data: zones, error: zonesErr } = await supabase.from('operational_zones').select('*');
@@ -3947,22 +4039,35 @@ async function loadWorkerLogisticsRouting(facilityId = null) {
             currentLoadedFac = fac;
             if (!fac) return;
 
-            document.getElementById('fspec-name').value = fac.name || '';
-            document.getElementById('fspec-manager-name').value = fac.manager_name || '';
-            document.getElementById('fspec-address').value = fac.address || '';
-            document.getElementById('fspec-city').value = fac.city || '';
-            document.getElementById('fspec-state').value = fac.state || '';
-            document.getElementById('fspec-zip').value = fac.zip || '';
-            document.getElementById('fspec-sqft').value = (fac.usable_warehouse_sqft !== null && fac.usable_warehouse_sqft !== undefined) ? fac.usable_warehouse_sqft : 20000;
-            document.getElementById('fspec-sqft-per-tote').value = (fac.sqft_per_tote !== null && fac.sqft_per_tote !== undefined) ? fac.sqft_per_tote : 1.0;
-            document.getElementById('fspec-tote-capacity').value = (fac.tote_capacity !== null && fac.tote_capacity !== undefined) ? fac.tote_capacity : 2000;
-            document.getElementById('fspec-staging-rooms').value = (fac.num_staging_rooms !== null && fac.num_staging_rooms !== undefined) ? fac.num_staging_rooms : 2;
-            document.getElementById('fspec-manager-email').value = fac.manager_email || '';
+            // Populate Read-Only Telemetry Display Cards
+            if (document.getElementById('fspec-display-name')) document.getElementById('fspec-display-name').textContent = fac.name || 'Fulfillment Center';
+            if (document.getElementById('fspec-display-address')) document.getElementById('fspec-display-address').textContent = `${fac.address || ''}, ${fac.city || ''}, ${fac.state || ''} ${fac.zip || ''}`;
+            if (document.getElementById('fspec-display-manager')) document.getElementById('fspec-display-manager').textContent = fac.manager_name || 'Operations Lead';
+            if (document.getElementById('fspec-display-sqft')) document.getElementById('fspec-display-sqft').textContent = (fac.usable_warehouse_sqft || 20000).toLocaleString();
+            if (document.getElementById('fspec-display-sqft-per-tote')) document.getElementById('fspec-display-sqft-per-tote').textContent = (fac.sqft_per_tote || 1.0).toFixed(1);
+            if (document.getElementById('fspec-display-capacity')) document.getElementById('fspec-display-capacity').textContent = (fac.tote_capacity || 2000).toLocaleString();
+            if (document.getElementById('fspec-display-rent')) document.getElementById('fspec-display-rent').textContent = `$${(fac.monthly_rent_cost || 8500).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+            if (document.getElementById('fspec-display-labor')) document.getElementById('fspec-display-labor').textContent = `$${(fac.monthly_labor_cost || 14000).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+            if (document.getElementById('fspec-display-utilities')) document.getElementById('fspec-display-utilities').textContent = `$${(fac.monthly_utilities_cost || 1200).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+            if (document.getElementById('fspec-display-insurance')) document.getElementById('fspec-display-insurance').textContent = `$${(fac.monthly_insurance_cost || 650).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
 
-            document.getElementById('fspec-rent').value = (fac.monthly_rent_cost !== null && fac.monthly_rent_cost !== undefined) ? fac.monthly_rent_cost : 8500;
-            document.getElementById('fspec-labor').value = (fac.monthly_labor_cost !== null && fac.monthly_labor_cost !== undefined) ? fac.monthly_labor_cost : 14000;
-            document.getElementById('fspec-utilities').value = (fac.monthly_utilities_cost !== null && fac.monthly_utilities_cost !== undefined) ? fac.monthly_utilities_cost : 1200;
-            document.getElementById('fspec-insurance').value = (fac.monthly_insurance_cost !== null && fac.monthly_insurance_cost !== undefined) ? fac.monthly_insurance_cost : 650;
+            // Backing inputs for backwards compatibility
+            if (document.getElementById('fspec-name')) document.getElementById('fspec-name').value = fac.name || '';
+            if (document.getElementById('fspec-manager-name')) document.getElementById('fspec-manager-name').value = fac.manager_name || '';
+            if (document.getElementById('fspec-address')) document.getElementById('fspec-address').value = fac.address || '';
+            if (document.getElementById('fspec-city')) document.getElementById('fspec-city').value = fac.city || '';
+            if (document.getElementById('fspec-state')) document.getElementById('fspec-state').value = fac.state || '';
+            if (document.getElementById('fspec-zip')) document.getElementById('fspec-zip').value = fac.zip || '';
+            if (document.getElementById('fspec-sqft')) document.getElementById('fspec-sqft').value = (fac.usable_warehouse_sqft !== null && fac.usable_warehouse_sqft !== undefined) ? fac.usable_warehouse_sqft : 20000;
+            if (document.getElementById('fspec-sqft-per-tote')) document.getElementById('fspec-sqft-per-tote').value = (fac.sqft_per_tote !== null && fac.sqft_per_tote !== undefined) ? fac.sqft_per_tote : 1.0;
+            if (document.getElementById('fspec-tote-capacity')) document.getElementById('fspec-tote-capacity').value = (fac.tote_capacity !== null && fac.tote_capacity !== undefined) ? fac.tote_capacity : 2000;
+            if (document.getElementById('fspec-staging-rooms')) document.getElementById('fspec-staging-rooms').value = (fac.num_staging_rooms !== null && fac.num_staging_rooms !== undefined) ? fac.num_staging_rooms : 2;
+            if (document.getElementById('fspec-manager-email')) document.getElementById('fspec-manager-email').value = fac.manager_email || '';
+
+            if (document.getElementById('fspec-rent')) document.getElementById('fspec-rent').value = (fac.monthly_rent_cost !== null && fac.monthly_rent_cost !== undefined) ? fac.monthly_rent_cost : 8500;
+            if (document.getElementById('fspec-labor')) document.getElementById('fspec-labor').value = (fac.monthly_labor_cost !== null && fac.monthly_labor_cost !== undefined) ? fac.monthly_labor_cost : 14000;
+            if (document.getElementById('fspec-utilities')) document.getElementById('fspec-utilities').value = (fac.monthly_utilities_cost !== null && fac.monthly_utilities_cost !== undefined) ? fac.monthly_utilities_cost : 1200;
+            if (document.getElementById('fspec-insurance')) document.getElementById('fspec-insurance').value = (fac.monthly_insurance_cost !== null && fac.monthly_insurance_cost !== undefined) ? fac.monthly_insurance_cost : 650;
 
             recalcFacilityProfit();
         }
@@ -4445,30 +4550,51 @@ async function loadWorkerLogisticsRouting(facilityId = null) {
             const q = (query || '').trim();
             if (!q) return;
 
-            const { data: exactItem } = await supabase.from('inventory')
+            const { data: items } = await supabase.from('inventory')
                 .select('id')
-                .eq('tote_code', q.toUpperCase())
-                .maybeSingle();
+                .or(`tote_code.eq.${q.toUpperCase()},tote_code.ilike.%${q}%`)
+                .limit(1);
 
-            if (exactItem) {
-                openToteMasterModal(exactItem.id);
+            if (items && items.length > 0) {
+                openToteMasterModal(items[0].id);
             } else {
                 onMasterToteSearchInput(q);
             }
         }
+
+        window.onMasterToteSearchInput = onMasterToteSearchInput;
+        window.executeMasterToteSearch = executeMasterToteSearch;
+        window.openToteMasterModal = openToteMasterModal;
+        window.closeToteMasterModal = closeToteMasterModal;
+        window.executeChargeMissingToteFromModal = executeChargeMissingToteFromModal;
+        window.executeReprintToteTagFromModal = executeReprintToteTagFromModal;
+        window.executeReassignFacilityFromModal = executeReassignFacilityFromModal;
+        window.executeSaveToteLabelFromModal = executeSaveToteLabelFromModal;
+        window.executeForceStatusOverrideFromModal = executeForceStatusOverrideFromModal;
 
         async function openToteMasterModal(toteId) {
             const resultsBox = document.getElementById('master-tote-search-results');
             if (resultsBox) resultsBox.classList.add('hidden');
 
             try {
-                // Fetch complete tote + user + subscription telemetry
-                const { data: item, error } = await supabase.from('inventory')
+                // Fetch complete tote + user + subscription telemetry safely
+                let item = null;
+                const { data: mainItem } = await supabase.from('inventory')
                     .select('*, users(*), facilities(*)')
                     .eq('id', toteId)
-                    .single();
+                    .maybeSingle();
 
-                if (error || !item) {
+                if (mainItem) {
+                    item = mainItem;
+                } else {
+                    const { data: fallbackItem } = await supabase.from('inventory')
+                        .select('*, users(*)')
+                        .eq('id', toteId)
+                        .maybeSingle();
+                    item = fallbackItem;
+                }
+
+                if (!item) {
                     alert('Tote not found');
                     return;
                 }
@@ -4566,18 +4692,39 @@ async function loadWorkerLogisticsRouting(facilityId = null) {
             openPrintLabelModal(code);
         }
 
+        function getFacilityPrefix(facId) {
+            const fid = (facId || '').toLowerCase();
+            if (fid.includes('portland') || fid.includes('pdx')) return 'PDX';
+            if (fid.includes('seattle') || fid.includes('sea')) return 'SEA';
+            if (fid.includes('yakima') || fid.includes('yak')) return 'YAK';
+            if (fid.includes('denver') || fid.includes('den')) return 'DEN';
+            if (fid.includes('spokane') || fid.includes('spo')) return 'SPO';
+            if (fid.includes('austin') || fid.includes('atx')) return 'ATX';
+            return (facId || 'SEA').replace('facility_', '').substring(0, 3).toUpperCase();
+        }
+
+        function computeUpdatedToteCode(oldToteCode, newFacilityId) {
+            const prefix = getFacilityPrefix(newFacilityId);
+            let suffix = '0000';
+            if (oldToteCode && oldToteCode.length >= 4) {
+                suffix = oldToteCode.slice(-4).toUpperCase();
+            }
+            return `CV-${prefix}-${suffix}`;
+        }
+
         async function executeReassignFacilityFromModal() {
             if (!currentMasterTote) return;
             const newFacilityId = document.getElementById('tmm-reassign-facility-select').value;
+            const newToteCode = computeUpdatedToteCode(currentMasterTote.tote_code, newFacilityId);
 
             try {
                 const { error } = await supabase.from('inventory')
-                    .update({ facility_id: newFacilityId })
+                    .update({ facility_id: newFacilityId, tote_code: newToteCode })
                     .eq('id', currentMasterTote.id);
 
                 if (error) throw error;
 
-                triggerScanFeedbackOverlay(true, `Reassigned to ${newFacilityId}`, currentMasterTote.tote_code);
+                triggerScanFeedbackOverlay(true, `Reassigned to ${newFacilityId} (${newToteCode})`, newToteCode);
                 closeToteMasterModal();
                 refreshDashboard();
             } catch (err) {

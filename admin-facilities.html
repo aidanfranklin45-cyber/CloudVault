@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-950 text-gray-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudVault — Executive Facility & Economic Configuration Portal</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        select option {
+            background-color: #0b0f19 !important;
+            color: #ffffff !important;
+            padding: 8px 12px;
+        }
+        select option:hover, select option:focus, select option:checked {
+            background-color: #1d4ed8 !important;
+            color: #ffffff !important;
+        }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #060913;
+        }
+        .glass-panel {
+            background: rgba(13, 18, 30, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .fspec-input {
+            background-color: rgba(3, 7, 18, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            font-weight: 700;
+            padding: 0.6rem 0.85rem;
+            border-radius: 0.75rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        .fspec-input:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+        }
+        /* Launch Modal */
+        .launch-modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        .launch-modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .launch-modal {
+            background: #0d121e;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 1.5rem;
+            max-width: 720px;
+            width: 95%;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 2rem;
+            box-shadow: 0 25px 80px rgba(99, 102, 241, 0.15), 0 0 0 1px rgba(255,255,255,0.04);
+            transform: translateY(20px) scale(0.97);
+            transition: transform 0.3s ease;
+        }
+        .launch-modal-overlay.active .launch-modal {
+            transform: translateY(0) scale(1);
+        }
+        .launch-modal::-webkit-scrollbar { width: 6px; }
+        .launch-modal::-webkit-scrollbar-track { background: transparent; }
+        .launch-modal::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+    </style>
+</head>
+<body class="flex flex-col min-h-full">
+
+    <!-- Top Navigation Header -->
+    <header class="sticky top-0 z-40 bg-gray-950/90 border-b border-gray-800/80 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            
+            <!-- Brand & Nav Tabs -->
+            <div class="flex items-center space-x-6">
+                <a href="admin.html" class="flex items-center space-x-3 group">
+                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-105 transition">
+                        <i data-lucide="shield" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
+                            CloudVault <span class="bg-blue-500/10 text-blue-400 text-[10px] px-2 py-0.5 rounded-full font-bold border border-blue-500/20 uppercase">Executive Hub</span>
+                        </h1>
+                        <p class="text-[11px] text-gray-400 font-medium">Facility &amp; Economic Configuration Portal</p>
+                    </div>
+                </a>
+
+                <!-- Navigation Tabs -->
+                <nav class="hidden md:flex items-center space-x-1 pl-6 border-l border-gray-800">
+                    <a href="admin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
+                        <i data-lucide="layout-dashboard" class="w-4 h-4 text-gray-400"></i> BI Analytics
+                    </a>
+                    <a href="admin-facilities.html" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-blue-600/20 border border-blue-500/30 transition flex items-center gap-1.5 shadow-sm">
+                        <i data-lucide="building-2" class="w-4 h-4 text-blue-400"></i> Facility Configuration
+                    </a>
+                    <a href="admin-logistics.html" class="px-3.5 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
+                        <i data-lucide="truck" class="w-4 h-4 text-gray-400"></i> Logistics Operations
+                    </a>
+                </nav>
+            </div>
+
+            <!-- Mode Controllers & Global Switcher -->
+            <div class="flex items-center gap-3">
+                <!-- Global Facility Switcher -->
+                <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2 shadow-sm" id="global-facility-select-container">
+                    <i data-lucide="building-2" class="w-3.5 h-3.5 text-blue-400"></i>
+                    <label class="text-xs text-gray-400 font-medium hidden sm:inline">Facility:</label>
+                    <select id="global-facility-select" onchange="onGlobalFacilityChange(this.value)" class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
+                        <option value="facility_seattle_north" class="bg-gray-950 text-white">Seattle North Fulfillment Center</option>
+                        <option value="facility_yakima_central" class="bg-gray-950 text-white">Yakima Fulfillment Center</option>
+                        <option value="facility_portland_central" class="bg-gray-950 text-white">Portland Central Hub</option>
+                    </select>
+                </div>
+
+                <!-- Role Impersonation Switcher -->
+                <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2" id="role-select-container">
+                    <label class="text-xs text-gray-400 font-medium">Clearance Role:</label>
+                    <select id="role-select" onchange="switchRole()" class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
+                        <option value="executive" class="bg-gray-950 text-white">Executive (Super Admin)</option>
+                        <option value="manager" class="bg-gray-950 text-white">Warehouse Manager</option>
+                        <option value="worker" class="bg-gray-950 text-white">Warehouse Worker</option>
+                    </select>
+                </div>
+
+                <button onclick="triggerSeedDb()" id="seed-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-emerald-900/20">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">Seed Supabase</span>
+                </button>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- Main Configuration Workspace -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        
+        <!-- Header Banner -->
+        <div class="glass-panel p-6 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-blue-500/20 shadow-2xl relative overflow-hidden">
+            <div class="space-y-1 relative z-10">
+                <span class="text-[10px] font-black uppercase text-blue-400 tracking-widest flex items-center gap-1.5">
+                    <i data-lucide="shield-check" class="w-3.5 h-3.5 text-blue-400"></i> Executive Master Configurator
+                </span>
+                <h2 class="text-2xl font-black text-white tracking-tight" id="config-facility-title">Seattle North Fulfillment Center</h2>
+                <p class="text-xs text-gray-400 max-w-2xl">Configure physical capacity, lease contracts, operating expenses, security deposit rules, regional storage pricing tiers, and active market ZIP code coverage in one authoritative console.</p>
+            </div>
+            <div class="flex items-center gap-3 relative z-10">
+                <button onclick="openLaunchModal()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs px-5 py-3 rounded-2xl shadow-xl shadow-emerald-600/20 flex items-center gap-2 cursor-pointer transition transform active:scale-95 border border-emerald-400/30">
+                    <i data-lucide="rocket" class="w-4.5 h-4.5"></i>
+                    <span>Launch New Market</span>
+                </button>
+                <button onclick="saveAllFacilityConfig()" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs px-6 py-3 rounded-2xl shadow-xl shadow-blue-600/30 flex items-center gap-2 cursor-pointer transition transform active:scale-95 border border-blue-400/40">
+                    <i data-lucide="save" class="w-4.5 h-4.5"></i>
+                    <span>Save All Specifications &amp; Pricing</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- Left Column: Facility Location, Physical Specs & Lease Expenses (7 cols) -->
+            <div class="lg:col-span-7 space-y-8">
+                
+                <!-- Card 1: Facility Specifications & Contact -->
+                <div class="glass-panel p-6 rounded-3xl space-y-5">
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                        <h3 class="text-sm font-extrabold uppercase text-blue-400 tracking-wider flex items-center gap-2">
+                            <i data-lucide="building" class="w-4 h-4 text-blue-400"></i> Facility Specifications &amp; Location
+                        </h3>
+                        <span class="text-[10px] font-mono text-gray-500">ID: <span id="conf-fac-id">facility_seattle_north</span></span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Facility Name</label>
+                            <input type="text" id="conf-name" class="fspec-input w-full" placeholder="Seattle North Fulfillment Center">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Manager Name</label>
+                            <input type="text" id="conf-manager-name" class="fspec-input w-full" placeholder="Alex Rivera">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Manager Email</label>
+                            <input type="email" id="conf-manager-email" class="fspec-input w-full" placeholder="alex.rivera@cloudvault.io">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Street Address</label>
+                            <input type="text" id="conf-address" class="fspec-input w-full" placeholder="4821 Aurora Ave N">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3 text-xs">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">City</label>
+                            <input type="text" id="conf-city" class="fspec-input w-full" placeholder="Seattle">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">State</label>
+                            <input type="text" id="conf-state" class="fspec-input w-full" placeholder="WA">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">ZIP</label>
+                            <input type="text" id="conf-zip" class="fspec-input w-full" placeholder="98103">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-4 gap-3 text-xs pt-2 border-t border-gray-850">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Usable SQFT</label>
+                            <input type="number" id="conf-sqft" class="fspec-input w-full" placeholder="20000">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">SQFT / Tote</label>
+                            <input type="number" step="0.1" id="conf-sqft-per-tote" class="fspec-input w-full" placeholder="1.0">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Max Capacity</label>
+                            <input type="number" id="conf-tote-capacity" class="fspec-input w-full" placeholder="2000">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Staging Rooms</label>
+                            <input type="number" id="conf-staging-rooms" class="fspec-input w-full" placeholder="2">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Lease & Operating Expenses -->
+                <div class="glass-panel p-6 rounded-3xl space-y-5">
+                    <div class="flex items-center justify-between border-b border-gray-880 pb-3">
+                        <h3 class="text-sm font-extrabold uppercase text-amber-400 tracking-wider flex items-center gap-2">
+                            <i data-lucide="dollar-sign" class="w-4 h-4 text-amber-400"></i> Monthly Lease &amp; Operating Expenses
+                        </h3>
+                        <span class="text-[10px] font-mono text-gray-500">Executive Financial Spec</span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 text-xs">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Rent / Lease ($)</label>
+                            <input type="number" id="conf-rent" class="fspec-input w-full" placeholder="8500">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Labor Cost ($)</label>
+                            <input type="number" id="conf-labor" class="fspec-input w-full" placeholder="14000">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Utilities ($)</label>
+                            <input type="number" id="conf-utilities" class="fspec-input w-full" placeholder="1200">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Insurance ($)</label>
+                            <input type="number" id="conf-insurance" class="fspec-input w-full" placeholder="650">
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Pricing Engine, Security Deposits & Market Control (5 cols) -->
+            <div class="lg:col-span-5 space-y-8">
+
+                <!-- Card 3: Economic Pricing Engine -->
+                <div class="glass-panel p-6 rounded-3xl space-y-5">
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                        <h3 class="text-sm font-extrabold uppercase text-emerald-400 tracking-wider flex items-center gap-2">
+                            <i data-lucide="calculator" class="w-4 h-4 text-emerald-400"></i> Regional Storage &amp; Valet Pricing Engine
+                        </h3>
+                        <span class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">Dynamic Rates</span>
+                    </div>
+
+                    <div class="space-y-3 text-xs">
+                        <p class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Volume Storage Tiers ($/Tote/Month)</p>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
+                                <label class="block text-[10px] font-bold text-gray-400">Tier 1 (1-9 Totes)</label>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-gray-500 font-bold">$</span>
+                                    <input type="number" step="0.50" id="conf-tier1" class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="5.00">
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
+                                <label class="block text-[10px] font-bold text-gray-400">Tier 2 (10-24 Totes)</label>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-gray-500 font-bold">$</span>
+                                    <input type="number" step="0.50" id="conf-tier2" class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="3.50">
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
+                                <label class="block text-[10px] font-bold text-gray-400">Tier 3 (25-49 Totes)</label>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-gray-500 font-bold">$</span>
+                                    <input type="number" step="0.50" id="conf-tier3" class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="2.00">
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
+                                <label class="block text-[10px] font-bold text-gray-400">Tier 4 (50+ Totes)</label>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-gray-500 font-bold">$</span>
+                                    <input type="number" step="0.50" id="conf-tier4" class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="1.00">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pt-3 border-t border-gray-850 space-y-3">
+                            <p class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Logistics Convenience Fee Formulas</p>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
+                                    <label class="block text-[10px] font-bold text-gray-400">Valet Base Fee ($)</label>
+                                    <input type="number" id="conf-valet-base" class="fspec-input w-full py-1 text-sm text-amber-400" placeholder="15.00">
+                                </div>
+                                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
+                                    <label class="block text-[10px] font-bold text-gray-400">Valet Tote Adder ($)</label>
+                                    <input type="number" id="conf-valet-adder" class="fspec-input w-full py-1 text-sm text-amber-400" placeholder="1.00">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 4: Security Deposit Rules & Active Market Control -->
+                <div class="glass-panel p-6 rounded-3xl space-y-5">
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                        <h3 class="text-sm font-extrabold uppercase text-indigo-400 tracking-wider flex items-center gap-2">
+                            <i data-lucide="globe" class="w-4 h-4 text-indigo-400"></i> Market Security Deposits &amp; ZIP Coverage
+                        </h3>
+                        <span class="text-[10px] font-mono text-gray-500" id="conf-market-zone-id">zone_sea</span>
+                    </div>
+
+                    <div class="space-y-4 text-xs">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Required Security Deposit ($)</label>
+                                <input type="number" id="conf-deposit-amount" class="fspec-input w-full text-indigo-300 font-mono" placeholder="25.00">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Market Active Status</label>
+                                <select id="conf-market-active-select" class="fspec-input w-full cursor-pointer">
+                                    <option value="true" class="bg-gray-950 text-emerald-400 font-bold">Active Service Zone</option>
+                                    <option value="false" class="bg-gray-950 text-red-400 font-bold">Deactivated / Paused</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Active ZIP Code Coverage</label>
+                            <div class="flex flex-wrap gap-2 p-3 bg-gray-950 border border-gray-800 rounded-2xl min-h-[60px]" id="conf-zip-container">
+                                <!-- Populated dynamically -->
+                            </div>
+                            <button onclick="addZipToActiveMarket()" class="mt-2 text-xs font-bold text-blue-400 hover:text-blue-300 transition flex items-center gap-1">
+                                <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Add New ZIP Code Coverage
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Launch New Market Modal -->
+    <div id="launch-modal-overlay" class="launch-modal-overlay" onclick="closeLaunchModalOutside(event)">
+        <div class="launch-modal">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                        <i data-lucide="rocket" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-extrabold text-white tracking-tight">Launch New Market</h3>
+                        <p class="text-[11px] text-gray-400">Create a new facility, operational zone, and pricing profile in one step.</p>
+                    </div>
+                </div>
+                <button onclick="closeLaunchModal()" class="text-gray-400 hover:text-white transition p-2 rounded-xl hover:bg-gray-800">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Step Indicator -->
+            <div class="flex items-center gap-2 mb-6">
+                <div class="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold px-3 py-1 rounded-full">
+                    <i data-lucide="building-2" class="w-3 h-3"></i> Facility
+                </div>
+                <div class="h-px flex-grow bg-gray-800"></div>
+                <div class="flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-bold px-3 py-1 rounded-full">
+                    <i data-lucide="globe" class="w-3 h-3"></i> Market Zone
+                </div>
+                <div class="h-px flex-grow bg-gray-800"></div>
+                <div class="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold px-3 py-1 rounded-full">
+                    <i data-lucide="calculator" class="w-3 h-3"></i> Pricing
+                </div>
+            </div>
+
+            <!-- Section 1: Facility Identity -->
+            <div class="space-y-4 mb-6">
+                <h4 class="text-xs font-extrabold uppercase text-emerald-400 tracking-wider flex items-center gap-2 border-b border-gray-800 pb-2">
+                    <i data-lucide="building" class="w-3.5 h-3.5"></i> Facility Identity & Location
+                </h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">City Name *</label>
+                        <input type="text" id="launch-city" class="fspec-input w-full" placeholder="e.g. Spokane">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">State *</label>
+                        <input type="text" id="launch-state" class="fspec-input w-full" placeholder="e.g. WA" maxlength="2">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Facility Name *</label>
+                        <input type="text" id="launch-fac-name" class="fspec-input w-full" placeholder="e.g. Spokane Central Hub">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Street Address</label>
+                        <input type="text" id="launch-address" class="fspec-input w-full" placeholder="e.g. 123 Main St">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Facility ZIP Code</label>
+                        <input type="text" id="launch-fac-zip" class="fspec-input w-full" placeholder="e.g. 99201">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Manager Name</label>
+                        <input type="text" id="launch-manager" class="fspec-input w-full" placeholder="e.g. Jane Doe">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Manager Email</label>
+                        <input type="email" id="launch-manager-email" class="fspec-input w-full" placeholder="e.g. jane.doe@cloudvault.io">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2: Physical Specs & Lease -->
+            <div class="space-y-4 mb-6">
+                <h4 class="text-xs font-extrabold uppercase text-blue-400 tracking-wider flex items-center gap-2 border-b border-gray-800 pb-2">
+                    <i data-lucide="ruler" class="w-3.5 h-3.5"></i> Physical Specs & Monthly Lease
+                </h4>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Usable SQFT</label>
+                        <input type="number" id="launch-sqft" class="fspec-input w-full" placeholder="15000" value="15000">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">SQFT / Tote</label>
+                        <input type="number" step="0.1" id="launch-sqft-per-tote" class="fspec-input w-full" placeholder="1.0" value="1.0">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Max Tote Capacity</label>
+                        <input type="number" id="launch-capacity" class="fspec-input w-full" placeholder="1500" value="1500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Staging Rooms</label>
+                        <input type="number" id="launch-staging" class="fspec-input w-full" placeholder="2" value="2">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Rent ($)</label>
+                        <input type="number" id="launch-rent" class="fspec-input w-full" placeholder="5000" value="5000">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Labor ($)</label>
+                        <input type="number" id="launch-labor" class="fspec-input w-full" placeholder="8000" value="8000">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Utilities ($)</label>
+                        <input type="number" id="launch-utilities" class="fspec-input w-full" placeholder="800" value="800">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Insurance ($)</label>
+                        <input type="number" id="launch-insurance" class="fspec-input w-full" placeholder="450" value="450">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 3: Market Zone & Pricing -->
+            <div class="space-y-4 mb-6">
+                <h4 class="text-xs font-extrabold uppercase text-amber-400 tracking-wider flex items-center gap-2 border-b border-gray-800 pb-2">
+                    <i data-lucide="calculator" class="w-3.5 h-3.5"></i> Pricing Engine & Market Zone
+                </h4>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Tier 1 Rate ($/tote)</label>
+                        <input type="number" step="0.50" id="launch-tier1" class="fspec-input w-full text-emerald-400" value="5.00">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Tier 2 Rate</label>
+                        <input type="number" step="0.50" id="launch-tier2" class="fspec-input w-full text-emerald-400" value="3.50">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Tier 3 Rate</label>
+                        <input type="number" step="0.50" id="launch-tier3" class="fspec-input w-full text-emerald-400" value="2.00">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Tier 4 Rate</label>
+                        <input type="number" step="0.50" id="launch-tier4" class="fspec-input w-full text-emerald-400" value="1.00">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Valet Base Fee ($)</label>
+                        <input type="number" id="launch-valet-base" class="fspec-input w-full text-amber-400" value="15.00">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Valet Tote Adder ($)</label>
+                        <input type="number" id="launch-valet-adder" class="fspec-input w-full text-amber-400" value="1.00">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Security Deposit ($)</label>
+                        <input type="number" id="launch-deposit" class="fspec-input w-full text-indigo-300" value="25.00">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Initial ZIP Codes</label>
+                        <input type="text" id="launch-zips" class="fspec-input w-full" placeholder="99201, 99202, 99203">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Launch Button -->
+            <div class="flex items-center justify-between pt-4 border-t border-gray-800">
+                <button onclick="closeLaunchModal()" class="text-xs font-bold text-gray-400 hover:text-white px-4 py-2.5 rounded-xl hover:bg-gray-800 transition">Cancel</button>
+                <button onclick="executeLaunchNewMarket()" id="launch-execute-btn" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs px-8 py-3 rounded-2xl shadow-xl shadow-emerald-600/30 flex items-center gap-2 cursor-pointer transition transform active:scale-95 border border-emerald-400/30">
+                    <i data-lucide="rocket" class="w-4 h-4"></i>
+                    <span>Launch Market & Create Facility</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Footer -->
+    <footer class="mt-auto py-6 border-t border-gray-900 text-center text-xs text-gray-500">
+        &copy; 2026 CloudVault Inc. &bull; Executive Facility Configuration Hub &bull; Internal Proprietary Software
+    </footer>
+
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+
+    <!-- Main Configuration Script -->
+    <script>
+        let activeRole = "executive";
+        let actualUserRole = null;
+        let activeFacilityId = localStorage.getItem('cloudvault_selected_facility') || 'facility_yakima_central';
+        let currentLoadedFac = null;
+        let currentLoadedZone = null;
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            
+            try {
+                if (typeof supabase !== 'undefined') {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session?.user) {
+                        const { data: profile } = await supabase.from('users').select('*').eq('id', session.user.id).single();
+                        if (profile) {
+                            actualUserRole = profile.role;
+                            if (profile.role !== 'executive') {
+                                alert("Executive clearance required to access Facility Configuration.");
+                                window.location.href = 'admin.html';
+                                return;
+                            }
+                        }
+                    }
+                    await loadFacilitiesDropdown();
+                    await loadSelectedFacilityConfig(activeFacilityId);
+                }
+            } catch (e) {
+                console.error("Config DOMInit failure:", e);
+            }
+        });
+
+        async function loadFacilitiesDropdown() {
+            try {
+                const { data: facs } = await supabase.from('facilities').select('*');
+                const globalSel = document.getElementById('global-facility-select');
+                if (globalSel && facs && facs.length > 0) {
+                    globalSel.innerHTML = facs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
+                    globalSel.value = activeFacilityId;
+                }
+            } catch (e) {
+                console.error("Dropdown load failed:", e);
+            }
+        }
+
+        async function onGlobalFacilityChange(facId) {
+            activeFacilityId = facId;
+            localStorage.setItem('cloudvault_selected_facility', facId);
+            await loadSelectedFacilityConfig(facId);
+        }
+
+        function switchRole() {
+            const roleSel = document.getElementById('role-select');
+            if (roleSel && roleSel.value !== 'executive') {
+                alert("Non-executive roles cannot access Facility Configuration.");
+                roleSel.value = 'executive';
+            }
+        }
+
+        const facilityPresets = {
+            'facility_seattle_north': {
+                id: 'facility_seattle_north',
+                name: 'Seattle North Fulfillment Center',
+                manager_name: 'Alex Rivera',
+                manager_email: 'alex.rivera@cloudvault.io',
+                address: '4821 Aurora Ave N',
+                city: 'Seattle',
+                state: 'WA',
+                zip: '98103',
+                usable_warehouse_sqft: 20000,
+                sqft_per_tote: 1.0,
+                tote_capacity: 2000,
+                num_staging_rooms: 2,
+                monthly_rent_cost: 8500,
+                monthly_labor_cost: 14000,
+                monthly_utilities_cost: 1200,
+                monthly_insurance_cost: 650,
+                tier1_rate: 5.00, tier2_rate: 3.50, tier3_rate: 2.00, tier4_rate: 1.00,
+                valet_base: 15.00, valet_tote_adder: 1.00
+            },
+            'facility_yakima_central': {
+                id: 'facility_yakima_central',
+                name: 'Yakima Fulfillment Center',
+                manager_name: 'Jordan Miller',
+                manager_email: 'jordan.miller@cloudvault.io',
+                address: '1200 S 1st St',
+                city: 'Yakima',
+                state: 'WA',
+                zip: '98901',
+                usable_warehouse_sqft: 15000,
+                sqft_per_tote: 1.0,
+                tote_capacity: 1500,
+                num_staging_rooms: 2,
+                monthly_rent_cost: 4500,
+                monthly_labor_cost: 8000,
+                monthly_utilities_cost: 800,
+                monthly_insurance_cost: 450,
+                tier1_rate: 5.00, tier2_rate: 3.50, tier3_rate: 2.00, tier4_rate: 1.00,
+                valet_base: 15.00, valet_tote_adder: 1.00
+            },
+            'facility_portland_central': {
+                id: 'facility_portland_central',
+                name: 'Portland Central Hub',
+                manager_name: 'Sarah Jenkins',
+                manager_email: 'sarah.jenkins@cloudvault.io',
+                address: '700 NW 11th Ave',
+                city: 'Portland',
+                state: 'OR',
+                zip: '97209',
+                usable_warehouse_sqft: 18000,
+                sqft_per_tote: 1.0,
+                tote_capacity: 1800,
+                num_staging_rooms: 2,
+                monthly_rent_cost: 7200,
+                monthly_labor_cost: 12500,
+                monthly_utilities_cost: 1100,
+                monthly_insurance_cost: 550,
+                tier1_rate: 5.00, tier2_rate: 3.50, tier3_rate: 2.00, tier4_rate: 1.00,
+                valet_base: 15.00, valet_tote_adder: 1.00
+            }
+        };
+
+        async function loadSelectedFacilityConfig(facilityId) {
+            const fid = (facilityId || '').toLowerCase();
+            let preset = facilityPresets[facilityId];
+            if (!preset) {
+                if (fid.includes('yakima')) preset = facilityPresets['facility_yakima_central'];
+                else if (fid.includes('portland')) preset = facilityPresets['facility_portland_central'];
+                else preset = facilityPresets['facility_seattle_north'];
+            }
+
+            try {
+                const { data: facs } = await supabase.from('facilities').select('*');
+                if (facs && facs.length > 0) {
+                    const matched = facs.find(f => f.id === facilityId || (fid.includes('yakima') && f.id.includes('yakima')) || (fid.includes('portland') && f.id.includes('portland')));
+                    if (matched) preset = { ...preset, ...matched };
+                }
+            } catch (e) {
+                console.warn("Using preset specs for facility:", facilityId);
+            }
+
+            currentLoadedFac = preset;
+
+            // Update DOM Header
+            document.getElementById('config-facility-title').textContent = preset.name;
+            document.getElementById('conf-fac-id').textContent = preset.id;
+
+            // Populate Specs Inputs
+            document.getElementById('conf-name').value = preset.name || '';
+            document.getElementById('conf-manager-name').value = preset.manager_name || '';
+            document.getElementById('conf-manager-email').value = preset.manager_email || '';
+            document.getElementById('conf-address').value = preset.address || '';
+            document.getElementById('conf-city').value = preset.city || '';
+            document.getElementById('conf-state').value = preset.state || '';
+            document.getElementById('conf-zip').value = preset.zip || '';
+            document.getElementById('conf-sqft').value = preset.usable_warehouse_sqft || 20000;
+            document.getElementById('conf-sqft-per-tote').value = preset.sqft_per_tote || 1.0;
+            document.getElementById('conf-tote-capacity').value = preset.tote_capacity || 2000;
+            document.getElementById('conf-staging-rooms').value = preset.num_staging_rooms || 2;
+
+            // Populate Expenses
+            document.getElementById('conf-rent').value = preset.monthly_rent_cost || 8500;
+            document.getElementById('conf-labor').value = preset.monthly_labor_cost || 14000;
+            document.getElementById('conf-utilities').value = preset.monthly_utilities_cost || 1200;
+            document.getElementById('conf-insurance').value = preset.monthly_insurance_cost || 650;
+
+            // Populate Pricing Engine
+            document.getElementById('conf-tier1').value = (Number(preset.tier1_rate) || 5.00).toFixed(2);
+            document.getElementById('conf-tier2').value = (Number(preset.tier2_rate) || 3.50).toFixed(2);
+            document.getElementById('conf-tier3').value = (Number(preset.tier3_rate) || 2.00).toFixed(2);
+            document.getElementById('conf-tier4').value = (Number(preset.tier4_rate) || 1.00).toFixed(2);
+            document.getElementById('conf-valet-base').value = Number(preset.valet_base) || 15.00;
+            document.getElementById('conf-valet-adder').value = Number(preset.valet_tote_adder) || 1.00;
+
+            // Fetch operational zone / deposits
+            await loadMarketZoneData(fid);
+        }
+
+        async function loadMarketZoneData(fid) {
+            try {
+                const { data: zones } = await supabase.from('operational_zones').select('*');
+                let zone = null;
+                if (zones && zones.length > 0) {
+                    zone = zones.find(z => (z.facility_id || '').toLowerCase() === fid || (fid.includes('yakima') && z.id.includes('yakima')) || (fid.includes('portland') && z.id.includes('pdx')) || (fid.includes('seattle') && z.id.includes('sea')));
+                }
+
+                if (!zone) {
+                    zone = {
+                        id: fid.includes('yakima') ? 'zone_yakima' : fid.includes('portland') ? 'zone_pdx' : 'zone_sea',
+                        required_deposit: 25.00,
+                        active: true,
+                        zip_codes: fid.includes('yakima') ? ['98908', '98942'] : fid.includes('portland') ? ['97201', '97202', '97205', '97209'] : ['98101', '98102', '98103', '98105', '98109', '98121']
+                    };
+                }
+
+                currentLoadedZone = zone;
+                document.getElementById('conf-market-zone-id').textContent = zone.id;
+                document.getElementById('conf-deposit-amount').value = zone.required_deposit || 25.00;
+                document.getElementById('conf-market-active-select').value = zone.active !== false ? "true" : "false";
+
+                renderZipCodes(zone.zip_codes || []);
+            } catch (e) {
+                console.error("Failed to load zone data:", e);
+            }
+        }
+
+        function renderZipCodes(zips) {
+            const zipContainer = document.getElementById('conf-zip-container');
+            if (!zipContainer) return;
+            if (zips.length === 0) {
+                zipContainer.innerHTML = `<span class="text-xs text-gray-500 font-mono">No ZIP codes currently assigned.</span>`;
+                return;
+            }
+            zipContainer.innerHTML = zips.map(z => `
+                <span class="bg-gray-900 border border-gray-800 text-gray-200 text-xs px-2.5 py-1 rounded-xl font-mono font-bold flex items-center gap-1.5 shadow-sm">
+                    ${z}
+                    <button onclick="removeZipFromActiveMarket('${z}')" class="text-red-400 hover:text-red-300 font-bold ml-1">&times;</button>
+                </span>
+            `).join('');
+        }
+
+        async function addZipToActiveMarket() {
+            const newZip = prompt("Enter new ZIP code to add to this active market zone:");
+            if (!newZip || !newZip.trim()) return;
+            const cleanZip = newZip.trim();
+
+            if (!currentLoadedZone) return;
+            let zips = currentLoadedZone.zip_codes || [];
+            if (!zips.includes(cleanZip)) zips.push(cleanZip);
+
+            currentLoadedZone.zip_codes = zips;
+            renderZipCodes(zips);
+
+            try {
+                await supabase.from('operational_zones').update({ zip_codes: zips }).eq('id', currentLoadedZone.id);
+            } catch (e) {
+                console.error("ZIP update failed:", e);
+            }
+        }
+
+        async function removeZipFromActiveMarket(zipToRemove) {
+            if (!currentLoadedZone) return;
+            let zips = (currentLoadedZone.zip_codes || []).filter(z => z !== zipToRemove);
+            currentLoadedZone.zip_codes = zips;
+            renderZipCodes(zips);
+
+            try {
+                await supabase.from('operational_zones').update({ zip_codes: zips }).eq('id', currentLoadedZone.id);
+            } catch (e) {
+                console.error("ZIP remove failed:", e);
+            }
+        }
+
+        async function saveAllFacilityConfig() {
+            if (!currentLoadedFac) return;
+
+            const updatedFac = {
+                id: currentLoadedFac.id,
+                name: document.getElementById('conf-name').value.trim(),
+                manager_name: document.getElementById('conf-manager-name').value.trim(),
+                manager_email: document.getElementById('conf-manager-email').value.trim(),
+                address: document.getElementById('conf-address').value.trim(),
+                city: document.getElementById('conf-city').value.trim(),
+                state: document.getElementById('conf-state').value.trim(),
+                zip: document.getElementById('conf-zip').value.trim(),
+                usable_warehouse_sqft: Number(document.getElementById('conf-sqft').value) || 20000,
+                sqft_per_tote: Number(document.getElementById('conf-sqft-per-tote').value) || 1.0,
+                tote_capacity: Number(document.getElementById('conf-tote-capacity').value) || 2000,
+                num_staging_rooms: Number(document.getElementById('conf-staging-rooms').value) || 2,
+                monthly_rent_cost: Number(document.getElementById('conf-rent').value) || 0,
+                monthly_labor_cost: Number(document.getElementById('conf-labor').value) || 0,
+                monthly_utilities_cost: Number(document.getElementById('conf-utilities').value) || 0,
+                monthly_insurance_cost: Number(document.getElementById('conf-insurance').value) || 0,
+                tier1_rate: Number(document.getElementById('conf-tier1').value) || 5.00,
+                tier2_rate: Number(document.getElementById('conf-tier2').value) || 3.50,
+                tier3_rate: Number(document.getElementById('conf-tier3').value) || 2.00,
+                tier4_rate: Number(document.getElementById('conf-tier4').value) || 1.00,
+                valet_base: Number(document.getElementById('conf-valet-base').value) || 15.00,
+                valet_tote_adder: Number(document.getElementById('conf-valet-adder').value) || 1.00
+            };
+
+            const depositVal = Number(document.getElementById('conf-deposit-amount').value) || 25.00;
+            const activeVal = document.getElementById('conf-market-active-select').value === "true";
+
+            try {
+                // Upsert facility
+                await supabase.from('facilities').upsert(updatedFac);
+
+                // Update settings pricing defaults
+                await supabase.from('settings').upsert({
+                    id: 'pricing',
+                    tier1: updatedFac.tier1_rate,
+                    tier2: updatedFac.tier2_rate,
+                    tier3: updatedFac.tier3_rate,
+                    tier4: updatedFac.tier4_rate,
+                    valet_base: updatedFac.valet_base,
+                    valet_tote_adder: updatedFac.valet_tote_adder
+                });
+
+                // Update zone deposit & active status
+                if (currentLoadedZone) {
+                    await supabase.from('operational_zones').update({
+                        required_deposit: depositVal,
+                        active: activeVal
+                    }).eq('id', currentLoadedZone.id);
+                }
+
+                alert(`Successfully saved all specifications, pricing rates, and deposit rules for ${updatedFac.name}!`);
+            } catch (err) {
+                console.error("Save config failed:", err);
+                alert("Saved locally to memory. Supabase error: " + err.message);
+            }
+        }
+
+        async function triggerSeedDb() {
+            alert("Seeding Supabase mock records...");
+        }
+
+        // ===== LAUNCH NEW MARKET MODAL =====
+        function openLaunchModal() {
+            document.getElementById('launch-modal-overlay').classList.add('active');
+            lucide.createIcons();
+        }
+
+        function closeLaunchModal() {
+            document.getElementById('launch-modal-overlay').classList.remove('active');
+        }
+
+        function closeLaunchModalOutside(e) {
+            if (e.target === document.getElementById('launch-modal-overlay')) {
+                closeLaunchModal();
+            }
+        }
+
+        async function executeLaunchNewMarket() {
+            const city = document.getElementById('launch-city').value.trim();
+            const state = document.getElementById('launch-state').value.trim().toUpperCase();
+            const facName = document.getElementById('launch-fac-name').value.trim();
+
+            if (!city || !state || !facName) {
+                alert('City, State, and Facility Name are required to launch a new market.');
+                return;
+            }
+
+            const btn = document.getElementById('launch-execute-btn');
+            const origHTML = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Launching...';
+            btn.disabled = true;
+            lucide.createIcons();
+
+            // Generate facility ID from city name
+            const citySlug = city.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+            const facilityId = `facility_${citySlug}_central`;
+            const zoneId = `zone_${citySlug}`;
+
+            const newFacility = {
+                id: facilityId,
+                name: facName,
+                manager_name: document.getElementById('launch-manager').value.trim() || '',
+                manager_email: document.getElementById('launch-manager-email').value.trim() || '',
+                address: document.getElementById('launch-address').value.trim() || '',
+                city: city,
+                state: state,
+                zip: document.getElementById('launch-fac-zip').value.trim() || '',
+                usable_warehouse_sqft: Number(document.getElementById('launch-sqft').value) || 15000,
+                sqft_per_tote: Number(document.getElementById('launch-sqft-per-tote').value) || 1.0,
+                tote_capacity: Number(document.getElementById('launch-capacity').value) || 1500,
+                num_staging_rooms: Number(document.getElementById('launch-staging').value) || 2,
+                monthly_rent_cost: Number(document.getElementById('launch-rent').value) || 5000,
+                monthly_labor_cost: Number(document.getElementById('launch-labor').value) || 8000,
+                monthly_utilities_cost: Number(document.getElementById('launch-utilities').value) || 800,
+                monthly_insurance_cost: Number(document.getElementById('launch-insurance').value) || 450,
+                tier1_rate: Number(document.getElementById('launch-tier1').value) || 5.00,
+                tier2_rate: Number(document.getElementById('launch-tier2').value) || 3.50,
+                tier3_rate: Number(document.getElementById('launch-tier3').value) || 2.00,
+                tier4_rate: Number(document.getElementById('launch-tier4').value) || 1.00,
+                valet_base: Number(document.getElementById('launch-valet-base').value) || 15.00,
+                valet_tote_adder: Number(document.getElementById('launch-valet-adder').value) || 1.00
+            };
+
+            const zipInput = document.getElementById('launch-zips').value.trim();
+            const zipCodes = zipInput ? zipInput.split(',').map(z => z.trim()).filter(z => z.length > 0) : [];
+
+            const newZone = {
+                id: zoneId,
+                facility_id: facilityId,
+                city: city,
+                active: true,
+                required_deposit: Number(document.getElementById('launch-deposit').value) || 25.00,
+                base_valet_fee: newFacility.valet_base,
+                service_days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+                zip_codes: zipCodes
+            };
+
+            try {
+                // Insert facility
+                const { error: facErr } = await supabase.from('facilities').upsert(newFacility, { onConflict: 'id' });
+                if (facErr) throw facErr;
+
+                // Insert operational zone
+                const { error: zoneErr } = await supabase.from('operational_zones').upsert(newZone, { onConflict: 'id' });
+                if (zoneErr) throw zoneErr;
+
+                // Refresh dropdown to include new facility
+                await loadFacilitiesDropdown();
+
+                // Add to dropdown if not from DB (fallback)
+                const globalSel = document.getElementById('global-facility-select');
+                if (globalSel && !Array.from(globalSel.options).some(o => o.value === facilityId)) {
+                    const opt = document.createElement('option');
+                    opt.value = facilityId;
+                    opt.textContent = facName;
+                    opt.className = 'bg-gray-950 text-white';
+                    globalSel.appendChild(opt);
+                }
+
+                // Switch to new facility
+                if (globalSel) globalSel.value = facilityId;
+                localStorage.setItem('cloudvault_selected_facility', facilityId);
+                activeFacilityId = facilityId;
+
+                // Add to local presets so switching works immediately
+                facilityPresets[facilityId] = newFacility;
+
+                closeLaunchModal();
+                await loadSelectedFacilityConfig(facilityId);
+
+                alert(`🚀 Successfully launched ${facName} in ${city}, ${state}!\n\nFacility ID: ${facilityId}\nZone ID: ${zoneId}\nZIP Codes: ${zipCodes.length > 0 ? zipCodes.join(', ') : 'None yet'}\n\nThe new market is now active and selected.`);
+
+            } catch (err) {
+                console.error('Launch new market failed:', err);
+                alert('Failed to launch new market: ' + (err.message || JSON.stringify(err)));
+            } finally {
+                btn.innerHTML = origHTML;
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        }
+    </script>
+</body>
+</html>

@@ -2417,8 +2417,21 @@
                 const matchesStatus = statusFilter === 'all' 
                     ? true 
                     : (statusFilter === 'valet_delivery'
-                        ? (item.status === 'pending-stage' || item.status === 'staged' || item.status === 'pending-dispatch' || item.status === 'out-for-delivery') && currentRequests.some(r => r.fulfillment_type === 'valet_delivery' && r.requested_items && r.requested_items.includes(item.id))
-                        : item.status === statusFilter);
+                        ? (
+                            item.status === 'pending-dispatch' || 
+                            item.status === 'out-for-delivery' || 
+                            currentRequests.some(r => 
+                                r.fulfillment_type === 'valet_delivery' && (
+                                    (r.requested_items && r.requested_items.includes(item.id)) ||
+                                    (r.requested_tote_codes && r.requested_tote_codes.includes(item.tote_code))
+                                )
+                            )
+                          )
+                        : (statusFilter === 'staged'
+                            ? item.status === 'staged' && !currentRequests.some(r => r.fulfillment_type === 'valet_delivery' && ((r.requested_items && r.requested_items.includes(item.id)) || (r.requested_tote_codes && r.requested_tote_codes.includes(item.tote_code))))
+                            : item.status === statusFilter
+                          )
+                      );
 
                 const itemCategory = getItemCategory(item);
                 const matchesCategory = currentCategoryFilter === 'all' || 
