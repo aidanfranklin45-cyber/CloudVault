@@ -448,92 +448,56 @@
                 </div>
             </div>
 
-            <!-- Logistics Convenience Rules -->
-            <div class="space-y-4 pt-2">
-                <label class="block text-sm font-semibold text-gray-300">Logistics Convenience Fee Formulas</label>
-                <div class="bg-gray-900/50 p-4 border border-gray-800 rounded-2xl space-y-4">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold">Self-Service</p>
-                            <p class="text-xs text-gray-500">Staging room retrieval</p>
-                        </div>
-                        <span class="text-xs font-bold text-emerald-400">$0.00 (Free)</span>
-                    </div>
-                    <div class="border-t border-gray-800 my-2"></div>
-                    <div class="flex flex-col gap-2">
-                        <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold">Valet Routing Service</p>
-                        <div class="flex items-center justify-between gap-4 mt-1">
-                            <div class="flex items-center space-x-1.5">
-                                <span class="text-xs text-gray-500">Base</span>
-                                <input type="number" id="valet-base" value="15" onchange="updateValetFormula()"
-                                    class="w-12 bg-gray-950 border border-gray-800 rounded-lg py-0.5 px-2 text-center text-xs font-bold text-white focus:border-blue-500 outline-none">
-                            </div>
-                            <span class="text-xs text-gray-500">+</span>
-                            <div class="flex items-center space-x-1.5">
-                                <span class="text-xs text-gray-500">Tote rate</span>
-                                <input type="number" id="valet-tote-adder" value="1" onchange="updateValetFormula()"
-                                    class="w-12 bg-gray-950 border border-gray-800 rounded-lg py-0.5 px-2 text-center text-xs font-bold text-white focus:border-blue-500 outline-none">
-                            </div>
-                        </div>
-                        <div
-                            class="bg-gray-950/60 p-2.5 rounded-xl border border-gray-800 text-[11px] text-blue-400 mt-2 font-mono text-center">
-                            Fee Formula: $ <span id="formula-base">15.00</span> + (Totes * $ <span
-                                id="formula-adder">1.00</span>)
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Active Market Geographical Toggles -->
-        <div class="glass-panel p-6 rounded-3xl lg:col-span-7 space-y-6">
-            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
-                <div class="flex items-center space-x-2">
-                    <i data-lucide="globe" class="w-5 h-5 text-indigo-400"></i>
-                    <h3 class="font-bold text-white text-lg">Active Market Control Board</h3>
-                </div>
-                <button onclick="openAddMarketModal()"
-                    class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-indigo-600/20">
-                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> Open New Market / Facility
-                </button>
-            </div>
-
-            <!-- Markets Toggles Grid -->
-            <div class="space-y-4" id="markets-list">
-                <!-- Populated Dynamically -->
-            </div>
-
-            <!-- Unlaunched City Waitlist Requests -->
-            <div class="pt-4 border-t border-gray-800 space-y-4">
-                <div class="flex items-center justify-between">
+            <!-- Active Market Geographical Toggles -->
+            <div class="glass-panel p-6 rounded-3xl lg:col-span-7 space-y-6">
+                <div class="flex items-center justify-between border-b border-gray-800 pb-4">
                     <div class="flex items-center space-x-2">
-                        <i data-lucide="users" class="w-4 h-4 text-amber-400"></i>
-                        <h4 class="font-bold text-white text-sm">Unlaunched City Waitlist Requests</h4>
+                        <i data-lucide="globe" class="w-5 h-5 text-indigo-400"></i>
+                        <h3 class="font-bold text-white text-lg">Active Market Control Board</h3>
                     </div>
-                    <span id="waitlist-total-count"
-                        class="text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">0
-                        Requests</span>
+                    <button onclick="openAddMarketModal()"
+                        class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-indigo-600/20">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i> Open New Market / Facility
+                    </button>
                 </div>
-                <div class="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-950/40 p-1">
-                    <table class="w-full text-left text-xs">
-                        <thead>
-                            <tr class="text-gray-400 border-b border-gray-800/80 bg-gray-900/50">
-                                <th class="p-3 font-semibold">City / Market</th>
-                                <th class="p-3 font-semibold">ZIP Codes</th>
-                                <th class="p-3 font-semibold">Priority Deposits ($25)</th>
-                                <th class="p-3 font-semibold">Reserved Capital</th>
-                                <th class="p-3 font-semibold text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="waitlist-table-body" class="divide-y divide-gray-850">
-                            <tr>
-                                <td colspan="4" class="p-4 text-center text-gray-500">Loading waitlist requests...</td>
-                            </tr>
-                        </tbody>
-                    </table>
+
+                <!-- Markets Toggles Grid -->
+                <div class="space-y-4" id="markets-list">
+                    <!-- Populated Dynamically -->
+                </div>
+
+                <!-- Unlaunched City Waitlist Requests -->
+                <div class="pt-4 border-t border-gray-800 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="users" class="w-4 h-4 text-amber-400"></i>
+                            <h4 class="font-bold text-white text-sm">Unlaunched City Waitlist Requests</h4>
+                        </div>
+                        <span id="waitlist-total-count"
+                            class="text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">0
+                            Requests</span>
+                    </div>
+                    <div class="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-950/40 p-1">
+                        <table class="w-full text-left text-xs">
+                            <thead>
+                                <tr class="text-gray-400 border-b border-gray-800/80 bg-gray-900/50">
+                                    <th class="p-3 font-semibold">City / Market</th>
+                                    <th class="p-3 font-semibold">ZIP Codes</th>
+                                    <th class="p-3 font-semibold">Priority Deposits ($25)</th>
+                                    <th class="p-3 font-semibold">Reserved Capital</th>
+                                    <th class="p-3 font-semibold text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="waitlist-table-body" class="divide-y divide-gray-850">
+                                <tr>
+                                    <td colspan="4" class="p-4 text-center text-gray-500">Loading waitlist requests...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-        </div>
         </div>
 
         <!-- Business Intelligence Conversion Funnel Charts -->
@@ -4788,8 +4752,8 @@
                 if (statusBadge) {
                     statusBadge.textContent = (item.status || 'stored').toUpperCase();
                     statusBadge.className = `text-xs font-bold px-2.5 py-0.5 rounded-full uppercase border ${item.status === 'stored' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                            item.status === 'with-customer' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' :
-                                'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                        item.status === 'with-customer' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' :
+                            'bg-amber-500/10 text-amber-400 border-amber-500/30'
                         }`;
                 }
 
