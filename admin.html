@@ -20,6 +20,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- JsBarcode for Printable Barcode & QR Label Generation -->
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <style>
         /* Print Styles for Barcode & Label Generation */
         @media print {
@@ -4032,10 +4033,9 @@
 
             const todayStr = new Date().toLocaleDateString();
             const firstCode = codes[0] || 'CV-SEA-1001';
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(firstCode)}&ecc=M&margin=1`;
 
             previewBox.innerHTML = `
-                <div style="border: 2px dashed #000; padding: 14px; width: 100%; max-width: 400px; background: #ffffff; color: #000000; border-radius: 10px; font-family: monospace; box-sizing: border-box;">
+                <div style="border: 2px dashed #000; padding: 12px; width: 100%; max-width: 420px; background: #ffffff; color: #000000; border-radius: 10px; font-family: monospace; box-sizing: border-box;">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px;">
                         <div>
                             <strong style="font-size: 15px; text-transform: uppercase; font-weight: 900;">CloudVault Storage</strong>
@@ -4043,13 +4043,13 @@
                         </div>
                         <span style="font-size: 10px; font-weight: bold; background: #000; color: #fff; padding: 3px 8px; border-radius: 4px;">FACILITY LOGISTICS</span>
                     </div>
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-                        <div style="flex: 1; text-align: center;">
-                            <svg id="preview-barcode-svg" style="width: 100%; max-height: 40px;"></svg>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 90px;">
+                        <div style="flex: 1 1 auto; overflow: hidden; max-width: calc(100% - 110px); text-align: center;">
+                            <svg id="preview-barcode-svg" style="max-width: 100%; height: 38px;"></svg>
                             <div style="font-size: 16px; font-weight: 900; letter-spacing: 2px; margin-top: 2px; font-family: monospace;">${firstCode}</div>
                         </div>
-                        <div style="text-align: center; border-left: 2px solid #ddd; padding-left: 10px;">
-                            <img src="${qrUrl}" style="width: 75px; height: 75px; object-fit: contain; image-rendering: pixelated; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto;" alt="QR Code" />
+                        <div style="flex: 0 0 100px; width: 100px; max-width: 100px; min-width: 100px; text-align: center; border-left: 2px solid #000; padding-left: 10px; box-sizing: border-box;">
+                            <canvas id="preview-qr-canvas" style="width: 75px; height: 75px; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto;"></canvas>
                             <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 2px; font-family: sans-serif;">FAST-SCAN QR</span>
                         </div>
                     </div>
@@ -4067,10 +4067,19 @@
                     try {
                         JsBarcode("#preview-barcode-svg", firstCode, {
                             format: "CODE128",
-                            width: 1.8,
+                            width: 1.6,
                             height: 38,
                             displayValue: false,
                             margin: 2
+                        });
+                    } catch (e) {}
+                }
+
+                const qrCanvas = document.getElementById('preview-qr-canvas');
+                if (qrCanvas && typeof QRCode === 'object' && QRCode.toCanvas) {
+                    try {
+                        QRCode.toCanvas(qrCanvas, firstCode, { width: 75, margin: 1 }, function (err) {
+                            if (err) console.error("Preview QR error:", err);
                         });
                     } catch (e) {}
                 }
@@ -4095,40 +4104,38 @@
             }
 
             printContainer.innerHTML = pages.map((pageCodes, pageIdx) => `
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); gap: 20px; padding: 20px; font-family: monospace; color: #000; box-sizing: border-box; width: 100%; height: 100vh; page-break-after: ${pageIdx < pages.length - 1 ? 'always' : 'avoid'};">
-                    ${pageCodes.map((code, idx) => {
-                        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(code)}&ecc=M&margin=1`;
-                        return `
-                            <div style="border: 2px dashed #000; padding: 16px; background: #ffffff; color: #000000; border-radius: 12px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; page-break-inside: avoid;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 6px;">
-                                    <div>
-                                        <strong style="font-size: 16px; text-transform: uppercase; font-weight: 900;">CloudVault Storage</strong>
-                                        <span style="display: block; font-size: 9px; color: #333; font-family: sans-serif;">Weatherproof Industrial Tote Tag</span>
-                                    </div>
-                                    <span style="font-size: 10px; font-weight: bold; background: #000; color: #fff; padding: 4px 8px; border-radius: 4px;">VERIFIED LOGISTICS</span>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); gap: 14px; padding: 10px; font-family: monospace; color: #000; box-sizing: border-box; width: 100%; height: 9.6in; max-height: 9.6in; page-break-after: ${pageIdx < pages.length - 1 ? 'always' : 'avoid'};">
+                    ${pageCodes.map((code, idx) => `
+                        <div style="border: 2px dashed #000; padding: 14px; background: #ffffff; color: #000000; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; height: 100%; page-break-inside: avoid;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 6px;">
+                                <div>
+                                    <strong style="font-size: 15px; text-transform: uppercase; font-weight: 900;">CloudVault Storage</strong>
+                                    <span style="display: block; font-size: 9px; color: #333; font-family: sans-serif;">Weatherproof Industrial Tote Tag</span>
                                 </div>
-                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 10px 0;">
-                                    <div style="flex: 1; text-align: center;">
-                                        <svg class="print-grid-barcode" data-code="${code}"></svg>
-                                        <div style="font-size: 20px; font-weight: 900; letter-spacing: 2px; margin-top: 4px;">${code}</div>
-                                    </div>
-                                    <div style="text-align: center; border-left: 2px solid #000; padding-left: 14px;">
-                                        <img src="${qrUrl}" style="width: 85px; height: 85px; object-fit: contain; image-rendering: pixelated; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block;" alt="QR Code" />
-                                        <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 3px; font-family: sans-serif;">FAST-SCAN QR</span>
-                                    </div>
+                                <span style="font-size: 10px; font-weight: bold; background: #000; color: #fff; padding: 4px 8px; border-radius: 4px;">VERIFIED LOGISTICS</span>
+                            </div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0; height: 100px;">
+                                <div style="flex: 1 1 auto; overflow: hidden; max-width: calc(100% - 110px); text-align: center;">
+                                    <svg class="print-grid-barcode" data-code="${code}" style="max-width: 100%; height: 42px;"></svg>
+                                    <div style="font-size: 18px; font-weight: 900; letter-spacing: 2px; margin-top: 4px; font-family: monospace;">${code}</div>
                                 </div>
-                                <div style="display: flex; justify-content: space-between; font-size: 10px; color: #000; border-top: 1px solid #000; padding-top: 6px; font-weight: bold;">
-                                    <span>SERIAL: #SEAL-99${pageIdx * 4 + idx + 10}</span>
-                                    <span>DATE: ${todayStr}</span>
-                                    <span>STATUS: VERIFIED</span>
+                                <div style="flex: 0 0 100px; width: 100px; max-width: 100px; min-width: 100px; text-align: center; border-left: 2px solid #000; padding-left: 10px; box-sizing: border-box;">
+                                    <canvas class="print-grid-qr" data-code="${code}" style="width: 80px; height: 80px; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto;"></canvas>
+                                    <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 3px; font-family: sans-serif;">FAST-SCAN QR</span>
                                 </div>
                             </div>
-                        `;
-                    }).join('')}
+                            <div style="display: flex; justify-content: space-between; font-size: 10px; color: #000; border-top: 1px solid #000; padding-top: 6px; font-weight: bold;">
+                                <span>SERIAL: #SEAL-99${pageIdx * 4 + idx + 10}</span>
+                                <span>DATE: ${todayStr}</span>
+                                <span>STATUS: VERIFIED</span>
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
             `).join('');
 
             setTimeout(() => {
+                // Render Barcodes
                 const barcodeEls = printContainer.querySelectorAll('.print-grid-barcode');
                 barcodeEls.forEach(svg => {
                     const c = svg.getAttribute('data-code');
@@ -4136,11 +4143,11 @@
                         try {
                             JsBarcode(svg, c, {
                                 format: "CODE128",
-                                width: 2,
-                                height: 45,
+                                width: 1.6,
+                                height: 42,
                                 fontSize: 10,
                                 displayValue: false,
-                                margin: 2
+                                margin: 1
                             });
                         } catch (err) {
                             console.warn("JsBarcode print error:", err);
@@ -4148,8 +4155,23 @@
                     }
                 });
 
+                // Render Canvas QR Codes synchronously via local qrcode.js
+                const qrCanvasEls = printContainer.querySelectorAll('.print-grid-qr');
+                qrCanvasEls.forEach(canvas => {
+                    const c = canvas.getAttribute('data-code');
+                    if (typeof QRCode === 'object' && QRCode.toCanvas) {
+                        try {
+                            QRCode.toCanvas(canvas, c, { width: 80, margin: 1 }, function (error) {
+                                if (error) console.error("QR render error:", error);
+                            });
+                        } catch (err) {
+                            console.warn("QRCode canvas error:", err);
+                        }
+                    }
+                });
+
                 window.print();
-            }, 150);
+            }, 250);
         }
     </script>
 
