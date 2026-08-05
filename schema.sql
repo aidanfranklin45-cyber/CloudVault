@@ -1163,8 +1163,10 @@ BEGIN
     v_next_status := 'pending-stage'::public.inventory_status;
   END IF;
 
+  -- Always mark activated = true when any scan occurs
   UPDATE public.inventory
-  SET status = v_next_status
+  SET status = v_next_status,
+      activated = true
   WHERE id = v_item.id;
 
   RETURN jsonb_build_object(
