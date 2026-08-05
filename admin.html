@@ -1665,7 +1665,7 @@
                         mrrSubtext.innerHTML = `<i data-lucide="arrow-up-right" class="w-3.5 h-3.5 mr-0.5 text-emerald-400"></i> ${subCount} active customer account${subCount !== 1 ? 's' : ''}`;
                     }
 
-                    const activeMarkets = markets.filter(m => m.active);
+                    const activeMarkets = (markets || []).filter(m => m && m.active);
                     document.getElementById('exec-totes').textContent = (activeTotes || 0).toLocaleString();
                     document.getElementById('exec-markets').textContent = `${activeMarkets.length} Cit${activeMarkets.length !== 1 ? 'ies' : 'y'}`;
                     
@@ -1679,16 +1679,17 @@
 
                     // Populate Facilities Selectors Dynamically
                     const { data: facs } = await supabase.from('facilities').select('*');
-                    if (facs && facs.length > 0) {
+                    const safeFacs = facs || [];
+                    if (safeFacs.length > 0) {
                         ['pricing-facility-select', 'manager-facility-select', 'exec-facility-select', 'emp-facility'].forEach(id => {
                             const el = document.getElementById(id);
                             if (el) {
                                 const curVal = el.value;
-                                el.innerHTML = facs.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
-                                if (curVal && facs.some(f => f.id === curVal)) {
+                                el.innerHTML = safeFacs.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
+                                if (curVal && safeFacs.some(f => f.id === curVal)) {
                                     el.value = curVal;
-                                } else if (facs.length > 0) {
-                                    el.value = facs[0].id;
+                                } else if (safeFacs.length > 0) {
+                                    el.value = safeFacs[0].id;
                                 }
                             }
                         });
@@ -2908,8 +2909,17 @@
         // Google Maps Routes API Logistics Routing Renderer
         // =========================================================================
 
-        async function loadWorkerLogisticsRouting(facilityId = 'facility_seattle_north') {
+        async function loadWorkerLogisticsRouting(facilityId = null) {
             try {
+                if (!facilityId) {
+                    if (actualAssignedFacilityId) {
+                        facilityId = actualAssignedFacilityId;
+                    } else {
+                        const select = document.getElementById('manager-facility-select');
+                        if (select && select.value) facilityId = select.value;
+                        else facilityId = 'facility_seattle_north';
+                    }
+                }
                 const { data: requests } = await supabase.from('access_requests')
                     .select('*, users(name, zip)')
                     .eq('facility_id', facilityId)
@@ -3988,7 +3998,6 @@
 
         function renderLabelPreview() {
             const codeInput = document.getElementById('print-tote-code');
-            const formatSelect = document.getElementById('print-label-format');
             const previewBox = document.getElementById('label-preview-box');
             const chipsBox = document.getElementById('print-chips-box');
             const sheetCounter = document.getElementById('avery-sheet-counter');
@@ -3996,9 +4005,7 @@
 
             const rawVal = codeInput ? codeInput.value.trim() : '';
             let codes = rawVal.split(',').map(c => c.trim()).filter(Boolean);
-            if (codes.length === 0) codes = ['CV-1002'];
-
-            const format = formatSelect ? formatSelect.value : 'avery_5160';
+            if (codes.length === 0) codes = ['CV-SEA-1001'];
 
             // Render Selected Chips Box
             if (chipsBox) {
@@ -4011,87 +4018,49 @@
             }
 
             if (sheetCounter) {
-                const sheetCount = Math.ceil(codes.length / 30);
-                sheetCounter.textContent = `${codes.length} Totes Selected (${sheetCount} Avery 5160 Sheet${sheetCount > 1 ? 's' : ''} — 30/page)`;
+                const sheetCount = Math.ceil(codes.length / 4);
+                sheetCounter.textContent = `${codes.length} Totes Selected (${sheetCount} Sheet${sheetCount > 1 ? 's' : ''} — 4 Tags/Page)`;
             }
 
             const todayStr = new Date().toLocaleDateString();
+            const firstCode = codes[0] || 'CV-SEA-1001';
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(firstCode)}&ecc=M&margin=1`;
 
-            if (format === 'avery_5160') {
-                // Show a clean 3x10 (or first 12 slots) grid preview
-                const previewSlots = codes.slice(0, 12);
-                previewBox.innerHTML = `
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 100%; font-family: monospace; text-align: center;">
-                        ${previewSlots.map(c => `
-                            <div style="border: 1px dashed #666; padding: 6px; background: #fff; color: #000; border-radius: 4px; display: flex; flex-direction: column; justify-content: space-between; min-height: 55px;">
-                                <div style="font-size: 8px; font-weight: bold; font-family: sans-serif; border-bottom: 1px solid #ddd; padding-bottom: 2px;">CLOUDVAULT STORAGE</div>
-                                <div style="font-size: 11px; font-weight: 900; font-family: monospace;">${c}</div>
-                                <svg class="preview-grid-barcode" data-code="${c}"></svg>
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-                setTimeout(() => {
-                    const svgs = previewBox.querySelectorAll('.preview-grid-barcode');
-                    svgs.forEach(svg => {
-                        const c = svg.getAttribute('data-code');
-                        if (typeof JsBarcode === 'function') {
-                            try {
-                                JsBarcode(svg, c, { format: "CODE128", width: 1.1, height: 20, fontSize: 8, displayValue: false, margin: 0 });
-                            } catch(e){}
-                        }
-                    });
-                }, 50);
-                return;
-            } else if (format === 'shelf_location') {
-                const firstCode = codes[0] || 'CV-1002';
-                previewBox.innerHTML = `
-                    <div style="border: 2px solid #000; padding: 12px; width: 100%; max-width: 360px; margin: 0 auto; background: #fff; color: #000; font-family: monospace; border-radius: 8px; text-align: center;">
-                        <div style="font-size: 11px; font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 3px; margin-bottom: 6px;">CLOUDVAULT STAGING ROOM SHELF TAG</div>
-                        <div style="font-size: 22px; font-weight: 900; letter-spacing: 2px; color: #2563eb; margin-bottom: 4px;">LOC-STG-${firstCode}</div>
-                        <svg id="preview-barcode-svg"></svg>
-                    </div>
-                `;
-            } else {
-                const firstCode = codes[0] || 'CV-1002';
-                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(firstCode)}`;
-                previewBox.innerHTML = `
-                    <div style="border: 2px dashed #333; padding: 12px; width: 100%; max-width: 380px; margin: 0 auto; background: #ffffff; color: #000000; font-family: monospace; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px;">
-                            <div>
-                                <strong style="font-size: 14px; text-transform: uppercase; font-weight: 900; letter-spacing: -0.5px;">CloudVault Storage</strong>
-                                <span style="display: block; font-size: 8px; color: #666; font-family: sans-serif;">High-Density Vault Logistics Tag</span>
-                            </div>
-                            <span style="font-size: 10px; font-weight: bold; background: #000; color: #fff; padding: 3px 8px; border-radius: 4px;">SEATTLE NORTH</span>
+            previewBox.innerHTML = `
+                <div style="border: 2px dashed #000; padding: 14px; width: 100%; max-width: 400px; background: #ffffff; color: #000000; border-radius: 10px; font-family: monospace; box-sizing: border-box;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px;">
+                        <div>
+                            <strong style="font-size: 15px; text-transform: uppercase; font-weight: 900;">CloudVault Storage</strong>
+                            <span style="display: block; font-size: 9px; color: #333; font-family: sans-serif;">Weatherproof Industrial Tag (4/Page)</span>
                         </div>
-                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                            <div style="flex: 1; text-align: center;">
-                                <svg id="preview-barcode-svg"></svg>
-                                <div style="font-size: 16px; font-weight: 900; letter-spacing: 2px; margin-top: -4px;">${firstCode}</div>
-                            </div>
-                            <div style="text-align: center; border-left: 1px solid #ccc; padding-left: 8px;">
-                                <img src="${qrUrl}" style="width: 65px; height: 65px; border: 1px solid #ccc; padding: 2px; border-radius: 4px;" alt="QR Code" />
-                                <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 2px; font-family: sans-serif;">FAST-SCAN QR</span>
-                            </div>
+                        <span style="font-size: 10px; font-weight: bold; background: #000; color: #fff; padding: 3px 8px; border-radius: 4px;">FACILITY LOGISTICS</span>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                        <div style="flex: 1; text-align: center;">
+                            <svg id="preview-barcode-svg" style="width: 100%; max-height: 40px;"></svg>
+                            <div style="font-size: 16px; font-weight: 900; letter-spacing: 2px; margin-top: 2px; font-family: monospace;">${firstCode}</div>
                         </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 9px; color: #444; margin-top: 8px; border-top: 1px solid #ddd; padding-top: 6px;">
-                            <span>SERIAL: #SEAL-9942</span>
-                            <span>DATE: ${todayStr}</span>
-                            <span>STATUS: VERIFIED</span>
+                        <div style="text-align: center; border-left: 2px solid #ddd; padding-left: 10px;">
+                            <img src="${qrUrl}" style="width: 75px; height: 75px; object-fit: contain; image-rendering: pixelated; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto;" alt="QR Code" />
+                            <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 2px; font-family: sans-serif;">FAST-SCAN QR</span>
                         </div>
                     </div>
-                `;
-            }
+                    <div style="display: flex; justify-content: space-between; font-size: 9px; color: #000; margin-top: 8px; border-top: 1px solid #000; padding-top: 4px; font-weight: bold;">
+                        <span>SERIAL: #SEAL-9910</span>
+                        <span>DATE: ${todayStr}</span>
+                        <span>STATUS: VERIFIED</span>
+                    </div>
+                </div>
+            `;
 
             setTimeout(() => {
                 const barcodeEl = document.getElementById('preview-barcode-svg');
                 if (barcodeEl && typeof JsBarcode === 'function') {
                     try {
-                        const firstCode = codes[0] || 'CV-1002';
                         JsBarcode("#preview-barcode-svg", firstCode, {
                             format: "CODE128",
                             width: 1.8,
-                            height: 40,
+                            height: 38,
                             displayValue: false,
                             margin: 2
                         });
@@ -4102,83 +4071,54 @@
 
         async function triggerPrintLabels() {
             const codeInput = document.getElementById('print-tote-code');
-            const formatSelect = document.getElementById('print-label-format');
             const printContainer = document.getElementById('print-container');
             if (!printContainer) return;
 
-            const inputVal = (codeInput ? codeInput.value.trim() : '') || 'CV-1002';
-            const format = formatSelect ? formatSelect.value : 'avery_5160';
-
+            const inputVal = (codeInput ? codeInput.value.trim() : '') || 'CV-SEA-1001';
             let codesToPrint = inputVal.split(',').map(c => c.trim()).filter(Boolean);
-            if (codesToPrint.length === 0) codesToPrint = ['CV-1002'];
+            if (codesToPrint.length === 0) codesToPrint = ['CV-SEA-1001'];
 
             const todayStr = new Date().toLocaleDateString();
 
-            if (format === 'avery_5160') {
-                // Chunk into pages of 30 labels (3 cols x 10 rows per sheet)
-                const pages = [];
-                for (let i = 0; i < codesToPrint.length; i += 30) {
-                    pages.push(codesToPrint.slice(i, i + 30));
-                }
+            // Chunk into sheets of 4 tags (2 columns x 2 rows per sheet)
+            const pages = [];
+            for (let i = 0; i < codesToPrint.length; i += 4) {
+                pages.push(codesToPrint.slice(i, i + 4));
+            }
 
-                printContainer.innerHTML = pages.map((pageCodes, pageIdx) => `
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: minmax(75px, auto); gap: 10px 14px; padding: 15px; font-family: monospace; color: #000; page-break-after: ${pageIdx < pages.length - 1 ? 'always' : 'avoid'};">
-                        ${pageCodes.map((code, idx) => `
-                            <div style="border: 1px dashed #666; padding: 6px; background: #ffffff; border-radius: 6px; text-align: center; display: flex; flex-direction: column; justify-content: space-between; min-height: 75px; box-sizing: border-box; page-break-inside: avoid;">
-                                <div style="font-size: 8px; font-weight: bold; font-family: sans-serif; border-bottom: 1px solid #ddd; padding-bottom: 2px;">CLOUDVAULT STORAGE</div>
-                                <div style="font-size: 13px; font-weight: 900; font-family: monospace; letter-spacing: 1px; margin: 2px 0;">${code}</div>
-                                <svg class="print-grid-barcode" data-code="${code}"></svg>
-                            </div>
-                        `).join('')}
-                    </div>
-                `).join('');
-            } else if (format === 'shelf_location') {
-                printContainer.innerHTML = `
-                    <div style="display: flex; flex-direction: column; gap: 20px; padding: 20px; font-family: monospace; color: #000;">
-                        ${codesToPrint.map((code, idx) => `
-                            <div style="border: 3px solid #000; padding: 15px; background: #fff; border-radius: 8px; text-align: center; max-width: 450px; margin: 0 auto; page-break-inside: avoid;">
-                                <div style="font-size: 12px; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 8px;">CLOUDVAULT STAGING ROOM SHELF TAG</div>
-                                <div style="font-size: 26px; font-weight: 900; letter-spacing: 2px; color: #000; margin-bottom: 6px;">LOC-STG-${code}</div>
-                                <svg class="print-grid-barcode" data-code="${code}"></svg>
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-            } else {
-                printContainer.innerHTML = `
-                    <div style="display: flex; flex-direction: column; gap: 25px; padding: 20px; font-family: monospace; color: #000;">
-                        ${codesToPrint.map((code, idx) => {
-                            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(code)}`;
-                            return `
-                                <div style="border: 2px dashed #000; padding: 16px; width: 100%; max-width: 420px; margin: 0 auto; background: #ffffff; color: #000000; border-radius: 10px; page-break-inside: avoid;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 10px;">
-                                        <div>
-                                            <strong style="font-size: 16px; text-transform: uppercase; font-weight: 900;">CloudVault Storage</strong>
-                                            <span style="display: block; font-size: 9px; color: #333; font-family: sans-serif;">High-Density Vault Logistics Tag</span>
-                                        </div>
-                                        <span style="font-size: 11px; font-weight: bold; background: #000; color: #fff; padding: 4px 10px; border-radius: 4px;">SEATTLE NORTH</span>
+            printContainer.innerHTML = pages.map((pageCodes, pageIdx) => `
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); gap: 20px; padding: 20px; font-family: monospace; color: #000; box-sizing: border-box; width: 100%; height: 100vh; page-break-after: ${pageIdx < pages.length - 1 ? 'always' : 'avoid'};">
+                    ${pageCodes.map((code, idx) => {
+                        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(code)}&ecc=M&margin=1`;
+                        return `
+                            <div style="border: 2px dashed #000; padding: 16px; background: #ffffff; color: #000000; border-radius: 12px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; page-break-inside: avoid;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 6px;">
+                                    <div>
+                                        <strong style="font-size: 16px; text-transform: uppercase; font-weight: 900;">CloudVault Storage</strong>
+                                        <span style="display: block; font-size: 9px; color: #333; font-family: sans-serif;">Weatherproof Industrial Tote Tag</span>
                                     </div>
-                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-                                        <div style="flex: 1; text-align: center;">
-                                            <svg class="print-grid-barcode" data-code="${code}"></svg>
-                                            <div style="font-size: 18px; font-weight: 900; letter-spacing: 2px; margin-top: 2px;">${code}</div>
-                                        </div>
-                                        <div style="text-align: center; border-left: 2px solid #ccc; padding-left: 10px;">
-                                            <img src="${qrUrl}" style="width: 75px; height: 75px; border: 1px solid #000; padding: 2px; border-radius: 4px;" alt="QR Code" />
-                                            <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 2px; font-family: sans-serif;">FAST-SCAN QR</span>
-                                        </div>
+                                    <span style="font-size: 10px; font-weight: bold; background: #000; color: #fff; padding: 4px 8px; border-radius: 4px;">VERIFIED LOGISTICS</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 10px 0;">
+                                    <div style="flex: 1; text-align: center;">
+                                        <svg class="print-grid-barcode" data-code="${code}"></svg>
+                                        <div style="font-size: 20px; font-weight: 900; letter-spacing: 2px; margin-top: 4px;">${code}</div>
                                     </div>
-                                    <div style="display: flex; justify-content: space-between; font-size: 10px; color: #000; margin-top: 10px; border-top: 1px solid #000; padding-top: 6px; font-weight: bold;">
-                                        <span>SERIAL: #SEAL-99${idx + 10}</span>
-                                        <span>DATE: ${todayStr}</span>
-                                        <span>STATUS: VERIFIED</span>
+                                    <div style="text-align: center; border-left: 2px solid #000; padding-left: 14px;">
+                                        <img src="${qrUrl}" style="width: 85px; height: 85px; object-fit: contain; image-rendering: pixelated; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block;" alt="QR Code" />
+                                        <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 3px; font-family: sans-serif;">FAST-SCAN QR</span>
                                     </div>
                                 </div>
-                            `;
-                        }).join('')}
-                    </div>
-                `;
-            }
+                                <div style="display: flex; justify-content: space-between; font-size: 10px; color: #000; border-top: 1px solid #000; padding-top: 6px; font-weight: bold;">
+                                    <span>SERIAL: #SEAL-99${pageIdx * 4 + idx + 10}</span>
+                                    <span>DATE: ${todayStr}</span>
+                                    <span>STATUS: VERIFIED</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `).join('');
 
             setTimeout(() => {
                 const barcodeEls = printContainer.querySelectorAll('.print-grid-barcode');
@@ -4188,11 +4128,11 @@
                         try {
                             JsBarcode(svg, c, {
                                 format: "CODE128",
-                                width: format === 'avery_5160' ? 1.3 : 2,
-                                height: format === 'avery_5160' ? 24 : 45,
+                                width: 2,
+                                height: 45,
                                 fontSize: 10,
                                 displayValue: false,
-                                margin: 1
+                                margin: 2
                             });
                         } catch (err) {
                             console.warn("JsBarcode print error:", err);
@@ -4339,11 +4279,9 @@
                         <input type="text" id="print-tote-code" placeholder="e.g. CV-1000, CV-1001, CV-1002" oninput="renderLabelPreview()" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white font-mono outline-none focus:border-blue-500">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Label Format</label>
-                        <select id="print-label-format" onchange="renderLabelPreview()" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white font-semibold outline-none focus:border-blue-500">
-                            <option value="avery_5160">Avery 5160 Sticker Sheet Grid (30 per page)</option>
-                            <option value="weatherproof_tote">Weatherproof Tote Tag (2" x 4")</option>
-                            <option value="shelf_location">Staging Shelf Tag (1" x 3")</option>
+                        <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Label Format Standard</label>
+                        <select id="print-label-format" disabled class="w-full bg-gray-950 border border-emerald-500/40 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-bold outline-none cursor-not-allowed">
+                            <option value="weatherproof_tote_4page" selected>🏷️ 4-per-Page Weatherproof Industrial Tote Tag (Standard)</option>
                         </select>
                     </div>
                 </div>

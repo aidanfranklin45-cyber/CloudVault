@@ -1597,16 +1597,15 @@
             btn.textContent = 'Securing Deposit & Price Lock...';
 
             try {
+                const updatePayload = {
+                    deposit_amount: activeWaitlistDeposit || 25.00,
+                    deposit_status: 'paid',
+                    payment_status: 'deposit_paid'
+                };
                 if (activeWaitlistId) {
-                    await supabase.from('waitlist').update({
-                        deposit_amount: activeWaitlistDeposit,
-                        payment_status: 'deposit_paid'
-                    }).eq('id', activeWaitlistId);
+                    await supabase.from('waitlist').update(updatePayload).eq('id', activeWaitlistId);
                 } else if (activeWaitlistEmail) {
-                    await supabase.from('waitlist').update({
-                        deposit_amount: activeWaitlistDeposit,
-                        payment_status: 'deposit_paid'
-                    }).eq('email', activeWaitlistEmail);
+                    await supabase.from('waitlist').update(updatePayload).eq('email', activeWaitlistEmail);
                 }
 
                 document.getElementById('waitlist-step-payment').classList.add('hidden-section');

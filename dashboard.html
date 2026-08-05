@@ -2461,6 +2461,11 @@
                     counts[slot] = (counts[slot] || 0) + 1;
                 });
 
+                const todayObj = new Date();
+                const todayStr = todayObj.toISOString().split('T')[0];
+                const currentHour = todayObj.getHours();
+                const isSelectedToday = dateStr === todayStr;
+
                 Array.from(selectEl.options).forEach(opt => {
                     const cleanVal = opt.value;
                     const baseLabel = cleanVal.includes('09:00') ? 'Morning (9 AM - 12 PM)' :
@@ -2468,7 +2473,26 @@
                                       'Evening Peak (3 PM - 6 PM)';
                     
                     const booked = counts[cleanVal] || 0;
-                    if (booked >= stagingCap) {
+                    let isElapsedToday = false;
+                    let elapsedReason = "";
+
+                    if (isSelectedToday) {
+                        if (cleanVal.includes('09:00') && currentHour >= 12) {
+                            isElapsedToday = true;
+                            elapsedReason = "Slot Passed Today";
+                        } else if (cleanVal.includes('12:00') && currentHour >= 15) {
+                            isElapsedToday = true;
+                            elapsedReason = "Slot Passed Today";
+                        } else if (cleanVal.includes('03:00') && currentHour >= 18) {
+                            isElapsedToday = true;
+                            elapsedReason = "Cutoff Passed Today";
+                        }
+                    }
+
+                    if (isElapsedToday) {
+                        opt.disabled = true;
+                        opt.textContent = `${baseLabel} — ⏳ ${elapsedReason}`;
+                    } else if (booked >= stagingCap) {
                         opt.disabled = true;
                         opt.textContent = `${baseLabel} — 🔴 FULL (${booked}/${stagingCap})`;
                     } else {
@@ -2517,7 +2541,10 @@
 
         async function handleReservationDateChange() {
             const dateInput = document.getElementById('retrieval-target-date');
+            const todayStr = new Date().toISOString().split('T')[0];
             if (dateInput) {
+                dateInput.min = todayStr;
+                if (dateInput.value < todayStr) dateInput.value = todayStr;
                 const profile = currentUser ? await getCachedUserProfile(currentUser.id) : null;
                 const facId = profile?.assigned_facility_id || 'facility_seattle_north';
                 await checkSlotAvailability(facId, dateInput.value, 'retrieval-time-slot');
@@ -2531,7 +2558,10 @@
 
         async function handleFulfillmentDateChange() {
             const dateInput = document.getElementById('fulfillment-target-date');
+            const todayStr = new Date().toISOString().split('T')[0];
             if (dateInput) {
+                dateInput.min = todayStr;
+                if (dateInput.value < todayStr) dateInput.value = todayStr;
                 const profile = currentUser ? await getCachedUserProfile(currentUser.id) : null;
                 const facId = profile?.assigned_facility_id || 'facility_seattle_north';
                 await checkSlotAvailability(facId, dateInput.value, 'fulfillment-time-slot');
