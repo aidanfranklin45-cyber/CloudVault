@@ -326,6 +326,16 @@ async function runAllSwarms() {
     await runAdminSwarm();
     await runE2EFulfillmentSwarm();
 
+    // Cleanup test data from waitlist table
+    try {
+        await fetch(`${SUPABASE_URL}/rest/v1/waitlist?email=like.*cloudvault-test.com*`, {
+            method: 'DELETE',
+            headers: HEADERS
+        });
+    } catch (e) {
+        // Ignored
+    }
+
     console.log("\n==================================================");
     console.log("📊 BOT SWARM SUMMARY RESULTS");
     console.log("==================================================");
