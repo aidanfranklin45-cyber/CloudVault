@@ -4005,76 +4005,6 @@
             renderLabelPreview();
         }
 
-        function renderLabelPreview() {
-            const codeInput = document.getElementById('print-tote-code');
-            const previewBox = document.getElementById('label-preview-box');
-            const chipsBox = document.getElementById('print-chips-box');
-            const sheetCounter = document.getElementById('avery-sheet-counter');
-            if (!previewBox) return;
-
-            const rawVal = codeInput ? codeInput.value.trim() : '';
-            let codes = rawVal.split(',').map(c => c.trim()).filter(Boolean);
-            if (codes.length === 0) codes = ['CV-SEA-1001'];
-
-            // Render Selected Chips Box
-            if (chipsBox) {
-                chipsBox.innerHTML = codes.map(c => `
-                    <span class="bg-blue-900/40 text-blue-200 border border-blue-500/30 px-2 py-0.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1">
-                        ${c}
-                        <button type="button" onclick="removeChipCode('${c}')" class="text-blue-400 hover:text-red-400 text-xs ml-0.5">✕</button>
-                    </span>
-                `).join('');
-            }
-
-            if (sheetCounter) {
-                const sheetCount = Math.ceil(codes.length / 4);
-                sheetCounter.textContent = `${codes.length} Totes Selected (${sheetCount} Sheet${sheetCount > 1 ? 's' : ''} — 4 Tags/Page)`;
-            }
-
-            const todayStr = new Date().toLocaleDateString();
-            const firstCode = codes[0] || 'CV-SEA-1001';
-
-            previewBox.innerHTML = `
-                <div style="border: 2px dashed #000; padding: 12px; width: 100%; max-width: 420px; background: #ffffff; color: #000000; border-radius: 10px; font-family: monospace; box-sizing: border-box;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px;">
-                        <div>
-                            <strong style="font-size: 15px; text-transform: uppercase; font-weight: 900;">CloudVault Storage</strong>
-                            <span style="display: block; font-size: 9px; color: #333; font-family: sans-serif;">Weatherproof Industrial Tag (4/Page)</span>
-                        </div>
-                        <span style="font-size: 10px; font-weight: bold; background: #000; color: #fff; padding: 3px 8px; border-radius: 4px;">FACILITY LOGISTICS</span>
-                    </div>
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 90px;">
-                        <div style="flex: 1 1 auto; overflow: hidden; max-width: calc(100% - 110px); text-align: center;">
-                            <svg id="preview-barcode-svg" style="max-width: 100%; height: 38px;"></svg>
-                            <div style="font-size: 16px; font-weight: 900; letter-spacing: 2px; margin-top: 2px; font-family: monospace;">${firstCode}</div>
-                        </div>
-                        <div style="flex: 0 0 100px; width: 100px; max-width: 100px; min-width: 100px; text-align: center; border-left: 2px solid #000; padding-left: 10px; box-sizing: border-box;">
-                            <img id="preview-qr-img" style="width: 75px; height: 75px; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto; object-fit: contain; image-rendering: pixelated;" alt="QR Code" />
-                            <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 2px; font-family: sans-serif;">FAST-SCAN QR</span>
-                        </div>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 9px; color: #000; margin-top: 8px; border-top: 1px solid #000; padding-top: 4px; font-weight: bold;">
-                        <span>SERIAL: #SEAL-9910</span>
-                        <span>DATE: ${todayStr}</span>
-                        <span>STATUS: VERIFIED</span>
-                    </div>
-                </div>
-            `;
-
-            setTimeout(() => {
-                const barcodeEl = document.getElementById('preview-barcode-svg');
-                if (barcodeEl && typeof JsBarcode === 'function') {
-                    try {
-                        JsBarcode("#preview-barcode-svg", firstCode, {
-                            format: "CODE128",
-                            width: 1.6,
-                            height: 38,
-                            displayValue: false,
-                            margin: 2
-                        });
-                    } catch (e) {}
-                }
-
         function generateQRDataURL(text) {
             return new Promise((resolve) => {
                 const tempDiv = document.createElement('div');
@@ -4267,6 +4197,9 @@
                 });
 
                 window.print();
+                setTimeout(() => {
+                    if (printContainer) printContainer.innerHTML = '';
+                }, 1000);
             }, 200);
         }
     </script>
@@ -4480,6 +4413,6 @@
     </div>
 
     <!-- Hidden Printable Container (Shown during window.print()) -->
-    <div id="print-container"></div>
+    <div id="print-container" style="display: none;"></div>
 </body>
 </html>
