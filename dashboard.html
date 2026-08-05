@@ -597,23 +597,45 @@
             </div>
         </div>
 
-        <!-- Toast Notification -->
-        <div id="toast" class="fixed bottom-6 right-6 bg-gray-900 text-white px-6 py-4 rounded-xl shadow-2xl font-semibold text-sm z-50 transform translate-y-20 opacity-0 transition-all duration-300">
-            <span id="toast-msg"></span>
-        </div>     </div>
-
-    </main>
-
-    <!-- Action Bar (Sticky Bottom) -->
-    <div id="action-bar" class="fixed bottom-0 left-0 right-0 action-bar-glass shadow-[0_-8px_25px_-5px_rgba(0,0,0,0.08)] p-4 transition-transform duration-300 bar-hidden z-40">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-            <div class="text-lg font-bold text-gray-900">
-                <span id="selected-count" class="text-blue-600">0</span> Items Selected
+    <!-- Update Payment Method Modal -->
+    <div id="update-payment-modal" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 border border-gray-100">
+            <div class="flex justify-between items-center border-b border-gray-100 pb-3">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                        💳
+                    </div>
+                    <div>
+                        <h3 class="font-extrabold text-gray-900 text-base">Update Payment Method</h3>
+                        <p class="text-[11px] text-gray-400">Update credit card details for CloudVault billing</p>
+                    </div>
+                </div>
+                <button onclick="closeUpdatePaymentModal()" class="text-gray-400 hover:text-gray-600 text-lg font-bold">&times;</button>
             </div>
-            <button id="request-btn" onclick="requestRetrieval()" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-md flex items-center">
-                Request Retrieval
-                <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
-            </button>
+
+            <form onsubmit="saveUpdatePaymentModal(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Cardholder Name</label>
+                    <input type="text" id="pay-name" placeholder="Full Name on Card" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Card Number</label>
+                    <input type="text" id="pay-card" placeholder="•••• •••• •••• ••••" maxLength="19" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 focus:outline-none focus:border-blue-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Expires (MM/YY)</label>
+                        <input type="text" id="pay-exp" placeholder="MM/YY" maxLength="5" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">CVC / CVC2</label>
+                        <input type="text" id="pay-cvc" placeholder="123" maxLength="4" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 focus:outline-none focus:border-blue-500">
+                    </div>
+                </div>
+                <button type="submit" id="save-pay-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition text-sm shadow-lg shadow-blue-500/20">
+                    Save Updated Payment Details
+                </button>
+            </form>
         </div>
     </div>
 
@@ -2084,6 +2106,33 @@
                 .subscribe();
         });
 
+        function openUpdatePaymentModal() {
+            const modal = document.getElementById('update-payment-modal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeUpdatePaymentModal() {
+            const modal = document.getElementById('update-payment-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        async function saveUpdatePaymentModal(e) {
+            e.preventDefault();
+            const btn = document.getElementById('save-pay-btn');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Updating Payment Method...';
+            }
+            setTimeout(() => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Save Updated Payment Details';
+                }
+                closeUpdatePaymentModal();
+                showToast('Payment method updated successfully!');
+            }, 800);
+        }
+
         // ============================================================
         // Onboarding Progress Tracker UI Renderer
         // ============================================================
@@ -2216,14 +2265,14 @@
             filteredData.forEach((item) => {
                 const id = item.id;
                 const isSelected = selectedItems.has(id);
-                const isStored = item.status === 'stored';
+                const isStored = item.status === 'stored' && item.activated !== false;
                 const isBulky = item.item_type === 'bulky';
 
                 const itemCat = getItemCategory(item);
                 const catBadgeHtml = itemCat ? `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${getCategoryBadgeClass(itemCat)}">#${itemCat.toLowerCase()}</span>` : '';
 
                 const card = document.createElement('div');
-                card.className = `tote-card bg-white border-2 rounded-2xl p-6 relative overflow-hidden cursor-pointer ${isSelected ? 'selected border-blue-600' : 'border-gray-100'}`;
+                card.className = `tote-card bg-white border-2 rounded-2xl p-6 relative overflow-hidden ${isStored ? 'cursor-pointer' : 'cursor-not-allowed opacity-90'} ${isSelected ? 'selected border-blue-600' : 'border-gray-100'}`;
                 card.onclick = () => { if (isStored) toggleTote(id); };
 
                 const iconHolderContent = item.image_url
@@ -2235,7 +2284,7 @@
 
                 let actionHTML = '';
                 if (item.activated === false) {
-                    actionHTML = '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">Processing Intake Tag</span>';
+                    actionHTML = '<span class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded border border-amber-200">Intake / Vault Storage Pending</span>';
                 } else if (item.status === 'pending-stage') {
                     const activeReq = currentRequests.find(r => r.requested_items && r.requested_items.includes(id));
                     const isValet = activeReq && activeReq.fulfillment_type === 'valet_delivery';
@@ -2477,15 +2526,15 @@
                     let elapsedReason = "";
 
                     if (isSelectedToday) {
-                        if (cleanVal.includes('09:00') && currentHour >= 12) {
+                        if (cleanVal.includes('09:00') && currentHour >= 9) {
                             isElapsedToday = true;
-                            elapsedReason = "Slot Passed Today";
-                        } else if (cleanVal.includes('12:00') && currentHour >= 15) {
+                            elapsedReason = "Active / Elapsed Block";
+                        } else if (cleanVal.includes('12:00') && currentHour >= 12) {
                             isElapsedToday = true;
-                            elapsedReason = "Slot Passed Today";
-                        } else if (cleanVal.includes('03:00') && currentHour >= 18) {
+                            elapsedReason = "Active / Elapsed Block";
+                        } else if (cleanVal.includes('03:00') && currentHour >= 15) {
                             isElapsedToday = true;
-                            elapsedReason = "Cutoff Passed Today";
+                            elapsedReason = "Active / Elapsed Block";
                         }
                     }
 

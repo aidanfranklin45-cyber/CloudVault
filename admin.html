@@ -1296,10 +1296,9 @@
 
     <!-- Main Logic Script -->
     <script>
-
-
         let activeRole = "executive";
         let actualUserRole = null;
+        let actualUserName = null;
         let actualAssignedFacilityId = null; // Set for managers/workers — their locked facility
         let funnelChartObj = null;
         let utilizationRingObj = null;
@@ -1320,15 +1319,35 @@
                                     return;
                                 }
                                 actualUserRole = profile.role;
-                                actualAssignedFacilityId = profile.assigned_facility_id || null;
-                                activeRole = profile.role;
-                                document.getElementById('role-select').value = activeRole;
+                                actualUserName = profile.name || user.email;
+                                actualAssignedFacilityId = profile.assigned_facility_id || 'facility_seattle_north';
+                                activeRole = profile.role === 'warehouse_worker' ? 'worker' : profile.role === 'warehouse_manager' ? 'manager' : 'executive';
+                                
+                                const roleSel = document.getElementById('role-select');
+                                if (roleSel) roleSel.value = activeRole;
                                 lockRoleDropdown(true);
+
+                                const devBar = document.getElementById('dev-role-bar');
+                                if (devBar) {
+                                    if (actualUserRole === 'executive') {
+                                        devBar.classList.remove('hidden');
+                                    } else {
+                                        devBar.classList.add('hidden');
+                                    }
+                                }
+
+                                if (actualAssignedFacilityId) {
+                                    const facSel = document.getElementById('manager-facility-select');
+                                    if (facSel) facSel.value = actualAssignedFacilityId;
+                                    lockFacilityDropdown(actualUserRole !== 'executive');
+                                }
+
                                 switchRoleView();
                             }
                             refreshDashboard();
                         } else {
                             actualUserRole = null;
+                            actualUserName = null;
                             window.location.href = "login.html";
                         }
                     });
@@ -1342,8 +1361,6 @@
             document.getElementById('role-select').value = activeRole;
             initializeCharts();
         });
-
-
 
         // Switch role UI layout (RBAC Matrix simulation)
         function switchRole() {
@@ -1370,31 +1387,34 @@
             document.getElementById('view-manager').classList.add('hidden');
             document.getElementById('view-worker').classList.add('hidden');
 
+            const displayName = actualUserName || (activeRole === 'executive' ? "Alex Executive" : activeRole === 'manager' ? "Sarah Manager" : "David Worker");
+            const avatarText = displayName.substring(0, 2).toUpperCase();
+
             // Show selected (cumulatively based on role hierarchy)
             if (activeRole === 'executive') {
                 document.getElementById('view-executive').classList.remove('hidden');
                 document.getElementById('view-manager').classList.remove('hidden');
                 document.getElementById('view-worker').classList.remove('hidden');
-                document.getElementById('user-avatar').textContent = "EX";
+                document.getElementById('user-avatar').textContent = avatarText;
                 document.getElementById('user-avatar').className = "w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-md";
-                document.getElementById('user-name').textContent = "Alex Executive";
+                document.getElementById('user-name').textContent = displayName;
                 document.getElementById('user-role-label').textContent = "Super Admin";
                 loadManagerFacilityData();
                 loadWorkerQueues();
             } else if (activeRole === 'manager') {
                 document.getElementById('view-manager').classList.remove('hidden');
                 document.getElementById('view-worker').classList.remove('hidden');
-                document.getElementById('user-avatar').textContent = "MN";
+                document.getElementById('user-avatar').textContent = avatarText;
                 document.getElementById('user-avatar').className = "w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-md";
-                document.getElementById('user-name').textContent = "Sarah Manager";
-                document.getElementById('user-role-label').textContent = "Warehouse Mgr";
+                document.getElementById('user-name').textContent = displayName;
+                document.getElementById('user-role-label').textContent = "Warehouse Manager";
                 loadManagerFacilityData();
                 loadWorkerQueues();
             } else if (activeRole === 'worker') {
                 document.getElementById('view-worker').classList.remove('hidden');
-                document.getElementById('user-avatar').textContent = "WK";
+                document.getElementById('user-avatar').textContent = avatarText;
                 document.getElementById('user-avatar').className = "w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white font-bold flex items-center justify-center text-xs shadow-md";
-                document.getElementById('user-name').textContent = "David Worker";
+                document.getElementById('user-name').textContent = displayName;
                 document.getElementById('user-role-label').textContent = "Operations Staff";
                 loadWorkerQueues();
                 setTimeout(() => {
