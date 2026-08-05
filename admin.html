@@ -3956,8 +3956,6 @@
 
         async function selectBatchPreset(presetKey) {
             const input = document.getElementById('print-tote-code');
-            const formatSelect = document.getElementById('print-label-format');
-            if (formatSelect) formatSelect.value = 'avery_5160';
 
             let codes = [];
             const facId = (document.getElementById('manager-facility-select')?.value) || 'facility_seattle_north';
@@ -4332,17 +4330,9 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Tote Barcode Code(s)</label>
-                        <input type="text" id="print-tote-code" placeholder="e.g. CV-1000, CV-1001, CV-1002" oninput="renderLabelPreview()" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white font-mono outline-none focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Label Format Standard</label>
-                        <select id="print-label-format" disabled class="w-full bg-gray-950 border border-emerald-500/40 rounded-xl px-4 py-2.5 text-sm text-emerald-300 font-bold outline-none cursor-not-allowed">
-                            <option value="weatherproof_tote_4page" selected>🏷️ 4-per-Page Weatherproof Industrial Tote Tag (Standard)</option>
-                        </select>
-                    </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Tote Barcode Code(s)</label>
+                    <input type="text" id="print-tote-code" placeholder="e.g. CV-1000, CV-1001, CV-1002" oninput="renderLabelPreview()" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white font-mono outline-none focus:border-blue-500">
                 </div>
 
                 <!-- Selected Batch Chips & Avery Capacity Counter -->
