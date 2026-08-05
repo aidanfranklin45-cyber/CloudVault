@@ -34,7 +34,7 @@ EXCEPTION
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE public.inventory_status AS ENUM ('stored', 'pending-stage', 'staged', 'with-customer', 'in-storage');
+    CREATE TYPE public.inventory_status AS ENUM ('stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
@@ -770,10 +770,16 @@ BEGIN
     SELECT array_agg(tote_code) INTO v_tote_codes FROM public.inventory WHERE id = ANY(p_tote_ids);
     SELECT assigned_facility_id INTO v_user_facility FROM public.users WHERE id = v_uid;
 
-    -- Update items status to pending-stage
-    UPDATE public.inventory
-    SET status = 'pending-stage'::inventory_status
-    WHERE id = ANY(p_tote_ids);
+    -- Update items status based on fulfillment type
+    IF p_fulfillment_type = 'valet_delivery' THEN
+      UPDATE public.inventory
+      SET status = 'pending-dispatch'::inventory_status
+      WHERE id = ANY(p_tote_ids);
+    ELSE
+      UPDATE public.inventory
+      SET status = 'pending-stage'::inventory_status
+      WHERE id = ANY(p_tote_ids);
+    END IF;
 
     -- Create access request with reservation slot and surge pricing
     INSERT INTO public.access_requests (
@@ -1093,15 +1099,17 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- Secure Barcode Tote Scanning (Staff only)
+-- Secure Barcode Tote Scanning (Staff only) — Fulfillment-Type-Aware
 CREATE OR REPLACE FUNCTION public.scan_tote(
-  p_tote_code TEXT
+  p_tote_code TEXT,
+  p_expected_status TEXT DEFAULT NULL
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_uid UUID;
   v_item RECORD;
   v_next_status public.inventory_status;
   v_user_role public.user_role;
+  v_fulfillment_type TEXT;
 BEGIN
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
@@ -1113,16 +1121,43 @@ BEGIN
     RAISE EXCEPTION 'Access Denied: Staff only';
   END IF;
 
-  SELECT id, status INTO v_item FROM public.inventory WHERE tote_code = p_tote_code LIMIT 1;
+  SELECT id, status, uid INTO v_item FROM public.inventory WHERE tote_code = p_tote_code LIMIT 1;
   IF v_item IS NULL THEN
     RAISE EXCEPTION 'Tote not found';
   END IF;
 
-  IF v_item.status = 'pending-stage' THEN
+  -- Look up the fulfillment type from the most recent pending access request for this tote
+  SELECT ar.fulfillment_type INTO v_fulfillment_type
+  FROM public.access_requests ar
+  WHERE ar.uid = v_item.uid
+    AND ar.status = 'pending'
+    AND (v_item.id = ANY(ar.requested_items) OR p_tote_code = ANY(ar.requested_tote_codes))
+  ORDER BY ar.requested_at DESC
+  LIMIT 1;
+
+  -- Default to staging if no access request found
+  IF v_fulfillment_type IS NULL THEN
+    v_fulfillment_type := 'staging';
+  END IF;
+
+  -- Determine next status based on current status and fulfillment type
+  IF v_item.status = 'stored' THEN
+    -- Un-activated tote being activated
+    v_next_status := 'pending-stage'::public.inventory_status;
+  ELSIF v_item.status = 'pending-stage' THEN
+    -- Self-serve: vault -> staging room
     v_next_status := 'staged'::public.inventory_status;
   ELSIF v_item.status = 'staged' THEN
+    -- Self-serve: staging room -> customer picks up
+    v_next_status := 'with-customer'::public.inventory_status;
+  ELSIF v_item.status = 'pending-dispatch' THEN
+    -- Valet: vault -> loaded on driver vehicle
+    v_next_status := 'out-for-delivery'::public.inventory_status;
+  ELSIF v_item.status = 'out-for-delivery' THEN
+    -- Valet: driver delivered to customer
     v_next_status := 'with-customer'::public.inventory_status;
   ELSIF v_item.status = 'with-customer' THEN
+    -- Both paths: customer returns -> back to vault storage
     v_next_status := 'stored'::public.inventory_status;
   ELSE
     v_next_status := 'pending-stage'::public.inventory_status;
@@ -1134,7 +1169,8 @@ BEGIN
 
   RETURN jsonb_build_object(
     'success', true,
-    'nextStatus', v_next_status
+    'nextStatus', v_next_status,
+    'fulfillmentType', v_fulfillment_type
   );
 END;
 $$ LANGUAGE plpgsql;

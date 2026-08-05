@@ -1046,16 +1046,41 @@
                                 </div>
                             </div>
 
-                            <div class="bg-gray-900/50 p-4 border border-gray-850 rounded-2xl space-y-2 text-xs text-gray-400">
+                            <div class="bg-gray-900/50 p-4 border border-gray-850 rounded-2xl space-y-3 text-xs text-gray-400">
                                 <p class="font-bold text-gray-300 uppercase text-[9px]">Auto-lifecycle mapping:</p>
-                                <div class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
-                                    <span>Un-activated</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-emerald-400 font-medium">In Vault</span>
-                                </div>
-                                <div class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
-                                    <span>In Vault</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-amber-400 font-medium">Staged in Room</span>
-                                </div>
-                                <div class="flex justify-between items-center text-[10px]">
-                                    <span>In Room</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-blue-400 font-medium">With Customer</span>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <!-- Self-Serve Path -->
+                                    <div class="space-y-1.5 border-r border-gray-800/40 pr-3">
+                                        <p class="text-[9px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">🚪 Self-Serve</p>
+                                        <div class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
+                                            <span>Un-activated</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-emerald-400 font-medium">In Vault</span>
+                                        </div>
+                                        <div class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
+                                            <span>In Vault</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-amber-400 font-medium">Staging Room</span>
+                                        </div>
+                                        <div class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
+                                            <span>In Room</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-blue-400 font-medium">With Customer</span>
+                                        </div>
+                                        <div class="flex justify-between items-center text-[10px]">
+                                            <span>Returned</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-purple-400 font-medium">Back to Vault</span>
+                                        </div>
+                                    </div>
+                                    <!-- Valet Path -->
+                                    <div class="space-y-1.5">
+                                        <p class="text-[9px] font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1">🚚 Valet Delivery</p>
+                                        <div class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
+                                            <span>Un-activated</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-emerald-400 font-medium">In Vault</span>
+                                        </div>
+                                        <div class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
+                                            <span>In Vault</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-orange-400 font-medium">Load on Driver</span>
+                                        </div>
+                                        <div class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
+                                            <span>Out for Delivery</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-blue-400 font-medium">With Customer</span>
+                                        </div>
+                                        <div class="flex justify-between items-center text-[10px]">
+                                            <span>Driver Pickup</span> <i data-lucide="arrow-right" class="w-3 h-3 text-gray-600"></i> <span class="text-purple-400 font-medium">Back to Vault</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1074,33 +1099,40 @@
                         <h3 class="font-bold text-white text-lg">Daily Operational Queue</h3>
                     </div>
 
-                    <!-- Four Phase Tabs: Labeled by Current Location & Target Action -->
-                    <div class="grid grid-cols-4 gap-2" id="worker-phase-tabs">
+                    <!-- Five Phase Tabs: Labeled by Current Location & Target Action -->
+                    <div class="grid grid-cols-5 gap-2" id="worker-phase-tabs">
                         <button id="wtab-activate" onclick="switchWorkerPhase('activate')"
                             class="worker-phase-tab active-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 transition-all">
-                            <i data-lucide="tag" class="w-4 h-4"></i>
+                            <i data-lucide="package-plus" class="w-4 h-4"></i>
                             <span class="text-[10px] font-bold uppercase tracking-wide">1. New Intake</span>
                             <span id="wtab-activate-count" class="text-lg font-black leading-none">—</span>
-                            <span class="text-[9px] text-emerald-400 font-semibold">Un-activated Totes</span>
+                            <span class="text-[9px] text-emerald-400 font-semibold">Activate & Shelve</span>
                         </button>
                         <button id="wtab-stage" onclick="switchWorkerPhase('stage')"
                             class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 transition-all">
                             <i data-lucide="archive-restore" class="w-4 h-4"></i>
-                            <span class="text-[10px] font-bold uppercase tracking-wide">2. In Vault</span>
+                            <span class="text-[10px] font-bold uppercase tracking-wide">2. Pull from Vault</span>
                             <span id="wtab-stage-count" class="text-lg font-black leading-none">—</span>
-                            <span class="text-[9px] text-gray-400">→ Move to Room</span>
+                            <span class="text-[9px] text-gray-400">Retrieval Requests</span>
                         </button>
                         <button id="wtab-customer" onclick="switchWorkerPhase('customer')"
                             class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300 transition-all">
-                            <i data-lucide="user-check" class="w-4 h-4"></i>
-                            <span class="text-[10px] font-bold uppercase tracking-wide">3. In Staging Room</span>
+                            <i data-lucide="door-open" class="w-4 h-4"></i>
+                            <span class="text-[10px] font-bold uppercase tracking-wide">3. Staging Room</span>
                             <span id="wtab-customer-count" class="text-lg font-black leading-none">—</span>
-                            <span class="text-[9px] text-gray-400">→ Handoff to Customer</span>
+                            <span class="text-[9px] text-gray-400">🚪 Self-Serve Pickup</span>
+                        </button>
+                        <button id="wtab-dispatch" onclick="switchWorkerPhase('dispatch')"
+                            class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-orange-300 transition-all">
+                            <i data-lucide="truck" class="w-4 h-4"></i>
+                            <span class="text-[10px] font-bold uppercase tracking-wide">4. Driver Dispatch</span>
+                            <span id="wtab-dispatch-count" class="text-lg font-black leading-none">—</span>
+                            <span class="text-[9px] text-gray-400">🚚 Valet Delivery</span>
                         </button>
                         <button id="wtab-returned" onclick="switchWorkerPhase('returned')"
                             class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-purple-500/40 hover:bg-purple-500/10 hover:text-purple-300 transition-all">
                             <i data-lucide="package-check" class="w-4 h-4"></i>
-                            <span class="text-[10px] font-bold uppercase tracking-wide">4. With Customer</span>
+                            <span class="text-[10px] font-bold uppercase tracking-wide">5. With Customer</span>
                             <span id="wtab-returned-count" class="text-lg font-black leading-none">—</span>
                             <span class="text-[9px] text-gray-400">→ Return to Vault</span>
                         </button>
@@ -1149,27 +1181,49 @@
                         <div id="wbody-activate" class="space-y-4"></div>
                     </div>
 
-                    <!-- Phase 2: In Vault Storage (pending-stage → move to staging room) -->
+                    <!-- Phase 2: Pull from Vault (pending-stage + pending-dispatch) -->
                     <div id="wview-stage" class="worker-phase-view space-y-4 hidden">
-                        <div class="bg-amber-950/30 border border-amber-500/20 p-4 rounded-2xl flex items-center justify-between text-xs">
-                            <span class="text-gray-300"><strong class="text-amber-400">Current Location:</strong> Vault Storage (Retrieval Requested)</span>
-                            <span class="text-amber-300 font-mono text-[11px] font-bold">Target Action: Retrieve & Move to Staging Room</span>
+                        <div class="bg-amber-950/30 border border-amber-500/20 p-4 rounded-2xl space-y-2 text-xs">
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-300"><strong class="text-amber-400">Worker Action:</strong> Pull totes from vault shelves</span>
+                                <span class="text-amber-300 font-mono text-[11px] font-bold">Retrieval Requests Pending</span>
+                            </div>
+                            <div class="flex gap-4 text-[10px] text-gray-400 border-t border-amber-500/10 pt-2 mt-1">
+                                <span>🚪 <strong class="text-blue-300">Self-Serve</strong> → Place in Staging Room for customer pickup</span>
+                                <span>🚚 <strong class="text-orange-300">Valet</strong> → Load onto driver vehicle for delivery</span>
+                            </div>
                         </div>
-                        <!-- Grouped Customer Cards Container for In Vault -->
+                        <!-- Grouped Customer Cards Container for Pull from Vault -->
                         <div id="wbody-stage" class="space-y-4"></div>
                     </div>
 
-                    <!-- Phase 3: In Staging Room (staged → scan to hand off to customer/driver) -->
+                    <!-- Phase 3: In Staging Room (Self-Serve only — staged → hand off to customer at facility) -->
                     <div id="wview-customer" class="worker-phase-view space-y-4 hidden">
                         <div class="bg-blue-950/30 border border-blue-500/20 p-4 rounded-2xl flex items-center justify-between text-xs">
-                            <span class="text-gray-300"><strong class="text-blue-400">Current Location:</strong> Staging Room (Ready for Pickup / Valet)</span>
-                            <span class="text-blue-300 font-mono text-[11px] font-bold">Target Action: Hand Off to Customer or Driver</span>
+                            <span class="text-gray-300"><strong class="text-blue-400">Current Location:</strong> Staging Room (🚪 Self-Serve customers only)</span>
+                            <span class="text-blue-300 font-mono text-[11px] font-bold">Customer arrives → Hand off totes</span>
                         </div>
                         <!-- Grouped Customer Cards Container for In Staging Room -->
                         <div id="wbody-customer" class="space-y-4"></div>
                     </div>
 
-                    <!-- Phase 4: Out With Customer (with-customer → scan return back to vault) -->
+                    <!-- Phase 4: Driver Dispatch (Valet only — pending-dispatch + out-for-delivery) -->
+                    <div id="wview-dispatch" class="worker-phase-view space-y-4 hidden">
+                        <div class="bg-orange-950/30 border border-orange-500/20 p-4 rounded-2xl space-y-2 text-xs">
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-300"><strong class="text-orange-400">🚚 Valet Delivery Pipeline</strong></span>
+                                <span class="text-orange-300 font-mono text-[11px] font-bold">Load & Dispatch to Customer's Door</span>
+                            </div>
+                            <p class="text-[10px] text-gray-400 border-t border-orange-500/10 pt-2 mt-1">
+                                Totes here are queued for valet delivery. Scan to mark as loaded on driver vehicle. 
+                                Driver delivers to customer's address. On next route visit, driver picks up returned totes.
+                            </p>
+                        </div>
+                        <!-- Grouped Customer Cards Container for Driver Dispatch -->
+                        <div id="wbody-dispatch" class="space-y-4"></div>
+                    </div>
+
+                    <!-- Phase 5: With Customer (with-customer → scan return back to vault) -->
                     <div id="wview-returned" class="worker-phase-view space-y-4 hidden">
                         <div class="bg-purple-950/30 border border-purple-500/20 p-4 rounded-2xl flex items-center justify-between text-xs">
                             <span class="text-gray-300"><strong class="text-purple-400">Current Location:</strong> Out With Customer (Drop-off Return Pending)</span>
@@ -2350,11 +2404,12 @@
 
         function switchWorkerPhase(phase) {
             window.hasManuallySwitchedPhase = true;
-            const phases = ['activate', 'stage', 'customer', 'returned'];
+            const phases = ['activate', 'stage', 'customer', 'dispatch', 'returned'];
             const colors = {
                 activate: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
                 stage:    'border-amber-500/40 bg-amber-500/10 text-amber-300',
                 customer: 'border-blue-500/40 bg-blue-500/10 text-blue-300',
+                dispatch: 'border-orange-500/40 bg-orange-500/10 text-orange-300',
                 returned: 'border-purple-500/40 bg-purple-500/10 text-purple-300',
             };
             const inactive = 'border-gray-700 bg-gray-900/50 text-gray-400';
@@ -2411,9 +2466,9 @@
                 const { data: allItems } = await supabase.from('inventory')
                     .select('*, users(name, onboarding_status)')
                     .eq('facility_id', facilityId)
-                    .in('status', ['stored', 'pending-stage', 'staged', 'with-customer']);
+                    .in('status', ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer']);
 
-                // Fetch access requests for PIN + reservation data
+                // Fetch access requests for PIN + reservation + fulfillment type data
                 const { data: manifests } = await supabase.from('access_requests')
                     .select('uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type')
                     .eq('facility_id', facilityId)
@@ -2433,8 +2488,8 @@
                             const dateStr = req.target_date ? new Date(req.target_date.split('T')[0] + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
                             const slotStr = req.time_slot || '';
                             const typeBadge = req.fulfillment_type === 'valet_delivery'
-                                ? `<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">Valet Delivery</span>`
-                                : `<span class="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">Self-Serve Drop-off</span>`;
+                                ? `<span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 Valet Delivery</span>`
+                                : `<span class="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 Self-Serve Drop-off</span>`;
                             return `<tr class="border-b border-gray-850/60 hover:bg-gray-900/30">
                                 <td class="py-2.5 font-mono text-gray-300">${req.uid ? req.uid.substring(0,8) + '...' : '—'}</td>
                                 <td class="py-2.5 font-bold text-white">${req.additional_totes || 1} Tote(s)</td>
@@ -2446,7 +2501,7 @@
                     }
                 }
 
-                // Build PIN / reservation lookup by uid
+                // Build PIN / reservation / fulfillment type lookup by uid
                 const pinByUid = {};
                 const typeByUid = {};
                 const reservationByUid = {};
@@ -2474,6 +2529,15 @@
                     return groups;
                 }
 
+                // Fulfillment type badge helper
+                function fulfillmentBadge(uid) {
+                    const ft = typeByUid[uid];
+                    if (ft === 'valet_delivery') {
+                        return `<span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 VALET</span>`;
+                    }
+                    return `<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE</span>`;
+                }
+
                 // ── Tab 1: NEW INTAKE CARDS ──
                 const activateItems = (allItems || []).filter(i => i.status === 'stored' && i.activated === false);
                 document.getElementById('wtab-activate-count').textContent = activateItems.length;
@@ -2487,7 +2551,7 @@
                     bodyActivate.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
                         <i data-lucide="check-circle" class="w-8 h-8 text-emerald-500 mx-auto"></i>
                         <p class="text-sm text-gray-300 font-bold">Intake Queue Clear</p>
-                        <p class="text-xs text-gray-500 font-mono">All incoming totes are activated.</p>
+                        <p class="text-xs text-gray-500 font-mono">All incoming totes are activated and shelved.</p>
                     </div>`;
                 } else {
                     bodyActivate.innerHTML = Object.entries(activateGrouped).map(([uid, totes]) => {
@@ -2502,11 +2566,11 @@
                                         </div>
                                         <div>
                                             <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
-                                            <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Un-activated Tote(s)</p>
+                                            <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Tote(s) to Activate</p>
                                         </div>
                                     </div>
                                     <button onclick="openPrintLabelModal('${firstCode}')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
-                                        <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print Batch Tag
+                                        <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print Labels
                                     </button>
                                 </div>
 
@@ -2526,32 +2590,44 @@
                     }).join('');
                 }
 
-                // ── Tab 2: IN VAULT CARDS ──
-                const stageItems = (allItems || []).filter(i => i.status === 'pending-stage');
-                document.getElementById('wtab-stage-count').textContent = stageItems.length;
+                // ── Tab 2: PULL FROM VAULT CARDS (pending-stage + pending-dispatch) ──
+                const pullItems = (allItems || []).filter(i => i.status === 'pending-stage' || i.status === 'pending-dispatch');
+                document.getElementById('wtab-stage-count').textContent = pullItems.length;
                 const bodyStage = document.getElementById('wbody-stage');
-                const stageGrouped = groupTotesByCustomer(stageItems);
+                const pullGrouped = groupTotesByCustomer(pullItems);
 
-                if (stageItems.length === 0) {
+                if (pullItems.length === 0) {
                     bodyStage.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
                         <i data-lucide="archive" class="w-8 h-8 text-amber-500 mx-auto"></i>
                         <p class="text-sm text-gray-300 font-bold">No Retrieval Requests Pending</p>
                         <p class="text-xs text-gray-500 font-mono">Vault storage is operating normally.</p>
                     </div>`;
                 } else {
-                    bodyStage.innerHTML = Object.entries(stageGrouped).map(([uid, totes]) => {
+                    bodyStage.innerHTML = Object.entries(pullGrouped).map(([uid, totes]) => {
                         const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0,8)}`;
                         const pin = pinByUid[uid] || '—';
                         const firstCode = totes[0].tote_code;
                         const res = reservationByUid[uid];
                         const isSameDay = res?.surge_tier === 'same_day_surge';
-                        const borderStyle = isSameDay ? 'border-red-500/70 bg-red-950/20' : 'border-amber-500/30 bg-gray-950';
+                        const ft = typeByUid[uid] || 'staging';
+                        const isValet = ft === 'valet_delivery';
+
+                        // Route color based on fulfillment type
+                        const borderColor = isSameDay ? 'border-red-500/70 bg-red-950/20' 
+                                          : isValet ? 'border-orange-500/30 bg-gray-950' 
+                                          : 'border-amber-500/30 bg-gray-950';
+                        const statusLabel = isValet ? 'Pending Driver Load' : 'Pending Staging';
+                        const statusColor = isValet ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                        const actionLabel = isValet ? 'LOAD ONTO DRIVER VEHICLE' : 'MOVE TO STAGING ROOM';
+                        const actionGradient = isValet ? 'from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 border-orange-400/40' : 'from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 border-amber-400/40';
+                        const actionIcon = isValet ? 'truck' : 'archive-restore';
+                        const expectedScanStatus = isValet ? 'pending-dispatch' : 'pending-stage';
 
                         return `
-                            <div class="border-2 ${borderStyle} rounded-3xl p-5 shadow-xl space-y-4 hover:border-amber-500/60 transition">
+                            <div class="border-2 ${borderColor} rounded-3xl p-5 shadow-xl space-y-4 hover:border-amber-500/60 transition">
                                 <div class="flex items-center justify-between border-b border-gray-850 pb-3">
                                     <div class="flex items-center space-x-3">
-                                        <div class="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center text-sm border border-amber-500/30 font-mono">
+                                        <div class="w-10 h-10 rounded-2xl ${isValet ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'} font-bold flex items-center justify-center text-sm border font-mono">
                                             ${customerName.substring(0,2).toUpperCase()}
                                         </div>
                                         <div>
@@ -2559,7 +2635,8 @@
                                             <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Tote(s)</p>
                                         </div>
                                     </div>
-                                    <div class="text-right">
+                                    <div class="flex items-center gap-2">
+                                        ${fulfillmentBadge(uid)}
                                         <span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-3 py-1 rounded-xl">PIN: ${pin}</span>
                                     </div>
                                 </div>
@@ -2567,20 +2644,20 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                         <span class="text-white font-bold">${t.tote_code}</span>
-                                        <span class="text-amber-400 text-[10px] bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-sans">Pending Staging</span>
+                                        <span class="${statusColor} text-[10px] px-2 py-0.5 rounded border font-sans">${statusLabel}</span>
                                     </div>`).join('')}
                                 </div>
 
                                 <!-- Full-Width 60px Ergonomic Industrial Action Button -->
-                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('pending-stage')" class="w-full min-h-[60px] bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-amber-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
-                                    <i data-lucide="archive-restore" class="w-6 h-6"></i>
-                                    <span>MOVE TOTES TO STAGING ROOM (${firstCode}) →</span>
+                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('${expectedScanStatus}')" class="w-full min-h-[60px] bg-gradient-to-r ${actionGradient} text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                    <i data-lucide="${actionIcon}" class="w-6 h-6"></i>
+                                    <span>${actionLabel} (${firstCode}) →</span>
                                 </button>
                             </div>`;
                     }).join('');
                 }
 
-                // ── Tab 3: IN STAGING ROOM CARDS ──
+                // ── Tab 3: IN STAGING ROOM CARDS (Self-Serve only — staged) ──
                 const customerItems = (allItems || []).filter(i => i.status === 'staged');
                 document.getElementById('wtab-customer-count').textContent = customerItems.length;
                 const bodyCustomer = document.getElementById('wbody-customer');
@@ -2588,9 +2665,9 @@
 
                 if (customerItems.length === 0) {
                     bodyCustomer.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
-                        <i data-lucide="user-check" class="w-8 h-8 text-blue-500 mx-auto"></i>
+                        <i data-lucide="door-open" class="w-8 h-8 text-blue-500 mx-auto"></i>
                         <p class="text-sm text-gray-300 font-bold">Staging Rooms Empty</p>
-                        <p class="text-xs text-gray-500 font-mono">No staged totes currently waiting for pickup.</p>
+                        <p class="text-xs text-gray-500 font-mono">No self-serve totes currently waiting for customer pickup.</p>
                     </div>`;
                 } else {
                     bodyCustomer.innerHTML = Object.entries(customerGrouped).map(([uid, totes]) => {
@@ -2608,26 +2685,82 @@
                                             <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Staged Tote(s)</p>
                                         </div>
                                     </div>
-                                    <span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 px-3 py-1 rounded-xl border border-blue-500/30">In Staging Room</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE</span>
+                                        <span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 px-3 py-1 rounded-xl border border-blue-500/30">In Staging Room</span>
+                                    </div>
                                 </div>
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                         <span class="text-white font-bold">${t.tote_code}</span>
-                                        <span class="text-blue-400 text-[10px] bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 font-sans">Ready for Handoff</span>
+                                        <span class="text-blue-400 text-[10px] bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 font-sans">Ready for Pickup</span>
                                     </div>`).join('')}
                                 </div>
 
                                 <!-- Full-Width 60px Ergonomic Industrial Action Button -->
                                 <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('staged')" class="w-full min-h-[60px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-blue-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                     <i data-lucide="user-check" class="w-6 h-6"></i>
-                                    <span>HAND OFF TOTES TO CUSTOMER (${firstCode}) →</span>
+                                    <span>HAND OFF TO CUSTOMER (${firstCode}) →</span>
                                 </button>
                             </div>`;
                     }).join('');
                 }
 
-                // ── Tab 4: WITH CUSTOMER CARDS ──
+                // ── Tab 4: DRIVER DISPATCH CARDS (Valet only — out-for-delivery) ──
+                const dispatchItems = (allItems || []).filter(i => i.status === 'out-for-delivery');
+                const dispatchCount = document.getElementById('wtab-dispatch-count');
+                if (dispatchCount) dispatchCount.textContent = dispatchItems.length;
+                const bodyDispatch = document.getElementById('wbody-dispatch');
+                const dispatchGrouped = groupTotesByCustomer(dispatchItems);
+
+                if (bodyDispatch) {
+                    if (dispatchItems.length === 0) {
+                        bodyDispatch.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
+                            <i data-lucide="truck" class="w-8 h-8 text-orange-500 mx-auto"></i>
+                            <p class="text-sm text-gray-300 font-bold">No Deliveries In Transit</p>
+                            <p class="text-xs text-gray-500 font-mono">No valet totes are currently out for delivery.</p>
+                        </div>`;
+                    } else {
+                        bodyDispatch.innerHTML = Object.entries(dispatchGrouped).map(([uid, totes]) => {
+                            const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0,8)}`;
+                            const firstCode = totes[0].tote_code;
+                            return `
+                                <div class="bg-gray-950 border-2 border-orange-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-orange-500/60 transition">
+                                    <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-10 h-10 rounded-2xl bg-orange-500/20 text-orange-400 font-bold flex items-center justify-center text-sm border border-orange-500/30 font-mono">
+                                                ${customerName.substring(0,2).toUpperCase()}
+                                            </div>
+                                            <div>
+                                                <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
+                                                <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Tote(s) Out for Delivery</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 VALET</span>
+                                            <span class="text-xs font-mono font-bold text-orange-400 bg-orange-500/10 px-3 py-1 rounded-xl border border-orange-500/30">En Route</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
+                                            <span class="text-white font-bold">${t.tote_code}</span>
+                                            <span class="text-orange-400 text-[10px] bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20 font-sans">Out for Delivery</span>
+                                        </div>`).join('')}
+                                    </div>
+
+                                    <!-- Full-Width 60px Ergonomic Industrial Action Button -->
+                                    <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('out-for-delivery')" class="w-full min-h-[60px] bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-orange-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                        <i data-lucide="package-check" class="w-6 h-6"></i>
+                                        <span>CONFIRM DELIVERED TO CUSTOMER (${firstCode}) →</span>
+                                    </button>
+                                </div>`;
+                        }).join('');
+                    }
+                }
+
+                // ── Tab 5: WITH CUSTOMER CARDS ──
                 const returnedItems = (allItems || []).filter(i => i.status === 'with-customer');
                 document.getElementById('wtab-returned-count').textContent = returnedItems.length;
                 const bodyReturned = document.getElementById('wbody-returned');
@@ -2643,6 +2776,10 @@
                     bodyReturned.innerHTML = Object.entries(returnedGrouped).map(([uid, totes]) => {
                         const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0,8)}`;
                         const firstCode = totes[0].tote_code;
+                        const ft = typeByUid[uid] || 'staging';
+                        const isValet = ft === 'valet_delivery';
+                        const returnLabel = isValet ? 'DRIVER PICKED UP — RETURN TO VAULT' : 'SCAN RETURN BACK TO VAULT';
+                        const returnNote = isValet ? 'Driver picks up on next route' : 'Customer returns at facility';
                         return `
                             <div class="bg-gray-950 border-2 border-purple-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-purple-500/60 transition">
                                 <div class="flex items-center justify-between border-b border-gray-850 pb-3">
@@ -2652,10 +2789,13 @@
                                         </div>
                                         <div>
                                             <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
-                                            <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Tote(s) Out</p>
+                                            <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Tote(s) Out &bull; ${returnNote}</p>
                                         </div>
                                     </div>
-                                    <span class="text-xs font-mono font-bold text-purple-400 bg-purple-500/10 px-3 py-1 rounded-xl border border-purple-500/30">With Customer</span>
+                                    <div class="flex items-center gap-2">
+                                        ${fulfillmentBadge(uid)}
+                                        <span class="text-xs font-mono font-bold text-purple-400 bg-purple-500/10 px-3 py-1 rounded-xl border border-purple-500/30">With Customer</span>
+                                    </div>
                                 </div>
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -2668,7 +2808,7 @@
                                 <!-- Full-Width 60px Ergonomic Industrial Action Button -->
                                 <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('with-customer')" class="w-full min-h-[60px] bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-purple-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                     <i data-lucide="package-check" class="w-6 h-6"></i>
-                                    <span>SCAN RETURN BACK TO VAULT (${firstCode}) →</span>
+                                    <span>${returnLabel} (${firstCode}) →</span>
                                 </button>
                             </div>`;
                     }).join('');
@@ -2731,9 +2871,11 @@
 
                 let transitionDesc = nextStatus;
                 if (nextStatus === 'pending-stage') transitionDesc = "Activated — Ready in Vault";
-                if (nextStatus === 'staged') transitionDesc = "Staged in Room";
-                if (nextStatus === 'with-customer') transitionDesc = "Released to Customer";
-                if (nextStatus === 'stored') transitionDesc = "Returned to Storage";
+                if (nextStatus === 'staged') transitionDesc = "Moved to Staging Room";
+                if (nextStatus === 'pending-dispatch') transitionDesc = "Activated — Queued for Driver";
+                if (nextStatus === 'out-for-delivery') transitionDesc = "Loaded on Driver — Out for Delivery";
+                if (nextStatus === 'with-customer') transitionDesc = "Delivered — With Customer";
+                if (nextStatus === 'stored') transitionDesc = "Returned to Vault Storage";
 
                 triggerScanFeedbackOverlay(true, transitionDesc, barcode);
 
