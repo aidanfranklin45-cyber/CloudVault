@@ -4049,7 +4049,7 @@
                             <div style="font-size: 16px; font-weight: 900; letter-spacing: 2px; margin-top: 2px; font-family: monospace;">${firstCode}</div>
                         </div>
                         <div style="flex: 0 0 100px; width: 100px; max-width: 100px; min-width: 100px; text-align: center; border-left: 2px solid #000; padding-left: 10px; box-sizing: border-box;">
-                            <canvas id="preview-qr-canvas" style="width: 75px; height: 75px; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto;"></canvas>
+                            <img id="preview-qr-img" style="width: 75px; height: 75px; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto; object-fit: contain; image-rendering: pixelated;" alt="QR Code" />
                             <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 2px; font-family: sans-serif;">FAST-SCAN QR</span>
                         </div>
                     </div>
@@ -4075,13 +4075,11 @@
                     } catch (e) {}
                 }
 
-                const qrCanvas = document.getElementById('preview-qr-canvas');
-                if (qrCanvas && typeof QRCode === 'object' && QRCode.toCanvas) {
-                    try {
-                        QRCode.toCanvas(qrCanvas, firstCode, { width: 75, margin: 1 }, function (err) {
-                            if (err) console.error("Preview QR error:", err);
-                        });
-                    } catch (e) {}
+                if (typeof QRCode === 'object' && QRCode.toDataURL) {
+                    QRCode.toDataURL(firstCode, { width: 200, margin: 1 }, function (err, url) {
+                        const img = document.getElementById('preview-qr-img');
+                        if (img && url) img.src = url;
+                    });
                 }
             }, 50);
         }
@@ -4096,6 +4094,21 @@
             if (codesToPrint.length === 0) codesToPrint = ['CV-SEA-1001'];
 
             const todayStr = new Date().toLocaleDateString();
+
+            // Pre-generate QR Data URLs for all codes asynchronously
+            const qrMap = {};
+            await Promise.all(codesToPrint.map(code => {
+                return new Promise((resolve) => {
+                    if (typeof QRCode === 'object' && QRCode.toDataURL) {
+                        QRCode.toDataURL(code, { width: 250, margin: 1 }, function (err, url) {
+                            if (!err && url) qrMap[code] = url;
+                            resolve();
+                        });
+                    } else {
+                        resolve();
+                    }
+                });
+            }));
 
             // Chunk into sheets of 4 tags (2 columns x 2 rows per sheet)
             const pages = [];
@@ -4120,8 +4133,8 @@
                                     <div style="font-size: 18px; font-weight: 900; letter-spacing: 2px; margin-top: 4px; font-family: monospace;">${code}</div>
                                 </div>
                                 <div style="flex: 0 0 100px; width: 100px; max-width: 100px; min-width: 100px; text-align: center; border-left: 2px solid #000; padding-left: 10px; box-sizing: border-box;">
-                                    <canvas class="print-grid-qr" data-code="${code}" style="width: 80px; height: 80px; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto;"></canvas>
-                                    <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 3px; font-family: sans-serif;">FAST-SCAN QR</span>
+                                    <img src="${qrMap[code] || ''}" style="width: 80px; height: 80px; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto; object-fit: contain; image-rendering: pixelated;" alt="QR Code" />
+                                    <span style="display: block; font-size: 8px; font-weight: block; margin-top: 3px; font-family: sans-serif;">FAST-SCAN QR</span>
                                 </div>
                             </div>
                             <div style="display: flex; justify-content: space-between; font-size: 10px; color: #000; border-top: 1px solid #000; padding-top: 6px; font-weight: bold;">
@@ -4155,23 +4168,8 @@
                     }
                 });
 
-                // Render Canvas QR Codes synchronously via local qrcode.js
-                const qrCanvasEls = printContainer.querySelectorAll('.print-grid-qr');
-                qrCanvasEls.forEach(canvas => {
-                    const c = canvas.getAttribute('data-code');
-                    if (typeof QRCode === 'object' && QRCode.toCanvas) {
-                        try {
-                            QRCode.toCanvas(canvas, c, { width: 80, margin: 1 }, function (error) {
-                                if (error) console.error("QR render error:", error);
-                            });
-                        } catch (err) {
-                            console.warn("QRCode canvas error:", err);
-                        }
-                    }
-                });
-
                 window.print();
-            }, 250);
+            }, 200);
         }
     </script>
 
