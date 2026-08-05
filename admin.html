@@ -1624,19 +1624,32 @@
         }
 
         async function onGlobalFacilityChange(facilityId) {
-            const facId = facilityId || document.getElementById('exec-facility-select')?.value || document.getElementById('manager-facility-select')?.value || 'facility_seattle_north';
-
-            // Sync select values
             const execSel = document.getElementById('exec-facility-select');
-            if (execSel && execSel.value !== facId) execSel.value = facId;
             const mgrSel = document.getElementById('manager-facility-select');
+
+            let facId = facilityId;
+            if (execSel && execSel.value) {
+                if (facilityId) execSel.value = facilityId;
+                facId = execSel.value;
+            } else if (mgrSel && mgrSel.value) {
+                if (facilityId) mgrSel.value = facilityId;
+                facId = mgrSel.value;
+            } else {
+                facId = 'facility_seattle_north';
+            }
+
             if (mgrSel && mgrSel.value !== facId) mgrSel.value = facId;
 
             // Sync active facility status pill
             const activePill = document.getElementById('active-facility-name-pill');
             if (activePill) {
-                const targetSel = (execSel && !execSel.classList.contains('hidden')) ? execSel : mgrSel;
-                const selectedText = targetSel && targetSel.selectedIndex >= 0 ? targetSel.options[targetSel.selectedIndex]?.text : facId;
+                let selectedText = null;
+                if (execSel && execSel.selectedIndex >= 0) {
+                    selectedText = execSel.options[execSel.selectedIndex]?.text;
+                }
+                if (!selectedText && mgrSel && mgrSel.selectedIndex >= 0) {
+                    selectedText = mgrSel.options[mgrSel.selectedIndex]?.text;
+                }
                 if (selectedText) activePill.textContent = selectedText;
             }
 
