@@ -20,7 +20,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- JsBarcode for Printable Barcode & QR Label Generation -->
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         /* Print Styles for Barcode & Label Generation */
         @media print {
@@ -4075,11 +4075,118 @@
                     } catch (e) {}
                 }
 
-                if (typeof QRCode === 'object' && QRCode.toDataURL) {
-                    QRCode.toDataURL(firstCode, { width: 200, margin: 1 }, function (err, url) {
-                        const img = document.getElementById('preview-qr-img');
-                        if (img && url) img.src = url;
-                    });
+        function generateQRDataURL(text) {
+            return new Promise((resolve) => {
+                const tempDiv = document.createElement('div');
+                tempDiv.style.position = 'absolute';
+                tempDiv.style.left = '-9999px';
+                document.body.appendChild(tempDiv);
+
+                try {
+                    if (typeof QRCode === 'function') {
+                        new QRCode(tempDiv, {
+                            text: text,
+                            width: 250,
+                            height: 250,
+                            correctLevel: (window.QRCode && QRCode.CorrectLevel) ? QRCode.CorrectLevel.M : 0
+                        });
+
+                        setTimeout(() => {
+                            const canvas = tempDiv.querySelector('canvas');
+                            const img = tempDiv.querySelector('img');
+                            let url = '';
+                            if (img && img.src && img.src.startsWith('data:')) {
+                                url = img.src;
+                            } else if (canvas) {
+                                url = canvas.toDataURL('image/png');
+                            }
+                            if (!url) {
+                                url = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(text)}&ecc=M&margin=1`;
+                            }
+                            if (tempDiv.parentNode) document.body.removeChild(tempDiv);
+                            resolve(url);
+                        }, 40);
+                    } else {
+                        const url = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(text)}&ecc=M&margin=1`;
+                        if (tempDiv.parentNode) document.body.removeChild(tempDiv);
+                        resolve(url);
+                    }
+                } catch (e) {
+                    if (tempDiv.parentNode) document.body.removeChild(tempDiv);
+                    resolve(`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(text)}&ecc=M&margin=1`);
+                }
+            });
+        }
+
+        async function renderLabelPreview() {
+            const codeInput = document.getElementById('print-tote-code');
+            const previewBox = document.getElementById('label-preview-box');
+            const chipsBox = document.getElementById('print-chips-box');
+            const sheetCounter = document.getElementById('avery-sheet-counter');
+            if (!previewBox) return;
+
+            const rawVal = codeInput ? codeInput.value.trim() : '';
+            let codes = rawVal.split(',').map(c => c.trim()).filter(Boolean);
+            if (codes.length === 0) codes = ['CV-SEA-1001'];
+
+            // Render Selected Chips Box
+            if (chipsBox) {
+                chipsBox.innerHTML = codes.map(c => `
+                    <span class="bg-blue-900/40 text-blue-200 border border-blue-500/30 px-2 py-0.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1">
+                        ${c}
+                        <button type="button" onclick="removeChipCode('${c}')" class="text-blue-400 hover:text-red-400 text-xs ml-0.5">✕</button>
+                    </span>
+                `).join('');
+            }
+
+            if (sheetCounter) {
+                const sheetCount = Math.ceil(codes.length / 4);
+                sheetCounter.textContent = `${codes.length} Totes Selected (${sheetCount} Sheet${sheetCount > 1 ? 's' : ''} — 4 Tags/Page)`;
+            }
+
+            const todayStr = new Date().toLocaleDateString();
+            const firstCode = codes[0] || 'CV-SEA-1001';
+            const qrDataUrl = await generateQRDataURL(firstCode);
+
+            previewBox.innerHTML = `
+                <div style="border: 2px dashed #000; padding: 12px; width: 100%; max-width: 420px; background: #ffffff; color: #000000; border-radius: 10px; font-family: monospace; box-sizing: border-box;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px;">
+                        <div>
+                            <strong style="font-size: 15px; text-transform: uppercase; font-weight: 900;">CloudVault Storage</strong>
+                            <span style="display: block; font-size: 9px; color: #333; font-family: sans-serif;">Weatherproof Industrial Tag (4/Page)</span>
+                        </div>
+                        <span style="font-size: 10px; font-weight: bold; background: #000; color: #fff; padding: 3px 8px; border-radius: 4px;">FACILITY LOGISTICS</span>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 90px;">
+                        <div style="flex: 1 1 auto; overflow: hidden; max-width: calc(100% - 110px); text-align: center;">
+                            <svg id="preview-barcode-svg" style="max-width: 100%; height: 38px;"></svg>
+                            <div style="font-size: 16px; font-weight: 900; letter-spacing: 2px; margin-top: 2px; font-family: monospace;">${firstCode}</div>
+                        </div>
+                        <div style="flex: 0 0 100px; width: 100px; max-width: 100px; min-width: 100px; text-align: center; border-left: 2px solid #000; padding-left: 10px; box-sizing: border-box;">
+                            <img id="preview-qr-img" src="${qrDataUrl}" style="width: 75px; height: 75px; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto; object-fit: contain; image-rendering: pixelated;" alt="QR Code" />
+                            <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 2px; font-family: sans-serif;">FAST-SCAN QR</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 9px; color: #000; margin-top: 8px; border-top: 1px solid #000; padding-top: 4px; font-weight: bold;">
+                        <span>SERIAL: #SEAL-9910</span>
+                        <span>DATE: ${todayStr}</span>
+                        <span>STATUS: VERIFIED</span>
+                    </div>
+                </div>
+            `;
+
+            setTimeout(() => {
+                const barcodeEl = document.getElementById('preview-barcode-svg');
+                if (barcodeEl && typeof JsBarcode === 'function') {
+                    try {
+                        JsBarcode("#preview-barcode-svg", firstCode, {
+                            format: "CODE128",
+                            width: 1.6,
+                            height: 38,
+                            displayValue: false,
+                            margin: 2
+                        });
+                    } catch (e) {}
                 }
             }, 50);
         }
@@ -4097,18 +4204,9 @@
 
             // Pre-generate QR Data URLs for all codes asynchronously
             const qrMap = {};
-            await Promise.all(codesToPrint.map(code => {
-                return new Promise((resolve) => {
-                    if (typeof QRCode === 'object' && QRCode.toDataURL) {
-                        QRCode.toDataURL(code, { width: 250, margin: 1 }, function (err, url) {
-                            if (!err && url) qrMap[code] = url;
-                            resolve();
-                        });
-                    } else {
-                        resolve();
-                    }
-                });
-            }));
+            for (const code of codesToPrint) {
+                qrMap[code] = await generateQRDataURL(code);
+            }
 
             // Chunk into sheets of 4 tags (2 columns x 2 rows per sheet)
             const pages = [];
@@ -4134,7 +4232,7 @@
                                 </div>
                                 <div style="flex: 0 0 100px; width: 100px; max-width: 100px; min-width: 100px; text-align: center; border-left: 2px solid #000; padding-left: 10px; box-sizing: border-box;">
                                     <img src="${qrMap[code] || ''}" style="width: 80px; height: 80px; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto; object-fit: contain; image-rendering: pixelated;" alt="QR Code" />
-                                    <span style="display: block; font-size: 8px; font-weight: block; margin-top: 3px; font-family: sans-serif;">FAST-SCAN QR</span>
+                                    <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 3px; font-family: sans-serif;">FAST-SCAN QR</span>
                                 </div>
                             </div>
                             <div style="display: flex; justify-content: space-between; font-size: 10px; color: #000; border-top: 1px solid #000; padding-top: 6px; font-weight: bold;">
