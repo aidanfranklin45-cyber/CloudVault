@@ -789,27 +789,11 @@
         <!-- VIEW 2: WAREHOUSE MANAGER ROLE -->
         <div id="view-manager" class="space-y-8 hidden animate-fade-in">
             
-            <!-- Facility Selection Header -->
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-900/50 p-6 border border-gray-800 rounded-3xl gap-4">
-                <div>
-                    <h2 class="text-xl font-bold text-white flex items-center gap-2">
-                        <i data-lucide="warehouse" class="w-5 h-5 text-indigo-400"></i>
-                        Facility Command Center
-                    </h2>
-                    <p class="text-xs text-gray-400 mt-0.5">Facility routing, capacity analytics, and staging logs</p>
-                </div>
-                <div class="flex items-center gap-3">
-                    <div id="active-facility-indicator" class="flex items-center gap-2 bg-gray-950 border border-indigo-500/30 px-3.5 py-2 rounded-xl">
-                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                        <span class="text-xs text-gray-400 font-semibold uppercase tracking-wider">Facility:</span>
-                        <span id="active-facility-name-pill" class="text-xs font-bold text-indigo-300 font-mono">Seattle North Fulfillment Center</span>
-                    </div>
-                    <select id="manager-facility-select" onchange="onGlobalFacilityChange(this.value)" class="hidden bg-gray-950 border border-gray-800 text-sm text-white font-bold py-2 px-4 rounded-xl outline-none cursor-pointer">
-                        <option value="facility_seattle_north">Seattle North Fulfillment Center</option>
-                        <option value="facility_portland_central">Portland Central Hub</option>
-                    </select>
-                </div>
-            </div>
+            <!-- Hidden fallback facility select for backwards compatibility -->
+            <select id="manager-facility-select" onchange="onGlobalFacilityChange(this.value)" class="hidden">
+                <option value="facility_seattle_north">Seattle North Fulfillment Center</option>
+                <option value="facility_portland_central">Portland Central Hub</option>
+            </select>
 
             <!-- Active Staging Room PIN Override Console -->
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -1654,7 +1638,7 @@
             }
 
             await loadRegionalPricing(facId);
-            await loadWorkerLiveData();
+            await loadWorkerLiveData(facId);
             await loadWorkerLogisticsRouting(facId);
         }
 
@@ -2553,15 +2537,15 @@
         // Industrial Customer-Grouped Ergonomic Queue Rendering
         // =========================================================================
 
-        async function loadWorkerLiveData() {
+        async function loadWorkerLiveData(facilityId = null) {
             try {
-                let facilityId = "facility_seattle_north";
-                const select = document.getElementById('manager-facility-select');
-                if (select && select.value) {
-                    facilityId = select.value;
-                } else if (actualAssignedFacilityId) {
-                    facilityId = actualAssignedFacilityId;
+                let facId = facilityId;
+                if (!facId) {
+                    const execSel = document.getElementById('exec-facility-select');
+                    const mgrSel = document.getElementById('manager-facility-select');
+                    facId = execSel?.value || mgrSel?.value || actualAssignedFacilityId || 'facility_seattle_north';
                 }
+                const queryFacilityId = facId;
 
                 // Evaluate SLA Cutoff Time (Past 18:00)
                 const now = new Date();
@@ -2581,13 +2565,13 @@
                 // Fetch all inventory for this facility across all relevant statuses
                 const { data: allItems } = await supabase.from('inventory')
                     .select('*, users(name, onboarding_status)')
-                    .eq('facility_id', facilityId)
+                    .eq('facility_id', queryFacilityId)
                     .in('status', ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer']);
 
                 // Fetch access requests for PIN + reservation + fulfillment type data
                 const { data: manifests } = await supabase.from('access_requests')
                     .select('uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type')
-                    .eq('facility_id', facilityId)
+                    .eq('facility_id', queryFacilityId)
                     .eq('status', 'pending');
 
                 // Render Incoming Scheduled Deliveries sub-table in Tab 1
