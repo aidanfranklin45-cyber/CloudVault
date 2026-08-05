@@ -805,9 +805,25 @@
     <!-- Settings Modal -->
     <div id="settings-modal" class="fixed inset-0 bg-gray-900 bg-opacity-40 z-50 flex items-center justify-center hidden">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl space-y-6">
-            <h2 class="text-2xl font-bold text-gray-900">Profile Settings</h2>
+            <div class="flex justify-between items-center border-b border-gray-100 pb-3">
+                <h2 class="text-2xl font-bold text-gray-900">Profile &amp; Vault Settings</h2>
+                <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-gray-600 transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <!-- Home Facility Selector -->
+            <div class="space-y-2">
+                <label class="block text-sm font-bold text-gray-800">Home Storage Facility</label>
+                <select id="settings-facility-select" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-blue-500 transition cursor-pointer">
+                    <option value="facility_seattle_north">Seattle North Fulfillment Center</option>
+                    <option value="facility_yakima_central">Yakima Fulfillment Center</option>
+                    <option value="facility_portland_central">Portland Central Hub</option>
+                </select>
+                <p class="text-[11px] text-gray-500 font-medium">All new totes added to your account will be stored at your selected home facility.</p>
+            </div>
+
+            <!-- Avatar Color Selector -->
             <div class="space-y-3">
-                <label class="block text-sm font-semibold text-gray-700">Avatar Color</label>
+                <label class="block text-sm font-bold text-gray-800">Avatar Accent Color</label>
                 <div class="flex space-x-4">
                     <button onclick="selectColor('blue')" id="color-blue" class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 border-2 border-transparent hover:border-blue-300 flex items-center justify-center font-bold transition"></button>
                     <button onclick="selectColor('green')" id="color-green" class="w-10 h-10 rounded-full bg-green-100 text-green-600 border-2 border-transparent hover:border-green-300 flex items-center justify-center font-bold transition"></button>
@@ -816,7 +832,8 @@
                     <button onclick="selectColor('orange')" id="color-orange" class="w-10 h-10 rounded-full bg-orange-100 text-orange-600 border-2 border-transparent hover:border-orange-300 flex items-center justify-center font-bold transition"></button>
                 </div>
             </div>
-            <div class="flex space-x-4 pt-4">
+
+            <div class="flex space-x-4 pt-4 border-t border-gray-100">
                 <button onclick="closeSettingsModal()" class="flex-1 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-200 transition">Cancel</button>
                 <button onclick="saveProfileColor()" id="save-color-btn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition">Save Changes</button>
             </div>
@@ -3181,10 +3198,24 @@
             }
         });
 
-        function openSettingsModal() {
+        async function openSettingsModal() {
             document.getElementById('user-dropdown').classList.add('hidden');
             document.getElementById('settings-modal').classList.remove('hidden');
             if (currentUserColor) selectColor(currentUserColor);
+
+            // Populate Home Facility selector from database
+            try {
+                const { data: facs } = await supabase.from('facilities').select('*');
+                const select = document.getElementById('settings-facility-select');
+                if (select && facs && facs.length > 0) {
+                    select.innerHTML = facs.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
+                    if (currentUserProfile && currentUserProfile.assigned_facility_id) {
+                        select.value = currentUserProfile.assigned_facility_id;
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to load facilities in settings:", e);
+            }
         }
         function closeSettingsModal() {
             document.getElementById('settings-modal').classList.add('hidden');
@@ -3213,15 +3244,21 @@
             btn.disabled = true;
             btn.textContent = 'Saving...';
             try {
-                const { error } = await supabase.from('users').update({ avatar_color: tempColor }).eq('id', currentUser.id);
+                const selectedFac = document.getElementById('settings-facility-select')?.value;
+                const updatePayload = { avatar_color: tempColor };
+                if (selectedFac) updatePayload.assigned_facility_id = selectedFac;
+
+                const { error } = await supabase.from('users').update(updatePayload).eq('id', currentUser.id);
                 if (error) throw error;
+
                 currentUserColor = tempColor;
+                if (currentUserProfile && selectedFac) currentUserProfile.assigned_facility_id = selectedFac;
                 applyAvatarColor(currentUserColor);
                 closeSettingsModal();
-                showToast("Profile color updated!");
+                showToast("Profile & Home Facility updated!");
             } catch (err) {
-                console.error("Failed to update color", err);
-                alert("Failed to update color: " + err.message);
+                console.error("Failed to update settings", err);
+                alert("Failed to update settings: " + err.message);
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Save Changes';

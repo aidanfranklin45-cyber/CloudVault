@@ -594,6 +594,34 @@ BEGIN
     RAISE EXCEPTION 'Unauthenticated';
   END IF;
 
+  -- Read current user's assigned facility & active zone
+  SELECT assigned_facility_id, active_zone INTO v_facility_id, v_zip
+  FROM public.users
+  WHERE id = v_uid;
+
+  -- Resolve facility if not explicitly assigned
+  IF v_facility_id IS NULL THEN
+    IF (v_zip ILIKE '%9890%' OR v_zip ILIKE '%yakima%') THEN
+      v_facility_id := 'facility_yakima';
+    ELSIF (v_zip ILIKE '%972%' OR v_zip ILIKE '%portland%') THEN
+      v_facility_id := 'facility_portland_central';
+    ELSE
+      SELECT facility_id INTO v_facility_id
+      FROM public.service_areas
+      WHERE zip_code = v_zip AND active = true
+      LIMIT 1;
+    END IF;
+
+    IF v_facility_id IS NULL THEN
+      v_facility_id := 'facility_seattle_north';
+    END IF;
+
+    -- Persist resolved assigned_facility_id back to user profile
+    UPDATE public.users
+    SET assigned_facility_id = v_facility_id
+    WHERE id = v_uid;
+  END IF;
+
   -- Read current subscription
   SELECT id, total_totes, recurring_storage INTO v_sub_id, v_current_totes, v_current_recurring
   FROM public.subscriptions 
@@ -624,16 +652,6 @@ BEGIN
     v_valet_fee := 0.00;
   END IF;
 
-  -- Dynamic facility lookup from service_areas
-  SELECT facility_id INTO v_facility_id
-  FROM public.service_areas
-  WHERE zip_code = v_zip AND active = true
-  LIMIT 1;
-
-  IF v_facility_id IS NULL THEN
-    v_facility_id := 'facility_seattle_north';
-  END IF;
-
   -- Update subscription
   UPDATE public.subscriptions
   SET total_totes = v_new_total,
@@ -643,7 +661,7 @@ BEGIN
       last_updated = now()
   WHERE id = v_sub_id;
 
-  -- Create inventory items with sequence-based unique tote codes
+  -- Create inventory items with sequence-based unique tote codes assigned to the user's home facility
   FOR i IN 0..(p_additional_totes - 1) LOOP
     INSERT INTO public.inventory (uid, tote_code, label, status, facility_id)
     VALUES (
@@ -675,7 +693,7 @@ BEGIN
   IF p_logistics_type = 'valet_pickup' THEN
     v_pin := floor(1000 + random() * 9000)::text;
     v_expires_at := now() + interval '24 hours';
-    INSERT INTO public.access_requests (uid, request_type, additional_totes, fulfillment_type, pin, pin_expires_at, valet_fee, status)
+    INSERT INTO public.access_requests (uid, request_type, additional_totes, fulfillment_type, pin, pin_expires_at, valet_fee, facility_id, status)
     VALUES (
       v_uid,
       'new_tote_delivery',
