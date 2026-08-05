@@ -2933,21 +2933,28 @@
                 const telemetryStops = document.getElementById('map-telemetry-stops');
                 const hubLabel = document.getElementById('map-hub-label');
 
-                const cityByFacility = {
-                    facility_seattle_north: "Seattle, WA",
-                    facility_portland_central: "Portland, OR",
-                    facility_denver_hub: "Denver, CO",
-                    facility_yakima_valley: "Yakima, WA"
-                };
-                const nameByFacility = {
-                    facility_seattle_north: "Seattle North Hub",
-                    facility_portland_central: "Portland Central Hub",
-                    facility_denver_hub: "Denver Logistics Hub",
-                    facility_yakima_valley: "Yakima Valley Station"
-                };
+                const fid = (facilityId || '').toLowerCase();
+                let activeCity = "Seattle, WA";
+                let hubName = "Seattle North Hub";
 
-                const activeCity = cityByFacility[facilityId] || "Seattle, WA";
-                if (hubLabel) hubLabel.textContent = `Hub: ${nameByFacility[facilityId] || activeCity}`;
+                if (fid.includes('yakima')) {
+                    activeCity = "Yakima, WA";
+                    hubName = "Yakima Fulfillment Center";
+                } else if (fid.includes('portland') || fid.includes('pdx')) {
+                    activeCity = "Portland, OR";
+                    hubName = "Portland Central Hub";
+                } else if (fid.includes('denver')) {
+                    activeCity = "Denver, CO";
+                    hubName = "Denver Logistics Hub";
+                } else if (fid.includes('austin')) {
+                    activeCity = "Austin, TX";
+                    hubName = "Austin Central Fulfillment Center";
+                } else {
+                    activeCity = "Seattle, WA";
+                    hubName = "Seattle North Hub";
+                }
+
+                if (hubLabel) hubLabel.textContent = `Hub: ${hubName}`;
 
                 const stops = requests || [];
                 if (countBadge) countBadge.textContent = `${stops.length} Active Valet Stops`;
