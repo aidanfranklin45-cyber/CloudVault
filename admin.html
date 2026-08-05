@@ -1559,29 +1559,44 @@
 
         // Regional Dynamic Pricing Handlers
         async function loadRegionalPricing(facilityId) {
-            const facId = facilityId || document.getElementById('pricing-facility-select')?.value || 'facility_seattle_north';
+            const facId = facilityId || document.getElementById('exec-facility-select')?.value || document.getElementById('pricing-facility-select')?.value || 'facility_seattle_north';
+
+            // Sync select dropdowns
+            const execSelect = document.getElementById('exec-facility-select');
+            if (execSelect && execSelect.value !== facId) execSelect.value = facId;
+            const pricingSelect = document.getElementById('pricing-facility-select');
+            if (pricingSelect && pricingSelect.value !== facId) pricingSelect.value = facId;
+
             const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', facId).single();
             if (fac && !error) {
-                document.getElementById('rate-tier-1').value = (Number(fac.tier1_rate) || 5.00).toFixed(2);
-                document.getElementById('rate-tier-2').value = (Number(fac.tier2_rate) || 3.50).toFixed(2);
-                document.getElementById('rate-tier-3').value = (Number(fac.tier3_rate) || 2.00).toFixed(2);
-                document.getElementById('rate-tier-4').value = (Number(fac.tier4_rate) || 1.00).toFixed(2);
-                document.getElementById('valet-base').value = Number(fac.valet_base) || 15.00;
-                document.getElementById('valet-tote-adder').value = Number(fac.valet_tote_adder) || 1.00;
-                updateValetFormula();
+                if (document.getElementById('rate-tier-1')) document.getElementById('rate-tier-1').value = (Number(fac.tier1_rate) || 5.00).toFixed(2);
+                if (document.getElementById('rate-tier-2')) document.getElementById('rate-tier-2').value = (Number(fac.tier2_rate) || 3.50).toFixed(2);
+                if (document.getElementById('rate-tier-3')) document.getElementById('rate-tier-3').value = (Number(fac.tier3_rate) || 2.00).toFixed(2);
+                if (document.getElementById('rate-tier-4')) document.getElementById('rate-tier-4').value = (Number(fac.tier4_rate) || 1.00).toFixed(2);
+                if (document.getElementById('valet-base')) document.getElementById('valet-base').value = Number(fac.valet_base) || 15.00;
+                if (document.getElementById('valet-tote-adder')) document.getElementById('valet-tote-adder').value = Number(fac.valet_tote_adder) || 1.00;
+                if (typeof updateValetFormula === 'function') updateValetFormula();
             }
         }
 
+        function loadExecutiveFacilitySpecs(facilityId) {
+            return loadRegionalPricing(facilityId);
+        }
+
+        function saveFacilitySpecs() {
+            return saveRegionalPricing();
+        }
+
         async function saveRegionalPricing() {
-            const facId = document.getElementById('pricing-facility-select')?.value || 'facility_seattle_north';
-            const facNameEl = document.getElementById('pricing-facility-select');
+            const facId = document.getElementById('exec-facility-select')?.value || document.getElementById('pricing-facility-select')?.value || 'facility_seattle_north';
+            const facNameEl = document.getElementById('exec-facility-select') || document.getElementById('pricing-facility-select');
             const facName = facNameEl ? facNameEl.options[facNameEl.selectedIndex]?.text || facId : facId;
-            const tier1 = parseFloat(document.getElementById('rate-tier-1').value) || 5.00;
-            const tier2 = parseFloat(document.getElementById('rate-tier-2').value) || 3.50;
-            const tier3 = parseFloat(document.getElementById('rate-tier-3').value) || 2.00;
-            const tier4 = parseFloat(document.getElementById('rate-tier-4').value) || 1.00;
-            const valetBase = parseFloat(document.getElementById('valet-base').value) || 15.00;
-            const valetAdder = parseFloat(document.getElementById('valet-tote-adder').value) || 1.00;
+            const tier1 = parseFloat(document.getElementById('rate-tier-1')?.value) || 5.00;
+            const tier2 = parseFloat(document.getElementById('rate-tier-2')?.value) || 3.50;
+            const tier3 = parseFloat(document.getElementById('rate-tier-3')?.value) || 2.00;
+            const tier4 = parseFloat(document.getElementById('rate-tier-4')?.value) || 1.00;
+            const valetBase = parseFloat(document.getElementById('valet-base')?.value) || 15.00;
+            const valetAdder = parseFloat(document.getElementById('valet-tote-adder')?.value) || 1.00;
 
             const { error } = await supabase.from('facilities').upsert({
                 id: facId,
@@ -1595,9 +1610,9 @@
             }, { onConflict: 'id' });
 
             if (error) {
-                alert('Failed to save regional pricing: ' + error.message);
+                alert('Failed to save facility specs: ' + error.message);
             } else {
-                alert(`Regional pricing updated successfully for ${facName}!`);
+                alert(`Facility specifications updated successfully for ${facName}!`);
             }
         }
 
