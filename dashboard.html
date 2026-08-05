@@ -408,10 +408,18 @@
 
             <!-- Active Retrievals / Staging Requests Panel -->
             <div id="active-requests-panel" class="hidden space-y-4 max-w-4xl mx-auto mt-6">
-                <h3 class="text-sm font-extrabold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                    <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    Scheduled Retrievals & Access Keypad PINs
-                </h3>
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <h3 class="text-sm font-extrabold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Scheduled Retrievals & Access Keypad PINs
+                    </h3>
+                    <!-- Filter Pills for Retrievals -->
+                    <div id="retrieval-type-filter-bar" class="flex items-center gap-1.5 bg-gray-100/80 p-1 rounded-xl border border-gray-200">
+                        <button onclick="setRetrievalFilter('all')" id="rf-pill-all" class="rf-pill bg-white text-gray-900 font-extrabold text-[11px] px-3 py-1 rounded-lg shadow-sm transition-all">All</button>
+                        <button onclick="setRetrievalFilter('staging')" id="rf-pill-staging" class="rf-pill text-gray-600 hover:text-gray-900 font-bold text-[11px] px-3 py-1 rounded-lg transition-all">Self-Service Pickup</button>
+                        <button onclick="setRetrievalFilter('valet_delivery')" id="rf-pill-valet_delivery" class="rf-pill text-gray-600 hover:text-gray-900 font-bold text-[11px] px-3 py-1 rounded-lg transition-all">Valet Storage</button>
+                    </div>
+                </div>
                 <div id="active-requests-list" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
             </div>
 
@@ -436,8 +444,9 @@
                     <select id="status-filter" class="block w-full pl-4 pr-10 py-3 text-base border border-gray-200 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-xl bg-gray-50 text-gray-700 font-semibold cursor-pointer" onchange="handleSearchFilter()">
                         <option value="all">All Totes</option>
                         <option value="stored">In Storage</option>
-                        <option value="staged">Ready for Pickup</option>
+                        <option value="staged">Ready for Pickup (Self-Service)</option>
                         <option value="pending-stage">Retrieval Pending</option>
+                        <option value="valet_delivery">Valet Storage / Delivery</option>
                     </select>
                 </div>
             </div>
@@ -1247,7 +1256,8 @@
                     .from('access_requests')
                     .select('*')
                     .eq('uid', uid)
-                    .eq('status', 'pending')
+                    .neq('status', 'completed')
+                    .neq('status', 'cancelled')
                     .order('target_date', { ascending: true });
 
                 if (!error && data) {
@@ -1270,28 +1280,126 @@
                 .subscribe();
         }
 
+        let currentRetrievalFilter = 'all';
+
+        function setRetrievalFilter(filter) {
+            currentRetrievalFilter = filter;
+            
+            document.querySelectorAll('.rf-pill').forEach(btn => {
+                btn.className = "rf-pill text-gray-600 hover:text-gray-900 font-bold text-[11px] px-3 py-1 rounded-lg transition-all";
+            });
+            const activeBtn = document.getElementById(`rf-pill-${filter}`);
+            if (activeBtn) {
+                activeBtn.className = "rf-pill bg-white text-gray-900 font-extrabold text-[11px] px-3 py-1 rounded-lg shadow-sm transition-all";
+            }
+
+            renderActiveRequests();
+        }
+
+        function getAssignedRoom(uid, totalRooms = 2) {
+            let hash = 0;
+            const str = uid || 'default';
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                hash |= 0;
+            }
+            return (Math.abs(hash) % (totalRooms || 2)) + 1;
+        }
+
         function renderActiveRequests() {
             const panel = document.getElementById('active-requests-panel');
             const list = document.getElementById('active-requests-list');
 
             if (!panel || !list) return;
 
-            // Only display requests that represent actual customer-initiated retrievals
-            const retrievalRequests = currentRequests.filter(req => req.requested_items && req.requested_items.length > 0);
+            // Combine active requests from DB + any inventory items currently in delivery/staging flow
+            let allActiveRequests = [...currentRequests];
 
-            if (retrievalRequests.length === 0) {
+            const activeInventoryItems = currentInventory.filter(i => 
+                ['pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery'].includes(i.status)
+            );
+
+            // Find items in active statuses that aren't yet linked to a request card
+            const unlinkedActiveItems = activeInventoryItems.filter(item => {
+                return !allActiveRequests.some(r => 
+                    (r.requested_items && r.requested_items.includes(item.id)) ||
+                    (r.requested_tote_codes && r.requested_tote_codes.includes(item.tote_code))
+                );
+            });
+
+            if (unlinkedActiveItems.length > 0) {
+                const valetUnlinked = unlinkedActiveItems.filter(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery');
+                const selfServeUnlinked = unlinkedActiveItems.filter(i => i.status === 'pending-stage' || i.status === 'staged');
+
+                if (valetUnlinked.length > 0) {
+                    allActiveRequests.push({
+                        id: 'synth_valet_req',
+                        uid: currentInventory[0]?.uid,
+                        request_type: 'retrieval',
+                        fulfillment_type: 'valet_delivery',
+                        requested_items: valetUnlinked.map(i => i.id),
+                        requested_tote_codes: valetUnlinked.map(i => i.tote_code),
+                        status: valetUnlinked.some(i => i.status === 'out-for-delivery') ? 'out-for-delivery' : 'pending-dispatch',
+                        target_date: new Date().toISOString().split('T')[0],
+                        time_slot: '09:00 AM - 12:00 PM',
+                        requested_at: new Date().toISOString()
+                    });
+                }
+
+                if (selfServeUnlinked.length > 0) {
+                    allActiveRequests.push({
+                        id: 'synth_staging_req',
+                        uid: currentInventory[0]?.uid,
+                        request_type: 'retrieval',
+                        fulfillment_type: 'staging',
+                        requested_items: selfServeUnlinked.map(i => i.id),
+                        requested_tote_codes: selfServeUnlinked.map(i => i.tote_code),
+                        status: selfServeUnlinked.some(i => i.status === 'staged') ? 'staged' : 'pending',
+                        target_date: new Date().toISOString().split('T')[0],
+                        time_slot: '09:00 AM - 12:00 PM',
+                        requested_at: new Date().toISOString()
+                    });
+                }
+            }
+
+            let retrievalRequests = allActiveRequests.filter(req => 
+                (req.requested_items && req.requested_items.length > 0) ||
+                (req.requested_tote_codes && req.requested_tote_codes.length > 0)
+            );
+
+            if (allActiveRequests.length === 0 && activeInventoryItems.length === 0) {
                 panel.classList.add('hidden');
                 list.innerHTML = '';
                 return;
             }
 
             panel.classList.remove('hidden');
+
+            // Apply retrieval type filter if set
+            if (currentRetrievalFilter !== 'all') {
+                retrievalRequests = retrievalRequests.filter(req => {
+                    if (currentRetrievalFilter === 'staging') {
+                        return !req.fulfillment_type || req.fulfillment_type === 'staging';
+                    }
+                    if (currentRetrievalFilter === 'valet_delivery') {
+                        return req.fulfillment_type === 'valet_delivery';
+                    }
+                    return true;
+                });
+            }
+
+            if (retrievalRequests.length === 0) {
+                list.innerHTML = `<div class="col-span-full bg-white border border-gray-200 rounded-3xl p-8 text-center text-gray-500 font-medium text-xs">No active ${currentRetrievalFilter === 'valet_delivery' ? 'Valet Storage' : 'Self-Service Pickup'} requests found matching filter.</div>`;
+                return;
+            }
+
             list.innerHTML = '';
 
             retrievalRequests.forEach(req => {
-                const itemDetails = (req.requested_items || []).map(itemId => {
-                    const item = currentInventory.find(i => i.id === itemId);
-                    if (!item) return `Tote (${itemId.substring(0, 8)})`;
+                const rawItems = (req.requested_tote_codes && req.requested_tote_codes.length > 0) ? req.requested_tote_codes : (req.requested_items || []);
+                const itemDetails = rawItems.map(itemRef => {
+                    const item = currentInventory.find(i => i.id === itemRef || i.tote_code === itemRef);
+                    if (!item) return `Tote (${itemRef})`;
                     return `${item.tote_code}${item.label ? ` — ${item.label}` : ''}`;
                 });
 
@@ -1308,36 +1416,48 @@
                     day: 'numeric'
                 }) : 'TBD';
 
+                const timeSlotStr = req.time_slot || '09:00 AM - 12:00 PM';
+                
+                let reservedAtStr = '';
+                if (req.requested_at) {
+                    const reqDate = new Date(req.requested_at);
+                    reservedAtStr = reqDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+
+                const roomNum = getAssignedRoom(req.uid || (currentUser && currentUser.id));
+
                 const isValet = req.fulfillment_type === 'valet_delivery';
                 const typeBadge = isValet 
-                    ? `<span class="bg-blue-50 text-blue-600 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-blue-100 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg> Valet Door Delivery</span>`
-                    : `<span class="bg-indigo-50 text-indigo-600 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-indigo-100 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg> Self-Service Pickup</span>`;
+                    ? `<span class="bg-blue-50 text-blue-700 text-[10px] font-extrabold px-2.5 py-1 rounded-lg border border-blue-200 flex items-center gap-1"><svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 001 1v4a1 1 0 001 1m-6 0h6"></path></svg> Valet Storage</span>`
+                    : `<span class="bg-indigo-50 text-indigo-700 text-[10px] font-extrabold px-2.5 py-1 rounded-lg border border-indigo-200 flex items-center gap-1"><svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg> Self-Service Pickup</span>`;
+
+                const roomBadge = isValet 
+                    ? '' 
+                    : `<span class="bg-emerald-50 text-emerald-800 text-[10px] font-extrabold px-2.5 py-1 rounded-lg border border-emerald-300 flex items-center gap-1"><svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg> Staging Room #${roomNum}</span>`;
 
                 const allStaged = (req.requested_items || []).every(itemId => {
                     const item = currentInventory.find(i => i.id === itemId);
-                    return item && item.status === 'staged';
+                    return item && (item.status === 'staged' || item.status === 'out-for-delivery');
                 });
                 const isStaged = req.status === 'staged' || allStaged;
 
-                // Step 3 badge HTML
                 const step3Badge = isStaged
                     ? `<div class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">✓</div>`
                     : `<div class="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-md shadow-blue-500/30 animate-pulse flex-shrink-0">3</div>`;
 
-                // Step 4 badge HTML & subtitle
                 let step4Badge = '';
                 let step4Subtitle = '';
                 if (isStaged) {
                     if (isValet) {
                         step4Badge = `<div class="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">🚚</div>`;
-                        step4Subtitle = `<span class="text-blue-600 font-bold">Dispatched</span>`;
+                        step4Subtitle = `<span class="text-blue-700 font-extrabold">Dispatched</span>`;
                     } else {
                         step4Badge = `<div class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">🔑</div>`;
-                        step4Subtitle = `<span class="text-emerald-600 font-bold">PIN Ready</span>`;
+                        step4Subtitle = `<span class="text-emerald-700 font-extrabold">PIN Ready</span>`;
                     }
                 } else {
-                    step4Badge = `<div class="w-7 h-7 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center font-bold text-xs flex-shrink-0">4</div>`;
-                    step4Subtitle = `Pending`;
+                    step4Badge = `<div class="w-7 h-7 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center font-bold text-xs flex-shrink-0">4</div>`;
+                    step4Subtitle = `<span class="text-gray-600 font-bold">Pending</span>`;
                 }
 
                 const progressPercent = isStaged ? 100 : 66;
@@ -1345,13 +1465,13 @@
                 let notesHtml = '';
                 if (isValet && req.delivery_notes) {
                     notesHtml = `
-                        <div class="bg-amber-50/80 border border-amber-200/70 rounded-2xl p-3.5 text-xs text-amber-900 flex items-start space-x-3">
-                            <div class="p-1.5 bg-amber-100 text-amber-700 rounded-lg flex-shrink-0 mt-0.5">
+                        <div class="bg-amber-50 border border-amber-300 rounded-2xl p-3.5 text-xs text-amber-950 flex items-start space-x-3 shadow-sm">
+                            <div class="p-1.5 bg-amber-100 text-amber-800 rounded-lg flex-shrink-0 mt-0.5">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                             </div>
                             <div>
-                                <span class="font-extrabold text-[10px] uppercase tracking-wider text-amber-800 block">Valet Delivery &amp; Drop-off Notes:</span>
-                                <p class="font-medium text-amber-900 mt-0.5">${escapeHtml(req.delivery_notes)}</p>
+                                <span class="font-black text-[10px] uppercase tracking-wider text-amber-900 block">Valet Delivery Notes:</span>
+                                <p class="font-semibold text-amber-950 mt-0.5">${escapeHtml(req.delivery_notes)}</p>
                             </div>
                         </div>`;
                 }
@@ -1360,19 +1480,32 @@
                 if (!isValet && req.pin) {
                     if (isStaged) {
                         pinSection = `
-                            <div class="bg-gray-900 text-white rounded-2xl p-4 flex flex-col items-center justify-center space-y-1 select-none border border-emerald-500/40 shadow-inner">
-                                <span class="text-[9px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> Keypad Access PIN (Ready)</span>
-                                <span class="text-2xl font-mono font-bold tracking-[0.2em] text-blue-400">${req.pin}</span>
-                                <button onclick="navigator.clipboard.writeText('${req.pin}'); showToast('PIN code copied!');" class="text-[10px] font-bold text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 px-2.5 py-1 rounded-lg transition mt-1">Copy PIN</button>
+                            <div class="bg-gray-950 text-white rounded-2xl p-4 flex flex-col items-center justify-center space-y-1 select-none border border-emerald-500/50 shadow-inner">
+                                <span class="text-[9px] font-extrabold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> Keypad Access PIN — Staging Room #${roomNum}</span>
+                                <span class="text-2xl font-mono font-black tracking-[0.2em] text-blue-400">${req.pin}</span>
+                                <span class="text-xs font-semibold text-gray-300">Reserved Window: ${timeSlotStr}</span>
+                                <button onclick="navigator.clipboard.writeText('${req.pin}'); showToast('PIN code copied!');" class="text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-lg transition mt-1">Copy PIN</button>
                             </div>`;
                     } else {
                         pinSection = `
-                            <div class="bg-gray-950 text-gray-400 rounded-2xl p-4 flex flex-col items-center justify-center space-y-1.5 select-none border border-dashed border-gray-800">
-                                <span class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Keypad PIN</span>
-                                <span class="text-[10px] font-semibold text-gray-500 text-center px-4">PIN will be active once totes are prepped in staging room on ${shortDateStr}.</span>
+                            <div class="bg-gray-950 text-gray-300 rounded-2xl p-4 flex flex-col items-center justify-center space-y-1.5 select-none border border-dashed border-gray-800">
+                                <span class="text-[9px] font-extrabold text-gray-400 uppercase tracking-widest">Keypad Access PIN (Staging Room #${roomNum})</span>
+                                <span class="text-xs font-bold text-gray-300 text-center px-4">PIN will activate once totes are prepped in Staging Room #${roomNum} on ${shortDateStr} (${timeSlotStr}).</span>
                             </div>`;
                     }
+                } else if (isValet) {
+                    pinSection = `
+                        <div class="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-2xl p-5 flex flex-col items-center justify-center space-y-1.5 select-none border border-blue-700/80 shadow-md">
+                            <span class="text-[10px] font-black text-amber-300 uppercase tracking-widest flex items-center gap-1.5">
+                                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                🚚 VALET DOOR DELIVERY WINDOW
+                            </span>
+                            <span class="text-xl font-black text-white tracking-wide text-center drop-shadow">${timeSlotStr}</span>
+                            <span class="text-xs font-bold text-blue-100 text-center">Driver dispatch &amp; door delivery scheduled for ${shortDateStr}</span>
+                        </div>`;
                 }
+
+                const step3Title = isValet ? '3. Order Prep' : `3. Room #${roomNum}`;
 
                 const div = document.createElement('div');
                 div.className = "bg-white border border-gray-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between gap-6 relative overflow-hidden";
@@ -1380,17 +1513,24 @@
                     <div class="space-y-4">
                         <div class="flex justify-between items-start border-b border-gray-100 pb-3">
                             <div>
-                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Scheduled Target Date</span>
-                                <h4 class="text-base font-extrabold text-gray-900 mt-0.5">${fullDateStr}</h4>
+                                <span class="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider block">Scheduled Target Date</span>
+                                <h4 class="text-lg font-black text-gray-900 mt-0.5">${fullDateStr}</h4>
+                                <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+                                    <span class="text-xs font-extrabold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 flex items-center gap-1">🕒 Reserved: ${timeSlotStr}</span>
+                                    ${reservedAtStr ? `<span class="text-xs font-semibold text-gray-600">Placed at ${reservedAtStr}</span>` : ''}
+                                </div>
                             </div>
-                            ${typeBadge}
+                            <div class="flex flex-col items-end gap-1.5">
+                                ${typeBadge}
+                                ${roomBadge}
+                            </div>
                         </div>
 
                         <!-- Live 4-Step Retrieval Progress Timeline Tracker -->
-                        <div class="bg-gray-50/80 border border-gray-150 rounded-2xl p-4 space-y-3">
-                            <div class="flex justify-between items-center text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-1">
+                        <div class="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-3 shadow-inner">
+                            <div class="flex justify-between items-center text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1">
                                 <span>Retrieval Progress Timeline</span>
-                                <span class="text-blue-600 font-bold">${isStaged ? 'Stage 4 of 4' : 'Stage 3 of 4'}</span>
+                                <span class="text-blue-700 font-extrabold">${isStaged ? 'Stage 4 of 4' : 'Stage 3 of 4'}</span>
                             </div>
 
                             <div class="relative py-1">
@@ -1403,7 +1543,7 @@
                                         <div class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">✓</div>
                                         <div>
                                             <h5 class="font-extrabold text-xs text-gray-900">1. Received</h5>
-                                            <p class="text-[9px] text-gray-500 font-semibold">Request Logged</p>
+                                            <p class="text-[9px] text-gray-600 font-bold">${reservedAtStr ? `At ${reservedAtStr}` : 'Request Logged'}</p>
                                         </div>
                                     </div>
 
@@ -1412,7 +1552,8 @@
                                         <div class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">✓</div>
                                         <div>
                                             <h5 class="font-extrabold text-xs text-gray-900">2. Scheduled</h5>
-                                            <p class="text-[9px] text-blue-600 font-bold">${shortDateStr}</p>
+                                            <p class="text-[9px] text-blue-700 font-black">${shortDateStr}</p>
+                                            <p class="text-[9px] text-gray-700 font-bold">${timeSlotStr}</p>
                                         </div>
                                     </div>
 
@@ -1420,8 +1561,8 @@
                                     <div class="flex items-center sm:flex-col sm:items-center text-left sm:text-center gap-2">
                                         ${step3Badge}
                                         <div>
-                                            <h5 class="font-extrabold text-xs ${isStaged ? 'text-gray-900' : 'text-blue-600'}">3. Staging</h5>
-                                            <p class="text-[9px] text-gray-500 font-semibold">${isStaged ? '✓ Complete' : 'In Progress'}</p>
+                                            <h5 class="font-extrabold text-xs ${isStaged ? 'text-gray-900' : 'text-blue-700'}">${step3Title}</h5>
+                                            <p class="text-[9px] text-gray-600 font-bold">${isStaged ? '✓ Complete' : 'In Progress'}</p>
                                         </div>
                                     </div>
 
@@ -1429,8 +1570,8 @@
                                     <div class="flex items-center sm:flex-col sm:items-center text-left sm:text-center gap-2">
                                         ${step4Badge}
                                         <div>
-                                            <h5 class="font-extrabold text-xs ${isStaged ? 'text-emerald-700' : 'text-gray-400'}">4. ${isValet ? 'Delivery' : 'Pickup'}</h5>
-                                            <p class="text-[9px] text-gray-500 font-semibold">${step4Subtitle}</p>
+                                            <h5 class="font-extrabold text-xs ${isStaged ? 'text-emerald-700' : 'text-gray-500'}">4. ${isValet ? 'Delivery' : 'Pickup'}</h5>
+                                            <p class="text-[9px] font-bold">${step4Subtitle}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -1440,11 +1581,11 @@
                         ${notesHtml}
 
                         <div class="space-y-1.5">
-                            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Requested Totes</span>
+                            <span class="text-[10px] font-extrabold text-gray-500 uppercase tracking-wider block">Requested Totes</span>
                             <div class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
                                 ${itemDetails.map(name => `
-                                    <span class="bg-gray-50 border border-gray-150 text-gray-600 text-xs px-2.5 py-1 rounded-xl font-bold flex items-center">
-                                        <svg class="w-3.5 h-3.5 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                                    <span class="bg-gray-50 border border-gray-200 text-gray-800 text-xs px-2.5 py-1 rounded-xl font-bold flex items-center">
+                                        <svg class="w-3.5 h-3.5 mr-1 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
                                         ${escapeHtml(name)}
                                     </span>
                                 `).join('')}
@@ -1453,18 +1594,22 @@
 
                         <div class="flex justify-between items-center pt-3 border-t border-gray-100">
                             ${!isStaged ? `
-                                <span class="text-xs text-gray-400 font-medium">Changed your mind?</span>
+                                <span class="text-xs text-gray-500 font-medium">Changed your mind?</span>
                                 <button onclick="cancelActiveRequest('${req.id}')" class="text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-red-200 transition flex items-center gap-1">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                                     Cancel Request
                                 </button>
-                            ` : `
-                                <span class="text-xs text-emerald-600 font-bold flex items-center gap-1">
-                                    <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
-                                    Staged & Ready in Room
+                            ` : (isValet ? `
+                                <span class="text-xs text-blue-700 font-extrabold flex items-center gap-1">
+                                    <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                    Valet Delivery Prepped for Dispatch
                                 </span>
-                                <span class="text-[10px] text-gray-400 font-medium font-mono">PIN Active Above</span>
-                            `}
+                            ` : `
+                                <span class="text-xs text-emerald-700 font-extrabold flex items-center gap-1">
+                                    <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    Totes Prepped in Staging Room #${roomNum}
+                                </span>
+                            `)}
                         </div>
                     </div>
 
@@ -2252,7 +2397,11 @@
 
             const filteredData = currentInventory.filter(item => {
                 const matchesSearch = (item.label || '').toLowerCase().includes(query) || (item.tote_code || '').toLowerCase().includes(query);
-                const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+                const matchesStatus = statusFilter === 'all' 
+                    ? true 
+                    : (statusFilter === 'valet_delivery'
+                        ? (item.status === 'pending-stage' || item.status === 'staged' || item.status === 'pending-dispatch' || item.status === 'out-for-delivery') && currentRequests.some(r => r.fulfillment_type === 'valet_delivery' && r.requested_items && r.requested_items.includes(item.id))
+                        : item.status === statusFilter);
 
                 const itemCategory = getItemCategory(item);
                 const matchesCategory = currentCategoryFilter === 'all' || 
@@ -2301,19 +2450,27 @@
                       );
 
                 let actionHTML = '';
+                const activeReq = currentRequests.find(r => 
+                    (r.requested_items && r.requested_items.includes(id)) || 
+                    (r.requested_tote_codes && item.tote_code && r.requested_tote_codes.includes(item.tote_code))
+                );
+                const isValet = (activeReq && activeReq.fulfillment_type === 'valet_delivery') || 
+                                item.status === 'pending-dispatch' || 
+                                item.status === 'out-for-delivery';
+
                 if (item.activated === false) {
                     actionHTML = '<span class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded border border-amber-200">Intake / Vault Storage Pending</span>';
                 } else if (item.status === 'pending-stage') {
-                    const activeReq = currentRequests.find(r => r.requested_items && r.requested_items.includes(id));
-                    const isValet = activeReq && activeReq.fulfillment_type === 'valet_delivery';
                     actionHTML = isValet
-                        ? '<span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded border border-blue-200">Valet Delivery Pending</span>'
+                        ? '<span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded border border-blue-200 flex items-center gap-1">🚚 Valet Delivery Pending</span>'
                         : '<span class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded border border-amber-200">Staging Pending</span>';
+                } else if (item.status === 'pending-dispatch') {
+                    actionHTML = '<span class="text-[10px] font-bold text-orange-600 bg-orange-50 px-2.5 py-1 rounded border border-orange-200 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span> 🚚 Valet Prep / Pending Dispatch</span>';
+                } else if (item.status === 'out-for-delivery') {
+                    actionHTML = '<span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-200 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping"></span> 🚚 Out for Delivery</span>';
                 } else if (item.status === 'staged') {
-                    const activeReq = currentRequests.find(r => r.requested_items && r.requested_items.includes(id));
-                    const isValet = activeReq && activeReq.fulfillment_type === 'valet_delivery';
                     actionHTML = isValet
-                        ? '<span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-200">Out for Delivery</span>'
+                        ? '<span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-200 flex items-center gap-1">🚚 Valet Delivery Prepped</span>'
                         : '<span class="text-[10px] font-bold text-green-600 bg-green-50 px-2.5 py-1 rounded border border-green-200">Staged (Ready)</span>';
                 } else if (item.status === 'with-customer') {
                     actionHTML = '<span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded border border-blue-200">With You</span>';
