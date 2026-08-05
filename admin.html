@@ -2325,7 +2325,7 @@
                     simulateScan();
                     scannerBuffer = "";
                 }
-            } else if (e.key.length === 1) {
+            } else if (e.key && e.key.length === 1) {
                 if (timeDiff > 100) {
                     scannerBuffer = e.key;
                 } else {
@@ -2441,11 +2441,11 @@
         async function loadWorkerLiveData() {
             try {
                 let facilityId = "facility_seattle_north";
-                if (actualAssignedFacilityId) {
+                const select = document.getElementById('manager-facility-select');
+                if (select && select.value) {
+                    facilityId = select.value;
+                } else if (actualAssignedFacilityId) {
                     facilityId = actualAssignedFacilityId;
-                } else {
-                    const select = document.getElementById('manager-facility-select');
-                    if (select && select.value) facilityId = select.value;
                 }
 
                 // Evaluate SLA Cutoff Time (Past 18:00)
@@ -2912,12 +2912,13 @@
         async function loadWorkerLogisticsRouting(facilityId = null) {
             try {
                 if (!facilityId) {
-                    if (actualAssignedFacilityId) {
+                    const select = document.getElementById('manager-facility-select');
+                    if (select && select.value) {
+                        facilityId = select.value;
+                    } else if (actualAssignedFacilityId) {
                         facilityId = actualAssignedFacilityId;
                     } else {
-                        const select = document.getElementById('manager-facility-select');
-                        if (select && select.value) facilityId = select.value;
-                        else facilityId = 'facility_seattle_north';
+                        facilityId = 'facility_seattle_north';
                     }
                 }
                 const { data: requests } = await supabase.from('access_requests')
