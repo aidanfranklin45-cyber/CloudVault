@@ -1764,18 +1764,31 @@
                     const { data: facs } = await supabase.from('facilities').select('*');
                     const safeFacs = facs || [];
                     if (safeFacs.length > 0) {
+                        // Determine the preferred facility: assigned facility takes priority over whatever was previously selected
+                        const preferredFacId = actualAssignedFacilityId || null;
+
                         ['pricing-facility-select', 'manager-facility-select', 'exec-facility-select', 'emp-facility'].forEach(id => {
                             const el = document.getElementById(id);
                             if (el) {
                                 const curVal = el.value;
                                 el.innerHTML = safeFacs.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
-                                if (curVal && safeFacs.some(f => f.id === curVal)) {
+                                // Executives and managers: lock to assigned facility by default
+                                if (preferredFacId && safeFacs.some(f => f.id === preferredFacId)) {
+                                    el.value = preferredFacId;
+                                } else if (curVal && safeFacs.some(f => f.id === curVal)) {
                                     el.value = curVal;
-                                } else if (safeFacs.length > 0) {
+                                } else {
                                     el.value = safeFacs[0].id;
                                 }
                             }
                         });
+
+                        // Update the active facility pill name to match
+                        const execSel = document.getElementById('exec-facility-select');
+                        const activePill = document.getElementById('active-facility-name-pill');
+                        if (execSel && activePill && execSel.selectedIndex >= 0) {
+                            activePill.textContent = execSel.options[execSel.selectedIndex]?.text || '';
+                        }
                     }
 
                     loadExecutiveFacilitySpecs();
