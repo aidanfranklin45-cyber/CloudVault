@@ -720,6 +720,7 @@ DECLARE
   v_base_fee NUMERIC(10,2);
   v_adder_fee NUMERIC(10,2);
   v_tote_count INT;
+  v_user_facility TEXT;
 BEGIN
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
@@ -748,7 +749,7 @@ BEGIN
     SELECT valet_base, valet_tote_adder INTO v_base_fee, v_adder_fee 
     FROM public.settings WHERE id = 'pricing';
     
-    v_valet_fee := v_base_fee + (v_tote_count * v_adder_fee);
+    v_valet_fee := COALESCE(v_base_fee, 15.00) + (v_tote_count * COALESCE(v_adder_fee, 2.00));
   END IF;
 
   v_pin := floor(1000 + random() * 9000)::text;
@@ -762,46 +763,41 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- Fetch tote codes and user facility
-  DECLARE
-    v_tote_codes TEXT[];
-    v_user_facility TEXT;
-  BEGIN
-    SELECT array_agg(tote_code) INTO v_tote_codes FROM public.inventory WHERE id = ANY(p_tote_ids);
-    SELECT assigned_facility_id INTO v_user_facility FROM public.users WHERE id = v_uid;
+  SELECT assigned_facility_id INTO v_user_facility FROM public.users WHERE id = v_uid;
+  IF v_user_facility IS NULL THEN
+    v_user_facility := 'facility_seattle_north';
+  END IF;
 
-    -- Update items status based on fulfillment type
-    IF p_fulfillment_type = 'valet_delivery' THEN
-      UPDATE public.inventory
-      SET status = 'pending-dispatch'::inventory_status
-      WHERE id = ANY(p_tote_ids);
-    ELSE
-      UPDATE public.inventory
-      SET status = 'pending-stage'::inventory_status
-      WHERE id = ANY(p_tote_ids);
-    END IF;
+  -- Update items status based on fulfillment type
+  IF p_fulfillment_type = 'valet_delivery' THEN
+    UPDATE public.inventory
+    SET status = 'pending-dispatch'::inventory_status
+    WHERE id = ANY(p_tote_ids);
+  ELSE
+    UPDATE public.inventory
+    SET status = 'pending-stage'::inventory_status
+    WHERE id = ANY(p_tote_ids);
+  END IF;
 
-    -- Create access request with reservation slot and surge pricing
-    INSERT INTO public.access_requests (
-      uid, request_type, fulfillment_type, requested_items, requested_tote_codes, facility_id, pin, pin_expires_at, valet_fee, surge_fee, surge_tier, status, target_date, time_slot, delivery_notes
-    ) VALUES (
-      v_uid,
-      'retrieval',
-      p_fulfillment_type,
-      p_tote_ids,
-      v_tote_codes,
-      v_user_facility,
-      v_pin,
-      v_expires_at,
-      v_valet_fee,
-      COALESCE(p_surge_fee, 0.00),
-      COALESCE(p_surge_tier, 'standard'),
-      'pending',
-      v_target_date,
-      p_time_slot,
-      p_delivery_notes
-    );
-  END;
+  -- Create access request with reservation slot and surge pricing
+  INSERT INTO public.access_requests (
+    uid, request_type, fulfillment_type, requested_items, facility_id, pin, pin_expires_at, valet_fee, surge_fee, surge_tier, status, target_date, time_slot, delivery_notes
+  ) VALUES (
+    v_uid,
+    'retrieval',
+    p_fulfillment_type,
+    p_tote_ids,
+    v_user_facility,
+    v_pin,
+    v_expires_at,
+    v_valet_fee,
+    COALESCE(p_surge_fee, 0.00),
+    COALESCE(p_surge_tier, 'standard'),
+    'pending',
+    v_target_date,
+    p_time_slot,
+    p_delivery_notes
+  );
 
   RETURN jsonb_build_object(
     'pin', v_pin,
