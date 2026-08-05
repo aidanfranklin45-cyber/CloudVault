@@ -810,19 +810,47 @@
                 <option value="facility_portland_central">Portland Central Hub</option>
             </select>
 
-            <!-- Active Staging Room PIN Override Console -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                
-                <!-- Staging Access Override -->
-                <div class="glass-panel p-6 rounded-3xl lg:col-span-12 space-y-6">
-                    <div class="flex items-center justify-between border-b border-gray-800 pb-4">
-                        <div class="flex items-center space-x-2">
-                            <i data-lucide="lock" class="w-5 h-5 text-amber-400"></i>
-                            <h3 class="font-bold text-white text-lg">Staging Room Access Override</h3>
+            <!-- Tote Master Control & Search Console (Manager & Executive Only) -->
+            <div class="glass-panel p-6 rounded-3xl space-y-6 border border-indigo-500/30">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-4 gap-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-2xl border border-indigo-500/20">
+                            <i data-lucide="scan-line" class="w-6 h-6"></i>
                         </div>
-                        <span class="text-xs font-semibold text-gray-500 bg-gray-900 border border-gray-800 px-2 py-1 rounded-lg">Security Clearance Level 2</span>
+                        <div>
+                            <h3 class="font-bold text-white text-lg flex items-center gap-2">
+                                Tote Master Control &amp; Telemetry Console
+                                <span class="bg-indigo-500/10 text-indigo-400 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-indigo-500/20 uppercase tracking-wider">Manager Clearance</span>
+                            </h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Scan laser barcodes or search totes to inspect history, reassign locations, charge missing fees, and reprint labels.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Master Search Input Bar -->
+                <div class="relative">
+                    <div class="relative flex items-center">
+                        <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-4 pointer-events-none"></i>
+                        <input type="text" id="master-tote-search-input" oninput="onMasterToteSearchInput(this.value)" onkeydown="if(event.key==='Enter') executeMasterToteSearch(this.value)" placeholder="🔍 Scan barcode or search tote code (e.g. CV-SEA-7DPK), customer name, or email..." class="w-full bg-gray-950 border-2 border-gray-800 focus:border-indigo-500 rounded-2xl pl-12 pr-28 py-3.5 text-sm text-white font-mono placeholder:font-sans placeholder:text-gray-500 outline-none transition shadow-inner">
+                        <button onclick="executeMasterToteSearch(document.getElementById('master-tote-search-input').value)" class="absolute right-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md flex items-center gap-1.5 cursor-pointer">
+                            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i> Inspect
+                        </button>
                     </div>
 
+                    <!-- Autocomplete Results Dropdown -->
+                    <div id="master-tote-search-results" class="hidden absolute left-0 right-0 top-full mt-2 bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl z-40 max-h-72 overflow-y-auto divide-y divide-gray-850">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Active Staging Room PIN Override Table (Preserved) -->
+                <div class="space-y-3 pt-2 border-t border-gray-850">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="lock" class="w-4 h-4 text-amber-400"></i> Active Staging Room Access PIN Overrides
+                        </h4>
+                        <span class="text-[10px] text-gray-500 font-mono">Security Clearance Level 2</span>
+                    </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
@@ -1316,6 +1344,16 @@
         let funnelChartObj = null;
         let utilizationRingObj = null;
 
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         // Initialize dashboard UI
         window.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
@@ -1610,8 +1648,9 @@
             const pricingSelect = document.getElementById('pricing-facility-select');
             if (pricingSelect && pricingSelect.value !== facId) pricingSelect.value = facId;
 
-            const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', facId).single();
-            if (fac && !error) {
+            const { data: facs } = await supabase.from('facilities').select('*');
+            const fac = (facs || []).find(f => f.id === facId || (facId.includes('yakima') && f.id.includes('yakima')) || (facId.includes('portland') && f.id.includes('portland')));
+            if (fac) {
                 if (document.getElementById('rate-tier-1')) document.getElementById('rate-tier-1').value = (Number(fac.tier1_rate) || 5.00).toFixed(2);
                 if (document.getElementById('rate-tier-2')) document.getElementById('rate-tier-2').value = (Number(fac.tier2_rate) || 3.50).toFixed(2);
                 if (document.getElementById('rate-tier-3')) document.getElementById('rate-tier-3').value = (Number(fac.tier3_rate) || 2.00).toFixed(2);
@@ -2101,11 +2140,23 @@
             }
         }
 
-        async function loadManagerLiveData(facilityId) {
+        async function loadManagerLiveData(facilityId = null) {
             try {
-                // Get facility stats
-                const { data: fac } = await supabase.from('facilities').select('*').eq('id', facilityId).single();
-                if (!fac) return;
+                let facId = facilityId || window.currentSelectedFacilityId;
+                if (!facId) {
+                    const globalSel = document.getElementById('global-facility-select');
+                    const mgrSel = document.getElementById('manager-facility-select');
+                    facId = globalSel?.value || mgrSel?.value || actualAssignedFacilityId || 'facility_seattle_north';
+                }
+
+                // Get facility stats safely without empty .eq('id', ...) calls
+                const { data: facs } = await supabase.from('facilities').select('*');
+                const fac = (facs || []).find(f => f.id === facId || (facId.includes('yakima') && f.id.includes('yakima')) || (facId.includes('portland') && f.id.includes('portland'))) || {
+                    usable_warehouse_sqft: 20000,
+                    sqft_per_tote: 1.0,
+                    num_staging_rooms: 2,
+                    tote_capacity: 2000
+                };
                 
                 const usable = fac.usable_warehouse_sqft || 20000;
                 const sqftTote = Number(fac.sqft_per_tote) || 1.0;
@@ -3877,9 +3928,12 @@ async function loadWorkerLogisticsRouting(facilityId = null) {
             }
 
             try {
-                const { data: fac } = await supabase.from('facilities').select('*').or(`id.eq.${selectedId},id.eq.facility_yakima,id.eq.facility_yakima_central`).single();
-                if (fac && fac.name) {
-                    specToLoad = { ...specToLoad, ...fac };
+                const { data: facs } = await supabase.from('facilities').select('*');
+                if (facs && facs.length > 0) {
+                    const matchedFac = facs.find(f => f.id === selectedId || (fid.includes('yakima') && f.id.includes('yakima')) || (fid.includes('portland') && f.id.includes('portland')));
+                    if (matchedFac) {
+                        specToLoad = { ...specToLoad, ...matchedFac };
+                    }
                 }
             } catch (e) {
                 // Fallback to default preset
@@ -4291,6 +4345,287 @@ async function loadWorkerLogisticsRouting(facilityId = null) {
         }
 
         // ── Item 4: Printable Barcode & QR Label Generator (Bulk & Individual) ──
+        // =========================================================================
+        // Tote Master Control & Telemetry System (Manager & Executive Only)
+        // =========================================================================
+        let currentMasterTote = null;
+
+        function calculateTenureString(timestamp) {
+            if (!timestamp) return "N/A";
+            const created = new Date(timestamp);
+            const now = new Date();
+            const diffMs = now - created;
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            if (diffDays < 1) return "Joined Today";
+            if (diffDays < 30) return `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+            const months = Math.floor(diffDays / 30);
+            const remainingDays = diffDays % 30;
+            if (months < 12) {
+                return `${months} mo${months !== 1 ? 's' : ''}${remainingDays > 0 ? `, ${remainingDays}d` : ''}`;
+            }
+            const years = Math.floor(months / 12);
+            const remMonths = months % 12;
+            return `${years} yr${years !== 1 ? 's' : ''}${remMonths > 0 ? `, ${remMonths}mo` : ''}`;
+        }
+
+        async function onMasterToteSearchInput(query) {
+            const resultsBox = document.getElementById('master-tote-search-results');
+            if (!resultsBox) return;
+
+            const q = (query || '').trim();
+            if (q.length < 2) {
+                resultsBox.classList.add('hidden');
+                resultsBox.innerHTML = '';
+                return;
+            }
+
+            try {
+                // Search inventory joined with users
+                const { data: items } = await supabase.from('inventory')
+                    .select('id, tote_code, label, status, facility_id, created_at, users(name, email, active_totes_held)')
+                    .or(`tote_code.ilike.%${q}%,label.ilike.%${q}%`)
+                    .limit(8);
+
+                let usersData = [];
+                if ((items || []).length < 5) {
+                    const { data: matchingUsers } = await supabase.from('users')
+                        .select('id, name, email')
+                        .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
+                        .limit(5);
+                    if (matchingUsers && matchingUsers.length > 0) {
+                        const uids = matchingUsers.map(u => u.id);
+                        const { data: userItems } = await supabase.from('inventory')
+                            .select('id, tote_code, label, status, facility_id, created_at, users(name, email, active_totes_held)')
+                            .in('uid', uids)
+                            .limit(8);
+                        usersData = userItems || [];
+                    }
+                }
+
+                const combined = [...(items || []), ...usersData];
+                const uniqueItems = Array.from(new Map(combined.map(item => [item.id, item])).values());
+
+                if (uniqueItems.length === 0) {
+                    resultsBox.innerHTML = `<div class="p-4 text-center text-xs text-gray-500 font-mono">No matching totes or customer records found for "${q}".</div>`;
+                    resultsBox.classList.remove('hidden');
+                    return;
+                }
+
+                resultsBox.innerHTML = uniqueItems.map(i => {
+                    const statusColor = i.status === 'stored' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                        : i.status === 'staged' ? 'text-green-400 bg-green-500/10 border-green-500/20'
+                        : i.status === 'out-for-delivery' ? 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20'
+                        : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                    const ownerName = i.users?.name || 'Customer';
+                    return `
+                        <div onclick="openToteMasterModal('${i.id}')" class="p-3 hover:bg-gray-900 flex items-center justify-between cursor-pointer transition">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 font-mono font-bold flex items-center justify-center text-xs border border-indigo-500/30">
+                                    📦
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-bold text-white font-mono">${i.tote_code}</span>
+                                        ${i.label ? `<span class="text-[10px] text-gray-400 font-sans font-medium">&bull; ${escapeHtml(i.label)}</span>` : ''}
+                                    </div>
+                                    <p class="text-[10px] text-gray-400">Owner: <strong class="text-gray-200">${escapeHtml(ownerName)}</strong> (${i.users?.email || 'N/A'})</p>
+                                </div>
+                            </div>
+                            <span class="text-[9px] font-bold uppercase ${statusColor} px-2 py-0.5 rounded border font-mono">${i.status}</span>
+                        </div>
+                    `;
+                }).join('');
+                resultsBox.classList.remove('hidden');
+            } catch (err) {
+                console.error("Master tote search failed:", err);
+            }
+        }
+
+        async function executeMasterToteSearch(query) {
+            const q = (query || '').trim();
+            if (!q) return;
+
+            const { data: exactItem } = await supabase.from('inventory')
+                .select('id')
+                .eq('tote_code', q.toUpperCase())
+                .maybeSingle();
+
+            if (exactItem) {
+                openToteMasterModal(exactItem.id);
+            } else {
+                onMasterToteSearchInput(q);
+            }
+        }
+
+        async function openToteMasterModal(toteId) {
+            const resultsBox = document.getElementById('master-tote-search-results');
+            if (resultsBox) resultsBox.classList.add('hidden');
+
+            try {
+                // Fetch complete tote + user + subscription telemetry
+                const { data: item, error } = await supabase.from('inventory')
+                    .select('*, users(*), facilities(*)')
+                    .eq('id', toteId)
+                    .single();
+
+                if (error || !item) {
+                    alert('Tote not found');
+                    return;
+                }
+
+                currentMasterTote = item;
+
+                // Fetch customer subscription
+                const { data: sub } = await supabase.from('subscriptions')
+                    .select('*')
+                    .eq('uid', item.uid)
+                    .maybeSingle();
+
+                // Populate Modal Header
+                document.getElementById('tmm-tote-code').textContent = item.tote_code;
+                document.getElementById('tmm-subtitle').textContent = `ID: ${item.id}`;
+                const statusBadge = document.getElementById('tmm-status-badge');
+                if (statusBadge) {
+                    statusBadge.textContent = (item.status || 'stored').toUpperCase();
+                    statusBadge.className = `text-xs font-bold px-2.5 py-0.5 rounded-full uppercase border ${
+                        item.status === 'stored' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+                        item.status === 'with-customer' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' :
+                        'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    }`;
+                }
+
+                // Populate Customer Telemetry
+                const user = item.users || {};
+                document.getElementById('tmm-customer-name').textContent = user.name || 'N/A';
+                document.getElementById('tmm-customer-email').textContent = user.email || 'N/A';
+                document.getElementById('tmm-customer-tenure').textContent = `Member for ${calculateTenureString(user.created_at)}`;
+                document.getElementById('tmm-customer-plan').textContent = sub ? `${sub.total_totes || 0} Tote(s) @ $${(Number(sub.tote_rate) || 0).toFixed(2)}/mo` : 'No Active Subscription';
+                document.getElementById('tmm-customer-totes-held').textContent = `${user.active_totes_held || 0} Active Tote(s)`;
+                document.getElementById('tmm-customer-created-at').textContent = user.created_at ? new Date(user.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+
+                // Populate Tote Telemetry
+                document.getElementById('tmm-tote-tenure').textContent = `Stored for ${calculateTenureString(item.created_at)}`;
+                document.getElementById('tmm-tote-label').textContent = item.label || 'Standard Tote';
+                document.getElementById('tmm-tote-category').textContent = item.category || 'General Storage';
+                document.getElementById('tmm-tote-facility').textContent = item.facilities?.name || item.facility_id || 'Seattle FC';
+                document.getElementById('tmm-tote-room').textContent = `Staging Room #${typeof getAssignedRoom === 'function' ? getAssignedRoom(item.uid) : '1'}`;
+                document.getElementById('tmm-tote-created-at').textContent = item.created_at ? new Date(item.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+
+                // Populate Inputs
+                const editLabelInput = document.getElementById('tmm-edit-label-input');
+                if (editLabelInput) editLabelInput.value = item.label || '';
+                const reassignSel = document.getElementById('tmm-reassign-facility-select');
+                if (reassignSel) reassignSel.value = item.facility_id || 'facility_seattle_north';
+                const overrideSel = document.getElementById('tmm-status-override-select');
+                if (overrideSel) overrideSel.value = item.status || 'stored';
+
+                document.getElementById('tote-master-modal').classList.remove('hidden');
+            } catch (err) {
+                console.error("Failed to open master tote modal:", err);
+                alert("Error loading tote telemetry: " + err.message);
+            }
+        }
+
+        function closeToteMasterModal() {
+            document.getElementById('tote-master-modal').classList.add('hidden');
+            currentMasterTote = null;
+        }
+
+        async function executeChargeMissingToteFromModal() {
+            if (!currentMasterTote) return;
+            const feeVal = parseFloat(document.getElementById('tmm-charge-amount').value) || 15.00;
+            const reasonVal = document.getElementById('tmm-charge-reason').value.trim() || 'Missing / Damaged Tote Penalty Fee';
+
+            if (!confirm(`Are you sure you want to charge $${feeVal.toFixed(2)} to ${currentMasterTote.users?.name || 'the customer'} for missing/damaged tote ${currentMasterTote.tote_code}?`)) {
+                return;
+            }
+
+            try {
+                const { data, error } = await supabase.rpc('charge_missing_tote', {
+                    p_tote_id: currentMasterTote.id,
+                    p_fee: feeVal,
+                    p_reason: reasonVal
+                });
+
+                if (error) throw error;
+
+                triggerScanFeedbackOverlay(true, `Customer Charged $${feeVal.toFixed(2)} Fee`, currentMasterTote.tote_code);
+                alert(`Successfully charged $${feeVal.toFixed(2)} missing tote fee to customer ${currentMasterTote.users?.name}! Record logged in charges ledger.`);
+                closeToteMasterModal();
+                refreshDashboard();
+            } catch (err) {
+                console.error("Missing tote fee charge failed:", err);
+                alert("Failed to execute charge: " + err.message);
+            }
+        }
+
+        function executeReprintToteTagFromModal() {
+            if (!currentMasterTote) return;
+            const code = currentMasterTote.tote_code;
+            closeToteMasterModal();
+            openPrintLabelModal(code);
+        }
+
+        async function executeReassignFacilityFromModal() {
+            if (!currentMasterTote) return;
+            const newFacilityId = document.getElementById('tmm-reassign-facility-select').value;
+
+            try {
+                const { error } = await supabase.from('inventory')
+                    .update({ facility_id: newFacilityId })
+                    .eq('id', currentMasterTote.id);
+
+                if (error) throw error;
+
+                triggerScanFeedbackOverlay(true, `Reassigned to ${newFacilityId}`, currentMasterTote.tote_code);
+                closeToteMasterModal();
+                refreshDashboard();
+            } catch (err) {
+                alert("Facility reassignment failed: " + err.message);
+            }
+        }
+
+        async function executeSaveToteLabelFromModal() {
+            if (!currentMasterTote) return;
+            const newLabel = document.getElementById('tmm-edit-label-input').value.trim();
+
+            try {
+                const { error } = await supabase.from('inventory')
+                    .update({ label: newLabel })
+                    .eq('id', currentMasterTote.id);
+
+                if (error) throw error;
+
+                triggerScanFeedbackOverlay(true, "Tote Label Saved", currentMasterTote.tote_code);
+                closeToteMasterModal();
+                refreshDashboard();
+            } catch (err) {
+                alert("Label save failed: " + err.message);
+            }
+        }
+
+        async function executeForceStatusOverrideFromModal() {
+            if (!currentMasterTote) return;
+            const newStatus = document.getElementById('tmm-status-override-select').value;
+
+            if (!confirm(`Are you sure you want to force status override for ${currentMasterTote.tote_code} to '${newStatus}'?`)) {
+                return;
+            }
+
+            try {
+                const { error } = await supabase.from('inventory')
+                    .update({ status: newStatus })
+                    .eq('id', currentMasterTote.id);
+
+                if (error) throw error;
+
+                triggerScanFeedbackOverlay(true, `Status Overridden to ${newStatus}`, currentMasterTote.tote_code);
+                closeToteMasterModal();
+                refreshDashboard();
+            } catch (err) {
+                alert("Status override failed: " + err.message);
+            }
+        }
         function openPrintLabelModal(toteCode) {
             const input = document.getElementById('print-tote-code');
             if (input && toteCode) {
@@ -4712,6 +5047,157 @@ async function loadWorkerLogisticsRouting(facilityId = null) {
                 <button type="button" onclick="triggerPrintLabels()" class="w-1/2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
                     <i data-lucide="printer" class="w-4 h-4"></i> Print Labels Now
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tote Master Detail & Management Control Modal -->
+    <div id="tote-master-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass-panel max-w-3xl w-full p-6 sm:p-8 rounded-3xl border border-indigo-500/40 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto relative">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 font-black flex items-center justify-center text-lg border border-indigo-500/30 font-mono">
+                        <i data-lucide="package" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 id="tmm-tote-code" class="font-black text-white text-xl font-mono">CV-SEA-7DPK</h3>
+                            <span id="tmm-status-badge" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase">Stored</span>
+                        </div>
+                        <p id="tmm-subtitle" class="text-xs text-gray-400 mt-0.5 font-mono">ID: —</p>
+                    </div>
+                </div>
+                <button onclick="closeToteMasterModal()" class="text-gray-400 hover:text-white p-2 rounded-xl bg-gray-900 border border-gray-800 transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <!-- Grid Layout: Telemetry Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Customer Owner Telemetry Card -->
+                <div class="bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-3 shadow-inner">
+                    <div class="flex items-center justify-between border-b border-gray-850 pb-2.5">
+                        <h4 class="text-xs font-extrabold uppercase text-blue-400 tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="user" class="w-4 h-4"></i> Customer Owner Telemetry
+                        </h4>
+                        <span id="tmm-customer-tenure" class="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">Member for —</span>
+                    </div>
+                    <div class="space-y-2 text-xs">
+                        <div class="flex justify-between"><span class="text-gray-400">Owner Name:</span><span id="tmm-customer-name" class="font-bold text-white">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Email:</span><span id="tmm-customer-email" class="font-mono text-gray-300">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Active Plan:</span><span id="tmm-customer-plan" class="font-bold text-indigo-300">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Total Totes Held:</span><span id="tmm-customer-totes-held" class="font-mono font-bold text-emerald-400">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Joined CloudVault:</span><span id="tmm-customer-created-at" class="font-mono text-gray-400">—</span></div>
+                    </div>
+                </div>
+
+                <!-- Tote Storage Telemetry Card -->
+                <div class="bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-3 shadow-inner">
+                    <div class="flex items-center justify-between border-b border-gray-850 pb-2.5">
+                        <h4 class="text-xs font-extrabold uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="archive" class="w-4 h-4"></i> Tote Vault Telemetry
+                        </h4>
+                        <span id="tmm-tote-tenure" class="text-[10px] font-bold text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">Stored for —</span>
+                    </div>
+                    <div class="space-y-2 text-xs">
+                        <div class="flex justify-between"><span class="text-gray-400">Custom Label:</span><span id="tmm-tote-label" class="font-bold text-white">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Category:</span><span id="tmm-tote-category" class="font-semibold text-gray-300">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Assigned Facility:</span><span id="tmm-tote-facility" class="font-bold text-indigo-300">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Staging Room Allocation:</span><span id="tmm-tote-room" class="font-mono font-bold text-amber-400">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Date Activated:</span><span id="tmm-tote-created-at" class="font-mono text-gray-400">—</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Granular Management Action Panel (Manager & Executive Clearance Only) -->
+            <div class="bg-gray-950 border border-indigo-500/30 rounded-2xl p-5 space-y-5 shadow-xl">
+                <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                    <h4 class="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
+                        <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i> Manager Master Actions
+                    </h4>
+                    <span class="text-[9px] font-mono text-gray-400 uppercase font-bold bg-gray-900 border border-gray-800 px-2 py-0.5 rounded">Security Level 2</span>
+                </div>
+
+                <!-- Action 1: Incident & Charge Customer ($15.00) -->
+                <div class="bg-red-950/30 border border-red-500/30 rounded-2xl p-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-black text-red-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="dollar-sign" class="w-4 h-4 text-red-400"></i> Charge Customer Penalty Fee (Missing / Damaged Tote)
+                        </span>
+                        <span class="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 font-mono">$15.00 Terms Agreement Standard</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                        <div class="sm:col-span-4">
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Fee Amount ($)</label>
+                            <input type="number" id="tmm-charge-amount" value="15.00" step="1.00" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white outline-none focus:border-red-500">
+                        </div>
+                        <div class="sm:col-span-8">
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Reason / Incident Note</label>
+                            <input type="text" id="tmm-charge-reason" value="Missing / Damaged Tote Fee" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-red-500">
+                        </div>
+                    </div>
+                    <button onclick="executeChargeMissingToteFromModal()" class="w-full bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-extrabold text-xs py-3 rounded-xl transition shadow-lg flex items-center justify-center gap-2 cursor-pointer">
+                        <i data-lucide="zap" class="w-4 h-4"></i> Execute Customer Fee Charge &amp; Record Incident
+                    </button>
+                </div>
+
+                <!-- Action 2 & 3 Grid: Reprint Label & Reassign Facility -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Reprint Thermal Tag -->
+                    <div class="bg-blue-950/30 border border-blue-500/30 rounded-2xl p-4 space-y-2.5">
+                        <span class="text-xs font-extrabold text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="printer" class="w-4 h-4 text-blue-400"></i> Reprint Thermal Label Tag
+                        </span>
+                        <p class="text-[10px] text-gray-400">Generate a fresh 4-per-page thermal replacement barcode label if the physical tag is worn, torn, or unreadable.</p>
+                        <button onclick="executeReprintToteTagFromModal()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-2.5 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-md">
+                            <i data-lucide="printer" class="w-4 h-4"></i> Launch Tag Printing Modal
+                        </button>
+                    </div>
+
+                    <!-- Reassign Facility Location -->
+                    <div class="bg-purple-950/30 border border-purple-500/30 rounded-2xl p-4 space-y-2.5">
+                        <span class="text-xs font-extrabold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="building-2" class="w-4 h-4 text-purple-400"></i> Reassign Facility Location
+                        </span>
+                        <div class="flex gap-2">
+                            <select id="tmm-reassign-facility-select" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none">
+                                <option value="facility_seattle_north">Seattle North FC</option>
+                                <option value="facility_yakima_central">Yakima FC</option>
+                                <option value="facility_portland_central">Portland Central Hub</option>
+                            </select>
+                            <button onclick="executeReassignFacilityFromModal()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1 cursor-pointer flex-shrink-0">
+                                Transfer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action 4: Edit Label & Manual Status Override -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Edit Custom Label -->
+                    <div class="bg-gray-900 border border-gray-850 rounded-2xl p-4 space-y-2">
+                        <label class="block text-xs font-extrabold uppercase text-gray-300">Edit Tote Custom Label</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="tmm-edit-label-input" placeholder="e.g. Winter Clothing &amp; Boots" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500">
+                            <button onclick="executeSaveToteLabelFromModal()" class="bg-gray-800 hover:bg-gray-700 text-white font-bold text-xs px-3 py-2 rounded-xl transition cursor-pointer flex-shrink-0">Save</button>
+                        </div>
+                    </div>
+
+                    <!-- Manual Lifecycle Status Override -->
+                    <div class="bg-gray-900 border border-gray-850 rounded-2xl p-4 space-y-2">
+                        <label class="block text-xs font-extrabold uppercase text-amber-300">Manual Lifecycle Status Override</label>
+                        <div class="flex gap-2">
+                            <select id="tmm-status-override-select" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-amber-500">
+                                <option value="stored">Stored (In Vault)</option>
+                                <option value="pending-stage">Pending Stage</option>
+                                <option value="staged">Staged (In Room)</option>
+                                <option value="pending-dispatch">Pending Dispatch</option>
+                                <option value="out-for-delivery">Out for Delivery</option>
+                                <option value="with-customer">With Customer</option>
+                            </select>
+                            <button onclick="executeForceStatusOverrideFromModal()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-3 py-2 rounded-xl transition cursor-pointer flex-shrink-0">Override</button>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>

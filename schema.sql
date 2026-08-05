@@ -1365,4 +1365,55 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ============================================================
+-- Charge Missing / Damaged Tote Penalty RPC (Manager & Exec Only)
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.charge_missing_tote(
+  p_tote_id UUID,
+  p_fee NUMERIC DEFAULT 15.00,
+  p_reason TEXT DEFAULT 'Missing / Damaged Tote Penalty Fee'
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_uid UUID;
+  v_user_role public.user_role;
+  v_item RECORD;
+BEGIN
+  v_uid := auth.uid();
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
+  IF v_user_role NOT IN ('warehouse_manager', 'executive') THEN
+    RAISE EXCEPTION 'Access Denied: Managers & Executives only';
+  END IF;
+
+  SELECT id, uid, tote_code, status INTO v_item FROM public.inventory WHERE id = p_tote_id LIMIT 1;
+  IF v_item IS NULL THEN
+    RAISE EXCEPTION 'Tote not found';
+  END IF;
+
+  INSERT INTO public.charges (
+    uid,
+    charge_type,
+    amount,
+    totes_charged,
+    status
+  ) VALUES (
+    v_item.uid,
+    COALESCE(p_reason, 'missing_tote_fee'),
+    COALESCE(p_fee, 15.00),
+    1,
+    'success'
+  );
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'tote_code', v_item.tote_code,
+    'charged_uid', v_item.uid,
+    'fee', COALESCE(p_fee, 15.00)
+  );
+END;
+$$ LANGUAGE plpgsql;
+
 
