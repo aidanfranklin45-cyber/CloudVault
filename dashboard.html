@@ -639,6 +639,24 @@
         </div>
     </div>
 
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-gray-900 text-white px-6 py-4 rounded-xl shadow-2xl font-semibold text-sm z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <span id="toast-msg"></span>
+    </div>
+
+    <!-- Action Bar (Sticky Bottom) -->
+    <div id="action-bar" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 transition-transform duration-300 bar-hidden z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+            <div class="text-lg font-bold text-gray-900">
+                <span id="selected-count" class="text-blue-600">0</span> Items Selected
+            </div>
+            <button id="request-btn" onclick="requestRetrieval()" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-md flex items-center">
+                Request Retrieval
+                <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            </button>
+        </div>
+    </div>
+
     <!-- PIN Confirmation Modal -->
     <div id="pin-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
@@ -2153,8 +2171,8 @@
             } else {
                 grid.classList.add('hidden');
                 empty.classList.add('hidden');
-                cutoffBanner.classList.add('hidden');
-                actionBar.className = "fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 transition-transform duration-300 bar-hidden z-40";
+                if (cutoffBanner) cutoffBanner.classList.add('hidden');
+                if (actionBar) actionBar.className = "fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 transition-transform duration-300 bar-hidden z-40";
                 
                 tracker.classList.remove('hidden');
                 
@@ -2396,14 +2414,19 @@
 
         function updateActionBar() {
             const count = selectedItems.size;
-            document.getElementById('selected-count').innerText = count;
+            const countEl = document.getElementById('selected-count');
+            if (countEl) {
+                countEl.innerText = count;
+            }
             const bar = document.getElementById('action-bar');
-            if (count > 0) {
-                bar.classList.remove('bar-hidden');
-                bar.classList.add('bar-visible');
-            } else {
-                bar.classList.remove('bar-visible');
-                bar.classList.add('bar-hidden');
+            if (bar) {
+                if (count > 0) {
+                    bar.classList.remove('bar-hidden');
+                    bar.classList.add('bar-visible');
+                } else {
+                    bar.classList.remove('bar-visible');
+                    bar.classList.add('bar-hidden');
+                }
             }
         }
 
@@ -2826,11 +2849,16 @@
 
         function showToast(message) {
             const toast = document.getElementById('toast');
-            document.getElementById('toast-msg').textContent = message;
-            toast.classList.remove('translate-y-20', 'opacity-0');
-            setTimeout(() => {
-                toast.classList.add('translate-y-20', 'opacity-0');
-            }, 3500);
+            const toastMsg = document.getElementById('toast-msg');
+            if (toastMsg) {
+                toastMsg.textContent = message;
+            }
+            if (toast) {
+                toast.classList.remove('translate-y-20', 'opacity-0');
+                setTimeout(() => {
+                    toast.classList.add('translate-y-20', 'opacity-0');
+                }, 3500);
+            }
         }
 
         // ============================================================
@@ -3055,39 +3083,43 @@
         }
 
         async function openBillingModal() {
-            document.getElementById('user-dropdown').classList.add('hidden');
-            document.getElementById('billing-modal').classList.remove('hidden');
+            const userDropdown = document.getElementById('user-dropdown');
+            const billingModal = document.getElementById('billing-modal');
+            if (userDropdown) userDropdown.classList.add('hidden');
+            if (billingModal) billingModal.classList.remove('hidden');
             
             const planNameEl = document.getElementById('billing-plan-name');
             const monthlyAmountEl = document.getElementById('billing-monthly-amount');
             const tierLabelEl = document.getElementById('billing-tier-label');
             const nextDateEl = document.getElementById('billing-next-date');
             
-            planNameEl.textContent = 'Loading...';
-            monthlyAmountEl.textContent = '...';
-            tierLabelEl.textContent = '...';
-            nextDateEl.textContent = 'Loading...';
+            if (planNameEl) planNameEl.textContent = 'Loading...';
+            if (monthlyAmountEl) monthlyAmountEl.textContent = '...';
+            if (tierLabelEl) tierLabelEl.textContent = '...';
+            if (nextDateEl) nextDateEl.textContent = 'Loading...';
 
             if (currentSubscription) {
                 const totalTotes = currentSubscription.total_totes || 0;
                 const toteRate = Number(currentSubscription.tote_rate) || 5.00;
                 const monthly = Number(currentSubscription.recurring_storage) || 0;
 
-                planNameEl.textContent = `${totalTotes} Tote${totalTotes !== 1 ? 's' : ''} Storage Plan`;
-                monthlyAmountEl.innerHTML = `$${monthly.toFixed(2)}<span class="text-xs font-normal text-blue-200">/mo</span>`;
-                tierLabelEl.textContent = `Tier @ $${toteRate.toFixed(2)}/tote`;
+                if (planNameEl) planNameEl.textContent = `${totalTotes} Tote${totalTotes !== 1 ? 's' : ''} Storage Plan`;
+                if (monthlyAmountEl) monthlyAmountEl.innerHTML = `$${monthly.toFixed(2)}<span class="text-xs font-normal text-blue-200">/mo</span>`;
+                if (tierLabelEl) tierLabelEl.textContent = `Tier @ $${toteRate.toFixed(2)}/tote`;
 
-                if (currentSubscription.current_period_end) {
-                    const d = new Date(currentSubscription.current_period_end);
-                    nextDateEl.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-                } else {
-                    nextDateEl.textContent = 'Auto-Renews Monthly';
+                if (nextDateEl) {
+                    if (currentSubscription.current_period_end) {
+                        const d = new Date(currentSubscription.current_period_end);
+                        nextDateEl.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+                    } else {
+                        nextDateEl.textContent = 'Auto-Renews Monthly';
+                    }
                 }
             } else {
-                planNameEl.textContent = 'No Active Plan';
-                monthlyAmountEl.textContent = '$0.00';
-                tierLabelEl.textContent = 'Inactive';
-                nextDateEl.textContent = 'N/A';
+                if (planNameEl) planNameEl.textContent = 'No Active Plan';
+                if (monthlyAmountEl) monthlyAmountEl.textContent = '$0.00';
+                if (tierLabelEl) tierLabelEl.textContent = 'Inactive';
+                if (nextDateEl) nextDateEl.textContent = 'N/A';
             }
 
             loadInvoiceHistory();

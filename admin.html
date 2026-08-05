@@ -799,8 +799,12 @@
                     <p class="text-xs text-gray-400 mt-0.5">Facility routing, capacity analytics, and staging logs</p>
                 </div>
                 <div class="flex items-center gap-3">
-                    <label class="text-xs text-gray-400 font-semibold">Active Facility:</label>
-                    <select id="manager-facility-select" onchange="loadManagerFacilityData()" class="bg-gray-950 border border-gray-800 text-sm text-white font-bold py-2 px-4 rounded-xl outline-none cursor-pointer">
+                    <div id="active-facility-indicator" class="flex items-center gap-2 bg-gray-950 border border-indigo-500/30 px-3.5 py-2 rounded-xl">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span class="text-xs text-gray-400 font-semibold uppercase tracking-wider">Facility:</span>
+                        <span id="active-facility-name-pill" class="text-xs font-bold text-indigo-300 font-mono">Seattle North Fulfillment Center</span>
+                    </div>
+                    <select id="manager-facility-select" onchange="onGlobalFacilityChange(this.value)" class="hidden bg-gray-950 border border-gray-800 text-sm text-white font-bold py-2 px-4 rounded-xl outline-none cursor-pointer">
                         <option value="facility_seattle_north">Seattle North Fulfillment Center</option>
                         <option value="facility_portland_central">Portland Central Hub</option>
                     </select>
@@ -1184,14 +1188,24 @@
 
                     <!-- Phase 2: Pull from Vault (pending-stage + pending-dispatch) -->
                     <div id="wview-stage" class="worker-phase-view space-y-4 hidden">
-                        <div class="bg-amber-950/30 border border-amber-500/20 p-4 rounded-2xl space-y-2 text-xs">
-                            <div class="flex items-center justify-between">
+                        <div class="bg-amber-950/30 border border-amber-500/20 p-4 rounded-2xl space-y-3 text-xs">
+                            <div class="flex items-center justify-between flex-wrap gap-2">
                                 <span class="text-gray-300"><strong class="text-amber-400">Worker Action:</strong> Pull totes from vault shelves</span>
                                 <span class="text-amber-300 font-mono text-[11px] font-bold">Retrieval Requests Pending</span>
                             </div>
-                            <div class="flex gap-4 text-[10px] text-gray-400 border-t border-amber-500/10 pt-2 mt-1">
-                                <span>🚪 <strong class="text-blue-300">Self-Serve</strong> → Place in Staging Room for customer pickup</span>
-                                <span>🚚 <strong class="text-orange-300">Valet</strong> → Load onto driver vehicle for delivery</span>
+                            
+                            <!-- Sub-Filter Bar for Separate Valet vs Self-Serve Staging Pulls -->
+                            <div class="flex items-center gap-2 border-t border-amber-500/10 pt-3 flex-wrap">
+                                <span class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider mr-1">Filter Pulls:</span>
+                                <button onclick="setPullSubFilter('all')" id="pfilter-all" class="pfilter-btn bg-amber-500 text-gray-950 font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm cursor-pointer">
+                                    All Pulls (<span id="cnt-pfilter-all">0</span>)
+                                </button>
+                                <button onclick="setPullSubFilter('staging')" id="pfilter-staging" class="pfilter-btn bg-gray-900 text-gray-300 border border-gray-700 hover:border-blue-500 font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition cursor-pointer">
+                                    🚪 Self-Serve Staging (<span id="cnt-pfilter-staging">0</span>)
+                                </button>
+                                <button onclick="setPullSubFilter('valet')" id="pfilter-valet" class="pfilter-btn bg-gray-900 text-gray-300 border border-gray-700 hover:border-orange-500 font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition cursor-pointer">
+                                    🚚 Valet Delivery (<span id="cnt-pfilter-valet">0</span>)
+                                </button>
                             </div>
                         </div>
                         <!-- Grouped Customer Cards Container for Pull from Vault -->
@@ -1389,6 +1403,16 @@
 
             const displayName = actualUserName || (activeRole === 'executive' ? "Alex Executive" : activeRole === 'manager' ? "Sarah Manager" : "David Worker");
             const avatarText = displayName.substring(0, 2).toUpperCase();
+
+            const mgrSel = document.getElementById('manager-facility-select');
+            const activeIndicator = document.getElementById('active-facility-indicator');
+            if (activeRole === 'executive') {
+                if (mgrSel) mgrSel.classList.add('hidden');
+                if (activeIndicator) activeIndicator.classList.remove('hidden');
+            } else {
+                if (mgrSel) mgrSel.classList.remove('hidden');
+                if (activeIndicator) activeIndicator.classList.add('hidden');
+            }
 
             // Show selected (cumulatively based on role hierarchy)
             if (activeRole === 'executive') {
@@ -1599,8 +1623,34 @@
             }
         }
 
+        async function onGlobalFacilityChange(facilityId) {
+            const facId = facilityId || document.getElementById('exec-facility-select')?.value || document.getElementById('manager-facility-select')?.value || 'facility_seattle_north';
+
+            // Sync select values
+            const execSel = document.getElementById('exec-facility-select');
+            if (execSel && execSel.value !== facId) execSel.value = facId;
+            const mgrSel = document.getElementById('manager-facility-select');
+            if (mgrSel && mgrSel.value !== facId) mgrSel.value = facId;
+
+            // Sync active facility status pill
+            const activePill = document.getElementById('active-facility-name-pill');
+            if (activePill) {
+                const targetSel = (execSel && !execSel.classList.contains('hidden')) ? execSel : mgrSel;
+                const selectedText = targetSel && targetSel.selectedIndex >= 0 ? targetSel.options[targetSel.selectedIndex]?.text : facId;
+                if (selectedText) activePill.textContent = selectedText;
+            }
+
+            await loadRegionalPricing(facId);
+            await loadWorkerLiveData();
+            await loadWorkerLogisticsRouting(facId);
+        }
+
         function loadExecutiveFacilitySpecs(facilityId) {
-            return loadRegionalPricing(facilityId);
+            return onGlobalFacilityChange(facilityId);
+        }
+
+        function loadManagerFacilityData(facilityId) {
+            return onGlobalFacilityChange(facilityId);
         }
 
         function saveFacilitySpecs() {
@@ -2439,6 +2489,22 @@
         // Switch Worker Phase Tab
         // =========================================================================
 
+        window.currentPullFilter = 'all';
+
+        function setPullSubFilter(filter) {
+            window.currentPullFilter = filter;
+            document.querySelectorAll('.pfilter-btn').forEach(btn => {
+                btn.className = 'pfilter-btn bg-gray-900 text-gray-300 border border-gray-700 hover:border-amber-500 font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition cursor-pointer';
+            });
+            const activeBtn = document.getElementById(`pfilter-${filter}`);
+            if (activeBtn) {
+                if (filter === 'all') activeBtn.className = 'pfilter-btn bg-amber-500 text-gray-950 font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm cursor-pointer';
+                if (filter === 'staging') activeBtn.className = 'pfilter-btn bg-blue-600 text-white font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm cursor-pointer';
+                if (filter === 'valet') activeBtn.className = 'pfilter-btn bg-orange-600 text-white font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm cursor-pointer';
+            }
+            loadWorkerQueues();
+        }
+
         function switchWorkerPhase(phase) {
             window.hasManuallySwitchedPhase = true;
             const phases = ['activate', 'stage', 'customer', 'dispatch', 'returned'];
@@ -2538,14 +2604,20 @@
                     }
                 }
 
-                // Build PIN / reservation / fulfillment type lookup by uid
+                // Build PIN / reservation / fulfillment type lookups
                 const pinByUid = {};
                 const typeByUid = {};
                 const reservationByUid = {};
+                const manifestByUidAndType = {};
+                const manifestByUid = {};
+
                 if (manifests) {
                     manifests.forEach(m => {
                         pinByUid[m.uid] = m.pin;
                         typeByUid[m.uid] = m.fulfillment_type || 'staging';
+                        manifestByUid[m.uid] = m;
+                        const key = `${m.uid}_${m.fulfillment_type || 'staging'}`;
+                        manifestByUidAndType[key] = m;
                         reservationByUid[m.uid] = {
                             target_date: m.target_date,
                             time_slot:   m.time_slot,
@@ -2553,6 +2625,17 @@
                             surge_fee:   m.surge_fee
                         };
                     });
+                }
+
+                // Helper to compute deterministic staging room number per customer
+                function getAssignedRoom(uid, totalRooms = 2) {
+                    let hash = 0;
+                    const str = uid || 'default';
+                    for (let i = 0; i < str.length; i++) {
+                        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                        hash |= 0;
+                    }
+                    return (Math.abs(hash) % (totalRooms || 2)) + 1;
                 }
 
                 // Group totes by Customer UID helper
@@ -2629,66 +2712,127 @@
 
                 // ── Tab 2: PULL FROM VAULT CARDS (pending-stage + pending-dispatch) ──
                 const pullItems = (allItems || []).filter(i => i.status === 'pending-stage' || i.status === 'pending-dispatch');
+                const stagingItems = pullItems.filter(i => i.status === 'pending-stage');
+                const valetItems = pullItems.filter(i => i.status === 'pending-dispatch');
+
+                if (document.getElementById('cnt-pfilter-all')) document.getElementById('cnt-pfilter-all').textContent = pullItems.length;
+                if (document.getElementById('cnt-pfilter-staging')) document.getElementById('cnt-pfilter-staging').textContent = stagingItems.length;
+                if (document.getElementById('cnt-pfilter-valet')) document.getElementById('cnt-pfilter-valet').textContent = valetItems.length;
+
+                let filteredPullItems = pullItems;
+                if (window.currentPullFilter === 'staging') filteredPullItems = stagingItems;
+                if (window.currentPullFilter === 'valet') filteredPullItems = valetItems;
+
                 document.getElementById('wtab-stage-count').textContent = pullItems.length;
                 const bodyStage = document.getElementById('wbody-stage');
-                const pullGrouped = groupTotesByCustomer(pullItems);
 
-                if (pullItems.length === 0) {
+                function groupPullItemsByUidAndDest(items) {
+                    const groups = {};
+                    (items || []).forEach(item => {
+                        const destType = item.status === 'pending-dispatch' ? 'valet_delivery' : 'staging';
+                        const key = `${item.uid}_${destType}`;
+                        if (!groups[key]) {
+                            groups[key] = {
+                                uid: item.uid,
+                                destType: destType,
+                                totes: []
+                            };
+                        }
+                        groups[key].totes.push(item);
+                    });
+                    return groups;
+                }
+
+                const pullGrouped = groupPullItemsByUidAndDest(filteredPullItems);
+
+                if (Object.keys(pullGrouped).length === 0) {
                     bodyStage.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
                         <i data-lucide="archive" class="w-8 h-8 text-amber-500 mx-auto"></i>
                         <p class="text-sm text-gray-300 font-bold">No Retrieval Requests Pending</p>
                         <p class="text-xs text-gray-500 font-mono">Vault storage is operating normally.</p>
                     </div>`;
                 } else {
-                    bodyStage.innerHTML = Object.entries(pullGrouped).map(([uid, totes]) => {
+                    bodyStage.innerHTML = Object.values(pullGrouped).map(group => {
+                        const uid = group.uid;
+                        const totes = group.totes;
+                        const isValet = group.destType === 'valet_delivery';
                         const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0,8)}`;
                         const pin = pinByUid[uid] || '—';
                         const firstCode = totes[0].tote_code;
-                        const res = reservationByUid[uid];
-                        const isSameDay = res?.surge_tier === 'same_day_surge';
-                        const ft = typeByUid[uid] || 'staging';
-                        const isValet = ft === 'valet_delivery';
 
-                        // Route color based on fulfillment type
+                        const manifestKey = `${uid}_${group.destType}`;
+                        const reqManifest = manifestByUidAndType[manifestKey] || manifestByUid[uid];
+
+                        const reqDate = reqManifest?.target_date ? new Date(reqManifest.target_date.split('T')[0] + 'T12:00:00') : new Date();
+                        const dateStr = reqDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
+                        const slotStr = reqManifest?.time_slot || '09:00 AM - 12:00 PM';
+                        const isSameDay = reqManifest?.surge_tier === 'same_day_surge';
+
+                        const numRooms = currentLoadedFac?.num_staging_rooms || 2;
+                        const assignedRoomNum = getAssignedRoom(uid, numRooms);
+
+                        const targetLocationBadge = isValet 
+                            ? `<span class="text-xs font-bold font-mono text-orange-400 bg-orange-500/10 border border-orange-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5"></i> Driver Loading Bay A</span>`
+                            : `<span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="door-open" class="w-3.5 h-3.5"></i> Staging Room #${assignedRoomNum}</span>`;
+
+                        const scheduleBadge = `<div class="flex items-center gap-3 text-xs bg-gray-900/90 px-3.5 py-1.5 rounded-xl border border-gray-800 font-mono">
+                            <span class="text-blue-300 font-bold flex items-center gap-1.5"><i data-lucide="calendar" class="w-3.5 h-3.5 text-blue-400"></i> ${dateStr}</span>
+                            <span class="text-gray-500 font-semibold">•</span>
+                            <span class="text-amber-300 font-bold flex items-center gap-1.5"><i data-lucide="clock" class="w-3.5 h-3.5 text-amber-400"></i> ${slotStr}</span>
+                            ${isSameDay ? '<span class="text-[9px] font-black uppercase text-red-400 bg-red-500/20 px-2 py-0.5 rounded border border-red-500/30 animate-pulse">⚡ EXPEDITED SAME-DAY</span>' : ''}
+                        </div>`;
+
                         const borderColor = isSameDay ? 'border-red-500/70 bg-red-950/20' 
                                           : isValet ? 'border-orange-500/30 bg-gray-950' 
                                           : 'border-amber-500/30 bg-gray-950';
-                        const statusLabel = isValet ? 'Pending Driver Load' : 'Pending Staging';
-                        const statusColor = isValet ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
-                        const actionLabel = isValet ? 'LOAD ONTO DRIVER VEHICLE' : 'MOVE TO STAGING ROOM';
+
+                        const actionLabel = isValet ? `LOAD ONTO DRIVER VEHICLE (${firstCode})` : `MOVE TO STAGING ROOM #${assignedRoomNum} (${firstCode})`;
                         const actionGradient = isValet ? 'from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 border-orange-400/40' : 'from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 border-amber-400/40';
                         const actionIcon = isValet ? 'truck' : 'archive-restore';
                         const expectedScanStatus = isValet ? 'pending-dispatch' : 'pending-stage';
 
                         return `
                             <div class="border-2 ${borderColor} rounded-3xl p-5 shadow-xl space-y-4 hover:border-amber-500/60 transition">
-                                <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-850 pb-3">
                                     <div class="flex items-center space-x-3">
                                         <div class="w-10 h-10 rounded-2xl ${isValet ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'} font-bold flex items-center justify-center text-sm border font-mono">
                                             ${customerName.substring(0,2).toUpperCase()}
                                         </div>
                                         <div>
-                                            <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
+                                            <h4 class="text-sm font-extrabold text-white flex items-center gap-2">
+                                                ${customerName}
+                                                ${isValet ? '<span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 VALET DELIVERY</span>' : '<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE STAGING</span>'}
+                                            </h4>
                                             <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Tote(s)</p>
                                         </div>
                                     </div>
-                                    <div class="flex items-center gap-2">
-                                        ${fulfillmentBadge(uid)}
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        ${targetLocationBadge}
                                         <span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-3 py-1 rounded-xl">PIN: ${pin}</span>
                                     </div>
                                 </div>
 
+                                <!-- Schedule & Target Info Row -->
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    ${scheduleBadge}
+                                </div>
+
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
-                                        <span class="text-white font-bold">${t.tote_code}</span>
-                                        <span class="${statusColor} text-[10px] px-2 py-0.5 rounded border font-sans">${statusLabel}</span>
-                                    </div>`).join('')}
+                                    ${totes.map(t => {
+                                        const isValetItem = t.status === 'pending-dispatch';
+                                        const sLabel = isValetItem ? 'Pending Driver Load' : 'Pending Staging';
+                                        const sColor = isValetItem ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                                        return `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
+                                            <span class="text-white font-bold">${t.tote_code}</span>
+                                            <span class="${sColor} text-[10px] px-2 py-0.5 rounded border font-sans font-semibold">${sLabel}</span>
+                                        </div>`;
+                                    }).join('')}
                                 </div>
 
                                 <!-- Full-Width 60px Ergonomic Industrial Action Button -->
                                 <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('${expectedScanStatus}')" class="w-full min-h-[60px] bg-gradient-to-r ${actionGradient} text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                     <i data-lucide="${actionIcon}" class="w-6 h-6"></i>
-                                    <span>${actionLabel} (${firstCode}) →</span>
+                                    <span>${actionLabel} →</span>
                                 </button>
                             </div>`;
                     }).join('');
@@ -2710,9 +2854,18 @@
                     bodyCustomer.innerHTML = Object.entries(customerGrouped).map(([uid, totes]) => {
                         const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0,8)}`;
                         const firstCode = totes[0].tote_code;
+
+                        const reqManifest = manifestByUidAndType[`${uid}_staging`] || manifestByUid[uid];
+                        const reqDate = reqManifest?.target_date ? new Date(reqManifest.target_date.split('T')[0] + 'T12:00:00') : new Date();
+                        const dateStr = reqDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
+                        const slotStr = reqManifest?.time_slot || '09:00 AM - 12:00 PM';
+
+                        const numRooms = currentLoadedFac?.num_staging_rooms || 2;
+                        const assignedRoomNum = getAssignedRoom(uid, numRooms);
+
                         return `
                             <div class="bg-gray-950 border-2 border-blue-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-blue-500/60 transition">
-                                <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-850 pb-3">
                                     <div class="flex items-center space-x-3">
                                         <div class="w-10 h-10 rounded-2xl bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center text-sm border border-blue-500/30 font-mono">
                                             ${customerName.substring(0,2).toUpperCase()}
@@ -2722,23 +2875,30 @@
                                             <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Staged Tote(s)</p>
                                         </div>
                                     </div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE</span>
-                                        <span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 px-3 py-1 rounded-xl border border-blue-500/30">In Staging Room</span>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="door-open" class="w-3.5 h-3.5"></i> Staging Room #${assignedRoomNum}</span>
+                                        <span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 px-3 py-1 rounded-xl border border-blue-500/30">PIN: ${pinByUid[uid] || '—'}</span>
                                     </div>
+                                </div>
+
+                                <!-- Schedule info -->
+                                <div class="flex flex-wrap items-center justify-between gap-2 text-xs bg-gray-900/90 px-3.5 py-1.5 rounded-xl border border-gray-800 font-mono">
+                                    <span class="text-blue-300 font-bold flex items-center gap-1.5"><i data-lucide="calendar" class="w-3.5 h-3.5 text-blue-400"></i> Pickup Date: ${dateStr}</span>
+                                    <span class="text-gray-500 font-semibold">•</span>
+                                    <span class="text-amber-300 font-bold flex items-center gap-1.5"><i data-lucide="clock" class="w-3.5 h-3.5 text-amber-400"></i> Slot: ${slotStr}</span>
                                 </div>
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                         <span class="text-white font-bold">${t.tote_code}</span>
-                                        <span class="text-blue-400 text-[10px] bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 font-sans">Ready for Pickup</span>
+                                        <span class="text-blue-400 text-[10px] bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 font-sans">Ready in Room #${assignedRoomNum}</span>
                                     </div>`).join('')}
                                 </div>
 
                                 <!-- Full-Width 60px Ergonomic Industrial Action Button -->
                                 <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('staged')" class="w-full min-h-[60px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-blue-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                     <i data-lucide="user-check" class="w-6 h-6"></i>
-                                    <span>HAND OFF TO CUSTOMER (${firstCode}) →</span>
+                                    <span>HAND OFF TO CUSTOMER AT ROOM #${assignedRoomNum} (${firstCode}) →</span>
                                 </button>
                             </div>`;
                     }).join('');
@@ -2762,9 +2922,15 @@
                         bodyDispatch.innerHTML = Object.entries(dispatchGrouped).map(([uid, totes]) => {
                             const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0,8)}`;
                             const firstCode = totes[0].tote_code;
+
+                            const reqManifest = manifestByUidAndType[`${uid}_valet_delivery`] || manifestByUid[uid];
+                            const reqDate = reqManifest?.target_date ? new Date(reqManifest.target_date.split('T')[0] + 'T12:00:00') : new Date();
+                            const dateStr = reqDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
+                            const slotStr = reqManifest?.time_slot || '09:00 AM - 12:00 PM';
+
                             return `
                                 <div class="bg-gray-950 border-2 border-orange-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-orange-500/60 transition">
-                                    <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-850 pb-3">
                                         <div class="flex items-center space-x-3">
                                             <div class="w-10 h-10 rounded-2xl bg-orange-500/20 text-orange-400 font-bold flex items-center justify-center text-sm border border-orange-500/30 font-mono">
                                                 ${customerName.substring(0,2).toUpperCase()}
@@ -2774,10 +2940,17 @@
                                                 <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0,8)} &bull; ${totes.length} Tote(s) Out for Delivery</p>
                                             </div>
                                         </div>
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 VALET</span>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="text-xs font-bold font-mono text-orange-400 bg-orange-500/10 border border-orange-500/20 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5"></i> Driver Loading Bay A</span>
                                             <span class="text-xs font-mono font-bold text-orange-400 bg-orange-500/10 px-3 py-1 rounded-xl border border-orange-500/30">En Route</span>
                                         </div>
+                                    </div>
+
+                                    <!-- Schedule info -->
+                                    <div class="flex flex-wrap items-center justify-between gap-2 text-xs bg-gray-900/90 px-3.5 py-1.5 rounded-xl border border-gray-800 font-mono">
+                                        <span class="text-blue-300 font-bold flex items-center gap-1.5"><i data-lucide="calendar" class="w-3.5 h-3.5 text-blue-400"></i> Delivery Date: ${dateStr}</span>
+                                        <span class="text-gray-500 font-semibold">•</span>
+                                        <span class="text-amber-300 font-bold flex items-center gap-1.5"><i data-lucide="clock" class="w-3.5 h-3.5 text-amber-400"></i> Slot: ${slotStr}</span>
                                     </div>
 
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
