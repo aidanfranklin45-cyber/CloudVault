@@ -2440,7 +2440,7 @@
                     .from('inventory')
                     .select('*')
                     .eq('uid', uid)
-                    .order('created_at', { ascending: false });
+                    .order('tote_code', { ascending: true });
 
                 if (!error && data) {
                     currentInventory = data;
@@ -2508,6 +2508,9 @@
 
                 return matchesSearch && matchesStatus && matchesCategory;
             });
+
+            // Guarantee stable, fixed physical shelf ordering (sorted deterministically by tote_code)
+            filteredData.sort((a, b) => (a.tote_code || '').localeCompare(b.tote_code || '', undefined, { numeric: true, sensitivity: 'base' }));
 
             tracker.classList.add('hidden');
             grid.classList.remove('hidden');
