@@ -268,15 +268,15 @@
 
                 <!-- Navigation Tabs -->
                 <nav class="hidden md:flex items-center space-x-1 pl-6 border-l border-gray-800">
-                    <a href="admin.html"
+                    <a href="admin.html" id="nav-bi-analytics"
                         class="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600/20 border border-blue-500/30 transition flex items-center gap-1.5 shadow-sm">
                         <i data-lucide="layout-dashboard" class="w-3.5 h-3.5 text-blue-400"></i> BI Analytics
                     </a>
-                    <a href="admin-facilities.html"
+                    <a href="admin-facilities.html" id="nav-facility-config"
                         class="px-3 py-1.5 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
                         <i data-lucide="building-2" class="w-3.5 h-3.5 text-gray-400"></i> Facility Configuration
                     </a>
-                    <a href="admin-logistics.html"
+                    <a href="admin-logistics.html" id="nav-logistics-ops"
                         class="px-3 py-1.5 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
                         <i data-lucide="truck" class="w-3.5 h-3.5 text-gray-400"></i> Logistics Operations
                     </a>
@@ -293,12 +293,6 @@
                     <label class="text-xs text-gray-400 font-medium hidden sm:inline">Facility:</label>
                     <select id="global-facility-select" onchange="onGlobalFacilityChange(this.value)"
                         class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
-                        <option value="facility_seattle_north" class="bg-gray-950 text-white">Seattle North Fulfillment
-                            Center</option>
-                        <option value="facility_yakima_central" class="bg-gray-950 text-white">Yakima Fulfillment Center
-                        </option>
-                        <option value="facility_portland_central" class="bg-gray-950 text-white">Portland Central Hub
-                        </option>
                     </select>
                 </div>
 
@@ -498,7 +492,6 @@
                     </div>
                 </div>
             </div>
-        </div>
 
         <!-- Business Intelligence Conversion Funnel Charts -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -561,8 +554,6 @@
                                 Facility</label>
                             <select id="emp-facility"
                                 class="w-full bg-gray-900 border border-gray-800 rounded-xl py-2.5 px-4 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
-                                <option value="facility_seattle_north">Seattle North Center</option>
-                                <option value="facility_portland_central">Portland Central Hub</option>
                             </select>
                         </div>
                         <div>
@@ -839,8 +830,6 @@
 
             <!-- Hidden fallback facility select for backwards compatibility -->
             <select id="manager-facility-select" onchange="onGlobalFacilityChange(this.value)" class="hidden">
-                <option value="facility_seattle_north">Seattle North Fulfillment Center</option>
-                <option value="facility_portland_central">Portland Central Hub</option>
             </select>
 
             <!-- Tote Master Control & Search Console (Manager & Executive Only) -->
@@ -1517,7 +1506,7 @@
                                 }
                                 actualUserRole = profile.role;
                                 actualUserName = profile.name || user.email;
-                                actualAssignedFacilityId = profile.assigned_facility_id || 'facility_seattle_north';
+                                actualAssignedFacilityId = profile.assigned_facility_id || null;
                                 activeRole = profile.role === 'warehouse_worker' ? 'worker' : profile.role === 'warehouse_manager' ? 'manager' : 'executive';
 
                                 const roleSel = document.getElementById('role-select');
@@ -1589,12 +1578,28 @@
 
             const mgrSel = document.getElementById('manager-facility-select');
             const activeIndicator = document.getElementById('active-facility-indicator');
+            const navFacilityConfig = document.getElementById('nav-facility-config');
+            const navBiAnalytics = document.getElementById('nav-bi-analytics');
+            const seedBtn = document.getElementById('seed-btn');
+
             if (activeRole === 'executive') {
                 if (mgrSel) mgrSel.classList.add('hidden');
                 if (activeIndicator) activeIndicator.classList.remove('hidden');
-            } else {
+                if (navFacilityConfig) navFacilityConfig.classList.remove('hidden');
+                if (navBiAnalytics) navBiAnalytics.classList.remove('hidden');
+                if (seedBtn) seedBtn.classList.remove('hidden');
+            } else if (activeRole === 'manager') {
                 if (mgrSel) mgrSel.classList.remove('hidden');
                 if (activeIndicator) activeIndicator.classList.add('hidden');
+                if (navFacilityConfig) navFacilityConfig.classList.add('hidden');
+                if (navBiAnalytics) navBiAnalytics.classList.remove('hidden');
+                if (seedBtn) seedBtn.classList.add('hidden');
+            } else {
+                if (mgrSel) mgrSel.classList.add('hidden');
+                if (activeIndicator) activeIndicator.classList.add('hidden');
+                if (navFacilityConfig) navFacilityConfig.classList.add('hidden');
+                if (navBiAnalytics) navBiAnalytics.classList.add('hidden');
+                if (seedBtn) seedBtn.classList.add('hidden');
             }
 
             // Show selected (cumulatively based on role hierarchy)
@@ -1786,25 +1791,32 @@
 
         // Regional Dynamic Pricing Handlers
         async function loadRegionalPricing(facilityId) {
-            const facId = facilityId || document.getElementById('exec-facility-select')?.value || document.getElementById('pricing-facility-select')?.value || 'facility_seattle_north';
+            const facId = facilityId || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+            if (!facId) return;
 
             // Sync select dropdowns
-            const execSelect = document.getElementById('exec-facility-select');
-            if (execSelect && execSelect.value !== facId) execSelect.value = facId;
-            const pricingSelect = document.getElementById('pricing-facility-select');
-            if (pricingSelect && pricingSelect.value !== facId) pricingSelect.value = facId;
+            ['exec-facility-select', 'pricing-facility-select', 'global-facility-select', 'manager-facility-select', 'emp-facility', 'transfer-facility-select', 'tmm-reassign-facility-select'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el && Array.from(el.options).some(o => o.value === facId)) {
+                    el.value = facId;
+                }
+            });
 
-            const { data: facs } = await supabase.from('facilities').select('*');
-            const fac = (facs || []).find(f => f.id === facId || (facId.includes('yakima') && f.id.includes('yakima')) || (facId.includes('portland') && f.id.includes('portland')));
-            if (fac) {
-                if (document.getElementById('rate-tier-1')) document.getElementById('rate-tier-1').value = (Number(fac.tier1_rate) || 5.00).toFixed(2);
-                if (document.getElementById('rate-tier-2')) document.getElementById('rate-tier-2').value = (Number(fac.tier2_rate) || 3.50).toFixed(2);
-                if (document.getElementById('rate-tier-3')) document.getElementById('rate-tier-3').value = (Number(fac.tier3_rate) || 2.00).toFixed(2);
-                if (document.getElementById('rate-tier-4')) document.getElementById('rate-tier-4').value = (Number(fac.tier4_rate) || 1.00).toFixed(2);
-                if (document.getElementById('valet-base')) document.getElementById('valet-base').value = Number(fac.valet_base) || 15.00;
-                if (document.getElementById('valet-tote-adder')) document.getElementById('valet-tote-adder').value = Number(fac.valet_tote_adder) || 1.00;
-                if (typeof updateValetFormula === 'function') updateValetFormula();
+            const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', facId).single();
+            if (error || !fac) {
+                const errorMsg = `Pricing Error: Facility record '${facId}' was not found in Supabase.`;
+                console.error(errorMsg, error);
+                alert(errorMsg);
+                throw new Error(errorMsg);
             }
+
+            if (document.getElementById('rate-tier-1')) document.getElementById('rate-tier-1').value = (Number(fac.tier1_rate) || 5.00).toFixed(2);
+            if (document.getElementById('rate-tier-2')) document.getElementById('rate-tier-2').value = (Number(fac.tier2_rate) || 3.50).toFixed(2);
+            if (document.getElementById('rate-tier-3')) document.getElementById('rate-tier-3').value = (Number(fac.tier3_rate) || 2.00).toFixed(2);
+            if (document.getElementById('rate-tier-4')) document.getElementById('rate-tier-4').value = (Number(fac.tier4_rate) || 1.00).toFixed(2);
+            if (document.getElementById('valet-base')) document.getElementById('valet-base').value = Number(fac.valet_base) || 15.00;
+            if (document.getElementById('valet-tote-adder')) document.getElementById('valet-tote-adder').value = Number(fac.valet_tote_adder) || 1.00;
+            if (typeof updateValetFormula === 'function') updateValetFormula();
         }
 
         async function onGlobalFacilityChange(facilityId) {
@@ -1813,20 +1825,19 @@
                 facId = localStorage.getItem('cloudvault_selected_facility') ||
                     document.getElementById('global-facility-select')?.value ||
                     document.getElementById('exec-facility-select')?.value ||
-                    document.getElementById('manager-facility-select')?.value ||
-                    'facility_yakima_central';
+                    document.getElementById('manager-facility-select')?.value;
             }
+
+            if (!facId) return;
 
             localStorage.setItem('cloudvault_selected_facility', facId);
             window.currentSelectedFacilityId = facId;
 
             // Sync all facility dropdowns across admin panels
-            ['global-facility-select', 'exec-facility-select', 'manager-facility-select', 'pricing-facility-select', 'emp-facility'].forEach(id => {
+            ['global-facility-select', 'exec-facility-select', 'manager-facility-select', 'pricing-facility-select', 'emp-facility', 'transfer-facility-select', 'tmm-reassign-facility-select'].forEach(id => {
                 const el = document.getElementById(id);
-                if (el) {
-                    if (Array.from(el.options).some(opt => opt.value === facId)) {
-                        el.value = facId;
-                    }
+                if (el && Array.from(el.options).some(opt => opt.value === facId)) {
+                    el.value = facId;
                 }
             });
 
@@ -1843,82 +1854,18 @@
         }
 
         async function fetchAndRenderFacilitySpecs(selectedId) {
-            const fid = (selectedId || '').toLowerCase();
-            const facilityDefaults = {
-                'facility_seattle_north': {
-                    id: 'facility_seattle_north',
-                    name: 'Seattle North Fulfillment Center',
-                    manager_name: 'Alex Rivera',
-                    address: '4821 Aurora Ave N',
-                    city: 'Seattle',
-                    state: 'WA',
-                    zip: '98103',
-                    usable_warehouse_sqft: 20000,
-                    sqft_per_tote: 1.0,
-                    tote_capacity: 2000,
-                    num_staging_rooms: 2,
-                    monthly_rent_cost: 8500,
-                    monthly_labor_cost: 14000,
-                    monthly_utilities_cost: 1200,
-                    monthly_insurance_cost: 650
-                },
-                'facility_yakima_central': {
-                    id: 'facility_yakima_central',
-                    name: 'Yakima Fulfillment Center',
-                    manager_name: 'Jordan Miller',
-                    address: '1200 S 1st St',
-                    city: 'Yakima',
-                    state: 'WA',
-                    zip: '98901',
-                    usable_warehouse_sqft: 15000,
-                    sqft_per_tote: 1.0,
-                    tote_capacity: 1500,
-                    num_staging_rooms: 2,
-                    monthly_rent_cost: 4500,
-                    monthly_labor_cost: 8000,
-                    monthly_utilities_cost: 800,
-                    monthly_insurance_cost: 450
-                },
-                'facility_portland_central': {
-                    id: 'facility_portland_central',
-                    name: 'Portland Central Hub',
-                    manager_name: 'Sarah Jenkins',
-                    address: '700 NW 11th Ave',
-                    city: 'Portland',
-                    state: 'OR',
-                    zip: '97209',
-                    usable_warehouse_sqft: 18000,
-                    sqft_per_tote: 1.0,
-                    tote_capacity: 1800,
-                    num_staging_rooms: 2,
-                    monthly_rent_cost: 7200,
-                    monthly_labor_cost: 12500,
-                    monthly_utilities_cost: 1100,
-                    monthly_insurance_cost: 550
-                }
-            };
+            const facId = selectedId || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+            if (!facId) return;
 
-            let specToLoad = facilityDefaults[selectedId];
-
-            if (!specToLoad) {
-                if (fid.includes('yakima')) specToLoad = facilityDefaults['facility_yakima_central'];
-                else if (fid.includes('portland')) specToLoad = facilityDefaults['facility_portland_central'];
-                else specToLoad = facilityDefaults['facility_seattle_north'];
+            const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', facId).single();
+            if (error || !fac) {
+                const msg = `Facility Error: Facility record '${facId}' was not found in Supabase.`;
+                console.error(msg, error);
+                alert(msg);
+                throw new Error(msg);
             }
 
-            try {
-                const { data: facs } = await supabase.from('facilities').select('*');
-                if (facs && facs.length > 0) {
-                    const matchedFac = facs.find(f => f.id === selectedId || (fid.includes('yakima') && f.id.includes('yakima')) || (fid.includes('portland') && f.id.includes('portland')));
-                    if (matchedFac) {
-                        specToLoad = { ...specToLoad, ...matchedFac };
-                    }
-                }
-            } catch (e) {
-                // Fallback to default preset
-            }
-
-            loadFacilitySpecs(specToLoad);
+            loadFacilitySpecs(fac);
         }
 
         function loadExecutiveFacilitySpecs(facilityId) {
@@ -1934,7 +1881,9 @@
         }
 
         async function saveRegionalPricing() {
-            const facId = document.getElementById('exec-facility-select')?.value || document.getElementById('pricing-facility-select')?.value || 'facility_seattle_north';
+            const facId = document.getElementById('exec-facility-select')?.value || document.getElementById('pricing-facility-select')?.value || window.currentSelectedFacilityId;
+            if (!facId) return;
+
             const facNameEl = document.getElementById('exec-facility-select') || document.getElementById('pricing-facility-select');
             const facName = facNameEl ? facNameEl.options[facNameEl.selectedIndex]?.text || facId : facId;
             const tier1 = parseFloat(document.getElementById('rate-tier-1')?.value) || 5.00;
@@ -1965,8 +1914,31 @@
         // Load Real Supabase Data
         async function loadLiveData() {
             try {
-                const currentFac = localStorage.getItem('cloudvault_selected_facility') || 'facility_yakima_central';
-                await onGlobalFacilityChange(currentFac);
+                // Populate Facilities Selectors Dynamically First
+                const { data: facs } = await supabase.from('facilities').select('*');
+                const safeFacs = facs || [];
+                if (safeFacs.length > 0) {
+                    const isExec = actualUserRole === 'executive';
+                    const preferredFacId = (!isExec && actualAssignedFacilityId) ? actualAssignedFacilityId : null;
+
+                    ['global-facility-select', 'pricing-facility-select', 'manager-facility-select', 'exec-facility-select', 'emp-facility', 'transfer-facility-select', 'tmm-reassign-facility-select'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            const curVal = el.value;
+                            el.innerHTML = safeFacs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
+                            if (preferredFacId && safeFacs.some(f => f.id === preferredFacId)) {
+                                el.value = preferredFacId;
+                            } else if (curVal && safeFacs.some(f => f.id === curVal)) {
+                                el.value = curVal;
+                            } else {
+                                el.value = safeFacs[0].id;
+                            }
+                        }
+                    });
+
+                    const currentFac = localStorage.getItem('cloudvault_selected_facility') || safeFacs[0].id;
+                    await onGlobalFacilityChange(currentFac);
+                }
 
                 // Get operational zones
                 const { data: zones, error: zonesErr } = await supabase.from('operational_zones').select('*');
@@ -2374,17 +2346,17 @@
                 if (!facId) {
                     const globalSel = document.getElementById('global-facility-select');
                     const mgrSel = document.getElementById('manager-facility-select');
-                    facId = globalSel?.value || mgrSel?.value || actualAssignedFacilityId || 'facility_seattle_north';
+                    facId = globalSel?.value || mgrSel?.value || actualAssignedFacilityId;
                 }
+                if (!facId) return;
 
-                // Get facility stats safely without empty .eq('id', ...) calls
-                const { data: facs } = await supabase.from('facilities').select('*');
-                const fac = (facs || []).find(f => f.id === facId || (facId.includes('yakima') && f.id.includes('yakima')) || (facId.includes('portland') && f.id.includes('portland'))) || {
-                    usable_warehouse_sqft: 20000,
-                    sqft_per_tote: 1.0,
-                    num_staging_rooms: 2,
-                    tote_capacity: 2000
-                };
+                const { data: fac, error: facErr } = await supabase.from('facilities').select('*').eq('id', facId).single();
+                if (facErr || !fac) {
+                    const msg = `Manager View Error: Facility record '${facId}' not found in Supabase.`;
+                    console.error(msg, facErr);
+                    alert(msg);
+                    throw new Error(msg);
+                }
 
                 const usable = fac.usable_warehouse_sqft || 20000;
                 const sqftTote = Number(fac.sqft_per_tote) || 1.0;
@@ -2850,8 +2822,9 @@
                     const globalSel = document.getElementById('global-facility-select');
                     const execSel = document.getElementById('exec-facility-select');
                     const mgrSel = document.getElementById('manager-facility-select');
-                    facId = globalSel?.value || execSel?.value || mgrSel?.value || actualAssignedFacilityId || 'facility_seattle_north';
+                    facId = globalSel?.value || execSel?.value || mgrSel?.value || actualAssignedFacilityId || localStorage.getItem('cloudvault_selected_facility');
                 }
+                if (!facId) return;
                 const queryFacilityId = facId;
 
                 // Evaluate SLA Cutoff Time (Past 18:00)
@@ -3448,39 +3421,18 @@
                     const globalSel = document.getElementById('global-facility-select');
                     const execSel = document.getElementById('exec-facility-select');
                     const mgrSel = document.getElementById('manager-facility-select');
-                    facId = globalSel?.value || execSel?.value || mgrSel?.value || actualAssignedFacilityId || 'facility_seattle_north';
+                    facId = globalSel?.value || execSel?.value || mgrSel?.value || actualAssignedFacilityId;
                 }
+                if (!facId) return;
                 const queryFacilityId = facId;
 
-                const fid = (queryFacilityId || '').toLowerCase();
-                let activeCity = "Seattle, WA";
-                let hubName = "Seattle North Hub";
-
-                if (fid.includes('yakima')) {
-                    activeCity = "Yakima, WA";
-                    hubName = "Yakima Fulfillment Center";
-                } else if (fid.includes('portland') || fid.includes('pdx')) {
-                    activeCity = "Portland, OR";
-                    hubName = "Portland Central Hub";
-                } else if (fid.includes('spokane')) {
-                    activeCity = "Spokane, WA";
-                    hubName = "Spokane Regional Hub";
-                } else if (fid.includes('tacoma')) {
-                    activeCity = "Tacoma, WA";
-                    hubName = "Tacoma South Hub";
-                } else if (fid.includes('boise')) {
-                    activeCity = "Boise, ID";
-                    hubName = "Boise Main Hub";
-                } else if (fid.includes('denver')) {
-                    activeCity = "Denver, CO";
-                    hubName = "Denver Logistics Hub";
-                } else if (fid.includes('austin')) {
-                    activeCity = "Austin, TX";
-                    hubName = "Austin Central Fulfillment Center";
-                } else {
-                    activeCity = "Seattle, WA";
-                    hubName = "Seattle North Hub";
+                const { data: fac, error: facErr } = await supabase.from('facilities').select('*').eq('id', queryFacilityId).single();
+                if (facErr || !fac) {
+                    throw new Error(`Logistics Routing Error: Facility record '${queryFacilityId}' not found in Supabase.`);
                 }
+
+                const activeCity = [fac.city, fac.state].filter(Boolean).join(', ') || fac.name;
+                const hubName = fac.name;
 
                 const { data: requests } = await supabase.from('access_requests')
                     .select('*, users(name, zip, active_zone)')
@@ -3488,14 +3440,8 @@
                     .neq('status', 'completed')
                     .neq('status', 'cancelled');
 
-                // Filter stops matching this facility/city context
-                const stops = (requests || []).filter(r => {
-                    if (r.facility_id === queryFacilityId) return true;
-                    if (fid.includes('yakima') && ((r.facility_id || '').includes('yakima') || (r.users?.active_zone || '').includes('yakima'))) return true;
-                    if (fid.includes('portland') && ((r.facility_id || '').includes('portland') || (r.users?.active_zone || '').includes('portland'))) return true;
-                    if (fid.includes('seattle') && ((r.facility_id || '').includes('seattle') || (r.users?.active_zone || '').includes('seattle'))) return true;
-                    return r.facility_id === queryFacilityId;
-                });
+                // Filter stops matching this facility context directly
+                const stops = (requests || []).filter(r => r.facility_id === queryFacilityId);
 
                 const stopsListEl = document.getElementById('delivery-stops-list');
                 const countBadge = document.getElementById('map-stops-count');
@@ -4030,7 +3976,7 @@
 
                 await supabase.from('access_requests').insert({
                     uid: currentOverrideTote.uid,
-                    facility_id: currentOverrideTote.facility_id || 'facility_seattle_north',
+                    facility_id: currentOverrideTote.facility_id || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility'),
                     request_type: 'manager_tote_override',
                     status: 'completed',
                     fulfillment_type: `Override ${currentOverrideTote.tote_code} → ${selectedOverrideTargetStatus} (${reason})`
@@ -4072,105 +4018,25 @@
 
         async function loadExecutiveFacilitySpecs(facilityId) {
             const globalSel = document.getElementById('global-facility-select');
-            const selectedId = facilityId || window.currentSelectedFacilityId || (globalSel ? globalSel.value : 'facility_seattle_north');
-            if (globalSel && globalSel.value !== selectedId) globalSel.value = selectedId;
+            const selectedId = facilityId || window.currentSelectedFacilityId || (globalSel ? globalSel.value : null) || localStorage.getItem('cloudvault_selected_facility');
+            if (!selectedId) return;
+
+            if (globalSel && globalSel.value !== selectedId && Array.from(globalSel.options).some(o => o.value === selectedId)) {
+                globalSel.value = selectedId;
+            }
 
             const activePill = document.getElementById('active-facility-name-pill');
-            const fid = (selectedId || '').toLowerCase();
 
-            const facilityDefaults = {
-                'facility_seattle_north': {
-                    id: 'facility_seattle_north',
-                    name: 'Seattle North Fulfillment Center',
-                    manager_name: 'Alex Rivera',
-                    address: '4821 Aurora Ave N',
-                    city: 'Seattle',
-                    state: 'WA',
-                    zip: '98103',
-                    usable_warehouse_sqft: 20000,
-                    sqft_per_tote: 1.0,
-                    tote_capacity: 2000,
-                    num_staging_rooms: 2,
-                    monthly_rent_cost: 8500,
-                    monthly_labor_cost: 14000,
-                    monthly_utilities_cost: 1200,
-                    monthly_insurance_cost: 650
-                },
-                'facility_yakima_central': {
-                    id: 'facility_yakima_central',
-                    name: 'Yakima Fulfillment Center',
-                    manager_name: 'Jordan Miller',
-                    address: '1200 S 1st St',
-                    city: 'Yakima',
-                    state: 'WA',
-                    zip: '98901',
-                    usable_warehouse_sqft: 15000,
-                    sqft_per_tote: 1.0,
-                    tote_capacity: 1500,
-                    num_staging_rooms: 2,
-                    monthly_rent_cost: 4500,
-                    monthly_labor_cost: 8000,
-                    monthly_utilities_cost: 800,
-                    monthly_insurance_cost: 450
-                },
-                'facility_yakima': {
-                    id: 'facility_yakima',
-                    name: 'Yakima Fulfillment Center',
-                    manager_name: 'Jordan Miller',
-                    address: '1200 S 1st St',
-                    city: 'Yakima',
-                    state: 'WA',
-                    zip: '98901',
-                    usable_warehouse_sqft: 15000,
-                    sqft_per_tote: 1.0,
-                    tote_capacity: 1500,
-                    num_staging_rooms: 2,
-                    monthly_rent_cost: 4500,
-                    monthly_labor_cost: 8000,
-                    monthly_utilities_cost: 800,
-                    monthly_insurance_cost: 450
-                },
-                'facility_portland_central': {
-                    id: 'facility_portland_central',
-                    name: 'Portland Central Hub',
-                    manager_name: 'Sarah Jenkins',
-                    address: '700 NW 11th Ave',
-                    city: 'Portland',
-                    state: 'OR',
-                    zip: '97209',
-                    usable_warehouse_sqft: 18000,
-                    sqft_per_tote: 1.0,
-                    tote_capacity: 1800,
-                    num_staging_rooms: 2,
-                    monthly_rent_cost: 7200,
-                    monthly_labor_cost: 12500,
-                    monthly_utilities_cost: 1100,
-                    monthly_insurance_cost: 550
-                }
-            };
-
-            let specToLoad = facilityDefaults[selectedId];
-
-            if (!specToLoad) {
-                if (fid.includes('yakima')) specToLoad = facilityDefaults['facility_yakima_central'];
-                else if (fid.includes('portland')) specToLoad = facilityDefaults['facility_portland_central'];
-                else specToLoad = facilityDefaults['facility_seattle_north'];
+            const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', selectedId).single();
+            if (error || !fac) {
+                const errorMsg = `Executive View Error: Facility '${selectedId}' was not found in Supabase.`;
+                console.error(errorMsg, error);
+                alert(errorMsg);
+                throw new Error(errorMsg);
             }
 
-            try {
-                const { data: facs } = await supabase.from('facilities').select('*');
-                if (facs && facs.length > 0) {
-                    const matchedFac = facs.find(f => f.id === selectedId || (fid.includes('yakima') && f.id.includes('yakima')) || (fid.includes('portland') && f.id.includes('portland')));
-                    if (matchedFac) {
-                        specToLoad = { ...specToLoad, ...matchedFac };
-                    }
-                }
-            } catch (e) {
-                // Fallback to default preset
-            }
-
-            if (activePill) activePill.textContent = specToLoad.name;
-            loadFacilitySpecs(specToLoad);
+            if (activePill) activePill.textContent = fac.name;
+            loadFacilitySpecs(fac);
         }
 
         function loadFacilitySpecs(fac) {
@@ -4224,7 +4090,7 @@
 
             const capacity = Number(document.getElementById('fspec-tote-capacity').value) || 2000;
 
-            let facilityId = currentLoadedFac?.id || "facility_seattle_north";
+            let facilityId = currentLoadedFac?.id || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
 
             // 1. Fetch active subscriptions for real revenue calculation
             const { data: activeSubs } = await supabase.from('subscriptions').select('uid, recurring_storage').eq('status', 'active');
@@ -4465,7 +4331,8 @@
             if (!tbody) return;
 
             try {
-                const facId = facilityId || 'facility_seattle_north';
+                const facId = facilityId || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+                if (!facId) return;
                 const { data: valetReqs } = await supabase.from('access_requests')
                     .select('*, users(name, active_zone)')
                     .eq('facility_id', facId)
@@ -4778,7 +4645,7 @@
                 const editLabelInput = document.getElementById('tmm-edit-label-input');
                 if (editLabelInput) editLabelInput.value = item.label || '';
                 const reassignSel = document.getElementById('tmm-reassign-facility-select');
-                if (reassignSel) reassignSel.value = item.facility_id || 'facility_seattle_north';
+                if (reassignSel && item.facility_id) reassignSel.value = item.facility_id;
                 const overrideSel = document.getElementById('tmm-status-override-select');
                 if (overrideSel) overrideSel.value = item.status || 'stored';
 
@@ -4929,7 +4796,7 @@
             const input = document.getElementById('print-tote-code');
 
             let codes = [];
-            const facId = (document.getElementById('manager-facility-select')?.value) || 'facility_seattle_north';
+            const facId = document.getElementById('global-facility-select')?.value || document.getElementById('manager-facility-select')?.value || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
 
             try {
                 if (presetKey === 'all') {
@@ -5529,9 +5396,6 @@
                         <div class="flex gap-2">
                             <select id="tmm-reassign-facility-select"
                                 class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none">
-                                <option value="facility_seattle_north">Seattle North FC</option>
-                                <option value="facility_yakima_central">Yakima FC</option>
-                                <option value="facility_portland_central">Portland Central Hub</option>
                             </select>
                             <button onclick="executeReassignFacilityFromModal()"
                                 class="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1 cursor-pointer flex-shrink-0">

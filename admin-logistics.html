@@ -49,13 +49,13 @@
 
                 <!-- Navigation Tabs -->
                 <nav class="hidden md:flex items-center space-x-1 pl-6 border-l border-gray-800">
-                    <a href="admin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
+                    <a href="admin.html" id="nav-bi-analytics" class="px-3.5 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
                         <i data-lucide="layout-dashboard" class="w-4 h-4 text-gray-400"></i> BI Analytics
                     </a>
-                    <a href="admin-facilities.html" class="px-3.5 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
+                    <a href="admin-facilities.html" id="nav-facility-config" class="px-3.5 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
                         <i data-lucide="building-2" class="w-4 h-4 text-gray-400"></i> Facility Configuration
                     </a>
-                    <a href="admin-logistics.html" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600/20 border border-amber-500/30 transition flex items-center gap-1.5 shadow-sm">
+                    <a href="admin-logistics.html" id="nav-logistics-ops" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600/20 border border-amber-500/30 transition flex items-center gap-1.5 shadow-sm">
                         <i data-lucide="truck" class="w-4 h-4 text-amber-400"></i> Logistics Operations
                     </a>
                 </nav>
@@ -67,9 +67,6 @@
                 <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2 shadow-sm">
                     <i data-lucide="building-2" class="w-3.5 h-3.5 text-blue-400"></i>
                     <select id="global-facility-select" onchange="onGlobalFacilityChange(this.value)" class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
-                        <option value="facility_seattle_north" class="bg-gray-950 text-white">Seattle North Fulfillment Center</option>
-                        <option value="facility_yakima_central" class="bg-gray-950 text-white">Yakima Fulfillment Center</option>
-                        <option value="facility_portland_central" class="bg-gray-950 text-white">Portland Central Hub</option>
                     </select>
                 </div>
             </div>
@@ -80,25 +77,50 @@
     <!-- Main Workspace -->
     <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         
-        <!-- Logistics Live Map Banner -->
-        <div class="glass-panel p-6 rounded-3xl space-y-4">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800 pb-3">
+        <!-- Logistics Live Map & Active Valet Route Manifest Panel -->
+        <div class="glass-panel p-6 rounded-3xl space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800 pb-4">
                 <div>
                     <span class="text-[10px] font-black uppercase text-amber-400 tracking-widest flex items-center gap-1.5">
                         <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i> Active Logistics Hub
                     </span>
-                    <h2 class="text-xl font-extrabold text-white tracking-tight" id="map-hub-label">Yakima Regional Dispatch Hub</h2>
+                    <h2 class="text-xl font-extrabold text-white tracking-tight" id="map-hub-label">Logistics Dispatch Hub</h2>
+                    <p class="text-xs text-gray-400 mt-0.5 font-mono" id="map-telemetry-stops">Hub Station: Loading...</p>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-3">
+                    <span id="map-stops-count" class="text-xs font-bold text-amber-400 bg-amber-500/10 px-3 py-1 rounded-xl border border-amber-500/20 font-mono">
+                        0 Active Valet Stops
+                    </span>
                     <span class="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20 flex items-center gap-1.5">
                         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> GPS Telemetry Live
                     </span>
                 </div>
             </div>
 
-            <!-- Embedded Interactive Map -->
-            <div class="w-full h-80 rounded-2xl overflow-hidden border border-gray-800 bg-gray-950 relative shadow-2xl">
-                <iframe id="worker-logistics-map-iframe" class="w-full h-full filter saturate-150 contrast-125" style="border:0;" loading="lazy" allowfullscreen src="https://maps.google.com/maps?q=Yakima,%20WA&t=&z=12&ie=UTF8&iwloc=&output=embed"></iframe>
+            <!-- Grid: Interactive Map & Live Delivery Stops Manifest List -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                <!-- Left: Interactive Map Embed (7 Cols) -->
+                <div class="lg:col-span-7 h-96 rounded-2xl overflow-hidden border border-gray-800 bg-gray-950 relative shadow-2xl">
+                    <iframe id="worker-logistics-map-iframe" class="w-full h-full filter saturate-150 contrast-125" style="border:0;" loading="lazy" allowfullscreen src="about:blank"></iframe>
+                </div>
+
+                <!-- Right: Active Valet Delivery Route Manifest (5 Cols) -->
+                <div class="lg:col-span-5 bg-gray-950/80 border border-gray-850 rounded-2xl p-4 space-y-4">
+                    <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="route" class="w-4 h-4 text-blue-400"></i>
+                            <h3 class="font-extrabold text-white text-sm">Valet Route Manifest</h3>
+                        </div>
+                        <span class="text-[10px] text-gray-500 font-mono">Real-Time Queue</span>
+                    </div>
+
+                    <!-- Stops List Container -->
+                    <div id="delivery-stops-list" class="space-y-3 max-h-80 overflow-y-auto pr-1">
+                        <div class="p-4 text-center text-xs text-gray-500 font-mono">Loading delivery stops...</div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -122,7 +144,7 @@
                 <span class="text-xs font-bold text-amber-400 flex items-center gap-1 group-hover:translate-x-1 transition">Print Labels →</span>
             </a>
 
-            <a href="admin-facilities.html" class="glass-panel p-6 rounded-3xl space-y-3 hover:border-indigo-500/40 transition group">
+            <a href="admin-facilities.html" id="action-card-fac-config" class="glass-panel p-6 rounded-3xl space-y-3 hover:border-indigo-500/40 transition group">
                 <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 group-hover:scale-105 transition">
                     <i data-lucide="building-2" class="w-6 h-6"></i>
                 </div>
@@ -144,29 +166,135 @@
     <script src="supabase-config.js"></script>
 
     <script>
-        window.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
-            const savedFacility = localStorage.getItem('cloudvault_selected_facility') || 'facility_yakima_central';
-            const globalSel = document.getElementById('global-facility-select');
-            if (globalSel) {
-                globalSel.value = savedFacility;
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                    const profile = await getCachedUserProfile(session.user.id);
+                    if (profile && profile.role) {
+                        const navFacilityConfig = document.getElementById('nav-facility-config');
+                        const navBiAnalytics = document.getElementById('nav-bi-analytics');
+                        const actionCardFacConfig = document.getElementById('action-card-fac-config');
+                        if (profile.role !== 'executive') {
+                            if (navFacilityConfig) navFacilityConfig.classList.add('hidden');
+                            if (actionCardFacConfig) actionCardFacConfig.classList.add('hidden');
+                        }
+                        if (profile.role === 'warehouse_worker' && navBiAnalytics) {
+                            navBiAnalytics.classList.add('hidden');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn("Failed to evaluate role navbar visibility:", e);
             }
-            onGlobalFacilityChange(savedFacility);
+            await loadLogisticsFacilities();
         });
 
-        function onGlobalFacilityChange(facId) {
+        async function loadLogisticsFacilities() {
+            try {
+                const savedFacility = localStorage.getItem('cloudvault_selected_facility');
+                const globalSel = document.getElementById('global-facility-select');
+
+                const { data: facs, error } = await supabase.from('facilities').select('*').order('name');
+                if (error) throw error;
+
+                if (facs && facs.length > 0 && globalSel) {
+                    globalSel.innerHTML = facs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
+                    const matchedFac = facs.find(f => f.id === savedFacility);
+                    const activeFacId = matchedFac ? matchedFac.id : facs[0].id;
+                    globalSel.value = activeFacId;
+                    await onGlobalFacilityChange(activeFacId);
+                } else {
+                    const msg = "Logistics Initialization Error: No active facilities found in Supabase database.";
+                    alert(msg);
+                    throw new Error(msg);
+                }
+            } catch (e) {
+                console.error("Failed to load logistics facilities:", e);
+                alert("Logistics Error: " + (e.message || "Failed to load facility data"));
+            }
+        }
+
+        async function onGlobalFacilityChange(facId) {
             localStorage.setItem('cloudvault_selected_facility', facId);
             const iframe = document.getElementById('worker-logistics-map-iframe');
             const label = document.getElementById('map-hub-label');
-            if (facId.includes('yakima')) {
-                if (iframe) iframe.src = "https://maps.google.com/maps?q=Yakima,%20WA&t=&z=12&ie=UTF8&iwloc=&output=embed";
-                if (label) label.textContent = "Yakima Regional Dispatch Hub";
-            } else if (facId.includes('portland')) {
-                if (iframe) iframe.src = "https://maps.google.com/maps?q=Portland,%20OR&t=&z=12&ie=UTF8&iwloc=&output=embed";
-                if (label) label.textContent = "Portland Central Hub";
-            } else {
-                if (iframe) iframe.src = "https://maps.google.com/maps?q=Seattle,%20WA&t=&z=12&ie=UTF8&iwloc=&output=embed";
-                if (label) label.textContent = "Seattle North Fulfillment Center";
+            const stopsCountEl = document.getElementById('map-stops-count');
+            const telemetryStopsEl = document.getElementById('map-telemetry-stops');
+            const stopsListEl = document.getElementById('delivery-stops-list');
+
+            try {
+                const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', facId).single();
+                if (error || !fac) {
+                    const msg = `Logistics Error: Facility record '${facId}' not found in Supabase.`;
+                    alert(msg);
+                    throw new Error(msg);
+                }
+
+                if (label) label.textContent = fac.name || 'Logistics Hub';
+                const activeCity = [fac.city, fac.state].filter(Boolean).join(', ') || fac.name;
+
+                // Query active valet delivery access requests from Supabase for this facility
+                const { data: requests, error: reqErr } = await supabase.from('access_requests')
+                    .select('*, users(name, zip, active_zone)')
+                    .eq('facility_id', facId)
+                    .eq('fulfillment_type', 'valet_delivery')
+                    .neq('status', 'completed')
+                    .neq('status', 'cancelled');
+
+                const stops = requests || [];
+
+                if (stopsCountEl) stopsCountEl.textContent = `${stops.length} Active Valet Stops`;
+
+                if (telemetryStopsEl) {
+                    const zips = stops.map(s => s.users?.zip || s.users?.active_zone).filter(Boolean);
+                    telemetryStopsEl.textContent = zips.length > 0 
+                        ? `Waypoints: ${activeCity} (ZIPs ${Array.from(new Set(zips)).join(', ')})` 
+                        : `Hub Station: ${activeCity} (Stationary Intake Mode)`;
+                }
+
+                if (stopsListEl) {
+                    if (stops.length === 0) {
+                        stopsListEl.innerHTML = `
+                            <div class="bg-gray-900/50 p-4 rounded-2xl border border-gray-850 text-center space-y-1">
+                                <p class="text-xs text-gray-400 font-bold">No Valet Deliveries Scheduled for ${fac.name}</p>
+                                <p class="text-[10px] text-gray-500 font-mono">Hub operating in stationary intake mode in ${activeCity}.</p>
+                            </div>`;
+                    } else {
+                        stopsListEl.innerHTML = stops.map((s, idx) => {
+                            const name = s.users?.name || (s.uid ? `Customer ${s.uid.substring(0, 6)}` : 'Valet Customer');
+                            const zip = s.users?.zip || s.users?.active_zone || 'Local Zone';
+                            const slot = s.time_slot || '09:00 AM - 12:00 PM';
+                            const itemNum = (s.requested_items || s.requested_tote_codes || []).length || 1;
+                            return `
+                                <div class="bg-gray-950 border border-gray-850 p-3 rounded-2xl flex items-center justify-between hover:border-amber-500/40 transition">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-7 h-7 rounded-xl bg-amber-600/20 text-amber-400 font-bold text-xs flex items-center justify-center border border-amber-500/30 font-mono">
+                                            #${idx + 1}
+                                        </div>
+                                        <div>
+                                            <h5 class="text-xs font-bold text-white">${name}</h5>
+                                            <p class="text-[10px] font-mono text-gray-400">ZIP ${zip} &bull; ${slot}</p>
+                                        </div>
+                                    </div>
+                                    <span class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">${itemNum} Tote(s)</span>
+                                </div>`;
+                        }).join('');
+                    }
+                }
+
+                if (iframe) {
+                    const zips = stops.map(s => s.users?.zip || s.users?.active_zone).filter(Boolean);
+                    const mapQuery = encodeURIComponent(`${activeCity} ${zips.slice(0, 3).join(' ')}`.trim());
+                    iframe.src = `https://maps.google.com/maps?q=${mapQuery}&t=&z=12&ie=UTF8&iwloc=&output=embed`;
+                }
+
+                lucide.createIcons();
+            } catch (err) {
+                console.error("onGlobalFacilityChange failure:", err);
+                alert(`Logistics Facility Error: ${err.message || 'Facility lookup failed'}`);
+                throw err;
             }
         }
     </script>
