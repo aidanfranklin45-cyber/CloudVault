@@ -3561,7 +3561,7 @@
                 const hubName = fac.name;
 
                 const { data: requests } = await supabase.from('access_requests')
-                    .select('*, users(id, name, active_zone, assigned_facility_id)')
+                    .select('*, users!uid(id, name, active_zone, assigned_facility_id)')
                     .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%')
                     .neq('status', 'completed')
                     .neq('status', 'cancelled');
@@ -4502,7 +4502,7 @@
                 const facId = facilityId || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
                 if (!facId) return;
                 const { data: valetReqs } = await supabase.from('access_requests')
-                    .select('*, users(name, active_zone)')
+                    .select('*, users!uid(name, active_zone)')
                     .eq('facility_id', facId)
                     .eq('fulfillment_type', 'valet_delivery')
                     .eq('status', 'pending');

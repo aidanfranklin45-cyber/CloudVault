@@ -2413,24 +2413,30 @@
 
             const filteredData = currentInventory.filter(item => {
                 const matchesSearch = (item.label || '').toLowerCase().includes(query) || (item.tote_code || '').toLowerCase().includes(query);
-                const matchesStatus = statusFilter === 'all' 
-                    ? true 
-                    : (statusFilter === 'valet_delivery'
-                        ? (
-                            item.status === 'pending-dispatch' || 
-                            item.status === 'out-for-delivery' || 
-                            currentRequests.some(r => 
-                                r.fulfillment_type === 'valet_delivery' && (
-                                    (r.requested_items && r.requested_items.includes(item.id)) ||
-                                    (r.requested_tote_codes && r.requested_tote_codes.includes(item.tote_code))
-                                )
-                            )
-                          )
-                        : (statusFilter === 'staged'
-                            ? item.status === 'staged' && !currentRequests.some(r => r.fulfillment_type === 'valet_delivery' && ((r.requested_items && r.requested_items.includes(item.id)) || (r.requested_tote_codes && r.requested_tote_codes.includes(item.tote_code))))
-                            : item.status === statusFilter
-                          )
-                      );
+                let matchesStatus = false;
+                if (statusFilter === 'all') {
+                    matchesStatus = true;
+                } else if (statusFilter === 'stored') {
+                    matchesStatus = (item.status === 'stored');
+                } else if (statusFilter === 'pending-stage') {
+                    const isRequested = currentRequests.some(r => 
+                        (r.requested_items && r.requested_items.includes(item.id)) ||
+                        (r.requested_tote_codes && r.requested_tote_codes.includes(item.tote_code))
+                    );
+                    matchesStatus = (item.status === 'pending-stage' || isRequested);
+                } else if (statusFilter === 'staged') {
+                    matchesStatus = (item.status === 'staged');
+                } else if (statusFilter === 'valet_delivery') {
+                    const isValetReq = currentRequests.some(r => 
+                        (r.fulfillment_type === 'valet_delivery' || r.request_type === 'valet_delivery' || r.fulfillment_type === 'valet_pickup') && (
+                            (r.requested_items && r.requested_items.includes(item.id)) ||
+                            (r.requested_tote_codes && r.requested_tote_codes.includes(item.tote_code))
+                        )
+                    );
+                    matchesStatus = (item.status === 'pending-dispatch' || item.status === 'out-for-delivery' || isValetReq);
+                } else {
+                    matchesStatus = (item.status === statusFilter);
+                }
 
                 const itemCategory = getItemCategory(item);
                 const matchesCategory = currentCategoryFilter === 'all' || 
