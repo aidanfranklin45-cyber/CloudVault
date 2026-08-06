@@ -1382,9 +1382,25 @@ BEGIN
     v_next_location_type := 'with_customer';
 
   ELSIF v_item.status = 'with-customer' THEN
-    v_next_status := 'pending-stage'::public.inventory_status;
-    v_next_location_code := 'INTAKE-BAY-1';
-    v_next_location_type := 'intake';
+    v_next_status := 'stored'::public.inventory_status;
+    v_next_location_code := COALESCE(v_item.location_code, 'V-A01-S01');
+    v_next_location_type := 'vault';
+
+  -- Stored tote requested by customer
+  ELSIF v_item.status = 'stored' THEN
+    IF v_has_pending_request AND v_fulfillment_type = 'valet_delivery' THEN
+      v_next_status := 'pending-dispatch'::public.inventory_status;
+      v_next_location_code := 'DISPATCH-BAY-1';
+      v_next_location_type := 'dispatch';
+    ELSIF v_has_pending_request THEN
+      v_next_status := 'pending-stage'::public.inventory_status;
+      v_next_location_code := 'VAULT-PULL-BAY';
+      v_next_location_type := 'vault';
+    ELSE
+      v_next_status := 'stored'::public.inventory_status;
+      v_next_location_code := COALESCE(v_item.location_code, 'V-A01-S01');
+      v_next_location_type := 'vault';
+    END IF;
 
   ELSE
     v_next_status := 'stored'::public.inventory_status;
@@ -1401,6 +1417,13 @@ BEGIN
       last_scanned_at = now(),
       last_scanned_by = v_uid
   WHERE id = v_item.id;
+
+  -- If returned to vault (status = 'stored'), mark pending access request completed
+  IF v_next_status = 'stored' AND v_has_pending_request THEN
+    UPDATE public.access_requests
+    SET status = 'completed'
+    WHERE uid = v_item.uid AND status = 'pending';
+  END IF;
 
   RETURN jsonb_build_object(
     'success', true,
