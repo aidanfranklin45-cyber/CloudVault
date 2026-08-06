@@ -552,14 +552,51 @@
                 if (label) label.textContent = fac.name || 'Logistics Hub';
                 const activeCity = [fac.city, fac.state].filter(Boolean).join(', ') || fac.name;
 
-                // Query active valet delivery access requests from Supabase for this facility
-                const { data: requests, error: reqErr } = await supabase.from('access_requests')
-                    .select('*, users(name, zip, active_zone, assigned_facility_id)')
+                // Query active valet delivery access requests and active inventory totes for this facility
+                const { data: requests } = await supabase.from('access_requests')
+                    .select('*, users(id, name, zip, active_zone, assigned_facility_id)')
                     .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%')
                     .neq('status', 'completed')
                     .neq('status', 'cancelled');
 
-                const stops = (requests || []).filter(r => r.facility_id === facId || r.users?.assigned_facility_id === facId);
+                const { data: activeValetTotes } = await supabase.from('inventory')
+                    .select('uid, tote_code, status, facility_id, users(id, name, zip, active_zone, assigned_facility_id)')
+                    .eq('facility_id', facId)
+                    .in('status', ['pending-dispatch', 'out-for-delivery']);
+
+                const activeValetUserMap = {};
+
+                (requests || []).forEach(r => {
+                    if (r.facility_id === facId || r.users?.assigned_facility_id === facId) {
+                        const uId = r.uid || (r.users ? r.users.id : null);
+                        if (uId) {
+                            activeValetUserMap[uId] = {
+                                name: r.users?.name || `Customer ${uId.substring(0, 6)}`,
+                                zip: r.users?.zip || r.users?.active_zone || 'Local Zone',
+                                slot: r.time_slot || '09:00 AM - 12:00 PM',
+                                status: r.status,
+                                toteCount: (r.requested_items || r.requested_tote_codes || []).length || 1
+                            };
+                        }
+                    }
+                });
+
+                (activeValetTotes || []).forEach(t => {
+                    const uId = t.uid;
+                    if (uId && !activeValetUserMap[uId]) {
+                        activeValetUserMap[uId] = {
+                            name: t.users?.name || `Customer ${uId.substring(0, 6)}`,
+                            zip: t.users?.zip || t.users?.active_zone || 'Local Zone',
+                            slot: t.status === 'out-for-delivery' ? 'En Route (In Transit)' : 'Awaiting Vehicle Load',
+                            status: t.status,
+                            toteCount: 1
+                        };
+                    } else if (uId && activeValetUserMap[uId]) {
+                        activeValetUserMap[uId].toteCount = Math.max(activeValetUserMap[uId].toteCount, 1);
+                    }
+                });
+
+                const stops = Object.values(activeValetUserMap);
 
                 if (stopsCountEl) stopsCountEl.textContent = `${stops.length} Active Valet Stops`;
 

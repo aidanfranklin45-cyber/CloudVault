@@ -3309,8 +3309,7 @@
                                             </div>
                                         </div>
                                         <div class="flex flex-wrap items-center gap-2">
-                                            <span class="text-xs font-bold font-mono text-orange-400 bg-orange-500/10 border border-orange-500/20 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5"></i> Driver Loading Bay A</span>
-                                            <span class="text-xs font-mono font-bold text-orange-400 bg-orange-500/10 px-3 py-1 rounded-xl border border-orange-500/30">En Route</span>
+                                            <span class="text-xs font-bold font-mono text-orange-400 bg-orange-500/10 border border-orange-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5"></i> En Route to Customer</span>
                                         </div>
                                     </div>
 
@@ -3505,13 +3504,45 @@
                 const hubName = fac.name;
 
                 const { data: requests } = await supabase.from('access_requests')
-                    .select('*, users(name, zip, active_zone, assigned_facility_id)')
+                    .select('*, users(id, name, zip, active_zone, assigned_facility_id)')
                     .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%')
                     .neq('status', 'completed')
                     .neq('status', 'cancelled');
 
-                // Filter stops matching this facility context directly
-                const stops = (requests || []).filter(r => r.facility_id === queryFacilityId || r.users?.assigned_facility_id === queryFacilityId);
+                const { data: activeValetTotes } = await supabase.from('inventory')
+                    .select('uid, tote_code, status, facility_id, users(id, name, zip, active_zone, assigned_facility_id)')
+                    .eq('facility_id', queryFacilityId)
+                    .in('status', ['pending-dispatch', 'out-for-delivery']);
+
+                const activeValetUserMap = {};
+
+                (requests || []).forEach(r => {
+                    if (r.facility_id === queryFacilityId || r.users?.assigned_facility_id === queryFacilityId) {
+                        const uId = r.uid || (r.users ? r.users.id : null);
+                        if (uId) {
+                            activeValetUserMap[uId] = {
+                                uid: uId,
+                                users: r.users,
+                                time_slot: r.time_slot || '09:00 AM - 12:00 PM',
+                                requested_items: r.requested_items
+                            };
+                        }
+                    }
+                });
+
+                (activeValetTotes || []).forEach(t => {
+                    const uId = t.uid;
+                    if (uId && !activeValetUserMap[uId]) {
+                        activeValetUserMap[uId] = {
+                            uid: uId,
+                            users: t.users,
+                            time_slot: t.status === 'out-for-delivery' ? 'En Route (In Transit)' : 'Awaiting Vehicle Load',
+                            requested_items: [t.tote_code]
+                        };
+                    }
+                });
+
+                const stops = Object.values(activeValetUserMap);
 
                 const stopsListEl = document.getElementById('delivery-stops-list');
                 const countBadge = document.getElementById('map-stops-count');
