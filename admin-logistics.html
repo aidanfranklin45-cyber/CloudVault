@@ -136,7 +136,7 @@
                             Customer Facility Relocation Portal
                             <span class="bg-cyan-500/10 text-cyan-400 text-[10px] px-2 py-0.5 rounded-full font-bold border border-cyan-500/20 uppercase">Manager &amp; Executive Tool</span>
                         </h3>
-                        <p class="text-xs text-gray-400">Reassign customers and their active tote inventory to any target market facility across the network.</p>
+                        <p class="text-xs text-gray-400">Reassign customers, active ZIP code coverage, and tote inventory to any target facility across the network.</p>
                     </div>
                 </div>
                 <span class="text-xs font-mono font-bold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-xl border border-cyan-500/20 flex items-center gap-1">
@@ -144,36 +144,52 @@
                 </span>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
-                <!-- 1. Customer Selector -->
-                <div class="md:col-span-4 space-y-1.5">
-                    <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider">Select Customer</label>
-                    <select id="relocate-customer-select" onchange="onRelocateCustomerSelected(this.value)" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold outline-none cursor-pointer focus:border-cyan-500">
-                        <option value="">Loading customer roster...</option>
-                    </select>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
+                <!-- 1. Customer Live Search Input with Auto-complete Dropdown -->
+                <div class="md:col-span-4 space-y-1.5 relative">
+                    <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider flex items-center justify-between">
+                        <span>Search Customer</span>
+                        <span class="text-[10px] text-cyan-400 font-mono">By Name, Email, or ID</span>
+                    </label>
+                    <div class="relative">
+                        <input type="text" id="relocate-customer-search" oninput="onRelocateCustomerSearchInput(this.value)" onfocus="onRelocateCustomerSearchFocus()" placeholder="Type customer name, email, or ID..." class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold outline-none focus:border-cyan-500 transition pr-8">
+                        <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute right-2.5 top-3 pointer-events-none"></i>
+                    </div>
+                    <!-- Search Results Dropdown List -->
+                    <div id="relocate-customer-results" class="hidden absolute top-full left-0 right-0 z-50 mt-1 bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl max-h-60 overflow-y-auto divide-y divide-gray-900">
+                    </div>
+                    <input type="hidden" id="relocate-selected-user-id" value="">
                 </div>
 
                 <!-- 2. Target Facility Selector -->
                 <div class="md:col-span-4 space-y-1.5">
                     <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider">Target Destination Facility</label>
-                    <select id="relocate-target-facility-select" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold outline-none cursor-pointer focus:border-cyan-500">
+                    <select id="relocate-target-facility-select" onchange="onRelocateFacilityChanged(this.value)" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold outline-none cursor-pointer focus:border-cyan-500 transition">
                         <option value="">Loading facilities...</option>
                     </select>
                 </div>
 
-                <!-- 3. Move Totes Checkbox & Action Button -->
-                <div class="md:col-span-4 flex items-center gap-3">
-                    <div class="flex-1">
-                        <label class="flex items-center gap-2 text-xs text-gray-300 font-bold cursor-pointer">
-                            <input type="checkbox" id="relocate-move-totes-check" checked class="w-4 h-4 accent-cyan-500 rounded cursor-pointer">
-                            <span>Reassign active totes &amp; orders</span>
-                        </label>
-                    </div>
-                    <button onclick="executeCustomerRelocation()" id="relocate-execute-btn" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-extrabold px-5 py-3 rounded-xl shadow-lg shadow-cyan-600/20 transition flex items-center gap-2 cursor-pointer border border-cyan-400/30 active:scale-95 shrink-0">
-                        <i data-lucide="arrow-right-left" class="w-4 h-4"></i>
-                        <span>Transfer Customer</span>
-                    </button>
+                <!-- 3. New Active ZIP Code Input -->
+                <div class="md:col-span-4 space-y-1.5">
+                    <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider flex items-center justify-between">
+                        <span>New Active ZIP Code</span>
+                        <span class="text-[10px] text-amber-400 font-mono">Zone Coverage</span>
+                    </label>
+                    <input type="text" id="relocate-target-zip-input" placeholder="e.g. 97201" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-amber-400 font-mono font-bold outline-none focus:border-amber-500 transition">
                 </div>
+            </div>
+
+            <!-- Transfer Options & Execute Button -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-gray-850">
+                <label class="flex items-center gap-2.5 text-xs text-gray-300 font-bold cursor-pointer">
+                    <input type="checkbox" id="relocate-move-totes-check" checked class="w-4 h-4 accent-cyan-500 rounded cursor-pointer">
+                    <span>Reassign active totes, orders, and delivery requests to new facility &amp; ZIP</span>
+                </label>
+
+                <button onclick="executeCustomerRelocation()" id="relocate-execute-btn" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-extrabold px-7 py-3 rounded-xl shadow-lg shadow-cyan-600/20 transition flex items-center gap-2 cursor-pointer border border-cyan-400/30 active:scale-95 shrink-0 w-full sm:w-auto justify-center">
+                    <i data-lucide="arrow-right-left" class="w-4 h-4"></i>
+                    <span>Execute Customer Transfer</span>
+                </button>
             </div>
 
             <!-- Active Selection Summary Card -->
@@ -251,6 +267,19 @@
 
         let allCustomersRoster = [];
 
+        let allCustomersRoster = [];
+        let allZonesList = [];
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         async function loadLogisticsFacilities() {
             try {
                 const savedFacility = localStorage.getItem('cloudvault_selected_facility');
@@ -294,22 +323,93 @@
                 if (error) throw error;
                 allCustomersRoster = users || [];
 
-                const sel = document.getElementById('relocate-customer-select');
-                if (!sel) return;
+                const { data: zones } = await supabase.from('operational_zones').select('*');
+                allZonesList = zones || [];
 
-                if (allCustomersRoster.length === 0) {
-                    sel.innerHTML = '<option value="">No registered customers found</option>';
-                    return;
-                }
-
-                sel.innerHTML = '<option value="">-- Select Customer to Transfer --</option>' + 
-                    allCustomersRoster.map(u => {
-                        const facName = (u.assigned_facility_id || 'unassigned').replace('facility_', '').replace('_', ' ').toUpperCase();
-                        const displayName = u.name && u.name !== 'Unknown' ? `${u.name} (${u.email})` : u.email;
-                        return `<option value="${u.id}" class="bg-gray-950 text-white">${displayName} — Current Facility: ${facName}</option>`;
-                    }).join('');
+                // Close search results dropdown on outside click
+                document.addEventListener('click', (e) => {
+                    const searchInput = document.getElementById('relocate-customer-search');
+                    const resultsDiv = document.getElementById('relocate-customer-results');
+                    if (searchInput && resultsDiv && !searchInput.contains(e.target) && !resultsDiv.contains(e.target)) {
+                        resultsDiv.classList.add('hidden');
+                    }
+                });
             } catch (e) {
                 console.error("Failed to load customer relocation roster:", e);
+            }
+        }
+
+        function onRelocateCustomerSearchInput(query) {
+            const resultsDiv = document.getElementById('relocate-customer-results');
+            if (!resultsDiv) return;
+
+            const q = (query || '').toLowerCase().trim();
+            if (!q) {
+                resultsDiv.classList.add('hidden');
+                return;
+            }
+
+            const matches = allCustomersRoster.filter(u => 
+                (u.name || '').toLowerCase().includes(q) || 
+                (u.email || '').toLowerCase().includes(q) ||
+                (u.id || '').toLowerCase().includes(q)
+            );
+
+            if (matches.length === 0) {
+                resultsDiv.classList.remove('hidden');
+                resultsDiv.innerHTML = `<div class="p-3 text-xs text-gray-500 font-mono text-center">No matching customers found for "${escapeHtml(query)}"</div>`;
+                return;
+            }
+
+            resultsDiv.classList.remove('hidden');
+            resultsDiv.innerHTML = matches.slice(0, 10).map(u => {
+                const facName = (u.assigned_facility_id || 'unassigned').replace('facility_', '').replace('_', ' ').toUpperCase();
+                const displayName = u.name && u.name !== 'Unknown' ? u.name : u.email;
+                return `
+                    <div onclick="selectRelocateCustomer('${u.id}')" class="p-3 hover:bg-gray-900 cursor-pointer transition flex items-center justify-between text-xs">
+                        <div>
+                            <div class="font-bold text-white">${escapeHtml(displayName)}</div>
+                            <div class="text-[10px] text-gray-400 font-mono">${escapeHtml(u.email)}</div>
+                        </div>
+                        <span class="text-[9px] text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 font-mono">${facName}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function onRelocateCustomerSearchFocus() {
+            const val = document.getElementById('relocate-customer-search')?.value;
+            if (val && val.trim()) {
+                onRelocateCustomerSearchInput(val);
+            }
+        }
+
+        async function selectRelocateCustomer(userId) {
+            const user = allCustomersRoster.find(u => u.id === userId);
+            if (!user) return;
+
+            document.getElementById('relocate-selected-user-id').value = user.id;
+            document.getElementById('relocate-customer-search').value = `${user.name && user.name !== 'Unknown' ? user.name : user.email} (${user.email})`;
+            document.getElementById('relocate-customer-results').classList.add('hidden');
+
+            await onRelocateCustomerSelected(userId);
+        }
+
+        function onRelocateFacilityChanged(facId) {
+            const zipInput = document.getElementById('relocate-target-zip-input');
+            if (!zipInput || !facId) return;
+
+            // Find zone matching this facility ID
+            const zone = allZonesList.find(z => z.facility_id === facId || (facId.includes('yakima') && (z.id || '').includes('yakima')) || (facId.includes('pdx') && (z.id || '').includes('pdx')));
+            if (zone && zone.zip_codes && zone.zip_codes.length > 0) {
+                zipInput.value = zone.zip_codes[0];
+            } else {
+                if (facId.includes('yakima')) zipInput.value = '98908';
+                else if (facId.includes('portland')) zipInput.value = '97201';
+                else if (facId.includes('denver')) zipInput.value = '80202';
+                else if (facId.includes('spokane')) zipInput.value = '99201';
+                else if (facId.includes('austin')) zipInput.value = '78701';
+                else zipInput.value = '98101';
             }
         }
 
@@ -332,7 +432,7 @@
             box.classList.remove('hidden');
             box.innerHTML = `
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-bold text-gray-200">
-                    <span>Customer: <strong class="text-cyan-400">${user.name || 'Customer'}</strong> &bull; <span class="text-gray-400">${user.email}</span></span>
+                    <span>Customer: <strong class="text-cyan-400">${escapeHtml(user.name || 'Customer')}</strong> &bull; <span class="text-gray-400">${escapeHtml(user.email)}</span></span>
                     <span class="bg-gray-900 border border-gray-800 text-gray-400 px-2.5 py-0.5 rounded-lg font-mono text-[11px] self-start sm:self-auto">UID: ${user.id.substring(0, 8)}...</span>
                 </div>
                 <div class="flex flex-wrap items-center gap-6 text-[11px] text-gray-400 pt-2 border-t border-gray-900">
@@ -344,15 +444,15 @@
         }
 
         async function executeCustomerRelocation() {
-            const sel = document.getElementById('relocate-customer-select');
+            const userId = document.getElementById('relocate-selected-user-id')?.value;
             const targetSel = document.getElementById('relocate-target-facility-select');
+            const newZip = document.getElementById('relocate-target-zip-input')?.value.trim();
             const moveTotes = document.getElementById('relocate-move-totes-check').checked;
 
-            const userId = sel ? sel.value : null;
             const newFacilityId = targetSel ? targetSel.value : null;
 
             if (!userId) {
-                alert("Please select a customer to transfer.");
+                alert("Please search and select a customer to transfer.");
                 return;
             }
             if (!newFacilityId) {
@@ -364,7 +464,7 @@
             const userName = user ? (user.name || user.email) : userId;
             const targetFacName = targetSel.options[targetSel.selectedIndex]?.text || newFacilityId;
 
-            if (!confirm(`Are you sure you want to transfer ${userName} to ${targetFacName}?${moveTotes ? '\n\nAll active totes and orders belonging to this customer will also be reassigned to the new facility.' : ''}`)) {
+            if (!confirm(`Are you sure you want to transfer ${userName} to ${targetFacName}${newZip ? ` (ZIP: ${newZip})` : ''}?${moveTotes ? '\n\nAll active totes and requests belonging to this customer will also be reassigned to the new facility.' : ''}`)) {
                 return;
             }
 
@@ -374,14 +474,17 @@
             btn.disabled = true;
 
             try {
-                // 1. Update user assigned_facility_id
+                const updatePayload = { assigned_facility_id: newFacilityId };
+                if (newZip) updatePayload.active_zone = newZip;
+
+                // 1. Update user assigned_facility_id & active_zone
                 const { error: userErr } = await supabase
                     .from('users')
-                    .update({ assigned_facility_id: newFacilityId })
+                    .update(updatePayload)
                     .eq('id', userId);
                 if (userErr) throw userErr;
 
-                // 2. Move totes & open orders if selected
+                // 2. Move totes & open access_requests if selected
                 let movedTotesCount = 0;
                 if (moveTotes) {
                     const { data: updatedTotes, error: toteErr } = await supabase
@@ -391,15 +494,14 @@
                         .select('id');
                     if (!toteErr && updatedTotes) movedTotesCount = updatedTotes.length;
 
-                    await supabase.from('orders').update({ facility_id: newFacilityId }).eq('uid', userId);
-                    await supabase.from('delivery_requests').update({ facility_id: newFacilityId }).eq('uid', userId);
+                    await supabase.from('access_requests').update({ facility_id: newFacilityId }).eq('uid', userId);
                 }
 
-                alert(`✅ Success! Customer ${userName} has been transferred to ${targetFacName}.${moveTotes ? ` (${movedTotesCount} active totes reassigned)` : ''}`);
+                alert(`✅ Success! Customer ${userName} has been transferred to ${targetFacName} (ZIP: ${newZip || 'Unchanged'}).${moveTotes ? ` (${movedTotesCount} active totes reassigned)` : ''}`);
 
-                // Clear selection and refresh
-                sel.value = '';
-                targetSel.value = '';
+                // Reset search selection
+                document.getElementById('relocate-selected-user-id').value = '';
+                document.getElementById('relocate-customer-search').value = '';
                 document.getElementById('relocate-summary-box').classList.add('hidden');
                 await loadCustomerRelocationRoster();
 
