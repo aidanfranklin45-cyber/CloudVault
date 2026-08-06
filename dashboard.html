@@ -2706,8 +2706,8 @@
             let stagingCap = 2; // Default limit
 
             try {
-                const { data: fac } = await supabase.from('facilities').select('staging_rooms').eq('id', targetFacId).maybeSingle();
-                if (fac && fac.staging_rooms) stagingCap = fac.staging_rooms;
+                const { data: fac } = await supabase.from('facilities').select('num_staging_rooms, staging_rooms').eq('id', targetFacId).maybeSingle();
+                if (fac) stagingCap = fac.num_staging_rooms || fac.staging_rooms || 2;
             } catch (e) {
                 console.warn('Could not fetch staging rooms capacity:', e);
             }
