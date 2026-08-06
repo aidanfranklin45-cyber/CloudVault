@@ -819,10 +819,15 @@
                 }
 
                 if (!zone) {
-                    const errorMsg = `Operational Zone Error: No active operational zone found for facility '${fid}'.`;
-                    console.error(errorMsg);
-                    alert(errorMsg);
-                    throw new Error(errorMsg);
+                    const fallbackSlug = (fid || 'facility').replace('facility_', '');
+                    zone = {
+                        id: `zone_${fallbackSlug}`,
+                        facility_id: fid,
+                        city: currentLoadedFac ? (currentLoadedFac.city || currentLoadedFac.name || 'Active Market') : 'Active Market',
+                        active: true,
+                        required_deposit: 25.00,
+                        zip_codes: []
+                    };
                 }
 
                 currentLoadedZone = zone;
@@ -865,7 +870,15 @@
             renderZipCodes(zips);
 
             try {
-                await supabase.from('operational_zones').update({ zip_codes: zips }).eq('id', currentLoadedZone.id);
+                const zoneCity = currentLoadedZone.city || (currentLoadedFac ? (currentLoadedFac.city || currentLoadedFac.name) : 'Active Market');
+                await supabase.from('operational_zones').upsert({
+                    id: currentLoadedZone.id,
+                    facility_id: currentLoadedFac ? currentLoadedFac.id : null,
+                    city: zoneCity,
+                    zip_codes: zips,
+                    active: currentLoadedZone.active !== false,
+                    required_deposit: currentLoadedZone.required_deposit || 25.00
+                }, { onConflict: 'id' });
             } catch (e) {
                 console.error("ZIP update failed:", e);
             }
@@ -878,7 +891,15 @@
             renderZipCodes(zips);
 
             try {
-                await supabase.from('operational_zones').update({ zip_codes: zips }).eq('id', currentLoadedZone.id);
+                const zoneCity = currentLoadedZone.city || (currentLoadedFac ? (currentLoadedFac.city || currentLoadedFac.name) : 'Active Market');
+                await supabase.from('operational_zones').upsert({
+                    id: currentLoadedZone.id,
+                    facility_id: currentLoadedFac ? currentLoadedFac.id : null,
+                    city: zoneCity,
+                    zip_codes: zips,
+                    active: currentLoadedZone.active !== false,
+                    required_deposit: currentLoadedZone.required_deposit || 25.00
+                }, { onConflict: 'id' });
             } catch (e) {
                 console.error("ZIP remove failed:", e);
             }
@@ -924,16 +945,19 @@
                 if (facErr) throw facErr;
 
                 // Update operational zone deposit & active status
-                if (currentLoadedZone) {
-                    const { error: zoneErr } = await supabase.from('operational_zones').upsert({
-                        id: currentLoadedZone.id,
-                        facility_id: currentLoadedFac.id,
-                        required_deposit: depositVal,
-                        active: activeVal,
-                        zip_codes: currentLoadedZone.zip_codes || []
-                    }, { onConflict: 'id' });
-                    if (zoneErr) throw zoneErr;
-                }
+                const zoneId = currentLoadedZone ? currentLoadedZone.id : `zone_${currentLoadedFac.id.replace('facility_', '')}`;
+                const zoneCity = (currentLoadedZone && currentLoadedZone.city) || updatedFac.city || updatedFac.name || 'Yakima';
+                const zoneZips = currentLoadedZone ? (currentLoadedZone.zip_codes || []) : [];
+
+                const { error: zoneErr } = await supabase.from('operational_zones').upsert({
+                    id: zoneId,
+                    facility_id: currentLoadedFac.id,
+                    city: zoneCity,
+                    required_deposit: depositVal,
+                    active: activeVal,
+                    zip_codes: zoneZips
+                }, { onConflict: 'id' });
+                if (zoneErr) throw zoneErr;
 
                 await loadFacilitiesDropdown();
                 alert(`Successfully saved specifications, regional pricing rates, and deposit rules for ${updatedFac.name}!`);
