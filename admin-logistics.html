@@ -560,7 +560,7 @@
                     .neq('status', 'cancelled');
 
                 const { data: activeValetTotes } = await supabase.from('inventory')
-                    .select('uid, tote_code, status, facility_id, users(id, name, zip, active_zone, assigned_facility_id)')
+                    .select('uid, tote_code, status, facility_id, users!uid(id, name, zip, active_zone, assigned_facility_id)')
                     .eq('facility_id', facId)
                     .in('status', ['pending-dispatch', 'out-for-delivery']);
 
