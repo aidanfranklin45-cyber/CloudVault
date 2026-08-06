@@ -339,28 +339,42 @@ RETURNS trigger AS $$
 DECLARE
   v_zip TEXT;
   v_facility_id TEXT;
+  v_role public.user_role;
 BEGIN
   v_zip := COALESCE(new.raw_user_meta_data->>'zip', '98101');
+  v_facility_id := new.raw_user_meta_data->>'assigned_facility_id';
   
-  IF v_zip IS NOT NULL AND v_zip != '' THEN
-    -- Try matching operational_zones
-    SELECT facility_id INTO v_facility_id
-    FROM public.operational_zones
-    WHERE v_zip = ANY(zip_codes) AND facility_id IS NOT NULL
-    LIMIT 1;
-
-    -- Fallback to service_areas
-    IF v_facility_id IS NULL THEN
-      SELECT facility_id INTO v_facility_id
-      FROM public.service_areas
-      WHERE zip_code = v_zip AND facility_id IS NOT NULL
-      LIMIT 1;
-    END IF;
+  IF (new.raw_user_meta_data->>'role') IS NOT NULL AND (new.raw_user_meta_data->>'role') != '' THEN
+    BEGIN
+      v_role := (new.raw_user_meta_data->>'role')::public.user_role;
+    EXCEPTION WHEN OTHERS THEN
+      v_role := 'customer'::public.user_role;
+    END;
+  ELSE
+    v_role := 'customer'::public.user_role;
   END IF;
 
-  -- Fail-safe default
-  IF v_facility_id IS NULL THEN
-    v_facility_id := 'facility_seattle_north';
+  IF v_facility_id IS NULL OR v_facility_id = '' THEN
+    IF v_zip IS NOT NULL AND v_zip != '' THEN
+      -- Try matching operational_zones
+      SELECT facility_id INTO v_facility_id
+      FROM public.operational_zones
+      WHERE v_zip = ANY(zip_codes) AND facility_id IS NOT NULL
+      LIMIT 1;
+
+      -- Fallback to service_areas
+      IF v_facility_id IS NULL THEN
+        SELECT facility_id INTO v_facility_id
+        FROM public.service_areas
+        WHERE zip_code = v_zip AND facility_id IS NOT NULL
+        LIMIT 1;
+      END IF;
+    END IF;
+
+    -- Fail-safe default
+    IF v_facility_id IS NULL THEN
+      v_facility_id := 'facility_seattle_north';
+    END IF;
   END IF;
 
   INSERT INTO public.users (id, email, name, phone, role, assigned_facility_id, active_zone)
@@ -369,10 +383,14 @@ BEGIN
       new.email, 
       COALESCE(new.raw_user_meta_data->>'name', 'Unknown'),
       COALESCE(new.raw_user_meta_data->>'phone', ''),
-      'customer'::user_role,
+      v_role,
       v_facility_id,
       v_zip
-  );
+  )
+  ON CONFLICT (id) DO UPDATE SET
+      name = EXCLUDED.name,
+      role = EXCLUDED.role,
+      assigned_facility_id = EXCLUDED.assigned_facility_id;
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
