@@ -2483,7 +2483,10 @@
                 }
 
                 // Render dynamic employee details for active facility with 2040 market transfer capabilities
-                const { data: employees } = await supabase.from('users').select('*').eq('assigned_facility_id', facilityId);
+                const { data: employees } = await supabase.from('users')
+                    .select('*')
+                    .eq('assigned_facility_id', facilityId)
+                    .neq('role', 'customer');
                 const rosterEl = document.getElementById('roster-list');
                 rosterEl.innerHTML = "";
                 if (employees && employees.length > 0) {
