@@ -503,13 +503,21 @@
                     movedTotesCount = rpcRes.totes_reassigned;
                 }
 
+                // Invalidate local profile cache for this user
+                localStorage.removeItem(`cv_user_${userId}`);
+                localStorage.removeItem(`cv_user_ts_${userId}`);
+
+                // Update in-memory roster item immediately
+                const rosterUser = allCustomersRoster.find(u => u.id === userId);
+                if (rosterUser) {
+                    rosterUser.assigned_facility_id = newFacilityId;
+                    if (newZip) rosterUser.active_zone = newZip;
+                }
+
                 alert(`✅ Success! Customer ${userName} has been transferred to ${targetFacName} (ZIP: ${newZip || 'Unchanged'}).${moveTotes ? ` (${movedTotesCount} active totes reassigned)` : ''}`);
 
-                // Reset search selection
-                document.getElementById('relocate-selected-user-id').value = '';
-                document.getElementById('relocate-customer-search').value = '';
-                document.getElementById('relocate-summary-box').classList.add('hidden');
-                
+                // Re-render card with new transferred status immediately
+                await onRelocateCustomerSelected(userId);
                 await loadCustomerRelocationRoster();
 
                 const currentActiveFac = localStorage.getItem('cloudvault_selected_facility');
