@@ -1055,6 +1055,51 @@
                 lucide.createIcons();
             }
         }
+
+        async function decommissionCurrentFacility() {
+            if (!currentLoadedFac || !currentLoadedFac.id) {
+                alert("No active facility selected to decommission.");
+                return;
+            }
+
+            const facId = currentLoadedFac.id;
+            const facName = currentLoadedFac.name || facId;
+
+            const confirmText = prompt(`⚠️ WARNING: Decommissioning will permanently delete "${facName}" (${facId}) from Supabase and remove it from all executive and logistics dropdowns.\n\nTo confirm, type the facility ID below:\n${facId}`);
+
+            if (confirmText !== facId) {
+                if (confirmText !== null) {
+                    alert("Facility ID mismatch. Decommission cancelled.");
+                }
+                return;
+            }
+
+            try {
+                // Delete facility from Supabase
+                const { error: facErr } = await supabase.from('facilities').delete().eq('id', facId);
+                if (facErr) throw facErr;
+
+                // Clean up associated zone if exists
+                await supabase.from('operational_zones').delete().eq('facility_id', facId);
+                if (currentLoadedZone && currentLoadedZone.id) {
+                    await supabase.from('operational_zones').delete().eq('id', currentLoadedZone.id);
+                }
+
+                alert(`Successfully decommissioned and deleted ${facName}.`);
+
+                // Reset selection
+                localStorage.removeItem('cloudvault_selected_facility');
+                await loadFacilitiesDropdown();
+                if (activeFacilityId) {
+                    await loadSelectedFacilityConfig(activeFacilityId);
+                } else {
+                    window.location.reload();
+                }
+            } catch (err) {
+                console.error("Decommission facility failed:", err);
+                alert("Failed to decommission facility: " + (err.message || JSON.stringify(err)));
+            }
+        }
     </script>
 </body>
 
