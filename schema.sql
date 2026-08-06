@@ -93,7 +93,25 @@ CREATE TABLE public.inventory (
     facility_id TEXT REFERENCES public.facilities(id) ON DELETE SET NULL,
     image_url TEXT,
     category TEXT,
+    location_code TEXT DEFAULT 'INTAKE-BAY-1',
+    location_type TEXT DEFAULT 'intake',
+    last_scanned_at TIMESTAMPTZ DEFAULT now(),
+    last_scanned_by UUID REFERENCES public.users(id),
+    activated BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
+-- Warehouse Physical Locations
+CREATE TABLE IF NOT EXISTS public.warehouse_locations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    facility_id TEXT REFERENCES public.facilities(id) ON DELETE CASCADE,
+    location_code TEXT NOT NULL,
+    location_type TEXT NOT NULL,
+    capacity INTEGER DEFAULT 1,
+    is_occupied BOOLEAN DEFAULT false,
+    assigned_tote_id UUID REFERENCES public.inventory(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    UNIQUE(facility_id, location_code)
 );
 
 -- Subscriptions
@@ -1159,7 +1177,127 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- Secure Barcode Tote Scanning (Staff only) — Fulfillment-Type-Aware
+-- Atomic Location Move / Slotting RPC
+CREATE OR REPLACE FUNCTION public.slot_tote_location(
+  p_tote_code TEXT,
+  p_location_code TEXT,
+  p_location_type TEXT DEFAULT 'vault'
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_uid UUID;
+  v_user_role public.user_role;
+  v_item RECORD;
+  v_new_status public.inventory_status;
+BEGIN
+  v_uid := auth.uid();
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
+  IF v_user_role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
+    RAISE EXCEPTION 'Access Denied: Staff clearance required';
+  END IF;
+
+  SELECT id, tote_code, uid, status, facility_id, activated INTO v_item 
+  FROM public.inventory 
+  WHERE tote_code = p_tote_code LIMIT 1;
+
+  IF v_item IS NULL THEN
+    RAISE EXCEPTION 'Fail-Fast Error: Tote code % not found in system', p_tote_code;
+  END IF;
+
+  -- Determine status based on target location type
+  IF p_location_type = 'vault' THEN
+    v_new_status := 'stored'::public.inventory_status;
+  ELSIF p_location_type = 'intake' THEN
+    v_new_status := 'pending-stage'::public.inventory_status;
+  ELSIF p_location_type = 'staging' THEN
+    v_new_status := 'staged'::public.inventory_status;
+  ELSIF p_location_type = 'dispatch' THEN
+    v_new_status := 'out-for-delivery'::public.inventory_status;
+  ELSIF p_location_type = 'with_customer' THEN
+    v_new_status := 'with-customer'::public.inventory_status;
+  ELSE
+    v_new_status := v_item.status;
+  END IF;
+
+  -- Update inventory record with explicit physical coordinates
+  UPDATE public.inventory
+  SET location_code = p_location_code,
+      location_type = p_location_type,
+      status = v_new_status,
+      activated = true,
+      last_scanned_at = now(),
+      last_scanned_by = v_uid
+  WHERE id = v_item.id;
+
+  -- Update or insert warehouse_locations tracking
+  IF v_item.facility_id IS NOT NULL AND p_location_code IS NOT NULL THEN
+    INSERT INTO public.warehouse_locations (facility_id, location_code, location_type, is_occupied, assigned_tote_id)
+    VALUES (v_item.facility_id, p_location_code, p_location_type, true, v_item.id)
+    ON CONFLICT (facility_id, location_code) 
+    DO UPDATE SET is_occupied = true, assigned_tote_id = v_item.id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'toteCode', p_tote_code,
+    'newLocationCode', p_location_code,
+    'newLocationType', p_location_type,
+    'newStatus', v_new_status
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Batch Stage Customer Totes (Single-Customer Order Fulfillment)
+CREATE OR REPLACE FUNCTION public.batch_stage_customer_totes(
+  p_customer_uid UUID,
+  p_target_location TEXT DEFAULT 'STAGE-BAY-A1'
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_uid UUID;
+  v_user_role public.user_role;
+  v_updated_count INT := 0;
+BEGIN
+  v_uid := auth.uid();
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
+  IF v_user_role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
+    RAISE EXCEPTION 'Access Denied: Staff clearance required';
+  END IF;
+
+  -- Update all pending totes for this customer
+  UPDATE public.inventory
+  SET status = CASE WHEN status = 'pending-dispatch' THEN 'out-for-delivery'::public.inventory_status ELSE 'staged'::public.inventory_status END,
+      location_code = p_target_location,
+      location_type = CASE WHEN status = 'pending-dispatch' THEN 'dispatch' ELSE 'staging' END,
+      activated = true,
+      last_scanned_at = now(),
+      last_scanned_by = v_uid
+  WHERE uid = p_customer_uid
+    AND status IN ('pending-stage', 'pending-dispatch', 'stored');
+
+  GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+
+  -- Update access requests for this customer
+  UPDATE public.access_requests
+  SET status = 'staged'
+  WHERE uid = p_customer_uid AND status = 'pending';
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'customerUid', p_customer_uid,
+    'totesUpdated', v_updated_count,
+    'targetLocation', p_target_location
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Secure Barcode Tote Scanning (Staff only) — Fulfillment-Type-Aware & Location-Deterministic
 CREATE OR REPLACE FUNCTION public.scan_tote(
   p_tote_code TEXT,
   p_expected_status TEXT DEFAULT NULL
@@ -1171,6 +1309,8 @@ DECLARE
   v_user_role public.user_role;
   v_fulfillment_type TEXT;
   v_has_pending_request BOOLEAN := FALSE;
+  v_next_location_code TEXT;
+  v_next_location_type TEXT;
 BEGIN
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
@@ -1179,20 +1319,22 @@ BEGIN
 
   SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
   IF v_user_role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
-    RAISE EXCEPTION 'Access Denied: Staff only';
+    RAISE EXCEPTION 'Access Denied: Staff clearance required';
   END IF;
 
-  SELECT id, status, uid INTO v_item FROM public.inventory WHERE tote_code = p_tote_code LIMIT 1;
+  SELECT id, status, uid, activated, location_code, location_type INTO v_item 
+  FROM public.inventory 
+  WHERE tote_code = p_tote_code LIMIT 1;
+
   IF v_item IS NULL THEN
-    RAISE EXCEPTION 'Tote not found';
+    RAISE EXCEPTION 'Fail-Fast Error: Tote code % not found in system', p_tote_code;
   END IF;
 
-  -- Look up the fulfillment type from the most recent pending access request for this tote
+  -- Look up fulfillment type from active access request
   SELECT ar.fulfillment_type INTO v_fulfillment_type
   FROM public.access_requests ar
   WHERE ar.uid = v_item.uid
     AND ar.status = 'pending'
-    AND v_item.id = ANY(ar.requested_items)
   ORDER BY ar.requested_at DESC
   LIMIT 1;
 
@@ -1200,45 +1342,73 @@ BEGIN
     v_has_pending_request := TRUE;
   END IF;
 
-  -- Step 1: Scanning an un-activated tote in Tab 1 (NEW INTAKE) -> Move to Tab 2 (Vault & Intake Pull)
+  -- Physical Lifecycle State Transitions:
+  -- 1. Activation Step: Un-activated tote -> Lands in Intake Processing Zone (NOT vault!)
   IF v_item.activated = false THEN
+    v_next_status := 'pending-stage'::public.inventory_status;
+    v_next_location_code := 'INTAKE-PROCESSING';
+    v_next_location_type := 'intake';
+
+  -- 2. Vault Slotting or Staging Pull Step
+  ELSIF v_item.status = 'pending-stage' THEN
+    v_next_status := 'staged'::public.inventory_status;
+    v_next_location_code := 'STAGE-BAY-A1';
+    v_next_location_type := 'staging';
+
+  ELSIF v_item.status = 'stored' THEN
     IF v_has_pending_request AND v_fulfillment_type = 'valet_delivery' THEN
       v_next_status := 'pending-dispatch'::public.inventory_status;
+      v_next_location_code := 'DISPATCH-BAY-1';
+      v_next_location_type := 'dispatch';
     ELSE
-      -- Move to pending-stage so it appears in Tab 2 (Intake Activation Flow) awaiting room assignment scan
       v_next_status := 'pending-stage'::public.inventory_status;
+      v_next_location_code := 'INTAKE-PULL';
+      v_next_location_type := 'intake';
     END IF;
 
-  -- Step 2: Scanning a tote in Tab 2 (Vault & Intake Pull) -> Move to Tab 3 (Staging Room) or Tab 4 (Driver Dispatch)
-  ELSIF v_item.status = 'pending-stage' THEN
-    -- Self-serve: vault -> staging room
-    v_next_status := 'staged'::public.inventory_status;
   ELSIF v_item.status = 'staged' THEN
-    -- Self-serve: staging room -> customer picks up
     v_next_status := 'with-customer'::public.inventory_status;
+    v_next_location_code := 'CUSTOMER-PREMISES';
+    v_next_location_type := 'with_customer';
+
   ELSIF v_item.status = 'pending-dispatch' THEN
-    -- Valet: vault/activation area -> loaded on driver vehicle
     v_next_status := 'out-for-delivery'::public.inventory_status;
+    v_next_location_code := 'VALET-TRUCK-A';
+    v_next_location_type := 'dispatch';
+
   ELSIF v_item.status = 'out-for-delivery' THEN
-    -- Valet: driver delivered to customer
     v_next_status := 'with-customer'::public.inventory_status;
+    v_next_location_code := 'CUSTOMER-PREMISES';
+    v_next_location_type := 'with_customer';
+
   ELSIF v_item.status = 'with-customer' THEN
-    -- Both paths: customer returns -> back to vault storage
-    v_next_status := 'stored'::public.inventory_status;
+    v_next_status := 'pending-stage'::public.inventory_status;
+    v_next_location_code := 'INTAKE-BAY-1';
+    v_next_location_type := 'intake';
+
   ELSE
     v_next_status := 'stored'::public.inventory_status;
+    v_next_location_code := 'V-A01-S01';
+    v_next_location_type := 'vault';
   END IF;
 
-  -- Always mark activated = true when any scan occurs
+  -- Apply physical state transition
   UPDATE public.inventory
   SET status = v_next_status,
-      activated = true
+      location_code = v_next_location_code,
+      location_type = v_next_location_type,
+      activated = true,
+      last_scanned_at = now(),
+      last_scanned_by = v_uid
   WHERE id = v_item.id;
 
   RETURN jsonb_build_object(
     'success', true,
     'nextStatus', v_next_status,
-    'fulfillmentType', v_fulfillment_type
+    'locationCode', v_next_location_code,
+    'locationType', v_next_location_type,
+    'fulfillmentType', v_fulfillment_type,
+    'customerUid', v_item.uid
   );
 END;
 $$ LANGUAGE plpgsql;

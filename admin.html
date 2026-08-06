@@ -3396,10 +3396,47 @@
             }
         }
 
-        // Key handler to listen for barcode scanner gun 'Enter' output
-        function handleScanKey(event) {
-            if (event.key === 'Enter') {
-                simulateScan();
+        // Slot Tote to Physical Vault Coordinate
+        async function slotToteToVault(toteCode) {
+            const suggestedSlot = `V-A01-S${Math.floor(Math.random() * 20) + 1}`;
+            const vaultSlot = prompt(`Enter Physical Vault Location Coordinate (e.g. Aisle/Bay/Shelf like V-A01-S12) for Tote ${toteCode}:`, suggestedSlot);
+            if (!vaultSlot || !vaultSlot.trim()) return;
+
+            try {
+                const { data, error } = await supabase.rpc('slot_tote_location', {
+                    p_tote_code: toteCode,
+                    p_location_code: vaultSlot.trim().toUpperCase(),
+                    p_location_type: 'vault'
+                });
+                if (error) throw error;
+
+                triggerScanFeedbackOverlay(true, `Slotted ${toteCode} to Vault Slot ${data.newLocationCode}`, toteCode);
+                loadWorkerQueues();
+            } catch (e) {
+                console.error("Vault slotting failed:", e);
+                triggerScanFeedbackOverlay(false, e.message || "Vault slotting failed.");
+                alert("Fail-Fast Error: " + (e.message || "Slotting failed"));
+            }
+        }
+
+        // Batch Stage All Requested Totes for a Single Customer Order
+        async function batchStageCustomerOrder(customerUid, customerName, defaultTargetLoc = 'STAGE-BAY-A1') {
+            const targetLoc = prompt(`Batch Stage ALL requested totes for ${customerName} to location:`, defaultTargetLoc);
+            if (!targetLoc || !targetLoc.trim()) return;
+
+            try {
+                const { data, error } = await supabase.rpc('batch_stage_customer_totes', {
+                    p_customer_uid: customerUid,
+                    p_target_location: targetLoc.trim().toUpperCase()
+                });
+                if (error) throw error;
+
+                triggerScanFeedbackOverlay(true, `Batch Staged ${data.totesUpdated || 0} Tote(s) for ${customerName} to ${data.targetLocation}`);
+                loadWorkerQueues();
+            } catch (e) {
+                console.error("Batch staging failed:", e);
+                triggerScanFeedbackOverlay(false, e.message || "Batch staging failed.");
+                alert("Fail-Fast Error: " + (e.message || "Batch staging failed"));
             }
         }
 
@@ -3442,17 +3479,17 @@
                 const { data, error } = await supabase.rpc('scan_tote', {
                     p_tote_code: barcode,
                     p_expected_status: expectedStatus
-                });
                 if (error) throw error;
                 const nextStatus = data.nextStatus;
+                const locCode = data.locationCode || 'INTAKE-PROCESSING';
 
-                let transitionDesc = nextStatus;
-                if (nextStatus === 'pending-stage') transitionDesc = "Activated — Ready in Vault";
-                if (nextStatus === 'staged') transitionDesc = "Moved to Staging Room";
-                if (nextStatus === 'pending-dispatch') transitionDesc = "Activated — Queued for Driver";
-                if (nextStatus === 'out-for-delivery') transitionDesc = "Loaded on Driver — Out for Delivery";
-                if (nextStatus === 'with-customer') transitionDesc = "Delivered — With Customer";
-                if (nextStatus === 'stored') transitionDesc = "Returned to Vault Storage";
+                let transitionDesc = `${nextStatus} [📍 ${locCode}]`;
+                if (nextStatus === 'pending-stage') transitionDesc = `Activated — Moved to Intake Zone [📍 ${locCode}]`;
+                if (nextStatus === 'staged') transitionDesc = `Moved to Staging Room [📍 ${locCode}]`;
+                if (nextStatus === 'pending-dispatch') transitionDesc = `Activated — Queued for Driver [📍 ${locCode}]`;
+                if (nextStatus === 'out-for-delivery') transitionDesc = `Loaded on Driver — Out for Delivery [📍 ${locCode}]`;
+                if (nextStatus === 'with-customer') transitionDesc = `Delivered — With Customer [📍 ${locCode}]`;
+                if (nextStatus === 'stored') transitionDesc = `Returned to Vault Storage [📍 ${locCode}]`;
 
                 triggerScanFeedbackOverlay(true, transitionDesc, barcode);
 
@@ -3510,9 +3547,18 @@
                     .neq('status', 'cancelled');
 
                 const { data: activeValetTotes } = await supabase.from('inventory')
-                    .select('uid, tote_code, status, facility_id, users!uid(id, name, zip, active_zone, assigned_facility_id)')
+                    .select('uid, tote_code, status, facility_id')
                     .eq('facility_id', queryFacilityId)
                     .in('status', ['pending-dispatch', 'out-for-delivery']);
+
+                const valetUids = Array.from(new Set((activeValetTotes || []).map(t => t.uid).filter(Boolean)));
+                let valetUsersMap = {};
+                if (valetUids.length > 0) {
+                    const { data: uData } = await supabase.from('users')
+                        .select('id, name, zip, active_zone, assigned_facility_id')
+                        .in('id', valetUids);
+                    (uData || []).forEach(u => { valetUsersMap[u.id] = u; });
+                }
 
                 const activeValetUserMap = {};
 
@@ -3532,10 +3578,11 @@
 
                 (activeValetTotes || []).forEach(t => {
                     const uId = t.uid;
+                    const u = valetUsersMap[uId];
                     if (uId && !activeValetUserMap[uId]) {
                         activeValetUserMap[uId] = {
                             uid: uId,
-                            users: t.users,
+                            users: u || { name: `Customer ${uId.substring(0, 6)}` },
                             time_slot: t.status === 'out-for-delivery' ? 'En Route (In Transit)' : 'Awaiting Vehicle Load',
                             requested_items: [t.tote_code]
                         };

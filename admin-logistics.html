@@ -560,9 +560,18 @@
                     .neq('status', 'cancelled');
 
                 const { data: activeValetTotes } = await supabase.from('inventory')
-                    .select('uid, tote_code, status, facility_id, users!uid(id, name, zip, active_zone, assigned_facility_id)')
+                    .select('uid, tote_code, status, facility_id')
                     .eq('facility_id', facId)
                     .in('status', ['pending-dispatch', 'out-for-delivery']);
+
+                const valetUids = Array.from(new Set((activeValetTotes || []).map(t => t.uid).filter(Boolean)));
+                let valetUsersMap = {};
+                if (valetUids.length > 0) {
+                    const { data: uData } = await supabase.from('users')
+                        .select('id, name, zip, active_zone, assigned_facility_id')
+                        .in('id', valetUids);
+                    (uData || []).forEach(u => { valetUsersMap[u.id] = u; });
+                }
 
                 const activeValetUserMap = {};
 
@@ -583,10 +592,11 @@
 
                 (activeValetTotes || []).forEach(t => {
                     const uId = t.uid;
+                    const u = valetUsersMap[uId];
                     if (uId && !activeValetUserMap[uId]) {
                         activeValetUserMap[uId] = {
-                            name: t.users?.name || `Customer ${uId.substring(0, 6)}`,
-                            zip: t.users?.zip || t.users?.active_zone || 'Local Zone',
+                            name: u?.name || `Customer ${uId.substring(0, 6)}`,
+                            zip: u?.zip || u?.active_zone || 'Local Zone',
                             slot: t.status === 'out-for-delivery' ? 'En Route (In Transit)' : 'Awaiting Vehicle Load',
                             status: t.status,
                             toteCount: 1
