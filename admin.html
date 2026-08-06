@@ -3275,11 +3275,19 @@
                                     </div>`).join('')}
                                 </div>
 
-                                <!-- Full-Width 60px Ergonomic Industrial Action Button -->
-                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('staged')" class="w-full min-h-[60px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-blue-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
-                                    <i data-lucide="user-check" class="w-6 h-6"></i>
-                                    <span>HAND OFF TO CUSTOMER AT ROOM #${assignedRoomNum} (${firstCode}) →</span>
-                                </button>
+                                <!-- Industrial Action Buttons (Batch + Single Hand-Off) -->
+                                <div class="grid grid-cols-1 ${totes.length > 1 ? 'sm:grid-cols-2' : ''} gap-3">
+                                    ${totes.length > 1 ? `
+                                    <button onclick="batchHandOffCustomerTotes('${uid}', '${customerName.replace(/'/g, "\\'")}', 'with-customer')" class="w-full min-h-[60px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                        <i data-lucide="check-check" class="w-6 h-6"></i>
+                                        <span>BATCH CHECK-OUT ALL ${totes.length} TOTES →</span>
+                                    </button>
+                                    ` : ''}
+                                    <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('staged')" class="w-full min-h-[60px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl border-2 border-blue-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                        <i data-lucide="user-check" class="w-6 h-6"></i>
+                                        <span>HAND OFF SINGLE TOTE (${firstCode}) →</span>
+                                    </button>
+                                </div>
                             </div>`;
                     }).join('');
                 }
@@ -3449,6 +3457,41 @@
                 console.error("Batch staging failed:", e);
                 triggerScanFeedbackOverlay(false, e.message || "Batch staging failed.");
                 alert("Fail-Fast Error: " + (e.message || "Batch staging failed"));
+            }
+        }
+
+        // Batch Check Out / Hand Off All Staged Totes to a Customer in Room #X
+        async function batchHandOffCustomerTotes(customerUid, customerName, targetStatus = 'with-customer') {
+            if (!confirm(`Batch check-out ALL staged totes for ${customerName} to customer?`)) return;
+
+            try {
+                // Update all staged totes for this customer to with-customer
+                const { data: updatedTotes, error: updateErr } = await supabase.from('inventory')
+                    .update({
+                        status: targetStatus,
+                        location_code: 'CUSTOMER-PREMISES',
+                        location_type: 'with_customer',
+                        last_scanned_at: new Date().toISOString()
+                    })
+                    .eq('uid', customerUid)
+                    .in('status', ['staged', 'pending-stage', 'pending-dispatch', 'out-for-delivery'])
+                    .select();
+
+                if (updateErr) throw updateErr;
+
+                // Mark pending access requests as completed
+                await supabase.from('access_requests')
+                    .update({ status: 'completed' })
+                    .eq('uid', customerUid)
+                    .neq('status', 'cancelled');
+
+                const count = (updatedTotes || []).length || 1;
+                triggerScanFeedbackOverlay(true, `Batch Hand-Off Success! Checked out ${count} tote(s) to ${customerName}.`);
+                loadWorkerQueues();
+            } catch (e) {
+                console.error('Batch customer hand-off failed:', e);
+                triggerScanFeedbackOverlay(false, e.message || 'Batch hand-off failed.');
+                alert('Fail-Fast Error: ' + (e.message || 'Batch hand-off failed'));
             }
         }
 
