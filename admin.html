@@ -3452,6 +3452,13 @@
             }
         }
 
+        function handleScanKey(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                simulateScan();
+            }
+        }
+
         // Simulate Barcode Scan in Worker Dashboard (with Offline Queue + Visual Overlay)
         async function simulateScan(expectedStatus = null) {
             const barcodeInput = document.getElementById('scan-barcode');
