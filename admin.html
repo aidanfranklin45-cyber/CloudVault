@@ -2890,7 +2890,7 @@
 
                 // Fetch all inventory for this facility across all relevant statuses
                 const { data: allItems } = await supabase.from('inventory')
-                    .select('*, users(name, onboarding_status)')
+                    .select('*, users!uid(name, onboarding_status)')
                     .eq('facility_id', queryFacilityId)
                     .in('status', ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer']);
 
@@ -4060,7 +4060,7 @@
 
             try {
                 const { data: item, error } = await supabase.from('inventory')
-                    .select('*, users(name)')
+                    .select('*, users!uid(name)')
                     .eq('tote_code', code)
                     .single();
 
@@ -4676,7 +4676,7 @@
             try {
                 // Search inventory joined with users
                 const { data: items } = await supabase.from('inventory')
-                    .select('id, tote_code, label, status, facility_id, created_at, users(name, email, active_totes_held)')
+                    .select('id, tote_code, label, status, facility_id, created_at, users!uid(name, email, active_totes_held)')
                     .or(`tote_code.ilike.%${q}%,label.ilike.%${q}%`)
                     .limit(8);
 
@@ -4689,7 +4689,7 @@
                     if (matchingUsers && matchingUsers.length > 0) {
                         const uids = matchingUsers.map(u => u.id);
                         const { data: userItems } = await supabase.from('inventory')
-                            .select('id, tote_code, label, status, facility_id, created_at, users(name, email, active_totes_held)')
+                            .select('id, tote_code, label, status, facility_id, created_at, users!uid(name, email, active_totes_held)')
                             .in('uid', uids)
                             .limit(8);
                         usersData = userItems || [];
@@ -4769,7 +4769,7 @@
                 // Fetch complete tote + user + subscription telemetry safely
                 let item = null;
                 const { data: mainItem } = await supabase.from('inventory')
-                    .select('*, users(*), facilities(*)')
+                    .select('*, users!uid(*), facilities(*)')
                     .eq('id', toteId)
                     .maybeSingle();
 
@@ -4777,7 +4777,7 @@
                     item = mainItem;
                 } else {
                     const { data: fallbackItem } = await supabase.from('inventory')
-                        .select('*, users(*)')
+                        .select('*, users!uid(*)')
                         .eq('id', toteId)
                         .maybeSingle();
                     item = fallbackItem;
