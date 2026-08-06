@@ -554,7 +554,7 @@
 
                 // Query active valet delivery access requests and active inventory totes for this facility
                 const { data: requests } = await supabase.from('access_requests')
-                    .select('*, users(id, name, zip, active_zone, assigned_facility_id)')
+                    .select('*, users(id, name, active_zone, assigned_facility_id)')
                     .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%')
                     .neq('status', 'completed')
                     .neq('status', 'cancelled');
@@ -568,7 +568,7 @@
                 let valetUsersMap = {};
                 if (valetUids.length > 0) {
                     const { data: uData } = await supabase.from('users')
-                        .select('id, name, zip, active_zone, assigned_facility_id')
+                        .select('id, name, active_zone, assigned_facility_id')
                         .in('id', valetUids);
                     (uData || []).forEach(u => { valetUsersMap[u.id] = u; });
                 }
