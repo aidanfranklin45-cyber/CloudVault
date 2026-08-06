@@ -860,6 +860,12 @@
                         <button type="button" onclick="selectPhotoCategory('Tools')" data-cat="Tools" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Tools</button>
                         <button type="button" onclick="selectPhotoCategory('Kitchen')" data-cat="Kitchen" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Kitchen</button>
                         <button type="button" onclick="selectPhotoCategory('Electronics')" data-cat="Electronics" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Electronics</button>
+                        <button type="button" onclick="selectPhotoCategory('Books')" data-cat="Books" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Books</button>
+                        <button type="button" onclick="selectPhotoCategory('Sports')" data-cat="Sports" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Sports</button>
+                        <button type="button" onclick="selectPhotoCategory('Toys')" data-cat="Toys" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Toys</button>
+                        <button type="button" onclick="selectPhotoCategory('Seasonal')" data-cat="Seasonal" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Seasonal</button>
+                        <button type="button" onclick="selectPhotoCategory('Outdoor')" data-cat="Outdoor" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Outdoor</button>
+                        <button type="button" onclick="selectPhotoCategory('Memorabilia')" data-cat="Memorabilia" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Memorabilia</button>
                         <button type="button" onclick="selectPhotoCategory('Other')" data-cat="Other" class="cat-chip-btn text-xs font-semibold px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:border-blue-500 transition">Other</button>
                     </div>
                 </div>
@@ -868,29 +874,41 @@
                 <div>
                     <label class="block text-xs font-bold uppercase text-gray-400 mb-2">Preset Categories</label>
                     <div class="grid grid-cols-3 gap-2">
-                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1540221652346-e5dd6b50f3e7?w=300&auto=format&fit=crop&q=60')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
-                            <img src="https://images.unsplash.com/photo-1540221652346-e5dd6b50f3e7?w=300&auto=format&fit=crop&q=60" class="w-full h-full object-cover">
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1540221652346-e5dd6b50f3e7?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1540221652346-e5dd6b50f3e7?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
                             <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Clothes</span>
                         </button>
-                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=300&auto=format&fit=crop&q=60')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
-                            <img src="https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=300&auto=format&fit=crop&q=60" class="w-full h-full object-cover">
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1512820790803-83ca734da794?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1512820790803-83ca734da794?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
                             <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Books</span>
                         </button>
-                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1544816155-12df9643f363?w=300&auto=format&fit=crop&q=60')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
-                            <img src="https://images.unsplash.com/photo-1544816155-12df9643f363?w=300&auto=format&fit=crop&q=60" class="w-full h-full object-cover">
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1512389142860-9c449e58a543?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1512389142860-9c449e58a543?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
                             <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Holiday</span>
                         </button>
-                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=300&auto=format&fit=crop&q=60')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
-                            <img src="https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=300&auto=format&fit=crop&q=60" class="w-full h-full object-cover">
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
                             <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Kitchen</span>
                         </button>
-                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1581244904349-864286be521b?w=300&auto=format&fit=crop&q=60')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
-                            <img src="https://images.unsplash.com/photo-1581244904349-864286be521b?w=300&auto=format&fit=crop&q=60" class="w-full h-full object-cover">
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
                             <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Tools</span>
                         </button>
-                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1471864190281-a93a3070b6de?w=300&auto=format&fit=crop&q=60')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
-                            <img src="https://images.unsplash.com/photo-1471864190281-a93a3070b6de?w=300&auto=format&fit=crop&q=60" class="w-full h-full object-cover">
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1450133064473-71024230f91b?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1450133064473-71024230f91b?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
                             <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Documents</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Electronics</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Sports</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Toys</span>
                         </button>
                     </div>
                 </div>
@@ -1850,7 +1868,7 @@
                 let newLabel = item ? (item.label || '') : '';
 
                 if (selectedPhotoCategory) {
-                    newLabel = newLabel.replace(/#(Clothing|Documents|Holiday|Tools|Kitchen|Electronics|Other)/gi, '').trim();
+                    newLabel = newLabel.replace(/#(Clothing|Documents|Holiday|Tools|Kitchen|Electronics|Books|Sports|Toys|Seasonal|Outdoor|Memorabilia|Other)/gi, '').trim();
                 }
 
                 const updateData = {
