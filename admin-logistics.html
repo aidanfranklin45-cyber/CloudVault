@@ -472,27 +472,35 @@
             btn.disabled = true;
 
             try {
-                const updatePayload = { assigned_facility_id: newFacilityId };
-                if (newZip) updatePayload.active_zone = newZip;
-
-                // 1. Update user assigned_facility_id & active_zone
-                const { error: userErr } = await supabase
-                    .from('users')
-                    .update(updatePayload)
-                    .eq('id', userId);
-                if (userErr) throw userErr;
-
-                // 2. Move totes & open access_requests if selected
                 let movedTotesCount = 0;
-                if (moveTotes) {
-                    const { data: updatedTotes, error: toteErr } = await supabase
-                        .from('inventory')
-                        .update({ facility_id: newFacilityId })
-                        .eq('uid', userId)
-                        .select('id');
-                    if (!toteErr && updatedTotes) movedTotesCount = updatedTotes.length;
+                const { data: rpcRes, error: rpcErr } = await supabase.rpc('transfer_customer_facility', {
+                    p_target_uid: userId,
+                    p_new_facility_id: newFacilityId,
+                    p_new_zip: newZip || null,
+                    p_move_totes: moveTotes
+                });
 
-                    await supabase.from('access_requests').update({ facility_id: newFacilityId }).eq('uid', userId);
+                if (rpcErr) {
+                    const updatePayload = { assigned_facility_id: newFacilityId };
+                    if (newZip) updatePayload.active_zone = newZip;
+
+                    const { error: userErr } = await supabase
+                        .from('users')
+                        .update(updatePayload)
+                        .eq('id', userId);
+                    if (userErr) throw userErr;
+
+                    if (moveTotes) {
+                        const { data: updatedTotes } = await supabase
+                            .from('inventory')
+                            .update({ facility_id: newFacilityId })
+                            .eq('uid', userId)
+                            .select('id');
+                        if (updatedTotes) movedTotesCount = updatedTotes.length;
+                        await supabase.from('access_requests').update({ facility_id: newFacilityId }).eq('uid', userId);
+                    }
+                } else if (rpcRes && rpcRes.totes_reassigned) {
+                    movedTotesCount = rpcRes.totes_reassigned;
                 }
 
                 alert(`✅ Success! Customer ${userName} has been transferred to ${targetFacName} (ZIP: ${newZip || 'Unchanged'}).${moveTotes ? ` (${movedTotesCount} active totes reassigned)` : ''}`);
@@ -501,6 +509,7 @@
                 document.getElementById('relocate-selected-user-id').value = '';
                 document.getElementById('relocate-customer-search').value = '';
                 document.getElementById('relocate-summary-box').classList.add('hidden');
+                
                 await loadCustomerRelocationRoster();
 
                 const currentActiveFac = localStorage.getItem('cloudvault_selected_facility');

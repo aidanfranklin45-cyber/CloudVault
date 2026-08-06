@@ -1242,9 +1242,9 @@
                         <button id="wtab-stage" onclick="switchWorkerPhase('stage')"
                             class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 transition-all">
                             <i data-lucide="archive-restore" class="w-4 h-4"></i>
-                            <span class="text-[10px] font-bold uppercase tracking-wide">2. Pull from Vault</span>
+                            <span class="text-[10px] font-bold uppercase tracking-wide">2. Vault &amp; Intake Pull</span>
                             <span id="wtab-stage-count" class="text-lg font-black leading-none">—</span>
-                            <span class="text-[9px] text-gray-400">Retrieval Requests</span>
+                            <span class="text-[9px] text-gray-400">Retrievals &amp; Dispatch</span>
                         </button>
                         <button id="wtab-customer" onclick="switchWorkerPhase('customer')"
                             class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300 transition-all">
@@ -1329,10 +1329,8 @@
                     <div id="wview-stage" class="worker-phase-view space-y-4 hidden">
                         <div class="bg-amber-950/30 border border-amber-500/20 p-4 rounded-2xl space-y-3 text-xs">
                             <div class="flex items-center justify-between flex-wrap gap-2">
-                                <span class="text-gray-300"><strong class="text-amber-400">Worker Action:</strong> Pull
-                                    totes from vault shelves</span>
-                                <span class="text-amber-300 font-mono text-[11px] font-bold">Retrieval Requests
-                                    Pending</span>
+                                <span class="text-gray-300"><strong class="text-amber-400">Worker Action:</strong> Dispatch activated intake totes or pull totes from vault shelves</span>
+                                <span class="text-amber-300 font-mono text-[11px] font-bold">Retrieval &amp; Dispatch Queue</span>
                             </div>
 
                             <!-- Sub-Filter Bar for Separate Valet vs Self-Serve Staging Pulls -->
@@ -3059,6 +3057,12 @@
                         const numRooms = currentLoadedFac?.num_staging_rooms || 2;
                         const assignedRoomNum = getAssignedRoom(uid, numRooms);
 
+                        const isActivationFlow = totes.some(t => t.activated === true && (t.status === 'pending-dispatch' || t.status === 'pending-stage') && (t.tote_code?.startsWith('CV-') || (t.label && t.label.toLowerCase().includes('empty'))));
+
+                        const originBadge = isActivationFlow
+                            ? `<span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="zap" class="w-3.5 h-3.5 text-emerald-400"></i> Intake Activation Flow</span>`
+                            : `<span class="text-xs font-bold font-mono text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="archive" class="w-3.5 h-3.5 text-amber-400"></i> Deep Vault Storage</span>`;
+
                         const targetLocationBadge = isValet
                             ? `<span class="text-xs font-bold font-mono text-orange-400 bg-orange-500/10 border border-orange-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5"></i> Driver Loading Bay A</span>`
                             : `<span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="door-open" class="w-3.5 h-3.5"></i> Staging Room #${assignedRoomNum}</span>`;
@@ -3075,8 +3079,8 @@
                                 : 'border-amber-500/30 bg-gray-950';
 
                         const actionLabel = isValet
-                            ? `LOAD ONTO DRIVER VEHICLE (${firstCode})`
-                            : `MOVE TO STAGING ROOM #${assignedRoomNum} (${firstCode})`;
+                            ? (isActivationFlow ? `LOAD ON DRIVER (FROM ACTIVATION AREA) (${firstCode})` : `PULL FROM VAULT & LOAD ON DRIVER (${firstCode})`)
+                            : (isActivationFlow ? `MOVE TO STAGING ROOM #${assignedRoomNum} (FROM ACTIVATION AREA) (${firstCode})` : `PULL FROM VAULT & MOVE TO STAGING ROOM #${assignedRoomNum} (${firstCode})`);
 
                         const actionGradient = isValet
                             ? 'from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 border-orange-400/40'
@@ -3101,6 +3105,7 @@
                                         </div>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
+                                        ${originBadge}
                                         ${targetLocationBadge}
                                         <span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-3 py-1 rounded-xl">PIN: ${pin}</span>
                                     </div>
@@ -3114,7 +3119,8 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => {
                             const isValetItem = t.status === 'pending-dispatch';
-                            const sLabel = isValetItem ? 'Pending Driver Load' : 'Pending Staging';
+                            const originPrefix = isActivationFlow ? 'Intake Flow' : 'Vault Storage';
+                            const sLabel = isValetItem ? `${originPrefix} &bull; Pending Driver Load` : `${originPrefix} &bull; Pending Staging`;
                             const sColor = isValetItem ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
                             const itemLabel = t.label ? ` &bull; ${escapeHtml(t.label)}` : '';
                             return `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
