@@ -493,335 +493,350 @@
                 </div>
             </div>
 
-        <!-- Business Intelligence Conversion Funnel Charts -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Business Intelligence Conversion Funnel Charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-            <!-- Funnel Graph -->
-            <div class="glass-panel p-6 rounded-3xl lg:col-span-8 space-y-4">
-                <div class="flex items-center justify-between border-b border-gray-800 pb-4">
-                    <div class="flex items-center space-x-2">
-                        <i data-lucide="funnel" class="w-5 h-5 text-emerald-400"></i>
-                        <h3 class="font-bold text-white text-lg">Web Traffic & Customer Signup Funnel</h3>
-                    </div>
-                    <div class="text-xs text-gray-400 flex items-center gap-4">
-                        <span class="flex items-center gap-1.5"><span
-                                class="w-2.5 h-2.5 bg-blue-500 rounded-full"></span> Low Volume (< 25)</span>
-                                <span class="flex items-center gap-1.5"><span
-                                        class="w-2.5 h-2.5 bg-indigo-500 rounded-full"></span> High Volume (Anchor
-                                    25+)</span>
-                    </div>
-                </div>
-
-                <div class="relative h-80">
-                    <canvas id="conversionFunnelChart"></canvas>
-                </div>
-                <div class="pt-2 text-center text-xs text-gray-500">
-                    Funnel tracking isolates low-volume users against anchor users to validate tiered rate efficiency.
-                </div>
-            </div>
-
-            <!-- Right-hand Settings Column -->
-            <div class="lg:col-span-4 space-y-8">
-                <!-- Add Employee Section -->
-                <div class="glass-panel p-6 rounded-3xl space-y-6">
-                    <div class="flex items-center space-x-2 border-b border-gray-800 pb-4">
-                        <i data-lucide="user-plus" class="w-5 h-5 text-blue-400"></i>
-                        <h3 class="font-bold text-white text-lg">Add New Employee Account</h3>
-                    </div>
-
-                    <form id="create-employee-form" onsubmit="handleCreateEmployee(event)" class="space-y-4">
-                        <div>
-                            <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Full Name</label>
-                            <input type="text" id="emp-name" placeholder="John Worker" required
-                                class="w-full bg-gray-900 border border-gray-800 rounded-xl py-2.5 px-4 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                <!-- Funnel Graph -->
+                <div class="glass-panel p-6 rounded-3xl lg:col-span-8 space-y-4">
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="funnel" class="w-5 h-5 text-emerald-400"></i>
+                            <h3 class="font-bold text-white text-lg">Web Traffic & Customer Signup Funnel</h3>
                         </div>
-                        <div>
-                            <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Email Address</label>
-                            <input type="email" id="emp-email" placeholder="worker@cloudvault.com" required
-                                class="w-full bg-gray-900 border border-gray-800 rounded-xl py-2.5 px-4 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Role / Clearance</label>
-                            <select id="emp-role"
-                                class="w-full bg-gray-900 border border-gray-800 rounded-xl py-2.5 px-4 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
-                                <option value="warehouse_worker">Warehouse Worker</option>
-                                <option value="warehouse_manager">Warehouse Manager</option>
-                                <option value="executive">Executive (Super Admin)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Assigned
-                                Facility</label>
-                            <select id="emp-facility"
-                                class="w-full bg-gray-900 border border-gray-800 rounded-xl py-2.5 px-4 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Temporary
-                                Password</label>
-                            <input type="password" id="emp-password" value="password123" required
-                                class="w-full bg-gray-900 border border-gray-800 rounded-xl py-2.5 px-4 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
-                        </div>
-                        <button type="submit"
-                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-md shadow-blue-900/20 text-sm mt-2 flex items-center justify-center gap-1.5">
-                            <i data-lucide="plus" class="w-4 h-4"></i> Create Employee Account
-                        </button>
-                    </form>
-                </div>
-
-                <!-- Analytics Configuration Section (PostHog) -->
-                <div class="glass-panel p-6 rounded-3xl space-y-6">
-                    <div class="flex items-center space-x-2 border-b border-gray-800 pb-4">
-                        <i data-lucide="bar-chart-3" class="w-5 h-5 text-indigo-400"></i>
-                        <h3 class="font-bold text-white text-lg">Analytics (PostHog)</h3>
-                    </div>
-                    <div class="space-y-4 text-sm text-gray-300">
-                        <div>
-                            <span class="text-xs font-bold uppercase text-gray-400 block mb-1">Organization</span>
-                            <span class="font-semibold text-white">CloudVault</span>
-                        </div>
-                        <div>
-                            <span class="text-xs font-bold uppercase text-gray-400 block mb-1">Project ID</span>
-                            <span class="font-mono text-white">521354</span>
-                        </div>
-                        <div>
-                            <span class="text-xs font-bold uppercase text-gray-400 block mb-1">Status</span>
-                            <span
-                                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-900/30 text-green-400 border border-green-800/50">
-                                <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-green-400 animate-pulse"></span>
-                                Connected
-                            </span>
-                        </div>
-                        <a href="https://us.posthog.com/project/521354/dashboard" target="_blank"
-                            rel="noopener noreferrer"
-                            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition shadow-md shadow-indigo-900/20 text-sm flex items-center justify-center gap-1.5 mt-2">
-                            <i data-lucide="external-link" class="w-4 h-4"></i> View PostHog Dashboard
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Facility Specifications, Physical Density & Financial Yield Command Center (Executive Only) -->
-        <div class="glass-panel p-6 sm:p-8 rounded-3xl space-y-6" id="facility-specs-panel">
-            <div
-                class="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-gray-800 pb-4 gap-4">
-                <div class="flex items-center space-x-3">
-                    <div class="p-2.5 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20">
-                        <i data-lucide="building-2" class="w-6 h-6"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-bold text-white text-xl flex items-center gap-2">
-                            Unified Facility Capacity & Financial Command Center
-                            <span
-                                class="bg-blue-500/10 text-blue-400 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-wider">Executive
-                                BI Control</span>
-                        </h3>
-                        <p class="text-xs text-gray-400 mt-0.5">Physical space utilization, lease & labor costs, and
-                            real-time net profitability unified in one panel.</p>
-                    </div>
-                </div>
-                <div class="flex items-center gap-3">
-                    <div
-                        class="bg-blue-950/60 border border-blue-500/30 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-inner">
-                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                        <span class="text-xs font-mono font-bold text-blue-300 uppercase tracking-wider"
-                            id="active-facility-name-pill">Seattle North Fulfillment Center</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-
-                <!-- Col 1: Physical Space Utilization Ring Gauge & Capacity (4 cols) -->
-                <div class="lg:col-span-4 bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-5">
-                    <div class="flex items-center justify-between border-b border-gray-850 pb-3">
-                        <h4
-                            class="text-xs font-extrabold uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">
-                            <i data-lucide="percent" class="w-4 h-4"></i> Physical Space Utilization
-                        </h4>
-                        <span class="text-[10px] text-gray-500 font-mono" id="exec-capacity-label">Capacity</span>
-                    </div>
-
-                    <!-- Real-time yield ring gauge -->
-                    <div class="flex items-center justify-center py-2 relative">
-                        <div class="relative w-40 h-40">
-                            <canvas id="facilityUtilizationRing"></canvas>
-                            <div class="absolute inset-0 flex flex-col items-center justify-center">
-                                <span class="text-3xl font-black text-white" id="m-capacity-pct">0%</span>
-                                <span
-                                    class="text-[9px] text-gray-500 uppercase tracking-widest font-bold mt-0.5">Utilized</span>
-                            </div>
+                        <div class="text-xs text-gray-400 flex items-center gap-4">
+                            <span class="flex items-center gap-1.5"><span
+                                    class="w-2.5 h-2.5 bg-blue-500 rounded-full"></span> Low Volume (< 25)</span>
+                                    <span class="flex items-center gap-1.5"><span
+                                            class="w-2.5 h-2.5 bg-indigo-500 rounded-full"></span> High Volume (Anchor
+                                        25+)</span>
                         </div>
                     </div>
 
-                    <div class="space-y-3 pt-3 border-t border-gray-850 text-xs">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
-                                <p class="text-[10px] font-bold text-gray-400 uppercase">Usable Sq Ft</p>
-                                <p class="text-base font-extrabold text-white mt-0.5" id="m-usable-sqft">20,000</p>
-                            </div>
-                            <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
-                                <p class="text-[10px] font-bold text-gray-400 uppercase">Active Totes</p>
-                                <p class="text-base font-extrabold text-white mt-0.5" id="m-active-totes">0</p>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
-                                <p class="text-[10px] font-bold text-gray-400 uppercase">Max Tote Cap</p>
-                                <p class="text-base font-extrabold text-blue-400 mt-0.5" id="m-tote-capacity">2,000</p>
-                            </div>
-                            <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
-                                <p class="text-[10px] font-bold text-gray-400 uppercase">Staging Rooms</p>
-                                <p class="text-base font-extrabold text-indigo-400 mt-0.5" id="m-staging-rooms">2</p>
-                            </div>
-                        </div>
+                    <div class="relative h-80">
+                        <canvas id="conversionFunnelChart"></canvas>
+                    </div>
+                    <div class="pt-2 text-center text-xs text-gray-500">
+                        Funnel tracking isolates low-volume users against anchor users to validate tiered rate
+                        efficiency.
                     </div>
                 </div>
 
-                <!-- Col 2: Read-Only Facility Specs & Operating Costs Telemetry (4 cols) -->
-                <div class="lg:col-span-4 bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-4">
-                    <div class="flex items-center justify-between border-b border-gray-850 pb-3">
-                        <h4
-                            class="text-xs font-extrabold uppercase text-blue-400 tracking-wider flex items-center gap-1.5">
-                            <i data-lucide="building-2" class="w-4 h-4"></i> Facility Specs &amp; Lease Costs
-                        </h4>
-                        <a href="admin-facilities.html" id="btn-edit-fac-config"
-                            class="text-[10px] font-bold text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-600 px-2.5 py-1 rounded-xl border border-blue-500/20 transition flex items-center gap-1">
-                            <i data-lucide="settings" class="w-3 h-3"></i> Executive Config →
-                        </a>
-                    </div>
-
-                    <div class="space-y-3 text-xs">
-                        <div class="bg-gray-900/60 p-3 rounded-xl border border-gray-800 space-y-1">
-                            <p class="text-[9px] font-bold uppercase text-gray-400">Facility Location &amp; Manager</p>
-                            <p class="text-sm font-extrabold text-white" id="fspec-display-name">Seattle North
-                                Fulfillment Center</p>
-                            <p class="text-[11px] text-gray-400 font-medium" id="fspec-display-address">4821 Aurora Ave
-                                N, Seattle, WA 98103</p>
-                            <p class="text-[10px] text-blue-400 font-mono font-bold mt-1">Manager: <span
-                                    id="fspec-display-manager" class="text-gray-200">Alex Rivera</span></p>
+                <!-- Right-hand Settings Column -->
+                <div class="lg:col-span-4 space-y-8">
+                    <!-- Add Employee Section -->
+                    <div class="glass-panel p-6 rounded-3xl space-y-6">
+                        <div class="flex items-center space-x-2 border-b border-gray-800 pb-4">
+                            <i data-lucide="user-plus" class="w-5 h-5 text-blue-400"></i>
+                            <h3 class="font-bold text-white text-lg">Add New Employee Account</h3>
                         </div>
 
-                        <div class="grid grid-cols-3 gap-2">
-                            <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
-                                <p class="text-[9px] font-bold text-gray-400 uppercase">Total SQFT</p>
-                                <p class="text-sm font-extrabold text-white mt-0.5" id="fspec-display-sqft">20,000</p>
-                            </div>
-                            <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
-                                <p class="text-[9px] font-bold text-gray-400 uppercase">SQFT / Tote</p>
-                                <p class="text-sm font-extrabold text-white mt-0.5" id="fspec-display-sqft-per-tote">1.0
-                                </p>
-                            </div>
-                            <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
-                                <p class="text-[9px] font-bold text-gray-400 uppercase">Max Cap</p>
-                                <p class="text-sm font-extrabold text-blue-400 mt-0.5" id="fspec-display-capacity">2,000
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-2">
-                            <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
-                                <p class="text-[9px] font-bold text-gray-400 uppercase">Rent / Lease</p>
-                                <p class="text-sm font-extrabold text-amber-400 mt-0.5" id="fspec-display-rent">
-                                    $8,500.00</p>
-                            </div>
-                            <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
-                                <p class="text-[9px] font-bold text-gray-400 uppercase">Labor Cost</p>
-                                <p class="text-sm font-extrabold text-amber-400 mt-0.5" id="fspec-display-labor">
-                                    $14,000.00</p>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-2">
-                            <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
-                                <p class="text-[9px] font-bold text-gray-400 uppercase">Utilities</p>
-                                <p class="text-sm font-extrabold text-gray-300 mt-0.5" id="fspec-display-utilities">
-                                    $1,200.00</p>
-                            </div>
-                            <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
-                                <p class="text-[9px] font-bold text-gray-400 uppercase">Insurance</p>
-                                <p class="text-sm font-extrabold text-gray-300 mt-0.5" id="fspec-display-insurance">
-                                    $650.00</p>
-                            </div>
-                        </div>
-
-                        <!-- Hidden backing inputs to maintain full backward compatibility for profit calculation scripts -->
-                        <div class="hidden">
-                            <input type="text" id="fspec-name">
-                            <input type="text" id="fspec-manager-name">
-                            <input type="text" id="fspec-address">
-                            <input type="text" id="fspec-city">
-                            <input type="text" id="fspec-state">
-                            <input type="text" id="fspec-zip">
-                            <input type="number" id="fspec-sqft">
-                            <input type="number" id="fspec-sqft-per-tote">
-                            <input type="number" id="fspec-tote-capacity">
-                            <input type="number" id="fspec-rent">
-                            <input type="number" id="fspec-labor">
-                            <input type="number" id="fspec-utilities">
-                            <input type="number" id="fspec-insurance">
-                            <input type="number" id="fspec-staging-rooms" value="2">
-                            <input type="email" id="fspec-manager-email">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Col 3: Live Financial Yield & Net Profitability Estimate (4 cols) -->
-                <div class="lg:col-span-4 bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-4">
-                    <div class="flex items-center justify-between border-b border-gray-850 pb-3">
-                        <h4
-                            class="text-xs font-extrabold uppercase text-emerald-400 tracking-wider flex items-center gap-1.5">
-                            <i data-lucide="trending-up" class="w-4 h-4"></i> Live Financial Yield
-                        </h4>
-                        <span
-                            class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded font-mono">Real-Time
-                            BI</span>
-                    </div>
-
-                    <div class="space-y-3">
-                        <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-3">
-                            <p class="text-[9px] text-gray-400 uppercase font-extrabold tracking-wider">Monthly Revenue
-                            </p>
-                            <p id="fp-revenue" class="text-2xl font-black text-emerald-400 mt-0.5">$0.00</p>
-                            <p class="text-[9px] text-gray-500 mt-0.5">Active totes × monthly subscription rate</p>
-                        </div>
-
-                        <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-3">
-                            <p class="text-[9px] text-gray-400 uppercase font-extrabold tracking-wider">Total Operating
-                                Costs</p>
-                            <p id="fp-costs" class="text-2xl font-black text-red-400 mt-0.5">$0.00</p>
-                            <p class="text-[9px] text-gray-500 mt-0.5">Rent + Labor + Utilities + Insurance</p>
-                        </div>
-
-                        <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-3.5 shadow-md">
-                            <div class="flex justify-between items-center">
-                                <p class="text-[10px] text-gray-300 uppercase font-extrabold tracking-wider">Net Monthly
-                                    Profit</p>
-                                <span id="fp-margin-badge"
-                                    class="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">—%
-                                    Margin</span>
-                            </div>
-                            <p id="fp-net" class="text-2xl font-black text-white mt-1">$0.00</p>
-                        </div>
-
-                        <div
-                            class="bg-gray-900/60 border border-gray-800 rounded-xl p-3 flex justify-between items-center">
+                        <form id="create-employee-form" onsubmit="handleCreateEmployee(event)" class="space-y-4">
                             <div>
-                                <p class="text-[9px] text-gray-400 uppercase font-bold">Space Yield Density</p>
-                                <p id="fp-util" class="text-sm font-extrabold text-blue-400 mt-0.5">0.0% Capacity</p>
+                                <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Full Name</label>
+                                <input type="text" id="emp-name" placeholder="John Worker" required
+                                    class="w-full bg-gray-900 border border-gray-800 rounded-xl py-2.5 px-4 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
                             </div>
-                            <div class="text-right">
-                                <p class="text-[9px] text-gray-400 uppercase font-bold">Rev / Sq Ft</p>
-                                <p id="fp-rev-sqft" class="text-sm font-extrabold text-emerald-400 mt-0.5">$0.00/sqft
-                                </p>
+                            <div>
+                                <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Email
+                                    Address</label>
+                                <input type="email" id="emp-email" placeholder="worker@cloudvault.com" required
+                                    class="w-full bg-gray-900 border border-gray-800 rounded-xl py-2.5 px-4 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
                             </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Role /
+                                    Clearance</label>
+                                <select id="emp-role"
+                                    class="w-full bg-gray-900 border border-gray-800 rounded-xl py-2.5 px-4 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                                    <option value="warehouse_worker">Warehouse Worker</option>
+                                    <option value="warehouse_manager">Warehouse Manager</option>
+                                    <option value="executive">Executive (Super Admin)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Assigned
+                                    Facility</label>
+                                <select id="emp-facility"
+                                    class="w-full bg-gray-900 border border-gray-800 rounded-xl py-2.5 px-4 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Temporary
+                                    Password</label>
+                                <input type="password" id="emp-password" value="password123" required
+                                    class="w-full bg-gray-900 border border-gray-800 rounded-xl py-2.5 px-4 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                            </div>
+                            <button type="submit"
+                                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-md shadow-blue-900/20 text-sm mt-2 flex items-center justify-center gap-1.5">
+                                <i data-lucide="plus" class="w-4 h-4"></i> Create Employee Account
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Analytics Configuration Section (PostHog) -->
+                    <div class="glass-panel p-6 rounded-3xl space-y-6">
+                        <div class="flex items-center space-x-2 border-b border-gray-800 pb-4">
+                            <i data-lucide="bar-chart-3" class="w-5 h-5 text-indigo-400"></i>
+                            <h3 class="font-bold text-white text-lg">Analytics (PostHog)</h3>
+                        </div>
+                        <div class="space-y-4 text-sm text-gray-300">
+                            <div>
+                                <span class="text-xs font-bold uppercase text-gray-400 block mb-1">Organization</span>
+                                <span class="font-semibold text-white">CloudVault</span>
+                            </div>
+                            <div>
+                                <span class="text-xs font-bold uppercase text-gray-400 block mb-1">Project ID</span>
+                                <span class="font-mono text-white">521354</span>
+                            </div>
+                            <div>
+                                <span class="text-xs font-bold uppercase text-gray-400 block mb-1">Status</span>
+                                <span
+                                    class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-900/30 text-green-400 border border-green-800/50">
+                                    <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-green-400 animate-pulse"></span>
+                                    Connected
+                                </span>
+                            </div>
+                            <a href="https://us.posthog.com/project/521354/dashboard" target="_blank"
+                                rel="noopener noreferrer"
+                                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition shadow-md shadow-indigo-900/20 text-sm flex items-center justify-center gap-1.5 mt-2">
+                                <i data-lucide="external-link" class="w-4 h-4"></i> View PostHog Dashboard
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Facility Specifications, Physical Density & Financial Yield Command Center (Executive Only) -->
+            <div class="glass-panel p-6 sm:p-8 rounded-3xl space-y-6" id="facility-specs-panel">
+                <div
+                    class="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-gray-800 pb-4 gap-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="p-2.5 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20">
+                            <i data-lucide="building-2" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-white text-xl flex items-center gap-2">
+                                Unified Facility Capacity & Financial Command Center
+                                <span
+                                    class="bg-blue-500/10 text-blue-400 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-wider">Executive
+                                    BI Control</span>
+                            </h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Physical space utilization, lease & labor costs, and
+                                real-time net profitability unified in one panel.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="bg-blue-950/60 border border-blue-500/30 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-inner">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                            <span class="text-xs font-mono font-bold text-blue-300 uppercase tracking-wider"
+                                id="active-facility-name-pill">Seattle North Fulfillment Center</span>
                         </div>
                     </div>
                 </div>
 
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+                    <!-- Col 1: Physical Space Utilization Ring Gauge & Capacity (4 cols) -->
+                    <div class="lg:col-span-4 bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-5">
+                        <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                            <h4
+                                class="text-xs font-extrabold uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">
+                                <i data-lucide="percent" class="w-4 h-4"></i> Physical Space Utilization
+                            </h4>
+                            <span class="text-[10px] text-gray-500 font-mono" id="exec-capacity-label">Capacity</span>
+                        </div>
+
+                        <!-- Real-time yield ring gauge -->
+                        <div class="flex items-center justify-center py-2 relative">
+                            <div class="relative w-40 h-40">
+                                <canvas id="facilityUtilizationRing"></canvas>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span class="text-3xl font-black text-white" id="m-capacity-pct">0%</span>
+                                    <span
+                                        class="text-[9px] text-gray-500 uppercase tracking-widest font-bold mt-0.5">Utilized</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3 pt-3 border-t border-gray-850 text-xs">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase">Usable Sq Ft</p>
+                                    <p class="text-base font-extrabold text-white mt-0.5" id="m-usable-sqft">20,000</p>
+                                </div>
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase">Active Totes</p>
+                                    <p class="text-base font-extrabold text-white mt-0.5" id="m-active-totes">0</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase">Max Tote Cap</p>
+                                    <p class="text-base font-extrabold text-blue-400 mt-0.5" id="m-tote-capacity">2,000
+                                    </p>
+                                </div>
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase">Staging Rooms</p>
+                                    <p class="text-base font-extrabold text-indigo-400 mt-0.5" id="m-staging-rooms">2
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Col 2: Read-Only Facility Specs & Operating Costs Telemetry (4 cols) -->
+                    <div class="lg:col-span-4 bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-4">
+                        <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                            <h4
+                                class="text-xs font-extrabold uppercase text-blue-400 tracking-wider flex items-center gap-1.5">
+                                <i data-lucide="building-2" class="w-4 h-4"></i> Facility Specs &amp; Lease Costs
+                            </h4>
+                            <a href="admin-facilities.html" id="btn-edit-fac-config"
+                                class="text-[10px] font-bold text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-600 px-2.5 py-1 rounded-xl border border-blue-500/20 transition flex items-center gap-1">
+                                <i data-lucide="settings" class="w-3 h-3"></i> Executive Config →
+                            </a>
+                        </div>
+
+                        <div class="space-y-3 text-xs">
+                            <div class="bg-gray-900/60 p-3 rounded-xl border border-gray-800 space-y-1">
+                                <p class="text-[9px] font-bold uppercase text-gray-400">Facility Location &amp; Manager
+                                </p>
+                                <p class="text-sm font-extrabold text-white" id="fspec-display-name">Seattle North
+                                    Fulfillment Center</p>
+                                <p class="text-[11px] text-gray-400 font-medium" id="fspec-display-address">4821 Aurora
+                                    Ave
+                                    N, Seattle, WA 98103</p>
+                                <p class="text-[10px] text-blue-400 font-mono font-bold mt-1">Manager: <span
+                                        id="fspec-display-manager" class="text-gray-200">Alex Rivera</span></p>
+                            </div>
+
+                            <div class="grid grid-cols-3 gap-2">
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">Total SQFT</p>
+                                    <p class="text-sm font-extrabold text-white mt-0.5" id="fspec-display-sqft">20,000
+                                    </p>
+                                </div>
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">SQFT / Tote</p>
+                                    <p class="text-sm font-extrabold text-white mt-0.5"
+                                        id="fspec-display-sqft-per-tote">1.0
+                                    </p>
+                                </div>
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">Max Cap</p>
+                                    <p class="text-sm font-extrabold text-blue-400 mt-0.5" id="fspec-display-capacity">
+                                        2,000
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">Rent / Lease</p>
+                                    <p class="text-sm font-extrabold text-amber-400 mt-0.5" id="fspec-display-rent">
+                                        $8,500.00</p>
+                                </div>
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">Labor Cost</p>
+                                    <p class="text-sm font-extrabold text-amber-400 mt-0.5" id="fspec-display-labor">
+                                        $14,000.00</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">Utilities</p>
+                                    <p class="text-sm font-extrabold text-gray-300 mt-0.5" id="fspec-display-utilities">
+                                        $1,200.00</p>
+                                </div>
+                                <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800">
+                                    <p class="text-[9px] font-bold text-gray-400 uppercase">Insurance</p>
+                                    <p class="text-sm font-extrabold text-gray-300 mt-0.5" id="fspec-display-insurance">
+                                        $650.00</p>
+                                </div>
+                            </div>
+
+                            <!-- Hidden backing inputs to maintain full backward compatibility for profit calculation scripts -->
+                            <div class="hidden">
+                                <input type="text" id="fspec-name">
+                                <input type="text" id="fspec-manager-name">
+                                <input type="text" id="fspec-address">
+                                <input type="text" id="fspec-city">
+                                <input type="text" id="fspec-state">
+                                <input type="text" id="fspec-zip">
+                                <input type="number" id="fspec-sqft">
+                                <input type="number" id="fspec-sqft-per-tote">
+                                <input type="number" id="fspec-tote-capacity">
+                                <input type="number" id="fspec-rent">
+                                <input type="number" id="fspec-labor">
+                                <input type="number" id="fspec-utilities">
+                                <input type="number" id="fspec-insurance">
+                                <input type="number" id="fspec-staging-rooms" value="2">
+                                <input type="email" id="fspec-manager-email">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Col 3: Live Financial Yield & Net Profitability Estimate (4 cols) -->
+                    <div class="lg:col-span-4 bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-4">
+                        <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                            <h4
+                                class="text-xs font-extrabold uppercase text-emerald-400 tracking-wider flex items-center gap-1.5">
+                                <i data-lucide="trending-up" class="w-4 h-4"></i> Live Financial Yield
+                            </h4>
+                            <span
+                                class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded font-mono">Real-Time
+                                BI</span>
+                        </div>
+
+                        <div class="space-y-3">
+                            <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-3">
+                                <p class="text-[9px] text-gray-400 uppercase font-extrabold tracking-wider">Monthly
+                                    Revenue
+                                </p>
+                                <p id="fp-revenue" class="text-2xl font-black text-emerald-400 mt-0.5">$0.00</p>
+                                <p class="text-[9px] text-gray-500 mt-0.5">Active totes × monthly subscription rate</p>
+                            </div>
+
+                            <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-3">
+                                <p class="text-[9px] text-gray-400 uppercase font-extrabold tracking-wider">Total
+                                    Operating
+                                    Costs</p>
+                                <p id="fp-costs" class="text-2xl font-black text-red-400 mt-0.5">$0.00</p>
+                                <p class="text-[9px] text-gray-500 mt-0.5">Rent + Labor + Utilities + Insurance</p>
+                            </div>
+
+                            <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-3.5 shadow-md">
+                                <div class="flex justify-between items-center">
+                                    <p class="text-[10px] text-gray-300 uppercase font-extrabold tracking-wider">Net
+                                        Monthly
+                                        Profit</p>
+                                    <span id="fp-margin-badge"
+                                        class="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">—%
+                                        Margin</span>
+                                </div>
+                                <p id="fp-net" class="text-2xl font-black text-white mt-1">$0.00</p>
+                            </div>
+
+                            <div
+                                class="bg-gray-900/60 border border-gray-800 rounded-xl p-3 flex justify-between items-center">
+                                <div>
+                                    <p class="text-[9px] text-gray-400 uppercase font-bold">Space Yield Density</p>
+                                    <p id="fp-util" class="text-sm font-extrabold text-blue-400 mt-0.5">0.0% Capacity
+                                    </p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[9px] text-gray-400 uppercase font-bold">Rev / Sq Ft</p>
+                                    <p id="fp-rev-sqft" class="text-sm font-extrabold text-emerald-400 mt-0.5">
+                                        $0.00/sqft
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
             </div>
-        </div>
 
         </div>
 
@@ -931,531 +946,405 @@
                 </div>
             </div>
 
-            <!-- Feature 2: Valet Delivery Dispatch & Driver Route Manifest Command Center -->
-            <div
-                class="glass-panel p-6 rounded-3xl space-y-6 border border-indigo-500/20 shadow-[0_0_30px_rgba(99,102,241,0.08)]">
-                <div
-                    class="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-gray-800 pb-4 gap-3">
+            <!-- VIEW 3: WAREHOUSE WORKER ROLE (HARDWARE-OPTIMIZED INDUSTRIAL TERMINAL) -->
+
+            <div id="view-worker" class="space-y-6 hidden animate-fade-in">
+
+                <!-- SLA-Driven Cutoff Banner (Past 18:00 Cutoff Alert) -->
+                <div id="sla-cutoff-banner"
+                    class="hidden bg-gradient-to-r from-red-600 via-red-700 to-rose-600 text-white p-4 rounded-2xl border-2 border-red-400 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-bounce">
                     <div class="flex items-center space-x-3">
-                        <div class="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-2xl border border-indigo-500/20">
-                            <i data-lucide="truck" class="w-6 h-6"></i>
+                        <div
+                            class="w-10 h-10 rounded-full bg-black/30 flex items-center justify-center text-white shrink-0">
+                            <i data-lucide="alert-triangle" class="w-6 h-6 text-yellow-300"></i>
                         </div>
                         <div>
-                            <h3 class="font-bold text-white text-lg flex items-center gap-2">
-                                Valet Dispatch & Driver Route Manifest
-                                <span class="cyber-badge text-[10px] px-2 py-0.5 rounded font-mono">DOOR DELIVERY
-                                    DISPATCH</span>
-                            </h3>
-                            <p class="text-xs text-gray-400">Door delivery dispatch grouped by ZIP code and target date
-                            </p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span id="valet-dispatch-count"
-                            class="text-xs font-bold text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 rounded-xl">0
-                            Pending Valet Routes</span>
-                    </div>
-                </div>
-
-                <!-- Valet Delivery Orders Table -->
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse text-xs">
-                        <thead>
-                            <tr
-                                class="text-[11px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-800 pb-2">
-                                <th class="pb-3">Stop #</th>
-                                <th class="pb-3">Customer</th>
-                                <th class="pb-3">ZIP / Area</th>
-                                <th class="pb-3">Totes to Deliver</th>
-                                <th class="pb-3">Valet Fee</th>
-                                <th class="pb-3 text-right">Route Action</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-850" id="valet-manifest-table-body">
-                            <tr>
-                                <td colspan="6" class="py-6 text-center text-xs text-gray-500 font-mono">No valet door
-                                    delivery routes pending dispatch.</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Tote Lifecycle Override -->
-            <div class="glass-panel p-6 rounded-3xl space-y-5">
-                <div class="flex items-center justify-between border-b border-gray-800 pb-4">
-                    <div class="flex items-center space-x-2">
-                        <i data-lucide="shield-alert" class="w-5 h-5 text-orange-400"></i>
-                        <div>
-                            <h3 class="font-bold text-white text-lg">Tote Lifecycle Override</h3>
-                            <p class="text-[10px] text-gray-500 mt-0.5">Manager-only. Force a tote into any lifecycle
-                                status. All overrides are logged.</p>
+                            <h4 class="font-black text-sm uppercase tracking-wider">⚠️ CUTOFF PASSED (18:00 SLA): CLEAR
+                                STAGING QUEUE IMMEDIATELY</h4>
+                            <p class="text-xs text-red-100">Same-day pickup SLA cutoff expired. All pending vault
+                                retrieval
+                                requests must be staged in rooms now.</p>
                         </div>
                     </div>
                     <span
-                        class="text-[9px] font-bold uppercase tracking-widest text-orange-400 border border-orange-500/30 bg-orange-500/10 px-2.5 py-1 rounded-lg">Manager
-                        Access</span>
+                        class="bg-black/50 text-yellow-300 font-mono font-bold text-xs px-3.5 py-1.5 rounded-xl border border-yellow-400/40 shrink-0">CRITICAL
+                        PRIORITY</span>
                 </div>
 
-                <div class="flex gap-3">
-                    <div class="relative flex-1">
-                        <i data-lucide="search"
-                            class="absolute left-3.5 top-3.5 w-4 h-4 text-gray-500 pointer-events-none"></i>
-                        <input type="text" id="override-tote-search" placeholder="Enter tote code (e.g. CV-3001)..."
-                            class="w-full bg-gray-950 border border-gray-800 rounded-xl py-3 pl-10 pr-4 text-sm text-white font-mono outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 transition"
-                            onkeydown="if(event.key==='Enter') lookupToteForOverride()">
-                    </div>
-                    <button onclick="lookupToteForOverride()"
-                        class="bg-orange-600/20 hover:bg-orange-600 text-orange-300 hover:text-white border border-orange-500/30 hover:border-transparent font-bold text-sm px-5 rounded-xl transition flex items-center gap-2">
-                        <i data-lucide="search" class="w-4 h-4"></i> Look Up
-                    </button>
-                </div>
-
-                <!-- Tote result card (hidden until lookup) -->
-                <div id="override-result" class="hidden bg-gray-950 border border-gray-800 rounded-2xl p-5 space-y-4">
-                    <div class="flex items-start justify-between">
-                        <div>
-                            <p class="text-xs text-gray-500 uppercase tracking-wide font-bold">Tote</p>
-                            <p id="override-tote-code-display" class="text-xl font-black text-white font-mono mt-0.5">
-                            </p>
-                            <p id="override-tote-owner" class="text-xs text-gray-400 mt-0.5"></p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-xs text-gray-500 uppercase tracking-wide font-bold">Current Status</p>
-                            <span id="override-current-status"
-                                class="inline-block mt-1 px-3 py-1 rounded-lg text-sm font-bold"></span>
-                        </div>
-                    </div>
-
-                    <div>
-                        <p class="text-xs font-bold uppercase text-gray-400 mb-2">Override To</p>
-                        <div class="grid grid-cols-4 gap-2">
-                            <button onclick="selectOverrideStatus('stored')"
-                                class="override-status-btn flex flex-col items-center gap-1 p-3 rounded-xl border border-gray-700 bg-gray-900 hover:border-gray-400 hover:text-white text-gray-400 transition text-[10px] font-bold uppercase">
-                                <i data-lucide="package" class="w-4 h-4"></i> Stored
-                            </button>
-                            <button onclick="selectOverrideStatus('pending-stage')"
-                                class="override-status-btn flex flex-col items-center gap-1 p-3 rounded-xl border border-gray-700 bg-gray-900 hover:border-emerald-500 hover:text-emerald-300 text-gray-400 transition text-[10px] font-bold uppercase">
-                                <i data-lucide="tag" class="w-4 h-4"></i> Pending Stage
-                            </button>
-                            <button onclick="selectOverrideStatus('staged')"
-                                class="override-status-btn flex flex-col items-center gap-1 p-3 rounded-xl border border-gray-700 bg-gray-900 hover:border-amber-500 hover:text-amber-300 text-gray-400 transition text-[10px] font-bold uppercase">
-                                <i data-lucide="archive-restore" class="w-4 h-4"></i> Staged
-                            </button>
-                            <button onclick="selectOverrideStatus('with-customer')"
-                                class="override-status-btn flex flex-col items-center gap-1 p-3 rounded-xl border border-gray-700 bg-gray-900 hover:border-blue-500 hover:text-blue-300 text-gray-400 transition text-[10px] font-bold uppercase">
-                                <i data-lucide="user-check" class="w-4 h-4"></i> With Customer
-                            </button>
-                        </div>
-                    </div>
-
-                    <div>
-                        <p class="text-xs font-bold uppercase text-gray-400 mb-1.5">Reason for Override <span
-                                class="text-gray-600 font-normal normal-case">(required for audit log)</span></p>
-                        <input type="text" id="override-reason"
-                            placeholder="e.g. Scan error, tote lost and recovered..."
-                            class="w-full bg-gray-900 border border-gray-800 rounded-xl py-2.5 px-4 text-sm text-white outline-none focus:border-orange-500 transition"
-                            oninput="updateOverrideBtn()">
-                    </div>
-
-                    <button id="override-confirm-btn" onclick="confirmToteOverride()" disabled
-                        class="w-full bg-orange-600/30 text-orange-400 font-bold py-3 rounded-xl text-sm transition border border-orange-500/30 cursor-not-allowed">
-                        Select a status to override
-                    </button>
-                </div>
-            </div>
-
-        </div>
-
-        <!-- VIEW 3: WAREHOUSE WORKER ROLE (HARDWARE-OPTIMIZED INDUSTRIAL TERMINAL) -->
-
-        <div id="view-worker" class="space-y-6 hidden animate-fade-in">
-
-            <!-- SLA-Driven Cutoff Banner (Past 18:00 Cutoff Alert) -->
-            <div id="sla-cutoff-banner"
-                class="hidden bg-gradient-to-r from-red-600 via-red-700 to-rose-600 text-white p-4 rounded-2xl border-2 border-red-400 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-bounce">
-                <div class="flex items-center space-x-3">
-                    <div
-                        class="w-10 h-10 rounded-full bg-black/30 flex items-center justify-center text-white shrink-0">
-                        <i data-lucide="alert-triangle" class="w-6 h-6 text-yellow-300"></i>
-                    </div>
-                    <div>
-                        <h4 class="font-black text-sm uppercase tracking-wider">⚠️ CUTOFF PASSED (18:00 SLA): CLEAR
-                            STAGING QUEUE IMMEDIATELY</h4>
-                        <p class="text-xs text-red-100">Same-day pickup SLA cutoff expired. All pending vault retrieval
-                            requests must be staged in rooms now.</p>
-                    </div>
-                </div>
-                <span
-                    class="bg-black/50 text-yellow-300 font-mono font-bold text-xs px-3.5 py-1.5 rounded-xl border border-yellow-400/40 shrink-0">CRITICAL
-                    PRIORITY</span>
-            </div>
-
-            <!-- Offline Queue Indicator Badge -->
-            <div id="offline-queue-badge"
-                class="hidden bg-amber-500/20 border border-amber-500/40 text-amber-300 p-3 rounded-2xl text-xs font-mono font-bold flex items-center justify-between">
-                <span class="flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
-                    <span>📶 Offline Mode Active — Scans are queued locally in browser</span>
-                </span>
-                <button onclick="syncOfflineQueue()"
-                    class="bg-amber-500 hover:bg-amber-400 text-black font-extrabold px-3 py-1 rounded-lg transition text-[10px] uppercase cursor-pointer">Sync
-                    Queue Now</button>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
-                <!-- Worker Scan/Actions Module -->
-                <div class="glass-panel p-6 rounded-3xl lg:col-span-4 space-y-6 flex flex-col justify-between">
-                    <div>
-                        <div class="flex items-center justify-between border-b border-gray-800 pb-4">
-                            <div class="flex items-center space-x-2">
-                                <i data-lucide="qr-code" class="w-5 h-5 text-emerald-400"></i>
-                                <h3 class="font-bold text-white text-lg">Instant Tote Scanner</h3>
-                            </div>
-                            <button onclick="openPrintLabelModal()"
-                                class="bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer"
-                                title="Generate printable QR & CODE128 barcode labels">
-                                <i data-lucide="printer" class="w-3.5 h-3.5"></i>
-                                <span>Print Labels</span>
-                            </button>
-                        </div>
-
-                        <div class="space-y-4 mt-6">
-                            <div>
-                                <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Scan Barcode / SKU
-                                    (Hardware Laser Auto-Intercept)</label>
-                                <div class="relative">
-                                    <input type="text" id="scan-barcode" placeholder="Click & Scan Barcode..."
-                                        onkeydown="handleScanKey(event)"
-                                        class="w-full bg-gray-950 border-2 border-gray-850 focus:border-blue-500 rounded-xl py-3.5 px-4 pl-10 text-sm text-white font-mono outline-none transition">
-                                    <div class="absolute left-3.5 top-4 text-gray-500">
-                                        <i data-lucide="scan-line" class="w-4 h-4 animate-pulse"></i>
-                                    </div>
-                                </div>
-                                <p class="text-[10px] text-gray-500 mt-1">Global gun listener active. Press Enter or
-                                    scan laser barcode.</p>
-                            </div>
-
-                            <!-- Live Scan Status Indicator Feed -->
-                            <div
-                                class="bg-gray-950/80 rounded-xl border border-gray-850 p-4 min-h-[105px] flex flex-col justify-center space-y-2">
-                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Terminal Output
-                                </p>
-                                <div id="terminal-output"
-                                    class="text-xs text-gray-400 font-mono flex flex-col justify-center items-center h-full text-center">
-                                    <i data-lucide="terminal" class="w-6 h-6 text-gray-700 mb-2"></i>
-                                    <span>Awaiting scan input...</span>
-                                </div>
-                            </div>
-
-                            <div
-                                class="bg-gray-900/50 p-4 border border-gray-850 rounded-2xl space-y-3 text-xs text-gray-400">
-                                <p class="font-bold text-gray-300 uppercase text-[9px]">Auto-lifecycle mapping:</p>
-                                <div class="grid grid-cols-2 gap-3">
-                                    <!-- Self-Serve Path -->
-                                    <div class="space-y-1.5 border-r border-gray-800/40 pr-3">
-                                        <p
-                                            class="text-[9px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">
-                                            🚪 Self-Serve</p>
-                                        <div
-                                            class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
-                                            <span>Un-activated</span> <i data-lucide="arrow-right"
-                                                class="w-3 h-3 text-gray-600"></i> <span
-                                                class="text-emerald-400 font-medium">In Vault</span>
-                                        </div>
-                                        <div
-                                            class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
-                                            <span>In Vault</span> <i data-lucide="arrow-right"
-                                                class="w-3 h-3 text-gray-600"></i> <span
-                                                class="text-amber-400 font-medium">Staging Room</span>
-                                        </div>
-                                        <div
-                                            class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
-                                            <span>In Room</span> <i data-lucide="arrow-right"
-                                                class="w-3 h-3 text-gray-600"></i> <span
-                                                class="text-blue-400 font-medium">With Customer</span>
-                                        </div>
-                                        <div class="flex justify-between items-center text-[10px]">
-                                            <span>Returned</span> <i data-lucide="arrow-right"
-                                                class="w-3 h-3 text-gray-600"></i> <span
-                                                class="text-purple-400 font-medium">Back to Vault</span>
-                                        </div>
-                                    </div>
-                                    <!-- Valet Path -->
-                                    <div class="space-y-1.5">
-                                        <p
-                                            class="text-[9px] font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1">
-                                            🚚 Valet Delivery</p>
-                                        <div
-                                            class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
-                                            <span>Un-activated</span> <i data-lucide="arrow-right"
-                                                class="w-3 h-3 text-gray-600"></i> <span
-                                                class="text-emerald-400 font-medium">In Vault</span>
-                                        </div>
-                                        <div
-                                            class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
-                                            <span>In Vault</span> <i data-lucide="arrow-right"
-                                                class="w-3 h-3 text-gray-600"></i> <span
-                                                class="text-orange-400 font-medium">Load on Driver</span>
-                                        </div>
-                                        <div
-                                            class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
-                                            <span>Out for Delivery</span> <i data-lucide="arrow-right"
-                                                class="w-3 h-3 text-gray-600"></i> <span
-                                                class="text-blue-400 font-medium">With Customer</span>
-                                        </div>
-                                        <div class="flex justify-between items-center text-[10px]">
-                                            <span>Driver Pickup</span> <i data-lucide="arrow-right"
-                                                class="w-3 h-3 text-gray-600"></i> <span
-                                                class="text-purple-400 font-medium">Back to Vault</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div
-                        class="mt-6 pt-4 border-t border-gray-850 text-[10px] text-gray-500 text-center flex items-center justify-center gap-1.5">
-                        <i data-lucide="help-circle" class="w-3.5 h-3.5 text-blue-500"></i>
-                        <span>Tap cards for gloved 60px touch action execution.</span>
-                    </div>
-                </div>
-
-                <!-- Daily Operational queues -->
-                <div class="glass-panel p-6 rounded-3xl lg:col-span-8 space-y-5">
-                    <div class="flex items-center space-x-2 border-b border-gray-800 pb-4">
-                        <i data-lucide="list-todo" class="w-5 h-5 text-indigo-400"></i>
-                        <h3 class="font-bold text-white text-lg">Daily Operational Queue</h3>
-                    </div>
-
-                    <!-- Five Phase Tabs: Labeled by Current Location & Target Action -->
-                    <div class="grid grid-cols-5 gap-2" id="worker-phase-tabs">
-                        <button id="wtab-activate" onclick="switchWorkerPhase('activate')"
-                            class="worker-phase-tab active-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 transition-all">
-                            <i data-lucide="package-plus" class="w-4 h-4"></i>
-                            <span class="text-[10px] font-bold uppercase tracking-wide">1. New Intake</span>
-                            <span id="wtab-activate-count" class="text-lg font-black leading-none">—</span>
-                            <span class="text-[9px] text-emerald-400 font-semibold">Activate & Shelve</span>
-                        </button>
-                        <button id="wtab-stage" onclick="switchWorkerPhase('stage')"
-                            class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 transition-all">
-                            <i data-lucide="archive-restore" class="w-4 h-4"></i>
-                            <span class="text-[10px] font-bold uppercase tracking-wide">2. Vault &amp; Intake Pull</span>
-                            <span id="wtab-stage-count" class="text-lg font-black leading-none">—</span>
-                            <span class="text-[9px] text-gray-400">Retrievals &amp; Dispatch</span>
-                        </button>
-                        <button id="wtab-customer" onclick="switchWorkerPhase('customer')"
-                            class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300 transition-all">
-                            <i data-lucide="door-open" class="w-4 h-4"></i>
-                            <span class="text-[10px] font-bold uppercase tracking-wide">3. Staging Room</span>
-                            <span id="wtab-customer-count" class="text-lg font-black leading-none">—</span>
-                            <span class="text-[9px] text-gray-400">🚪 Self-Serve Pickup</span>
-                        </button>
-                        <button id="wtab-dispatch" onclick="switchWorkerPhase('dispatch')"
-                            class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-orange-300 transition-all">
-                            <i data-lucide="truck" class="w-4 h-4"></i>
-                            <span class="text-[10px] font-bold uppercase tracking-wide">4. Driver Dispatch</span>
-                            <span id="wtab-dispatch-count" class="text-lg font-black leading-none">—</span>
-                            <span class="text-[9px] text-gray-400">🚚 Valet Delivery</span>
-                        </button>
-                        <button id="wtab-returned" onclick="switchWorkerPhase('returned')"
-                            class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-purple-500/40 hover:bg-purple-500/10 hover:text-purple-300 transition-all">
-                            <i data-lucide="package-check" class="w-4 h-4"></i>
-                            <span class="text-[10px] font-bold uppercase tracking-wide">5. With Customer</span>
-                            <span id="wtab-returned-count" class="text-lg font-black leading-none">—</span>
-                            <span class="text-[9px] text-gray-400">→ Return to Vault</span>
-                        </button>
-                    </div>
-
-                    <!-- Phase 1: New Intake (stored, un-activated → QR barcode scan to activate) -->
-                    <div id="wview-activate" class="worker-phase-view space-y-5">
-
-                        <!-- Contextual Bulk Printing Action Bar -->
-                        <div
-                            class="bg-gradient-to-r from-blue-950/80 to-indigo-950/80 border border-blue-500/30 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
-                            <div class="space-y-1 text-center sm:text-left">
-                                <h4
-                                    class="text-sm font-extrabold text-blue-300 uppercase tracking-wider flex items-center justify-center sm:justify-start gap-2">
-                                    <i data-lucide="tag" class="w-4 h-4 text-emerald-400"></i> New Intake Queue
-                                </h4>
-                                <p class="text-xs text-gray-400">Un-activated totes waiting for initial thermal tag
-                                    printing and vault storage activation.</p>
-                            </div>
-                            <button id="btn-print-all-intake" onclick="printAllIntakeLabels()"
-                                class="hidden w-full sm:w-auto min-h-[54px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs px-6 py-3 rounded-xl border border-blue-400/40 shadow-xl items-center justify-center gap-2 cursor-pointer transition transform active:scale-95">
-                                <i data-lucide="printer" class="w-4 h-4"></i>
-                                <span>🖨️ Print All [<span id="print-intake-count">0</span>] Intake Labels</span>
-                            </button>
-                        </div>
-
-                        <!-- Incoming Scheduled Deliveries Table -->
-                        <div class="bg-gray-950/60 p-4 border border-gray-800 rounded-2xl space-y-3">
-                            <div class="flex items-center justify-between">
-                                <h4
-                                    class="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-                                    <i data-lucide="truck" class="w-4 h-4"></i> Scheduled Incoming Tote Deliveries &amp;
-                                    Drop-offs
-                                </h4>
-                                <span id="w-incoming-count" class="text-[10px] font-bold text-gray-400 font-mono">0
-                                    Scheduled</span>
-                            </div>
-                            <table class="w-full text-left border-collapse text-xs">
-                                <thead>
-                                    <tr
-                                        class="text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-800 pb-2">
-                                        <th class="pb-2">Customer UID</th>
-                                        <th class="pb-2">Quantity</th>
-                                        <th class="pb-2">Logistics Type</th>
-                                        <th class="pb-2">Target Schedule</th>
-                                        <th class="pb-2 text-right">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-850" id="wbody-incoming-deliveries">
-                                    <tr>
-                                        <td colspan="5" class="py-4 text-center text-xs text-gray-500 font-mono">No
-                                            incoming tote deliveries currently scheduled.</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Grouped Customer Cards Container for New Intake -->
-                        <div id="wbody-activate" class="space-y-4"></div>
-                    </div>
-
-                    <!-- Phase 2: Pull from Vault (pending-stage + pending-dispatch) -->
-                    <div id="wview-stage" class="worker-phase-view space-y-4 hidden">
-                        <div class="bg-amber-950/30 border border-amber-500/20 p-4 rounded-2xl space-y-3 text-xs">
-                            <div class="flex items-center justify-between flex-wrap gap-2">
-                                <span class="text-gray-300"><strong class="text-amber-400">Worker Action:</strong> Dispatch activated intake totes or pull totes from vault shelves</span>
-                                <span class="text-amber-300 font-mono text-[11px] font-bold">Retrieval &amp; Dispatch Queue</span>
-                            </div>
-
-                            <!-- Sub-Filter Bar for Separate Valet vs Self-Serve Staging Pulls -->
-                            <div class="flex items-center gap-2 border-t border-amber-500/10 pt-3 flex-wrap">
-                                <span
-                                    class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider mr-1">Filter
-                                    Pulls:</span>
-                                <button onclick="setPullSubFilter('all')" id="pfilter-all"
-                                    class="pfilter-btn bg-amber-500 text-gray-950 font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm cursor-pointer">
-                                    All Pulls (<span id="cnt-pfilter-all">0</span>)
-                                </button>
-                                <button onclick="setPullSubFilter('staging')" id="pfilter-staging"
-                                    class="pfilter-btn bg-gray-900 text-gray-300 border border-gray-700 hover:border-blue-500 font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition cursor-pointer">
-                                    🚪 Self-Serve Staging (<span id="cnt-pfilter-staging">0</span>)
-                                </button>
-                                <button onclick="setPullSubFilter('valet')" id="pfilter-valet"
-                                    class="pfilter-btn bg-gray-900 text-gray-300 border border-gray-700 hover:border-orange-500 font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition cursor-pointer">
-                                    🚚 Valet Delivery (<span id="cnt-pfilter-valet">0</span>)
-                                </button>
-                            </div>
-                        </div>
-                        <!-- Grouped Customer Cards Container for Pull from Vault -->
-                        <div id="wbody-stage" class="space-y-4"></div>
-                    </div>
-
-                    <!-- Phase 3: In Staging Room (Self-Serve only — staged → hand off to customer at facility) -->
-                    <div id="wview-customer" class="worker-phase-view space-y-4 hidden">
-                        <div
-                            class="bg-blue-950/30 border border-blue-500/20 p-4 rounded-2xl flex items-center justify-between text-xs">
-                            <span class="text-gray-300"><strong class="text-blue-400">Current Location:</strong> Staging
-                                Room (🚪 Self-Serve customers only)</span>
-                            <span class="text-blue-300 font-mono text-[11px] font-bold">Customer arrives → Hand off
-                                totes</span>
-                        </div>
-                        <!-- Grouped Customer Cards Container for In Staging Room -->
-                        <div id="wbody-customer" class="space-y-4"></div>
-                    </div>
-
-                    <!-- Phase 4: Driver Dispatch (Valet only — pending-dispatch + out-for-delivery) -->
-                    <div id="wview-dispatch" class="worker-phase-view space-y-4 hidden">
-                        <div class="bg-orange-950/30 border border-orange-500/20 p-4 rounded-2xl space-y-2 text-xs">
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-300"><strong class="text-orange-400">🚚 Valet Delivery
-                                        Pipeline</strong></span>
-                                <span class="text-orange-300 font-mono text-[11px] font-bold">Load & Dispatch to
-                                    Customer's Door</span>
-                            </div>
-                            <p class="text-[10px] text-gray-400 border-t border-orange-500/10 pt-2 mt-1">
-                                Totes here are queued for valet delivery. Scan to mark as loaded on driver vehicle.
-                                Driver delivers to customer's address. On next route visit, driver picks up returned
-                                totes.
-                            </p>
-                        </div>
-                        <!-- Grouped Customer Cards Container for Driver Dispatch -->
-                        <div id="wbody-dispatch" class="space-y-4"></div>
-                    </div>
-
-                    <!-- Phase 5: With Customer (with-customer → scan return back to vault) -->
-                    <div id="wview-returned" class="worker-phase-view space-y-4 hidden">
-                        <div
-                            class="bg-purple-950/30 border border-purple-500/20 p-4 rounded-2xl flex items-center justify-between text-xs">
-                            <span class="text-gray-300"><strong class="text-purple-400">Current Location:</strong> Out
-                                With Customer (Drop-off Return Pending)</span>
-                            <span class="text-purple-300 font-mono text-[11px] font-bold">Target Action: Scan Return
-                                Back to Vault</span>
-                        </div>
-                        <!-- Grouped Customer Cards Container for Out With Customer -->
-                        <div id="wbody-returned" class="space-y-4"></div>
-                    </div>
-
-                </div>
-            </div>
-
-            <!-- Logistics Routing Maps (Delivery coordination with Google Maps Routes API) -->
-            <div class="glass-panel p-6 rounded-3xl space-y-4">
-                <div class="flex items-center justify-between border-b border-gray-800 pb-4">
-                    <div class="flex items-center space-x-2">
-                        <i data-lucide="navigation" class="w-5 h-5 text-blue-400"></i>
-                        <h3 class="font-bold text-white text-lg">Active Logistics Routing</h3>
-                    </div>
-                    <span id="map-stops-count"
-                        class="text-xs font-bold text-gray-400 font-mono bg-gray-900 px-3 py-1 rounded-xl border border-gray-800">0
-                        Active Valet Stops</span>
+                <!-- Offline Queue Indicator Badge -->
+                <div id="offline-queue-badge"
+                    class="hidden bg-amber-500/20 border border-amber-500/40 text-amber-300 p-3 rounded-2xl text-xs font-mono font-bold flex items-center justify-between">
+                    <span class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                        <span>📶 Offline Mode Active — Scans are queued locally in browser</span>
+                    </span>
+                    <button onclick="syncOfflineQueue()"
+                        class="bg-amber-500 hover:bg-amber-400 text-black font-extrabold px-3 py-1 rounded-lg transition text-[10px] uppercase cursor-pointer">Sync
+                        Queue Now</button>
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    <!-- Delivery Stops List -->
-                    <div class="lg:col-span-4 space-y-3">
-                        <h4
-                            class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center justify-between">
-                            <span>Scheduled Pickups Today</span>
-                            <span class="text-[10px] text-emerald-400 font-mono">Optimized Waypoints</span>
-                        </h4>
-                        <div class="space-y-3 max-h-[320px] overflow-y-auto pr-1" id="delivery-stops-list">
-                            <!-- Populated dynamically -->
+
+                    <!-- Worker Scan/Actions Module -->
+                    <div class="glass-panel p-6 rounded-3xl lg:col-span-4 space-y-6 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                                <div class="flex items-center space-x-2">
+                                    <i data-lucide="qr-code" class="w-5 h-5 text-emerald-400"></i>
+                                    <h3 class="font-bold text-white text-lg">Instant Tote Scanner</h3>
+                                </div>
+                                <button onclick="openPrintLabelModal()"
+                                    class="bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                                    title="Generate printable QR & CODE128 barcode labels">
+                                    <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+                                    <span>Print Labels</span>
+                                </button>
+                            </div>
+
+                            <div class="space-y-4 mt-6">
+                                <div>
+                                    <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Scan Barcode /
+                                        SKU
+                                        (Hardware Laser Auto-Intercept)</label>
+                                    <div class="relative">
+                                        <input type="text" id="scan-barcode" placeholder="Click & Scan Barcode..."
+                                            onkeydown="handleScanKey(event)"
+                                            class="w-full bg-gray-950 border-2 border-gray-850 focus:border-blue-500 rounded-xl py-3.5 px-4 pl-10 text-sm text-white font-mono outline-none transition">
+                                        <div class="absolute left-3.5 top-4 text-gray-500">
+                                            <i data-lucide="scan-line" class="w-4 h-4 animate-pulse"></i>
+                                        </div>
+                                    </div>
+                                    <p class="text-[10px] text-gray-500 mt-1">Global gun listener active. Press Enter or
+                                        scan laser barcode.</p>
+                                </div>
+
+                                <!-- Live Scan Status Indicator Feed -->
+                                <div
+                                    class="bg-gray-950/80 rounded-xl border border-gray-850 p-4 min-h-[105px] flex flex-col justify-center space-y-2">
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Terminal
+                                        Output
+                                    </p>
+                                    <div id="terminal-output"
+                                        class="text-xs text-gray-400 font-mono flex flex-col justify-center items-center h-full text-center">
+                                        <i data-lucide="terminal" class="w-6 h-6 text-gray-700 mb-2"></i>
+                                        <span>Awaiting scan input...</span>
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="bg-gray-900/50 p-4 border border-gray-850 rounded-2xl space-y-3 text-xs text-gray-400">
+                                    <p class="font-bold text-gray-300 uppercase text-[9px]">Auto-lifecycle mapping:</p>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <!-- Self-Serve Path -->
+                                        <div class="space-y-1.5 border-r border-gray-800/40 pr-3">
+                                            <p
+                                                class="text-[9px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                                                🚪 Self-Serve</p>
+                                            <div
+                                                class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
+                                                <span>Un-activated</span> <i data-lucide="arrow-right"
+                                                    class="w-3 h-3 text-gray-600"></i> <span
+                                                    class="text-emerald-400 font-medium">In Vault</span>
+                                            </div>
+                                            <div
+                                                class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
+                                                <span>In Vault</span> <i data-lucide="arrow-right"
+                                                    class="w-3 h-3 text-gray-600"></i> <span
+                                                    class="text-amber-400 font-medium">Staging Room</span>
+                                            </div>
+                                            <div
+                                                class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
+                                                <span>In Room</span> <i data-lucide="arrow-right"
+                                                    class="w-3 h-3 text-gray-600"></i> <span
+                                                    class="text-blue-400 font-medium">With Customer</span>
+                                            </div>
+                                            <div class="flex justify-between items-center text-[10px]">
+                                                <span>Returned</span> <i data-lucide="arrow-right"
+                                                    class="w-3 h-3 text-gray-600"></i> <span
+                                                    class="text-purple-400 font-medium">Back to Vault</span>
+                                            </div>
+                                        </div>
+                                        <!-- Valet Path -->
+                                        <div class="space-y-1.5">
+                                            <p
+                                                class="text-[9px] font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1">
+                                                🚚 Valet Delivery</p>
+                                            <div
+                                                class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
+                                                <span>Un-activated</span> <i data-lucide="arrow-right"
+                                                    class="w-3 h-3 text-gray-600"></i> <span
+                                                    class="text-emerald-400 font-medium">In Vault</span>
+                                            </div>
+                                            <div
+                                                class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
+                                                <span>In Vault</span> <i data-lucide="arrow-right"
+                                                    class="w-3 h-3 text-gray-600"></i> <span
+                                                    class="text-orange-400 font-medium">Load on Driver</span>
+                                            </div>
+                                            <div
+                                                class="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1">
+                                                <span>Out for Delivery</span> <i data-lucide="arrow-right"
+                                                    class="w-3 h-3 text-gray-600"></i> <span
+                                                    class="text-blue-400 font-medium">With Customer</span>
+                                            </div>
+                                            <div class="flex justify-between items-center text-[10px]">
+                                                <span>Driver Pickup</span> <i data-lucide="arrow-right"
+                                                    class="w-3 h-3 text-gray-600"></i> <span
+                                                    class="text-purple-400 font-medium">Back to Vault</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div
+                            class="mt-6 pt-4 border-t border-gray-850 text-[10px] text-gray-500 text-center flex items-center justify-center gap-1.5">
+                            <i data-lucide="help-circle" class="w-3.5 h-3.5 text-blue-500"></i>
+                            <span>Tap cards for gloved 60px touch action execution.</span>
                         </div>
                     </div>
 
-                    <!-- Live Map Canvas / Route Viewer -->
-                    <div
-                        class="lg:col-span-8 bg-gray-950 rounded-2xl border border-gray-800 min-h-[320px] overflow-hidden relative flex flex-col">
-                        <div id="google-maps-container" class="w-full h-full min-h-[320px] relative">
-                            <!-- Google Maps Route Embed Iframe -->
-                            <iframe id="google-maps-iframe"
-                                class="w-full h-full min-h-[320px] border-0 rounded-2xl filter saturate-150 contrast-125 opacity-90"
-                                loading="lazy" allowfullscreen
-                                src="https://maps.google.com/maps?q=Seattle%2C+WA&t=&z=12&ie=UTF8&iwloc=&output=embed">
-                            </iframe>
+                    <!-- Daily Operational queues -->
+                    <div class="glass-panel p-6 rounded-3xl lg:col-span-8 space-y-5">
+                        <div class="flex items-center space-x-2 border-b border-gray-800 pb-4">
+                            <i data-lucide="list-todo" class="w-5 h-5 text-indigo-400"></i>
+                            <h3 class="font-bold text-white text-lg">Daily Operational Queue</h3>
+                        </div>
 
-                            <!-- Floating Map Telemetry Overlay -->
+                        <!-- Five Phase Tabs: Labeled by Current Location & Target Action -->
+                        <div class="grid grid-cols-5 gap-2" id="worker-phase-tabs">
+                            <button id="wtab-activate" onclick="switchWorkerPhase('activate')"
+                                class="worker-phase-tab active-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 transition-all">
+                                <i data-lucide="package-plus" class="w-4 h-4"></i>
+                                <span class="text-[10px] font-bold uppercase tracking-wide">1. New Intake</span>
+                                <span id="wtab-activate-count" class="text-lg font-black leading-none">—</span>
+                                <span class="text-[9px] text-emerald-400 font-semibold">Activate & Shelve</span>
+                            </button>
+                            <button id="wtab-stage" onclick="switchWorkerPhase('stage')"
+                                class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 transition-all">
+                                <i data-lucide="archive-restore" class="w-4 h-4"></i>
+                                <span class="text-[10px] font-bold uppercase tracking-wide">2. Vault &amp; Intake
+                                    Pull</span>
+                                <span id="wtab-stage-count" class="text-lg font-black leading-none">—</span>
+                                <span class="text-[9px] text-gray-400">Retrievals &amp; Dispatch</span>
+                            </button>
+                            <button id="wtab-customer" onclick="switchWorkerPhase('customer')"
+                                class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300 transition-all">
+                                <i data-lucide="door-open" class="w-4 h-4"></i>
+                                <span class="text-[10px] font-bold uppercase tracking-wide">3. Staging Room</span>
+                                <span id="wtab-customer-count" class="text-lg font-black leading-none">—</span>
+                                <span class="text-[9px] text-gray-400">🚪 Self-Serve Pickup</span>
+                            </button>
+                            <button id="wtab-dispatch" onclick="switchWorkerPhase('dispatch')"
+                                class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-orange-300 transition-all">
+                                <i data-lucide="truck" class="w-4 h-4"></i>
+                                <span class="text-[10px] font-bold uppercase tracking-wide">4. Driver Dispatch</span>
+                                <span id="wtab-dispatch-count" class="text-lg font-black leading-none">—</span>
+                                <span class="text-[9px] text-gray-400">🚚 Valet Delivery</span>
+                            </button>
+                            <button id="wtab-returned" onclick="switchWorkerPhase('returned')"
+                                class="worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border border-gray-700 bg-gray-900/50 text-gray-400 hover:border-purple-500/40 hover:bg-purple-500/10 hover:text-purple-300 transition-all">
+                                <i data-lucide="package-check" class="w-4 h-4"></i>
+                                <span class="text-[10px] font-bold uppercase tracking-wide">5. With Customer</span>
+                                <span id="wtab-returned-count" class="text-lg font-black leading-none">—</span>
+                                <span class="text-[9px] text-gray-400">→ Return to Vault</span>
+                            </button>
+                        </div>
+
+                        <!-- Phase 1: New Intake (stored, un-activated → QR barcode scan to activate) -->
+                        <div id="wview-activate" class="worker-phase-view space-y-5">
+
+                            <!-- Contextual Bulk Printing Action Bar -->
                             <div
-                                class="absolute bottom-3 left-3 bg-gray-950/90 border border-gray-800 backdrop-blur-md px-3 py-2 rounded-xl text-[10px] text-gray-300 font-mono space-y-1 shadow-2xl">
-                                <div class="flex items-center gap-1.5 text-blue-400 font-bold">
-                                    <span class="w-2 h-2 rounded-full bg-blue-500 animate-ping"></span>
-                                    <span id="map-hub-label">Hub: Seattle North Facility</span>
+                                class="bg-gradient-to-r from-blue-950/80 to-indigo-950/80 border border-blue-500/30 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+                                <div class="space-y-1 text-center sm:text-left">
+                                    <h4
+                                        class="text-sm font-extrabold text-blue-300 uppercase tracking-wider flex items-center justify-center sm:justify-start gap-2">
+                                        <i data-lucide="tag" class="w-4 h-4 text-emerald-400"></i> New Intake Queue
+                                    </h4>
+                                    <p class="text-xs text-gray-400">Un-activated totes waiting for initial thermal tag
+                                        printing and vault storage activation.</p>
                                 </div>
-                                <div id="map-telemetry-stops" class="text-gray-400">Waypoints: ZIPs 98101, 98109, 98122
+                                <button id="btn-print-all-intake" onclick="printAllIntakeLabels()"
+                                    class="hidden w-full sm:w-auto min-h-[54px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs px-6 py-3 rounded-xl border border-blue-400/40 shadow-xl items-center justify-center gap-2 cursor-pointer transition transform active:scale-95">
+                                    <i data-lucide="printer" class="w-4 h-4"></i>
+                                    <span>🖨️ Print All [<span id="print-intake-count">0</span>] Intake Labels</span>
+                                </button>
+                            </div>
+
+                            <!-- Incoming Scheduled Deliveries Table -->
+                            <div class="bg-gray-950/60 p-4 border border-gray-800 rounded-2xl space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <h4
+                                        class="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+                                        <i data-lucide="truck" class="w-4 h-4"></i> Scheduled Incoming Tote Deliveries
+                                        &amp;
+                                        Drop-offs
+                                    </h4>
+                                    <span id="w-incoming-count" class="text-[10px] font-bold text-gray-400 font-mono">0
+                                        Scheduled</span>
+                                </div>
+                                <table class="w-full text-left border-collapse text-xs">
+                                    <thead>
+                                        <tr
+                                            class="text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-800 pb-2">
+                                            <th class="pb-2">Customer UID</th>
+                                            <th class="pb-2">Quantity</th>
+                                            <th class="pb-2">Logistics Type</th>
+                                            <th class="pb-2">Target Schedule</th>
+                                            <th class="pb-2 text-right">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-850" id="wbody-incoming-deliveries">
+                                        <tr>
+                                            <td colspan="5" class="py-4 text-center text-xs text-gray-500 font-mono">No
+                                                incoming tote deliveries currently scheduled.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Grouped Customer Cards Container for New Intake -->
+                            <div id="wbody-activate" class="space-y-4"></div>
+                        </div>
+
+                        <!-- Phase 2: Pull from Vault (pending-stage + pending-dispatch) -->
+                        <div id="wview-stage" class="worker-phase-view space-y-4 hidden">
+                            <div class="bg-amber-950/30 border border-amber-500/20 p-4 rounded-2xl space-y-3 text-xs">
+                                <div class="flex items-center justify-between flex-wrap gap-2">
+                                    <span class="text-gray-300"><strong class="text-amber-400">Worker Action:</strong>
+                                        Dispatch activated intake totes or pull totes from vault shelves</span>
+                                    <span class="text-amber-300 font-mono text-[11px] font-bold">Retrieval &amp;
+                                        Dispatch Queue</span>
+                                </div>
+
+                                <!-- Sub-Filter Bar for Separate Valet vs Self-Serve Staging Pulls -->
+                                <div class="flex items-center gap-2 border-t border-amber-500/10 pt-3 flex-wrap">
+                                    <span
+                                        class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider mr-1">Filter
+                                        Pulls:</span>
+                                    <button onclick="setPullSubFilter('all')" id="pfilter-all"
+                                        class="pfilter-btn bg-amber-500 text-gray-950 font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition shadow-sm cursor-pointer">
+                                        All Pulls (<span id="cnt-pfilter-all">0</span>)
+                                    </button>
+                                    <button onclick="setPullSubFilter('staging')" id="pfilter-staging"
+                                        class="pfilter-btn bg-gray-900 text-gray-300 border border-gray-700 hover:border-blue-500 font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition cursor-pointer">
+                                        🚪 Self-Serve Staging (<span id="cnt-pfilter-staging">0</span>)
+                                    </button>
+                                    <button onclick="setPullSubFilter('valet')" id="pfilter-valet"
+                                        class="pfilter-btn bg-gray-900 text-gray-300 border border-gray-700 hover:border-orange-500 font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition cursor-pointer">
+                                        🚚 Valet Delivery (<span id="cnt-pfilter-valet">0</span>)
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- Grouped Customer Cards Container for Pull from Vault -->
+                            <div id="wbody-stage" class="space-y-4"></div>
+                        </div>
+
+                        <!-- Phase 3: In Staging Room (Self-Serve only — staged → hand off to customer at facility) -->
+                        <div id="wview-customer" class="worker-phase-view space-y-4 hidden">
+                            <div
+                                class="bg-blue-950/30 border border-blue-500/20 p-4 rounded-2xl flex items-center justify-between text-xs">
+                                <span class="text-gray-300"><strong class="text-blue-400">Current Location:</strong>
+                                    Staging
+                                    Room (🚪 Self-Serve customers only)</span>
+                                <span class="text-blue-300 font-mono text-[11px] font-bold">Customer arrives → Hand off
+                                    totes</span>
+                            </div>
+                            <!-- Grouped Customer Cards Container for In Staging Room -->
+                            <div id="wbody-customer" class="space-y-4"></div>
+                        </div>
+
+                        <!-- Phase 4: Driver Dispatch (Valet only — pending-dispatch + out-for-delivery) -->
+                        <div id="wview-dispatch" class="worker-phase-view space-y-4 hidden">
+                            <div class="bg-orange-950/30 border border-orange-500/20 p-4 rounded-2xl space-y-2 text-xs">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-300"><strong class="text-orange-400">🚚 Valet Delivery
+                                            Pipeline</strong></span>
+                                    <span class="text-orange-300 font-mono text-[11px] font-bold">Load & Dispatch to
+                                        Customer's Door</span>
+                                </div>
+                                <p class="text-[10px] text-gray-400 border-t border-orange-500/10 pt-2 mt-1">
+                                    Totes here are queued for valet delivery. Scan to mark as loaded on driver vehicle.
+                                    Driver delivers to customer's address. On next route visit, driver picks up returned
+                                    totes.
+                                </p>
+                            </div>
+                            <!-- Grouped Customer Cards Container for Driver Dispatch -->
+                            <div id="wbody-dispatch" class="space-y-4"></div>
+                        </div>
+
+                        <!-- Phase 5: With Customer (with-customer → scan return back to vault) -->
+                        <div id="wview-returned" class="worker-phase-view space-y-4 hidden">
+                            <div
+                                class="bg-purple-950/30 border border-purple-500/20 p-4 rounded-2xl flex items-center justify-between text-xs">
+                                <span class="text-gray-300"><strong class="text-purple-400">Current Location:</strong>
+                                    Out
+                                    With Customer (Drop-off Return Pending)</span>
+                                <span class="text-purple-300 font-mono text-[11px] font-bold">Target Action: Scan Return
+                                    Back to Vault</span>
+                            </div>
+                            <!-- Grouped Customer Cards Container for Out With Customer -->
+                            <div id="wbody-returned" class="space-y-4"></div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Logistics Routing Maps (Delivery coordination with Google Maps Routes API) -->
+                <div class="glass-panel p-6 rounded-3xl space-y-4">
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="navigation" class="w-5 h-5 text-blue-400"></i>
+                            <h3 class="font-bold text-white text-lg">Active Logistics Routing</h3>
+                        </div>
+                        <span id="map-stops-count"
+                            class="text-xs font-bold text-gray-400 font-mono bg-gray-900 px-3 py-1 rounded-xl border border-gray-800">0
+                            Active Valet Stops</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        <!-- Delivery Stops List -->
+                        <div class="lg:col-span-4 space-y-3">
+                            <h4
+                                class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center justify-between">
+                                <span>Scheduled Pickups Today</span>
+                                <span class="text-[10px] text-emerald-400 font-mono">Optimized Waypoints</span>
+                            </h4>
+                            <div class="space-y-3 max-h-[320px] overflow-y-auto pr-1" id="delivery-stops-list">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Live Map Canvas / Route Viewer -->
+                        <div
+                            class="lg:col-span-8 bg-gray-950 rounded-2xl border border-gray-800 min-h-[320px] overflow-hidden relative flex flex-col">
+                            <div id="google-maps-container" class="w-full h-full min-h-[320px] relative">
+                                <!-- Google Maps Route Embed Iframe -->
+                                <iframe id="google-maps-iframe"
+                                    class="w-full h-full min-h-[320px] border-0 rounded-2xl filter saturate-150 contrast-125 opacity-90"
+                                    loading="lazy" allowfullscreen
+                                    src="https://maps.google.com/maps?q=Seattle%2C+WA&t=&z=12&ie=UTF8&iwloc=&output=embed">
+                                </iframe>
+
+                                <!-- Floating Map Telemetry Overlay -->
+                                <div
+                                    class="absolute bottom-3 left-3 bg-gray-950/90 border border-gray-800 backdrop-blur-md px-3 py-2 rounded-xl text-[10px] text-gray-300 font-mono space-y-1 shadow-2xl">
+                                    <div class="flex items-center gap-1.5 text-blue-400 font-bold">
+                                        <span class="w-2 h-2 rounded-full bg-blue-500 animate-ping"></span>
+                                        <span id="map-hub-label">Hub: Seattle North Facility</span>
+                                    </div>
+                                    <div id="map-telemetry-stops" class="text-gray-400">Waypoints: ZIPs 98101, 98109,
+                                        98122
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-        </div>
+            </div>
 
     </main>
 
@@ -2310,7 +2199,7 @@
                 // 1. Create a non-persisted secondary Supabase client so current admin session is not lost
                 const supabaseUrl = window.SUPABASE_URL || 'https://xbxvebnrjryvksvtufqj.supabase.co';
                 const supabaseKey = window.SUPABASE_ANON_KEY || supabase.supabaseKey;
-                
+
                 const tempAuthClient = supabase.createClient(supabaseUrl, supabaseKey, {
                     auth: { persistSession: false, autoRefreshToken: false }
                 });
@@ -3186,13 +3075,13 @@
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => {
-                                        const isValetItem = t.status === 'pending-dispatch';
-                                        const originPrefix = isActivationFlow ? 'Intake Flow' : 'Vault Storage';
-                                        const sLabel = isValetItem ? `${originPrefix} &bull; Pending Driver Load` : `${originPrefix} &bull; Pending Staging`;
-                                        const sColor = isValetItem ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
-                                        const itemLabel = t.label ? ` &bull; ${escapeHtml(t.label)}` : '';
-                                        const locTag = t.location_code ? ` 📍 ${t.location_code}` : ' 📍 INT-PROC';
-                                        return `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
+                            const isValetItem = t.status === 'pending-dispatch';
+                            const originPrefix = isActivationFlow ? 'Intake Flow' : 'Vault Storage';
+                            const sLabel = isValetItem ? `${originPrefix} &bull; Pending Driver Load` : `${originPrefix} &bull; Pending Staging`;
+                            const sColor = isValetItem ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                            const itemLabel = t.label ? ` &bull; ${escapeHtml(t.label)}` : '';
+                            const locTag = t.location_code ? ` 📍 ${t.location_code}` : ' 📍 INT-PROC';
+                            return `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                             <div>
                                                 <span class="text-white font-bold">${t.tote_code}</span>
                                                 <span class="text-cyan-400 text-[10px] bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20 ml-1 font-mono">${locTag}</span>
@@ -3200,7 +3089,7 @@
                                             </div>
                                             <span class="${sColor} text-[10px] px-2 py-0.5 rounded border font-sans font-semibold">${sLabel}</span>
                                         </div>`;
-                                    }).join('')}
+                        }).join('')}
                                 </div>
 
                                 <!-- Batch Order Staging & Individual Scan Actions -->
@@ -4665,10 +4554,10 @@
                         .update({ facility_id: newFacilityId })
                         .eq('uid', activeTransferStaffId)
                         .select('id');
-                    
+
                     await supabase.from('orders').update({ facility_id: newFacilityId }).eq('uid', activeTransferStaffId);
                     await supabase.from('delivery_requests').update({ facility_id: newFacilityId }).eq('uid', activeTransferStaffId);
-                    
+
                     if (updatedTotes && updatedTotes.length > 0) {
                         extraInfo = ` (${updatedTotes.length} active totes reassigned)`;
                     }
