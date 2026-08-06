@@ -461,6 +461,12 @@
                 <button onclick="setCategoryFilter('Tools')" data-category-pill="Tools" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Tools</button>
                 <button onclick="setCategoryFilter('Kitchen')" data-category-pill="Kitchen" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Kitchen</button>
                 <button onclick="setCategoryFilter('Electronics')" data-category-pill="Electronics" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Electronics</button>
+                <button onclick="setCategoryFilter('Books')" data-category-pill="Books" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Books</button>
+                <button onclick="setCategoryFilter('Sports')" data-category-pill="Sports" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Sports</button>
+                <button onclick="setCategoryFilter('Toys')" data-category-pill="Toys" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Toys</button>
+                <button onclick="setCategoryFilter('Seasonal')" data-category-pill="Seasonal" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Seasonal</button>
+                <button onclick="setCategoryFilter('Outdoor')" data-category-pill="Outdoor" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Outdoor</button>
+                <button onclick="setCategoryFilter('Memorabilia')" data-category-pill="Memorabilia" class="cat-pill bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-bold text-xs px-3.5 py-2 rounded-xl transition-all whitespace-nowrap">Memorabilia</button>
             </div>
 
             <!-- Tote Grid (populated by Supabase Realtime) -->
@@ -873,7 +879,7 @@
                 <!-- Presets Grid -->
                 <div>
                     <label class="block text-xs font-bold uppercase text-gray-400 mb-2">Preset Categories</label>
-                    <div class="grid grid-cols-3 gap-2">
+                    <div class="grid grid-cols-3 gap-2 max-h-56 overflow-y-auto p-1 scrollbar-thin">
                         <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1540221652346-e5dd6b50f3e7?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
                             <img src="https://images.unsplash.com/photo-1540221652346-e5dd6b50f3e7?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
                             <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Clothes</span>
@@ -909,6 +915,30 @@
                         <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
                             <img src="https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
                             <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Toys</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Seasonal</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Outdoor</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Memorabilia</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Shoes</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Gardening</span>
+                        </button>
+                        <button onclick="selectPhotoPreset('https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop&q=80')" class="preset-photo-btn border border-gray-200 rounded-xl overflow-hidden hover:border-blue-500 transition relative h-16">
+                            <img src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop&q=80" class="w-full h-full object-cover">
+                            <span class="absolute inset-0 bg-black bg-opacity-40 text-white font-bold text-[9px] flex items-center justify-center uppercase">Music</span>
                         </button>
                     </div>
                 </div>
@@ -1155,7 +1185,7 @@
         function getItemCategory(item) {
             if (item.category) return item.category;
             if (item.label) {
-                const match = item.label.match(/#(Clothing|Documents|Holiday|Tools|Kitchen|Electronics|Other)/i);
+                const match = item.label.match(/#(Clothing|Documents|Holiday|Tools|Kitchen|Electronics|Books|Sports|Toys|Seasonal|Outdoor|Memorabilia|Other)/i);
                 if (match) {
                     const word = match[1];
                     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
@@ -1178,6 +1208,18 @@
                     return 'bg-orange-50 text-orange-700 border-orange-200';
                 case 'electronics':
                     return 'bg-purple-50 text-purple-700 border-purple-200';
+                case 'books':
+                    return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+                case 'sports':
+                    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                case 'toys':
+                    return 'bg-pink-50 text-pink-700 border-pink-200';
+                case 'seasonal':
+                    return 'bg-teal-50 text-teal-700 border-teal-200';
+                case 'outdoor':
+                    return 'bg-lime-50 text-lime-800 border-lime-200';
+                case 'memorabilia':
+                    return 'bg-yellow-50 text-yellow-800 border-yellow-200';
                 default:
                     return 'bg-gray-100 text-gray-700 border-gray-200';
             }
