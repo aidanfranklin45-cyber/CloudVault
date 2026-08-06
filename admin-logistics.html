@@ -124,6 +124,63 @@
             </div>
         </div>
 
+        <!-- Customer Facility Relocation & Transfer Portal -->
+        <div class="glass-panel p-6 rounded-3xl space-y-6 border border-cyan-500/20 shadow-2xl">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800 pb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
+                        <i data-lucide="user-check" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
+                            Customer Facility Relocation Portal
+                            <span class="bg-cyan-500/10 text-cyan-400 text-[10px] px-2 py-0.5 rounded-full font-bold border border-cyan-500/20 uppercase">Manager &amp; Executive Tool</span>
+                        </h3>
+                        <p class="text-xs text-gray-400">Reassign customers and their active tote inventory to any target market facility across the network.</p>
+                    </div>
+                </div>
+                <span class="text-xs font-mono font-bold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-xl border border-cyan-500/20 flex items-center gap-1">
+                    <i data-lucide="arrow-right-left" class="w-3.5 h-3.5"></i> Network Transfer
+                </span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+                <!-- 1. Customer Selector -->
+                <div class="md:col-span-4 space-y-1.5">
+                    <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider">Select Customer</label>
+                    <select id="relocate-customer-select" onchange="onRelocateCustomerSelected(this.value)" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold outline-none cursor-pointer focus:border-cyan-500">
+                        <option value="">Loading customer roster...</option>
+                    </select>
+                </div>
+
+                <!-- 2. Target Facility Selector -->
+                <div class="md:col-span-4 space-y-1.5">
+                    <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider">Target Destination Facility</label>
+                    <select id="relocate-target-facility-select" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold outline-none cursor-pointer focus:border-cyan-500">
+                        <option value="">Loading facilities...</option>
+                    </select>
+                </div>
+
+                <!-- 3. Move Totes Checkbox & Action Button -->
+                <div class="md:col-span-4 flex items-center gap-3">
+                    <div class="flex-1">
+                        <label class="flex items-center gap-2 text-xs text-gray-300 font-bold cursor-pointer">
+                            <input type="checkbox" id="relocate-move-totes-check" checked class="w-4 h-4 accent-cyan-500 rounded cursor-pointer">
+                            <span>Reassign active totes &amp; orders</span>
+                        </label>
+                    </div>
+                    <button onclick="executeCustomerRelocation()" id="relocate-execute-btn" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-extrabold px-5 py-3 rounded-xl shadow-lg shadow-cyan-600/20 transition flex items-center gap-2 cursor-pointer border border-cyan-400/30 active:scale-95 shrink-0">
+                        <i data-lucide="arrow-right-left" class="w-4 h-4"></i>
+                        <span>Transfer Customer</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Active Selection Summary Card -->
+            <div id="relocate-summary-box" class="hidden bg-gray-950/80 border border-gray-850 rounded-2xl p-4 text-xs space-y-2">
+            </div>
+        </div>
+
         <!-- Quick Access Action Panel -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <a href="admin.html#worker-panel" class="glass-panel p-6 rounded-3xl space-y-3 hover:border-blue-500/40 transition group">
@@ -189,22 +246,32 @@
                 console.warn("Failed to evaluate role navbar visibility:", e);
             }
             await loadLogisticsFacilities();
+            await loadCustomerRelocationRoster();
         });
+
+        let allCustomersRoster = [];
 
         async function loadLogisticsFacilities() {
             try {
                 const savedFacility = localStorage.getItem('cloudvault_selected_facility');
                 const globalSel = document.getElementById('global-facility-select');
+                const relocateTargetSel = document.getElementById('relocate-target-facility-select');
 
                 const { data: facs, error } = await supabase.from('facilities').select('*').order('name');
                 if (error) throw error;
 
-                if (facs && facs.length > 0 && globalSel) {
-                    globalSel.innerHTML = facs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
-                    const matchedFac = facs.find(f => f.id === savedFacility);
-                    const activeFacId = matchedFac ? matchedFac.id : facs[0].id;
-                    globalSel.value = activeFacId;
-                    await onGlobalFacilityChange(activeFacId);
+                if (facs && facs.length > 0) {
+                    if (globalSel) {
+                        globalSel.innerHTML = facs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
+                        const matchedFac = facs.find(f => f.id === savedFacility);
+                        const activeFacId = matchedFac ? matchedFac.id : facs[0].id;
+                        globalSel.value = activeFacId;
+                        await onGlobalFacilityChange(activeFacId);
+                    }
+                    if (relocateTargetSel) {
+                        relocateTargetSel.innerHTML = '<option value="">-- Select Target Destination Facility --</option>' + 
+                            facs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
+                    }
                 } else {
                     const msg = "Logistics Initialization Error: No active facilities found in Supabase database.";
                     alert(msg);
@@ -213,6 +280,139 @@
             } catch (e) {
                 console.error("Failed to load logistics facilities:", e);
                 alert("Logistics Error: " + (e.message || "Failed to load facility data"));
+            }
+        }
+
+        async function loadCustomerRelocationRoster() {
+            try {
+                const { data: users, error } = await supabase
+                    .from('users')
+                    .select('id, name, email, role, assigned_facility_id, active_zone')
+                    .eq('role', 'customer')
+                    .order('name');
+
+                if (error) throw error;
+                allCustomersRoster = users || [];
+
+                const sel = document.getElementById('relocate-customer-select');
+                if (!sel) return;
+
+                if (allCustomersRoster.length === 0) {
+                    sel.innerHTML = '<option value="">No registered customers found</option>';
+                    return;
+                }
+
+                sel.innerHTML = '<option value="">-- Select Customer to Transfer --</option>' + 
+                    allCustomersRoster.map(u => {
+                        const facName = (u.assigned_facility_id || 'unassigned').replace('facility_', '').replace('_', ' ').toUpperCase();
+                        const displayName = u.name && u.name !== 'Unknown' ? `${u.name} (${u.email})` : u.email;
+                        return `<option value="${u.id}" class="bg-gray-950 text-white">${displayName} — Current Facility: ${facName}</option>`;
+                    }).join('');
+            } catch (e) {
+                console.error("Failed to load customer relocation roster:", e);
+            }
+        }
+
+        async function onRelocateCustomerSelected(userId) {
+            const box = document.getElementById('relocate-summary-box');
+            if (!userId || !box) {
+                if (box) box.classList.add('hidden');
+                return;
+            }
+
+            const user = allCustomersRoster.find(u => u.id === userId);
+            if (!user) return;
+
+            let toteCount = 0;
+            try {
+                const { count } = await supabase.from('inventory').select('*', { count: 'exact', head: true }).eq('uid', userId);
+                toteCount = count || 0;
+            } catch (e) {}
+
+            box.classList.remove('hidden');
+            box.innerHTML = `
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-bold text-gray-200">
+                    <span>Customer: <strong class="text-cyan-400">${user.name || 'Customer'}</strong> &bull; <span class="text-gray-400">${user.email}</span></span>
+                    <span class="bg-gray-900 border border-gray-800 text-gray-400 px-2.5 py-0.5 rounded-lg font-mono text-[11px] self-start sm:self-auto">UID: ${user.id.substring(0, 8)}...</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-6 text-[11px] text-gray-400 pt-2 border-t border-gray-900">
+                    <div>Current Facility: <strong class="text-white">${user.assigned_facility_id || 'Unassigned'}</strong></div>
+                    <div>Active Zone: <strong class="text-white">${user.active_zone || 'None'}</strong></div>
+                    <div>Active Inventory: <strong class="text-emerald-400">${toteCount} Tote(s)</strong></div>
+                </div>
+            `;
+        }
+
+        async function executeCustomerRelocation() {
+            const sel = document.getElementById('relocate-customer-select');
+            const targetSel = document.getElementById('relocate-target-facility-select');
+            const moveTotes = document.getElementById('relocate-move-totes-check').checked;
+
+            const userId = sel ? sel.value : null;
+            const newFacilityId = targetSel ? targetSel.value : null;
+
+            if (!userId) {
+                alert("Please select a customer to transfer.");
+                return;
+            }
+            if (!newFacilityId) {
+                alert("Please select a target destination facility.");
+                return;
+            }
+
+            const user = allCustomersRoster.find(u => u.id === userId);
+            const userName = user ? (user.name || user.email) : userId;
+            const targetFacName = targetSel.options[targetSel.selectedIndex]?.text || newFacilityId;
+
+            if (!confirm(`Are you sure you want to transfer ${userName} to ${targetFacName}?${moveTotes ? '\n\nAll active totes and orders belonging to this customer will also be reassigned to the new facility.' : ''}`)) {
+                return;
+            }
+
+            const btn = document.getElementById('relocate-execute-btn');
+            const origHTML = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Transferring...';
+            btn.disabled = true;
+
+            try {
+                // 1. Update user assigned_facility_id
+                const { error: userErr } = await supabase
+                    .from('users')
+                    .update({ assigned_facility_id: newFacilityId })
+                    .eq('id', userId);
+                if (userErr) throw userErr;
+
+                // 2. Move totes & open orders if selected
+                let movedTotesCount = 0;
+                if (moveTotes) {
+                    const { data: updatedTotes, error: toteErr } = await supabase
+                        .from('inventory')
+                        .update({ facility_id: newFacilityId })
+                        .eq('uid', userId)
+                        .select('id');
+                    if (!toteErr && updatedTotes) movedTotesCount = updatedTotes.length;
+
+                    await supabase.from('orders').update({ facility_id: newFacilityId }).eq('uid', userId);
+                    await supabase.from('delivery_requests').update({ facility_id: newFacilityId }).eq('uid', userId);
+                }
+
+                alert(`✅ Success! Customer ${userName} has been transferred to ${targetFacName}.${moveTotes ? ` (${movedTotesCount} active totes reassigned)` : ''}`);
+
+                // Clear selection and refresh
+                sel.value = '';
+                targetSel.value = '';
+                document.getElementById('relocate-summary-box').classList.add('hidden');
+                await loadCustomerRelocationRoster();
+
+                const currentActiveFac = localStorage.getItem('cloudvault_selected_facility');
+                if (currentActiveFac) await onGlobalFacilityChange(currentActiveFac);
+
+            } catch (err) {
+                console.error("Customer relocation failed:", err);
+                alert("Transfer failed: " + (err.message || JSON.stringify(err)));
+            } finally {
+                btn.innerHTML = origHTML;
+                btn.disabled = false;
+                lucide.createIcons();
             }
         }
 

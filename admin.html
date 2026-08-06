@@ -4446,11 +4446,27 @@
 
                 if (error) throw error;
 
-                alert(`Personnel market transfer complete! Reassigned to ${newFacilityId}.`);
+                let extraInfo = '';
+                if (newRole === 'customer') {
+                    const { data: updatedTotes } = await supabase
+                        .from('inventory')
+                        .update({ facility_id: newFacilityId })
+                        .eq('uid', activeTransferStaffId)
+                        .select('id');
+                    
+                    await supabase.from('orders').update({ facility_id: newFacilityId }).eq('uid', activeTransferStaffId);
+                    await supabase.from('delivery_requests').update({ facility_id: newFacilityId }).eq('uid', activeTransferStaffId);
+                    
+                    if (updatedTotes && updatedTotes.length > 0) {
+                        extraInfo = ` (${updatedTotes.length} active totes reassigned)`;
+                    }
+                }
+
+                alert(`Transfer complete! Reassigned to ${newFacilityId}.${extraInfo}`);
                 closeStaffTransferModal();
                 loadManagerFacilityData();
             } catch (err) {
-                alert("Staff transfer failed: " + err.message);
+                alert("Transfer failed: " + err.message);
             }
         }
 
