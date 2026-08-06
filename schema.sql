@@ -336,14 +336,42 @@ CREATE POLICY "Executives view metadata" ON public.metadata
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user() 
 RETURNS trigger AS $$
+DECLARE
+  v_zip TEXT;
+  v_facility_id TEXT;
 BEGIN
-  INSERT INTO public.users (id, email, name, phone, role)
+  v_zip := COALESCE(new.raw_user_meta_data->>'zip', '98101');
+  
+  IF v_zip IS NOT NULL AND v_zip != '' THEN
+    -- Try matching operational_zones
+    SELECT facility_id INTO v_facility_id
+    FROM public.operational_zones
+    WHERE v_zip = ANY(zip_codes) AND facility_id IS NOT NULL
+    LIMIT 1;
+
+    -- Fallback to service_areas
+    IF v_facility_id IS NULL THEN
+      SELECT facility_id INTO v_facility_id
+      FROM public.service_areas
+      WHERE zip_code = v_zip AND facility_id IS NOT NULL
+      LIMIT 1;
+    END IF;
+  END IF;
+
+  -- Fail-safe default
+  IF v_facility_id IS NULL THEN
+    v_facility_id := 'facility_seattle_north';
+  END IF;
+
+  INSERT INTO public.users (id, email, name, phone, role, assigned_facility_id, active_zone)
   VALUES (
       new.id, 
       new.email, 
       COALESCE(new.raw_user_meta_data->>'name', 'Unknown'),
       COALESCE(new.raw_user_meta_data->>'phone', ''),
-      'customer'::user_role
+      'customer'::user_role,
+      v_facility_id,
+      v_zip
   );
   RETURN new;
 END;
