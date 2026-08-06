@@ -1152,6 +1152,7 @@ DECLARE
   v_next_status public.inventory_status;
   v_user_role public.user_role;
   v_fulfillment_type TEXT;
+  v_has_pending_request BOOLEAN := FALSE;
 BEGIN
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
@@ -1177,15 +1178,29 @@ BEGIN
   ORDER BY ar.requested_at DESC
   LIMIT 1;
 
-  -- Default to staging if no access request found
-  IF v_fulfillment_type IS NULL THEN
-    v_fulfillment_type := 'staging';
+  IF v_fulfillment_type IS NOT NULL THEN
+    v_has_pending_request := TRUE;
   END IF;
 
-  -- Determine next status based on current status and fulfillment type
+  -- Determine next status based on current status and activation state
   IF v_item.status = 'stored' THEN
-    -- Un-activated tote being activated
-    v_next_status := 'pending-stage'::public.inventory_status;
+    IF v_item.activated = false THEN
+      -- Newly activated tote in Activation Area (NOT deep vault storage)
+      IF v_has_pending_request AND v_fulfillment_type = 'valet_delivery' THEN
+        v_next_status := 'pending-dispatch'::public.inventory_status;
+      ELSIF v_has_pending_request AND v_fulfillment_type = 'staging' THEN
+        v_next_status := 'staged'::public.inventory_status;
+      ELSE
+        v_next_status := 'stored'::public.inventory_status;
+      END IF;
+    ELSE
+      -- Existing active tote in vault storage being requested for staging or valet
+      IF v_has_pending_request AND v_fulfillment_type = 'valet_delivery' THEN
+        v_next_status := 'pending-dispatch'::public.inventory_status;
+      ELSE
+        v_next_status := 'pending-stage'::public.inventory_status;
+      END IF;
+    END IF;
   ELSIF v_item.status = 'pending-stage' THEN
     -- Self-serve: vault -> staging room
     v_next_status := 'staged'::public.inventory_status;
@@ -1193,7 +1208,7 @@ BEGIN
     -- Self-serve: staging room -> customer picks up
     v_next_status := 'with-customer'::public.inventory_status;
   ELSIF v_item.status = 'pending-dispatch' THEN
-    -- Valet: vault -> loaded on driver vehicle
+    -- Valet: vault/activation area -> loaded on driver vehicle
     v_next_status := 'out-for-delivery'::public.inventory_status;
   ELSIF v_item.status = 'out-for-delivery' THEN
     -- Valet: driver delivered to customer
@@ -1202,7 +1217,7 @@ BEGIN
     -- Both paths: customer returns -> back to vault storage
     v_next_status := 'stored'::public.inventory_status;
   ELSE
-    v_next_status := 'pending-stage'::public.inventory_status;
+    v_next_status := 'stored'::public.inventory_status;
   END IF;
 
   -- Always mark activated = true when any scan occurs
