@@ -554,13 +554,12 @@
 
                 // Query active valet delivery access requests from Supabase for this facility
                 const { data: requests, error: reqErr } = await supabase.from('access_requests')
-                    .select('*, users(name, zip, active_zone)')
-                    .eq('facility_id', facId)
+                    .select('*, users(name, zip, active_zone, assigned_facility_id)')
                     .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%')
                     .neq('status', 'completed')
                     .neq('status', 'cancelled');
 
-                const stops = requests || [];
+                const stops = (requests || []).filter(r => r.facility_id === facId || r.users?.assigned_facility_id === facId);
 
                 if (stopsCountEl) stopsCountEl.textContent = `${stops.length} Active Valet Stops`;
 

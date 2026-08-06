@@ -2893,7 +2893,9 @@
                     manifests.forEach(m => {
                         pinByUid[m.uid] = m.pin;
                         typeByUid[m.uid] = m.fulfillment_type || 'staging';
-                        manifestByUid[m.uid] = m;
+                        if (!manifestByUid[m.uid] || m.fulfillment_type === 'valet_delivery' || m.request_type === 'valet_delivery' || m.request_type === 'retrieval') {
+                            manifestByUid[m.uid] = m;
+                        }
                         const key = `${m.uid}_${m.fulfillment_type || 'staging'}`;
                         manifestByUidAndType[key] = m;
                         reservationByUid[m.uid] = {
@@ -3458,13 +3460,13 @@
                 const hubName = fac.name;
 
                 const { data: requests } = await supabase.from('access_requests')
-                    .select('*, users(name, zip, active_zone)')
+                    .select('*, users(name, zip, active_zone, assigned_facility_id)')
                     .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%')
                     .neq('status', 'completed')
                     .neq('status', 'cancelled');
 
                 // Filter stops matching this facility context directly
-                const stops = (requests || []).filter(r => r.facility_id === queryFacilityId);
+                const stops = (requests || []).filter(r => r.facility_id === queryFacilityId || r.users?.assigned_facility_id === queryFacilityId);
 
                 const stopsListEl = document.getElementById('delivery-stops-list');
                 const countBadge = document.getElementById('map-stops-count');
