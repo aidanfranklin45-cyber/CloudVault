@@ -3057,7 +3057,15 @@
                         const numRooms = currentLoadedFac?.num_staging_rooms || 2;
                         const assignedRoomNum = getAssignedRoom(uid, numRooms);
 
-                        const isActivationFlow = totes.some(t => t.activated === true && (t.status === 'pending-dispatch' || t.status === 'pending-stage') && (t.tote_code?.startsWith('CV-') || (t.label && t.label.toLowerCase().includes('empty'))));
+                        const isPortalRetrieval = reqManifest && (
+                            reqManifest.request_type === 'valet_delivery' ||
+                            reqManifest.request_type === 'self_serve_pickup' ||
+                            reqManifest.request_type === 'staging' ||
+                            reqManifest.request_type === 'retrieval' ||
+                            reqManifest.request_type === 'customer_retrieval'
+                        );
+
+                        const isActivationFlow = !isPortalRetrieval && totes.every(t => !t.label || t.label.toLowerCase().includes('empty'));
 
                         const originBadge = isActivationFlow
                             ? `<span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="zap" class="w-3.5 h-3.5 text-emerald-400"></i> Intake Activation Flow</span>`
