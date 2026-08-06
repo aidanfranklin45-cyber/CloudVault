@@ -3018,7 +3018,13 @@
                 function groupPullItemsByUidAndDest(items) {
                     const groups = {};
                     (items || []).forEach(item => {
-                        const destType = item.status === 'pending-dispatch' ? 'valet_delivery' : 'staging';
+                        const manifest = manifestByUid[item.uid];
+                        const isValetRequest = manifest && (
+                            manifest.fulfillment_type === 'valet_delivery' ||
+                            manifest.request_type === 'valet_delivery' ||
+                            manifest.fulfillment_type === 'valet_pickup'
+                        );
+                        const destType = (item.status === 'pending-dispatch' || isValetRequest) ? 'valet_delivery' : 'staging';
                         const key = `${item.uid}_${destType}`;
                         if (!groups[key]) {
                             groups[key] = {
@@ -3453,7 +3459,7 @@
 
                 const { data: requests } = await supabase.from('access_requests')
                     .select('*, users(name, zip, active_zone)')
-                    .eq('fulfillment_type', 'valet_delivery')
+                    .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%')
                     .neq('status', 'completed')
                     .neq('status', 'cancelled');
 

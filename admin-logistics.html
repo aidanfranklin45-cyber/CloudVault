@@ -556,7 +556,7 @@
                 const { data: requests, error: reqErr } = await supabase.from('access_requests')
                     .select('*, users(name, zip, active_zone)')
                     .eq('facility_id', facId)
-                    .eq('fulfillment_type', 'valet_delivery')
+                    .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%')
                     .neq('status', 'completed')
                     .neq('status', 'cancelled');
 
