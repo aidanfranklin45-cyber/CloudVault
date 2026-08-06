@@ -2988,9 +2988,9 @@
                                 </div>
 
                                 <!-- Full-Width 60px Ergonomic Industrial Action Button -->
-                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('stored')" class="w-full min-h-[60px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('pending-stage')" class="w-full min-h-[60px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                     <i data-lucide="qr-code" class="w-6 h-6"></i>
-                                    <span>ACTIVATE TOTE (${firstCode}) →</span>
+                                    <span>ACTIVATE TOTE (${firstCode}) → MOVE TO INTAKE PULL QUEUE</span>
                                 </button>
                             </div>`;
                     }).join('');

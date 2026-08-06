@@ -1182,25 +1182,16 @@ BEGIN
     v_has_pending_request := TRUE;
   END IF;
 
-  -- Determine next status based on current status and activation state
-  IF v_item.status = 'stored' THEN
-    IF v_item.activated = false THEN
-      -- Newly activated tote in Activation Area (NOT deep vault storage)
-      IF v_has_pending_request AND v_fulfillment_type = 'valet_delivery' THEN
-        v_next_status := 'pending-dispatch'::public.inventory_status;
-      ELSIF v_has_pending_request AND v_fulfillment_type = 'staging' THEN
-        v_next_status := 'staged'::public.inventory_status;
-      ELSE
-        v_next_status := 'stored'::public.inventory_status;
-      END IF;
+  -- Step 1: Scanning an un-activated tote in Tab 1 (NEW INTAKE) -> Move to Tab 2 (Vault & Intake Pull)
+  IF v_item.activated = false THEN
+    IF v_has_pending_request AND v_fulfillment_type = 'valet_delivery' THEN
+      v_next_status := 'pending-dispatch'::public.inventory_status;
     ELSE
-      -- Existing active tote in vault storage being requested for staging or valet
-      IF v_has_pending_request AND v_fulfillment_type = 'valet_delivery' THEN
-        v_next_status := 'pending-dispatch'::public.inventory_status;
-      ELSE
-        v_next_status := 'pending-stage'::public.inventory_status;
-      END IF;
+      -- Move to pending-stage so it appears in Tab 2 (Intake Activation Flow) awaiting room assignment scan
+      v_next_status := 'pending-stage'::public.inventory_status;
     END IF;
+
+  -- Step 2: Scanning a tote in Tab 2 (Vault & Intake Pull) -> Move to Tab 3 (Staging Room) or Tab 4 (Driver Dispatch)
   ELSIF v_item.status = 'pending-stage' THEN
     -- Self-serve: vault -> staging room
     v_next_status := 'staged'::public.inventory_status;
