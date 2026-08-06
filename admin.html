@@ -3032,15 +3032,18 @@
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
-                                        <span class="text-white font-bold">${t.tote_code}</span>
-                                        <span class="text-emerald-400 text-[10px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-sans">Un-activated</span>
+                                        <div class="flex items-center space-x-2">
+                                            <span class="text-white font-bold">${t.tote_code}</span>
+                                            <span class="text-cyan-400 text-[10px] bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 font-mono">📍 ${t.location_code || 'INTAKE-BAY-1'}</span>
+                                        </div>
+                                        <button onclick="slotToteToVault('${t.tote_code}')" class="text-cyan-300 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 text-[10px] font-bold px-2 py-1 rounded border border-cyan-500/30 transition">Slot to Vault</button>
                                     </div>`).join('')}
                                 </div>
 
                                 <!-- Full-Width 60px Ergonomic Industrial Action Button -->
                                 <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('pending-stage')" class="w-full min-h-[60px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                     <i data-lucide="qr-code" class="w-6 h-6"></i>
-                                    <span>ACTIVATE TOTE (${firstCode}) → MOVE TO INTAKE PULL QUEUE</span>
+                                    <span>ACTIVATE TOTE (${firstCode}) → MOVE TO INTAKE PROCESSING ZONE</span>
                                 </button>
                             </div>`;
                     }).join('');
@@ -3143,8 +3146,8 @@
                                 : 'border-amber-500/30 bg-gray-950';
 
                         const actionLabel = isValet
-                            ? (isActivationFlow ? `LOAD ON DRIVER (FROM ACTIVATION AREA) (${firstCode})` : `PULL FROM VAULT & LOAD ON DRIVER (${firstCode})`)
-                            : (isActivationFlow ? `MOVE TO STAGING ROOM #${assignedRoomNum} (FROM ACTIVATION AREA) (${firstCode})` : `PULL FROM VAULT & MOVE TO STAGING ROOM #${assignedRoomNum} (${firstCode})`);
+                            ? (isActivationFlow ? `LOAD ON DRIVER (${firstCode})` : `PULL FROM VAULT & LOAD ON DRIVER (${firstCode})`)
+                            : (isActivationFlow ? `MOVE TO STAGING ROOM #${assignedRoomNum} (${firstCode})` : `PULL FROM VAULT & MOVE TO STAGING ROOM #${assignedRoomNum} (${firstCode})`);
 
                         const actionGradient = isValet
                             ? 'from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 border-orange-400/40'
@@ -3152,6 +3155,7 @@
 
                         const actionIcon = isValet ? 'truck' : 'archive-restore';
                         const expectedScanStatus = isValet ? 'pending-dispatch' : 'pending-stage';
+                        const defaultTargetLocation = isValet ? 'DISPATCH-BAY-1' : `STAGE-BAY-A${assignedRoomNum}`;
 
                         return `
                             <div class="border-2 ${borderColor} rounded-3xl p-5 shadow-xl space-y-4 hover:border-amber-500/60 transition">
@@ -3182,26 +3186,34 @@
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => {
-                            const isValetItem = t.status === 'pending-dispatch';
-                            const originPrefix = isActivationFlow ? 'Intake Flow' : 'Vault Storage';
-                            const sLabel = isValetItem ? `${originPrefix} &bull; Pending Driver Load` : `${originPrefix} &bull; Pending Staging`;
-                            const sColor = isValetItem ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
-                            const itemLabel = t.label ? ` &bull; ${escapeHtml(t.label)}` : '';
-                            return `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
+                                        const isValetItem = t.status === 'pending-dispatch';
+                                        const originPrefix = isActivationFlow ? 'Intake Flow' : 'Vault Storage';
+                                        const sLabel = isValetItem ? `${originPrefix} &bull; Pending Driver Load` : `${originPrefix} &bull; Pending Staging`;
+                                        const sColor = isValetItem ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                                        const itemLabel = t.label ? ` &bull; ${escapeHtml(t.label)}` : '';
+                                        const locTag = t.location_code ? ` 📍 ${t.location_code}` : ' 📍 INT-PROC';
+                                        return `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                             <div>
                                                 <span class="text-white font-bold">${t.tote_code}</span>
+                                                <span class="text-cyan-400 text-[10px] bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20 ml-1 font-mono">${locTag}</span>
                                                 <span class="text-[11px] text-gray-400 font-sans font-medium">${itemLabel}</span>
                                             </div>
                                             <span class="${sColor} text-[10px] px-2 py-0.5 rounded border font-sans font-semibold">${sLabel}</span>
                                         </div>`;
-                        }).join('')}
+                                    }).join('')}
                                 </div>
 
-                                <!-- Full-Width 60px Ergonomic Industrial Action Button -->
-                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('${expectedScanStatus}')" class="w-full min-h-[60px] bg-gradient-to-r ${actionGradient} text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
-                                    <i data-lucide="${actionIcon}" class="w-6 h-6"></i>
-                                    <span>${actionLabel} →</span>
-                                </button>
+                                <!-- Batch Order Staging & Individual Scan Actions -->
+                                <div class="flex flex-col sm:flex-row gap-2">
+                                    <button onclick="batchStageCustomerOrder('${uid}', '${customerName.replace(/'/g, "\\'")}', '${defaultTargetLocation}')" class="flex-1 min-h-[50px] bg-gradient-to-r ${actionGradient} text-white font-black text-xs uppercase tracking-wider rounded-2xl border-2 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                        <i data-lucide="layers" class="w-5 h-5"></i>
+                                        <span>⚡ BATCH STAGE ALL ${totes.length} TOTE(S) FOR ORDER →</span>
+                                    </button>
+                                    <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('${expectedScanStatus}')" class="min-h-[50px] px-4 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold text-xs rounded-2xl border border-gray-700 flex items-center justify-center gap-1.5 cursor-pointer transition">
+                                        <i data-lucide="${actionIcon}" class="w-4 h-4"></i>
+                                        <span>Single Scan (${firstCode})</span>
+                                    </button>
+                                </div>
                             </div>`;
                     }).join('');
                 }
@@ -3479,6 +3491,7 @@
                 const { data, error } = await supabase.rpc('scan_tote', {
                     p_tote_code: barcode,
                     p_expected_status: expectedStatus
+                });
                 if (error) throw error;
                 const nextStatus = data.nextStatus;
                 const locCode = data.locationCode || 'INTAKE-PROCESSING';
