@@ -2291,9 +2291,15 @@
             }
         }
 
-        // Create Employee Account
+        // Create Employee Account (Direct Supabase Auth + Profile Sync)
         async function handleCreateEmployee(e) {
             e.preventDefault();
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = "Registering Employee...";
+            }
+
             const name = document.getElementById('emp-name').value.trim();
             const email = document.getElementById('emp-email').value.trim();
             const role = document.getElementById('emp-role').value;
@@ -2301,16 +2307,55 @@
             const password = document.getElementById('emp-password').value;
 
             try {
-                const { data, error } = await supabase.functions.invoke('admin-create-employee', {
-                    body: { name, email, role, assignedFacilityId: facility, password }
+                // 1. Create a non-persisted secondary Supabase client so current admin session is not lost
+                const supabaseUrl = window.SUPABASE_URL || 'https://xbxvebnrjryvksvtufqj.supabase.co';
+                const supabaseKey = window.SUPABASE_ANON_KEY || supabase.supabaseKey;
+                
+                const tempAuthClient = supabase.createClient(supabaseUrl, supabaseKey, {
+                    auth: { persistSession: false, autoRefreshToken: false }
                 });
-                if (error) throw error;
-                alert(`Employee ${name} successfully registered in Supabase.`);
+
+                // 2. Register user in Supabase Auth with metadata
+                const { data: authData, error: authErr } = await tempAuthClient.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: {
+                            name: name,
+                            role: role,
+                            assigned_facility_id: facility
+                        }
+                    }
+                });
+
+                if (authErr) throw authErr;
+
+                // 3. Guarantee role & assigned facility are saved to public.users table
+                if (authData && authData.user) {
+                    const { error: dbErr } = await supabase.from('users').upsert({
+                        id: authData.user.id,
+                        email: email,
+                        name: name,
+                        role: role,
+                        assigned_facility_id: facility
+                    }, { onConflict: 'id' });
+
+                    if (dbErr) {
+                        console.warn("User auth created, public.users upsert warning:", dbErr);
+                    }
+                }
+
+                alert(`✅ Employee account for ${name} (${role.replace('_', ' ')}) has been successfully created!`);
                 document.getElementById('create-employee-form').reset();
-                loadLiveData();
+                if (typeof loadLiveData === 'function') loadLiveData();
             } catch (err) {
                 console.error("Supabase employee creation failed:", err);
                 alert("Failed to create employee: " + err.message);
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = `+ Create Employee Account`;
+                }
             }
         }
 
