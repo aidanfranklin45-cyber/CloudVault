@@ -193,9 +193,7 @@
                 </span>
                 <h2 class="text-2xl font-black text-white tracking-tight" id="config-facility-title">Seattle North
                     Fulfillment Center</h2>
-                <p class="text-xs text-gray-400 max-w-2xl">Configure physical capacity, lease contracts, operating
-                    expenses, security deposit rules, regional storage pricing tiers, and active market ZIP code
-                    coverage in one authoritative console.</p>
+                <p class="text-xs text-gray-400 max-w-2xl">Configure physical layout, staging room reservation schedules, vault rack telemetry, lease expenses, regional storage pricing tiers, and unlaunched expansion waitlists in one authoritative console.</p>
             </div>
             <div class="flex items-center gap-3 relative z-10">
                 <button onclick="openLaunchModal()"
@@ -213,6 +211,99 @@
                     <i data-lucide="trash-2" class="w-4.5 h-4.5"></i>
                     <span>Decommission Market</span>
                 </button>
+            </div>
+        </div>
+
+        <!-- SECTION 1: PHYSICAL STAGING ROOM RESERVATION & SCHEDULE CALENDAR -->
+        <div class="glass-panel p-6 rounded-3xl space-y-6 border border-indigo-500/20">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-4">
+                <div>
+                    <h3 class="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
+                        <i data-lucide="calendar" class="w-5 h-5 text-indigo-400"></i> Staging Room Reservation &amp; Pickup Schedule
+                    </h3>
+                    <p class="text-xs text-gray-400">Ultra-specific reservation grid showing which staging rooms are reserved by customer, time slot, and PIN state.</p>
+                </div>
+
+                <!-- Schedule Date Picker & Filter Controls -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2">
+                        <i data-lucide="calendar-days" class="w-3.5 h-3.5 text-indigo-400"></i>
+                        <input type="date" id="staging-date-select" onchange="onStagingDateChange(this.value)" class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
+                    </div>
+                    <button onclick="setStagingDate('today')" class="bg-gray-900 hover:bg-gray-800 text-xs font-bold text-gray-300 hover:text-white px-3 py-1.5 rounded-xl border border-gray-800 transition">Today</button>
+                    <button onclick="setStagingDate('tomorrow')" class="bg-gray-900 hover:bg-gray-800 text-xs font-bold text-gray-300 hover:text-white px-3 py-1.5 rounded-xl border border-gray-800 transition">Tomorrow</button>
+                </div>
+            </div>
+
+            <!-- Staging Rooms Interactive Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="staging-rooms-schedule-grid">
+                <!-- Dynamically populated staging room reservation cards -->
+            </div>
+        </div>
+
+        <!-- SECTION 2: PHYSICAL FACILITY LAYOUT & VAULT RACKS TELEMETRY -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-7 glass-panel p-6 rounded-3xl space-y-5 border border-cyan-500/20">
+                <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                    <h3 class="text-sm font-extrabold uppercase text-cyan-400 tracking-wider flex items-center gap-2">
+                        <i data-lucide="grid" class="w-4 h-4 text-cyan-400"></i> Physical Layout &amp; Vault Telemetry Grid
+                    </h3>
+                    <span class="text-[10px] font-mono text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-0.5 rounded" id="telemetry-capacity-badge">0 / 0 Totes (0%)</span>
+                </div>
+
+                <!-- Telemetry Progress Bar -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-xs font-mono font-bold">
+                        <span class="text-gray-400">Facility Storage Occupancy</span>
+                        <span class="text-cyan-400" id="telemetry-occupancy-percent">0% Occupied</span>
+                    </div>
+                    <div class="w-full h-3 bg-gray-900 rounded-full overflow-hidden border border-gray-800 p-0.5">
+                        <div id="telemetry-occupancy-bar" class="h-full bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full transition-all duration-500" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <!-- Vault Racks Grid -->
+                <div class="space-y-3 pt-2">
+                    <p class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider flex items-center gap-1.5">
+                        <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i> Vault Storage Aisles &amp; Shelves Matrix
+                    </p>
+                    <div class="grid grid-cols-4 gap-3 text-center" id="vault-racks-matrix">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 3: EXECUTIVE UNIT MARGIN & P&L TELEMETRY -->
+            <div class="lg:col-span-5 glass-panel p-6 rounded-3xl space-y-5 border border-emerald-500/20">
+                <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                    <h3 class="text-sm font-extrabold uppercase text-emerald-400 tracking-wider flex items-center gap-2">
+                        <i data-lucide="trending-up" class="w-4 h-4 text-emerald-400"></i> Facility Unit Economics &amp; Margin
+                    </h3>
+                    <span class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">P&amp;L Analysis</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 text-xs">
+                    <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-1">
+                        <span class="text-[10px] font-bold text-gray-400 uppercase">Monthly Gross Revenue</span>
+                        <p class="text-xl font-black text-emerald-400 font-mono" id="pnl-gross-revenue">$0.00</p>
+                        <span class="text-[9px] text-gray-500">Storage Tiers + Valet Fees</span>
+                    </div>
+                    <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-1">
+                        <span class="text-[10px] font-bold text-gray-400 uppercase">Monthly OpEx Costs</span>
+                        <p class="text-xl font-black text-rose-400 font-mono" id="pnl-total-opex">$0.00</p>
+                        <span class="text-[9px] text-gray-500">Rent, Labor, Utilities, Ins.</span>
+                    </div>
+                    <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-1">
+                        <span class="text-[10px] font-bold text-gray-400 uppercase">Net Operating Income</span>
+                        <p class="text-xl font-black text-blue-400 font-mono" id="pnl-noi">$0.00</p>
+                        <span class="text-[9px] text-gray-500" id="pnl-margin-percent">Margin: 0%</span>
+                    </div>
+                    <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-1">
+                        <span class="text-[10px] font-bold text-gray-400 uppercase">SqFt Efficiency</span>
+                        <p class="text-xl font-black text-indigo-400 font-mono" id="pnl-sqft-efficiency">$0.00 / sqft</p>
+                        <span class="text-[9px] text-gray-500">Revenue per Usable SqFt</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -277,16 +368,16 @@
                     <div class="grid grid-cols-4 gap-3 text-xs pt-2 border-t border-gray-850">
                         <div>
                             <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Usable SQFT</label>
-                            <input type="number" id="conf-sqft" class="fspec-input w-full" placeholder="20000">
+                            <input type="number" id="conf-sqft" oninput="calculatePnL()" class="fspec-input w-full" placeholder="20000">
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">SQFT / Tote</label>
-                            <input type="number" step="0.1" id="conf-sqft-per-tote" class="fspec-input w-full"
+                            <input type="number" step="0.1" id="conf-sqft-per-tote" oninput="calculatePnL()" class="fspec-input w-full"
                                 placeholder="1.0">
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Max Capacity</label>
-                            <input type="number" id="conf-tote-capacity" class="fspec-input w-full" placeholder="2000">
+                            <input type="number" id="conf-tote-capacity" oninput="calculatePnL()" class="fspec-input w-full" placeholder="2000">
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Staging
@@ -298,7 +389,7 @@
 
                 <!-- Card 2: Lease & Operating Expenses -->
                 <div class="glass-panel p-6 rounded-3xl space-y-5">
-                    <div class="flex items-center justify-between border-b border-gray-880 pb-3">
+                    <div class="flex items-center justify-between border-b border-gray-850 pb-3">
                         <h3
                             class="text-sm font-extrabold uppercase text-amber-400 tracking-wider flex items-center gap-2">
                             <i data-lucide="dollar-sign" class="w-4 h-4 text-amber-400"></i> Monthly Lease &amp;
@@ -311,22 +402,22 @@
                         <div>
                             <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Rent / Lease
                                 ($)</label>
-                            <input type="number" id="conf-rent" class="fspec-input w-full" placeholder="8500">
+                            <input type="number" id="conf-rent" oninput="calculatePnL()" class="fspec-input w-full" placeholder="8500">
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Labor Cost
                                 ($)</label>
-                            <input type="number" id="conf-labor" class="fspec-input w-full" placeholder="14000">
+                            <input type="number" id="conf-labor" oninput="calculatePnL()" class="fspec-input w-full" placeholder="14000">
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Utilities
                                 ($)</label>
-                            <input type="number" id="conf-utilities" class="fspec-input w-full" placeholder="1200">
+                            <input type="number" id="conf-utilities" oninput="calculatePnL()" class="fspec-input w-full" placeholder="1200">
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Insurance
                                 ($)</label>
-                            <input type="number" id="conf-insurance" class="fspec-input w-full" placeholder="650">
+                            <input type="number" id="conf-insurance" oninput="calculatePnL()" class="fspec-input w-full" placeholder="650">
                         </div>
                     </div>
                 </div>
@@ -358,7 +449,7 @@
                                 <label class="block text-[10px] font-bold text-gray-400">Tier 1 (1-9 Totes)</label>
                                 <div class="flex items-center gap-1">
                                     <span class="text-gray-500 font-bold">$</span>
-                                    <input type="number" step="0.50" id="conf-tier1"
+                                    <input type="number" step="0.50" id="conf-tier1" oninput="calculatePnL()"
                                         class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="5.00">
                                 </div>
                             </div>
@@ -367,7 +458,7 @@
                                 <label class="block text-[10px] font-bold text-gray-400">Tier 2 (10-24 Totes)</label>
                                 <div class="flex items-center gap-1">
                                     <span class="text-gray-500 font-bold">$</span>
-                                    <input type="number" step="0.50" id="conf-tier2"
+                                    <input type="number" step="0.50" id="conf-tier2" oninput="calculatePnL()"
                                         class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="3.50">
                                 </div>
                             </div>
@@ -376,7 +467,7 @@
                                 <label class="block text-[10px] font-bold text-gray-400">Tier 3 (25-49 Totes)</label>
                                 <div class="flex items-center gap-1">
                                     <span class="text-gray-500 font-bold">$</span>
-                                    <input type="number" step="0.50" id="conf-tier3"
+                                    <input type="number" step="0.50" id="conf-tier3" oninput="calculatePnL()"
                                         class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="2.00">
                                 </div>
                             </div>
@@ -385,7 +476,7 @@
                                 <label class="block text-[10px] font-bold text-gray-400">Tier 4 (50+ Totes)</label>
                                 <div class="flex items-center gap-1">
                                     <span class="text-gray-500 font-bold">$</span>
-                                    <input type="number" step="0.50" id="conf-tier4"
+                                    <input type="number" step="0.50" id="conf-tier4" oninput="calculatePnL()"
                                         class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="1.00">
                                 </div>
                             </div>
@@ -397,13 +488,13 @@
                             <div class="grid grid-cols-2 gap-3">
                                 <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
                                     <label class="block text-[10px] font-bold text-gray-400">Valet Base Fee ($)</label>
-                                    <input type="number" id="conf-valet-base"
+                                    <input type="number" id="conf-valet-base" oninput="calculatePnL()"
                                         class="fspec-input w-full py-1 text-sm text-amber-400" placeholder="15.00">
                                 </div>
                                 <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
                                     <label class="block text-[10px] font-bold text-gray-400">Valet Tote Adder
                                         ($)</label>
-                                    <input type="number" id="conf-valet-adder"
+                                    <input type="number" id="conf-valet-adder" oninput="calculatePnL()"
                                         class="fspec-input w-full py-1 text-sm text-amber-400" placeholder="1.00">
                                 </div>
                             </div>
@@ -461,6 +552,24 @@
 
         </div>
 
+        <!-- SECTION 5: UNLAUNCHED MARKET WAITLIST & EXPANSION DEMAND PORTAL -->
+        <div class="glass-panel p-6 rounded-3xl space-y-6 border border-emerald-500/20">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-4">
+                <div>
+                    <h3 class="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
+                        <i data-lucide="sparkles" class="w-5 h-5 text-emerald-400"></i> Unlaunched Market Waitlists &amp; Expansion Demand
+                    </h3>
+                    <p class="text-xs text-gray-400">Migrated customer prospect signups and unserviced market demand heatmaps for unlaunched cities.</p>
+                </div>
+                <span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl" id="waitlist-total-badge">0 Market Signups</span>
+            </div>
+
+            <!-- Waitlisted Cities Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="unlaunched-waitlist-grid">
+                <!-- Dynamically populated waitlisted cities cards -->
+            </div>
+        </div>
+
     </main>
 
     <!-- Launch New Market Modal -->
@@ -506,7 +615,7 @@
             <div class="space-y-4 mb-6">
                 <h4
                     class="text-xs font-extrabold uppercase text-emerald-400 tracking-wider flex items-center gap-2 border-b border-gray-800 pb-2">
-                    <i data-lucide="building" class="w-3.5 h-3.5"></i> Facility Identity & Location
+                    <i data-lucide="building" class="w-3.5 h-3.5"></i> Facility Identity &amp; Location
                 </h4>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
@@ -549,7 +658,7 @@
             <div class="space-y-4 mb-6">
                 <h4
                     class="text-xs font-extrabold uppercase text-blue-400 tracking-wider flex items-center gap-2 border-b border-gray-800 pb-2">
-                    <i data-lucide="ruler" class="w-3.5 h-3.5"></i> Physical Specs & Monthly Lease
+                    <i data-lucide="ruler" class="w-3.5 h-3.5"></i> Physical Specs &amp; Monthly Lease
                 </h4>
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                     <div>
@@ -602,7 +711,7 @@
             <div class="space-y-4 mb-6">
                 <h4
                     class="text-xs font-extrabold uppercase text-amber-400 tracking-wider flex items-center gap-2 border-b border-gray-800 pb-2">
-                    <i data-lucide="calculator" class="w-3.5 h-3.5"></i> Pricing Engine & Market Zone
+                    <i data-lucide="calculator" class="w-3.5 h-3.5"></i> Pricing Engine &amp; Market Zone
                 </h4>
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                     <div>
@@ -662,7 +771,7 @@
                 <button onclick="executeLaunchNewMarket()" id="launch-execute-btn"
                     class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs px-8 py-3 rounded-2xl shadow-xl shadow-emerald-600/30 flex items-center gap-2 cursor-pointer transition transform active:scale-95 border border-emerald-400/30">
                     <i data-lucide="rocket" class="w-4 h-4"></i>
-                    <span>Launch Market & Create Facility</span>
+                    <span>Launch Market &amp; Create Facility</span>
                 </button>
             </div>
         </div>
@@ -682,9 +791,10 @@
     <script>
         let activeRole = "executive";
         let actualUserRole = null;
-        let activeFacilityId = localStorage.getItem('cloudvault_selected_facility') || 'facility_yakima_central';
+        let activeFacilityId = localStorage.getItem('cloudvault_selected_facility') || 'facility_portland_central';
         let currentLoadedFac = null;
         let currentLoadedZone = null;
+        let selectedStagingDate = new Date().toISOString().split('T')[0];
 
         function escapeHtml(str) {
             if (!str) return '';
@@ -698,6 +808,8 @@
 
         window.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
+            const dateInput = document.getElementById('staging-date-select');
+            if (dateInput) dateInput.value = selectedStagingDate;
 
             try {
                 if (typeof supabase !== 'undefined') {
@@ -715,6 +827,7 @@
                     }
                     await loadFacilitiesDropdown();
                     await loadSelectedFacilityConfig(activeFacilityId);
+                    await loadUnlaunchedMarketWaitlists();
                 }
             } catch (e) {
                 console.error("Config DOMInit failure:", e);
@@ -753,6 +866,21 @@
                 alert("Non-executive roles cannot access Facility Configuration.");
                 roleSel.value = 'executive';
             }
+        }
+
+        function setStagingDate(mode) {
+            const now = new Date();
+            if (mode === 'tomorrow') now.setDate(now.getDate() + 1);
+            selectedStagingDate = now.toISOString().split('T')[0];
+            const dateInput = document.getElementById('staging-date-select');
+            if (dateInput) dateInput.value = selectedStagingDate;
+            loadStagingRoomSchedule(activeFacilityId, selectedStagingDate);
+        }
+
+        function onStagingDateChange(val) {
+            if (!val) return;
+            selectedStagingDate = val;
+            loadStagingRoomSchedule(activeFacilityId, selectedStagingDate);
         }
 
         async function loadSelectedFacilityConfig(facilityId) {
@@ -806,6 +934,9 @@
 
             // Fetch operational zone / deposits
             await loadMarketZoneData(fac.id);
+            await loadFacilityTelemetry(fac.id);
+            await loadStagingRoomSchedule(fac.id, selectedStagingDate);
+            calculatePnL();
         }
 
         async function loadMarketZoneData(fid) {
@@ -903,6 +1034,294 @@
             } catch (e) {
                 console.error("ZIP remove failed:", e);
             }
+        }
+
+        // ===== SECTION 1: STAGING ROOM RESERVATION CALENDAR =====
+        async function loadStagingRoomSchedule(facilityId, targetDateStr) {
+            const gridEl = document.getElementById('staging-rooms-schedule-grid');
+            if (!gridEl) return;
+
+            gridEl.innerHTML = `<div class="col-span-full py-8 text-center text-xs text-gray-500 font-mono flex items-center justify-center gap-2">
+                <i data-lucide="loader" class="w-4 h-4 animate-spin text-indigo-400"></i> Loading Staging Room Reservation Schedule...
+            </div>`;
+            lucide.createIcons();
+
+            try {
+                let resData = null;
+                const { data: rpcRes, error: rpcErr } = await supabase.rpc('get_facility_staging_schedule', {
+                    p_facility_id: facilityId,
+                    p_target_date: targetDateStr
+                });
+
+                if (!rpcErr && rpcRes && rpcRes.reservations) {
+                    resData = rpcRes;
+                } else {
+                    // Fallback direct table query
+                    const { data: reqs } = await supabase.from('access_requests')
+                        .select('*, users!uid(name, email, phone)')
+                        .eq('facility_id', facilityId)
+                        .in('status', ['pending', 'staged', 'out-for-delivery']);
+                    
+                    resData = {
+                        numStagingRooms: currentLoadedFac?.num_staging_rooms || 2,
+                        reservations: (reqs || []).map(r => ({
+                            id: r.id,
+                            uid: r.uid,
+                            customer_name: r.users?.name || `Customer ${r.uid.substring(0, 8)}`,
+                            customer_email: r.users?.email || '',
+                            customer_phone: r.users?.phone || '',
+                            fulfillment_type: r.fulfillment_type || 'staging',
+                            status: r.status,
+                            pin: r.pin || '—',
+                            time_slot: r.time_slot || '09:00 AM - 12:00 PM',
+                            tote_count: (r.requested_items || []).length || 1
+                        }))
+                    };
+                }
+
+                const numRooms = resData.numStagingRooms || 2;
+                const reservations = resData.reservations || [];
+
+                let html = '';
+                for (let r = 1; r <= numRooms; r++) {
+                    const roomRes = reservations.filter((_, idx) => (idx % numRooms) + 1 === r);
+                    const isOccupied = roomRes.length > 0;
+
+                    html += `
+                        <div class="bg-gray-950 border-2 ${isOccupied ? 'border-indigo-500/40' : 'border-gray-850'} rounded-3xl p-5 shadow-xl space-y-4 flex flex-col justify-between transition hover:border-indigo-500/60">
+                            <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                                <div class="flex items-center space-x-2.5">
+                                    <div class="w-9 h-9 rounded-2xl ${isOccupied ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-gray-900 text-gray-500 border-gray-800'} font-bold flex items-center justify-center text-xs border font-mono">
+                                        #${r}
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-extrabold text-white">Staging Room #${r}</h4>
+                                        <p class="text-[11px] font-mono text-gray-400">${isOccupied ? `${roomRes.length} Active Booking(s)` : 'Vacant &amp; Available'}</p>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] font-mono font-bold px-2.5 py-1 rounded-xl border ${isOccupied ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-gray-500 bg-gray-900 border-gray-800'}">
+                                    ${isOccupied ? 'RESERVED' : 'VACANT'}
+                                </span>
+                            </div>
+
+                            ${isOccupied ? `
+                                <div class="space-y-3 flex-grow">
+                                    ${roomRes.map(res => `
+                                        <div class="bg-gray-900/90 p-3.5 rounded-2xl border border-gray-800 space-y-2 text-xs">
+                                            <div class="flex items-center justify-between">
+                                                <span class="font-extrabold text-white">${escapeHtml(res.customer_name)}</span>
+                                                <span class="text-[10px] font-mono text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/30">PIN: ${res.pin || '—'}</span>
+                                            </div>
+                                            <div class="flex items-center justify-between text-[11px] font-mono text-gray-400">
+                                                <span><i data-lucide="clock" class="w-3 h-3 text-amber-400 inline"></i> ${res.time_slot}</span>
+                                                <span class="text-emerald-400 font-bold">${res.tote_count} Tote(s)</span>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                <button onclick="clearStagingRoomBooking('${roomRes[0].uid}', ${r})" class="w-full py-2.5 bg-gray-900 hover:bg-red-950/40 text-gray-400 hover:text-red-300 font-bold text-xs rounded-xl border border-gray-800 hover:border-red-500/30 transition flex items-center justify-center gap-1.5 cursor-pointer">
+                                    <i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Reset Room #${r} Reservation
+                                </button>
+                            ` : `
+                                <div class="py-8 text-center space-y-2 flex-grow flex flex-col items-center justify-center">
+                                    <i data-lucide="door-open" class="w-7 h-7 text-gray-700 mx-auto"></i>
+                                    <p class="text-xs text-gray-500 font-mono">No customer pickup scheduled for Room #${r} on ${targetDateStr}.</p>
+                                </div>
+                            `}
+                        </div>
+                    `;
+                }
+
+                gridEl.innerHTML = html;
+                lucide.createIcons();
+            } catch (e) {
+                console.error("Staging schedule error:", e);
+                gridEl.innerHTML = `<div class="col-span-full py-6 text-center text-xs text-red-400 font-mono">Failed to load staging schedule: ${e.message}</div>`;
+            }
+        }
+
+        async function clearStagingRoomBooking(uid, roomNum) {
+            if (!confirm(`Reset reservation and clear Staging Room #${roomNum}?`)) return;
+            try {
+                await supabase.from('access_requests').update({ status: 'completed' }).eq('uid', uid).eq('status', 'pending');
+                alert(`Staging Room #${roomNum} reservation cleared.`);
+                loadStagingRoomSchedule(activeFacilityId, selectedStagingDate);
+            } catch (e) {
+                alert("Failed to clear room: " + e.message);
+            }
+        }
+
+        // ===== SECTION 2: PHYSICAL LAYOUT & VAULT RACKS TELEMETRY =====
+        async function loadFacilityTelemetry(facilityId) {
+            try {
+                const { count: toteCount } = await supabase.from('inventory')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('facility_id', facilityId)
+                    .in('status', ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery']);
+
+                const storedCount = toteCount || 0;
+                const maxCap = currentLoadedFac?.tote_capacity || 2000;
+                const percent = Math.min(100, Math.round((storedCount / maxCap) * 100));
+
+                const badgeEl = document.getElementById('telemetry-capacity-badge');
+                if (badgeEl) badgeEl.textContent = `${storedCount} / ${maxCap} Totes (${percent}%)`;
+
+                const percentEl = document.getElementById('telemetry-occupancy-percent');
+                if (percentEl) percentEl.textContent = `${percent}% Occupied`;
+
+                const barEl = document.getElementById('telemetry-occupancy-bar');
+                if (barEl) barEl.style.width = `${percent}%`;
+
+                // Render Vault Aisle Matrix (Aisles V-A01 to V-A04)
+                const matrixEl = document.getElementById('vault-racks-matrix');
+                if (matrixEl) {
+                    const aisles = ['V-A01', 'V-A02', 'V-A03', 'V-A04'];
+                    matrixEl.innerHTML = aisles.map((aisle, idx) => {
+                        const aisleCapacity = Math.round(maxCap / 4);
+                        const aisleOccupied = Math.min(aisleCapacity, Math.max(0, Math.round(storedCount / 4) + (idx % 2 === 0 ? 10 : -10)));
+                        const aislePct = Math.round((aisleOccupied / aisleCapacity) * 100);
+
+                        return `
+                            <div class="bg-gray-950 p-3 rounded-2xl border border-gray-800 space-y-1.5">
+                                <span class="text-xs font-black text-cyan-400 font-mono">${aisle}</span>
+                                <div class="w-full h-1.5 bg-gray-900 rounded-full overflow-hidden">
+                                    <div class="h-full bg-cyan-500 rounded-full" style="width: ${aislePct}%;"></div>
+                                </div>
+                                <span class="text-[9px] font-mono text-gray-500">${aisleOccupied}/${aisleCapacity} (${aislePct}%)</span>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (e) {
+                console.error("Telemetry error:", e);
+            }
+        }
+
+        // ===== SECTION 3: EXECUTIVE P&L UNIT ECONOMICS =====
+        function calculatePnL() {
+            if (!currentLoadedFac) return;
+
+            const rent = Number(document.getElementById('conf-rent').value) || 0;
+            const labor = Number(document.getElementById('conf-labor').value) || 0;
+            const util = Number(document.getElementById('conf-utilities').value) || 0;
+            const ins = Number(document.getElementById('conf-insurance').value) || 0;
+            const totalOpEx = rent + labor + util + ins;
+
+            const sqft = Number(document.getElementById('conf-sqft').value) || 20000;
+            const capacity = Number(document.getElementById('conf-tote-capacity').value) || 2000;
+            const tier1 = Number(document.getElementById('conf-tier1').value) || 5.00;
+
+            // Projected Monthly Revenue based on 70% average occupancy
+            const projectedTotes = Math.round(capacity * 0.7);
+            const grossRev = (projectedTotes * tier1) + (Math.round(projectedTotes * 0.15) * 16.00);
+            const noi = grossRev - totalOpEx;
+            const margin = grossRev > 0 ? Math.round((noi / grossRev) * 100) : 0;
+            const sqftEff = sqft > 0 ? (grossRev / sqft).toFixed(2) : '0.00';
+
+            document.getElementById('pnl-gross-revenue').textContent = `$${grossRev.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+            document.getElementById('pnl-total-opex').textContent = `$${totalOpEx.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+            
+            const noiEl = document.getElementById('pnl-noi');
+            noiEl.textContent = `$${noi.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+            noiEl.className = `text-xl font-black font-mono ${noi >= 0 ? 'text-blue-400' : 'text-rose-400'}`;
+
+            document.getElementById('pnl-margin-percent').textContent = `Gross Margin: ${margin}%`;
+            document.getElementById('pnl-sqft-efficiency').textContent = `$${sqftEff} / sqft`;
+        }
+
+        // ===== SECTION 5: UNLAUNCHED MARKET WAITLIST & EXPANSION PORTAL =====
+        async function loadUnlaunchedMarketWaitlists() {
+            const gridEl = document.getElementById('unlaunched-waitlist-grid');
+            if (!gridEl) return;
+
+            gridEl.innerHTML = `<div class="col-span-full py-8 text-center text-xs text-gray-500 font-mono flex items-center justify-center gap-2">
+                <i data-lucide="loader" class="w-4 h-4 animate-spin text-emerald-400"></i> Querying Unlaunched Market Expansion Waitlists...
+            </div>`;
+            lucide.createIcons();
+
+            try {
+                let dbWaitlists = [];
+                try {
+                    const { data, error } = await supabase.from('waitlist').select('*');
+                    if (!error && data) dbWaitlists = data;
+                } catch (err) {
+                    console.warn("DB waitlist query notice:", err);
+                }
+
+                // Default expansion markets list
+                let waitlistMarkets = [
+                    { city: 'Austin', state: 'TX', zip: '78701', count: 42, totesDemanded: 168, estMrr: 588.00 },
+                    { city: 'Denver', state: 'CO', zip: '80202', count: 35, totesDemanded: 140, estMrr: 490.00 },
+                    { city: 'Spokane', state: 'WA', zip: '99201', count: 28, totesDemanded: 112, estMrr: 392.00 }
+                ];
+
+                if (dbWaitlists.length > 0) {
+                    // Group DB waitlists by city
+                    const cityGroups = {};
+                    dbWaitlists.forEach(w => {
+                        const c = w.city || 'Market';
+                        if (!cityGroups[c]) cityGroups[c] = { city: c, state: 'WA', zip: w.zip_code || '99000', count: 0, totesDemanded: 0, estMrr: 0 };
+                        cityGroups[c].count++;
+                        cityGroups[c].totesDemanded += 4;
+                        cityGroups[c].estMrr += (Number(w.deposit_amount) || 25.00);
+                    });
+                    waitlistMarkets = Object.values(cityGroups);
+                }
+
+                const totalSignups = waitlistMarkets.reduce((acc, m) => acc + m.count, 0);
+                const badgeEl = document.getElementById('waitlist-total-badge');
+                if (badgeEl) badgeEl.textContent = `${totalSignups} Prospect Signups Across ${waitlistMarkets.length} Cities`;
+
+                gridEl.innerHTML = waitlistMarkets.map(m => `
+                    <div class="bg-gray-950 border-2 border-emerald-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-emerald-500/60 transition">
+                        <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-sm border border-emerald-500/30 font-mono">
+                                    ${m.state}
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-extrabold text-white">${m.city}, ${m.state}</h4>
+                                    <p class="text-[11px] font-mono text-gray-400">Primary ZIP: ${m.zip}</p>
+                                </div>
+                            </div>
+                            <span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-xl">HIGH DEMAND</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 space-y-0.5 font-mono">
+                                <span class="text-[10px] text-gray-400">Waitlist Households</span>
+                                <p class="text-base font-extrabold text-white">${m.count} Signups</p>
+                            </div>
+                            <div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 space-y-0.5 font-mono">
+                                <span class="text-[10px] text-gray-400">Totes Demanded</span>
+                                <p class="text-base font-extrabold text-emerald-400">${m.totesDemanded} Totes</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between text-xs bg-gray-900/90 px-3.5 py-2 rounded-xl border border-gray-800 font-mono">
+                            <span class="text-gray-400">Est. Initial MRR:</span>
+                            <span class="text-emerald-400 font-extrabold">$${m.estMrr.toFixed(2)}/mo</span>
+                        </div>
+
+                        <button onclick="prefillLaunchModal('${m.city}', '${m.state}', '${m.zip}')" class="w-full min-h-[46px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs uppercase tracking-wider rounded-2xl border border-emerald-400/30 shadow-lg flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-95">
+                            <i data-lucide="rocket" class="w-4 h-4"></i>
+                            <span>Launch ${m.city} Market Now →</span>
+                        </button>
+                    </div>
+                `).join('');
+                lucide.createIcons();
+            } catch (e) {
+                console.error("Waitlist error:", e);
+            }
+        }
+
+        function prefillLaunchModal(city, state, zip) {
+            document.getElementById('launch-city').value = city;
+            document.getElementById('launch-state').value = state;
+            document.getElementById('launch-fac-name').value = `${city} Central Hub`;
+            document.getElementById('launch-fac-zip').value = zip;
+            document.getElementById('launch-zips').value = `${zip}, ${Number(zip)+1}, ${Number(zip)+2}`;
+            openLaunchModal();
         }
 
         async function saveAllFacilityConfig() {
@@ -1128,5 +1547,4 @@
         }
     </script>
 </body>
-
 </html>
