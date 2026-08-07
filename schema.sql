@@ -120,13 +120,17 @@ CREATE TABLE public.subscriptions (
     uid UUID REFERENCES public.users(id) ON DELETE CASCADE,
     stripe_subscription_id TEXT,
     total_totes INTEGER DEFAULT 0,
+    tote_count INTEGER DEFAULT 0,
     tote_rate NUMERIC(10,2) DEFAULT 0.00,
     recurring_storage NUMERIC(10,2) DEFAULT 0.00,
     logistics_type TEXT DEFAULT 'self_service',
     valet_fee NUMERIC(10,2) DEFAULT 0.00,
     first_month_total NUMERIC(10,2) DEFAULT 0.00,
+    monthly_total NUMERIC(10,2) DEFAULT 0.00,
+    plan_tier TEXT DEFAULT 'valet_flex',
     status TEXT DEFAULT 'active',
     current_period_end TIMESTAMPTZ,
+    next_billing_date TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
     last_updated TIMESTAMPTZ DEFAULT now()
 );
@@ -574,17 +578,35 @@ BEGIN
   WHERE id = v_uid;
 
   -- Insert subscription
-  INSERT INTO public.subscriptions (uid, stripe_subscription_id, total_totes, tote_rate, recurring_storage, logistics_type, valet_fee, first_month_total, status, current_period_end)
-  VALUES (
+  INSERT INTO public.subscriptions (
+    uid,
+    stripe_subscription_id,
+    total_totes,
+    tote_count,
+    tote_rate,
+    recurring_storage,
+    logistics_type,
+    valet_fee,
+    first_month_total,
+    monthly_total,
+    plan_tier,
+    status,
+    current_period_end,
+    next_billing_date
+  ) VALUES (
     v_uid,
     'stub_' || substring(md5(random()::text) from 1 for 9),
+    p_tote_count,
     p_tote_count,
     v_tote_rate,
     v_recurring_storage,
     p_logistics_type,
     v_valet_fee,
     v_first_month_total,
+    v_first_month_total,
+    'valet_flex',
     'active',
+    now() + interval '30 days',
     now() + interval '30 days'
   );
 
@@ -1293,6 +1315,69 @@ BEGIN
     'customerUid', p_customer_uid,
     'totesUpdated', v_updated_count,
     'targetLocation', p_target_location
+  );
+-- Staging Schedule & Reservation Calendar RPC
+CREATE OR REPLACE FUNCTION public.get_facility_staging_schedule(
+  p_facility_id TEXT,
+  p_target_date DATE DEFAULT CURRENT_DATE
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_uid UUID;
+  v_user_role public.user_role;
+  v_facility RECORD;
+  v_num_rooms INT := 2;
+  v_reservations JSONB;
+BEGIN
+  v_uid := auth.uid();
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
+  IF v_user_role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
+    RAISE EXCEPTION 'Access Denied: Staff clearance required';
+  END IF;
+
+  SELECT num_staging_rooms, staging_rooms INTO v_facility
+  FROM public.facilities
+  WHERE id = p_facility_id LIMIT 1;
+
+  IF v_facility IS NOT NULL THEN
+    v_num_rooms := COALESCE(v_facility.num_staging_rooms, v_facility.staging_rooms, 2);
+  END IF;
+
+  -- Query active access requests and staging room reservations for target date and facility
+  SELECT COALESCE(jsonb_agg(
+    jsonb_build_object(
+      'id', ar.id,
+      'uid', ar.uid,
+      'customer_name', COALESCE(u.name, 'Customer ' || SUBSTRING(ar.uid::text, 1, 8)),
+      'customer_email', u.email,
+      'customer_phone', u.phone,
+      'facility_id', ar.facility_id,
+      'request_type', ar.request_type,
+      'fulfillment_type', ar.fulfillment_type,
+      'status', ar.status,
+      'pin', ar.pin,
+      'target_date', ar.target_date,
+      'time_slot', COALESCE(ar.time_slot, '09:00 AM - 12:00 PM'),
+      'surge_tier', ar.surge_tier,
+      'requested_items', ar.requested_items,
+      'tote_count', CASE WHEN ar.requested_items IS NOT NULL THEN cardinality(ar.requested_items) ELSE 1 END
+    ) ORDER BY ar.requested_at DESC
+  ), '[]'::jsonb) INTO v_reservations
+  FROM public.access_requests ar
+  LEFT JOIN public.users u ON ar.uid = u.id
+  WHERE (ar.facility_id = p_facility_id OR u.assigned_facility_id = p_facility_id)
+    AND (ar.target_date = p_target_date OR ar.target_date IS NULL)
+    AND ar.status IN ('pending', 'staged', 'out-for-delivery');
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'facilityId', p_facility_id,
+    'targetDate', p_target_date,
+    'numStagingRooms', v_num_rooms,
+    'reservations', v_reservations
   );
 END;
 $$ LANGUAGE plpgsql;
