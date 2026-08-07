@@ -1235,42 +1235,74 @@
             if (!gridEl) return;
 
             gridEl.innerHTML = `<div class="col-span-full py-8 text-center text-xs text-gray-500 font-mono flex items-center justify-center gap-2">
-                <i data-lucide="loader" class="w-4 h-4 animate-spin text-emerald-400"></i> Querying Unlaunched Market Expansion Waitlists...
+                <i data-lucide="loader" class="w-4 h-4 animate-spin text-emerald-400"></i> Querying Dynamic Market Expansion Telemetry from Supabase...
             </div>`;
             lucide.createIcons();
 
             try {
-                let dbWaitlists = [];
-                try {
-                    const { data, error } = await supabase.from('waitlist').select('*');
-                    if (!error && data) dbWaitlists = data;
-                } catch (err) {
-                    console.warn("DB waitlist query notice:", err);
-                }
+                // Dynamically fetch active facilities, operational zones, and service areas to build active exclusion set
+                const [{ data: facs }, { data: zones }, { data: serviceAreas }] = await Promise.all([
+                    supabase.from('facilities').select('id, name'),
+                    supabase.from('operational_zones').select('id, city, zip_codes'),
+                    supabase.from('service_areas').select('zip_code, city, active').eq('active', true)
+                ]);
 
-                // Default expansion markets list
-                let waitlistMarkets = [
-                    { city: 'Austin', state: 'TX', zip: '78701', count: 42, totesDemanded: 168, estMrr: 588.00 },
-                    { city: 'Denver', state: 'CO', zip: '80202', count: 35, totesDemanded: 140, estMrr: 490.00 },
-                    { city: 'Spokane', state: 'WA', zip: '99201', count: 28, totesDemanded: 112, estMrr: 392.00 }
-                ];
+                const activeCitySet = new Set();
+                const activeZipSet = new Set();
 
-                if (dbWaitlists.length > 0) {
-                    // Group DB waitlists by city
-                    const cityGroups = {};
-                    dbWaitlists.forEach(w => {
-                        const c = w.city || 'Market';
-                        if (!cityGroups[c]) cityGroups[c] = { city: c, state: 'WA', zip: w.zip_code || '99000', count: 0, totesDemanded: 0, estMrr: 0 };
-                        cityGroups[c].count++;
-                        cityGroups[c].totesDemanded += 4;
-                        cityGroups[c].estMrr += (Number(w.deposit_amount) || 25.00);
-                    });
-                    waitlistMarkets = Object.values(cityGroups);
-                }
+                (facs || []).forEach(f => {
+                    if (f.name) activeCitySet.add(f.name.toLowerCase().replace(/ fulfillment center| hub| center/g, '').trim());
+                });
+                (zones || []).forEach(z => {
+                    if (z.city) activeCitySet.add(z.city.toLowerCase().trim());
+                    (z.zip_codes || []).forEach(zip => activeZipSet.add(zip.trim()));
+                });
+                (serviceAreas || []).forEach(s => {
+                    if (s.city) activeCitySet.add(s.city.toLowerCase().trim());
+                    if (s.zip_code) activeZipSet.add(s.zip_code.trim());
+                });
 
+                // Fetch real dynamic waitlist data from Supabase
+                const { data: dbWaitlists, error: waitlistErr } = await supabase.from('waitlist').select('*');
+                if (waitlistErr) throw waitlistErr;
+
+                // Exclude any waitlist entries that belong to active operational hubs/ZIPs
+                const unlaunchedWaitlists = (dbWaitlists || []).filter(w => {
+                    const c = (w.city || '').toLowerCase().trim();
+                    const z = (w.zip_code || '').trim();
+                    const isCityActive = Array.from(activeCitySet).some(ac => c.includes(ac) || ac.includes(c));
+                    const isZipActive = activeZipSet.has(z);
+                    return !isCityActive && !isZipActive;
+                });
+
+                // Group by city
+                const cityGroups = {};
+                unlaunchedWaitlists.forEach(w => {
+                    const c = (w.city && w.city.trim()) || (w.zip_code ? `ZIP: ${w.zip_code}` : 'Unmapped Region');
+                    if (!cityGroups[c]) {
+                        cityGroups[c] = { city: c, state: 'WA', zip: w.zip_code || 'Expansion', count: 0, totesDemanded: 0, estMrr: 0 };
+                    }
+                    cityGroups[c].count++;
+                    cityGroups[c].totesDemanded += (Number(w.requested_totes) || 4);
+                    cityGroups[c].estMrr += (Number(w.deposit_amount) || 25.00);
+                });
+
+                const waitlistMarkets = Object.values(cityGroups);
                 const totalSignups = waitlistMarkets.reduce((acc, m) => acc + m.count, 0);
                 const badgeEl = document.getElementById('waitlist-total-badge');
-                if (badgeEl) badgeEl.textContent = `${totalSignups} Prospect Signups Across ${waitlistMarkets.length} Cities`;
+
+                if (waitlistMarkets.length === 0) {
+                    if (badgeEl) badgeEl.textContent = `0 Unlaunched Market Expansion Signups`;
+                    gridEl.innerHTML = `<div class="col-span-full bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
+                        <i data-lucide="check-circle" class="w-8 h-8 text-emerald-500 mx-auto"></i>
+                        <p class="text-sm text-gray-300 font-bold">All Requested Markets Are Live</p>
+                        <p class="text-xs text-gray-500 font-mono">No pending waitlisted cities found. All customer signups match active operational hubs.</p>
+                    </div>`;
+                    lucide.createIcons();
+                    return;
+                }
+
+                if (badgeEl) badgeEl.textContent = `${totalSignups} Prospect Signups Across ${waitlistMarkets.length} Unlaunched Cities`;
 
                 gridEl.innerHTML = waitlistMarkets.map(m => `
                     <div class="bg-gray-950 border-2 border-emerald-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-emerald-500/60 transition">
@@ -1280,11 +1312,11 @@
                                     ${m.state}
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-extrabold text-white">${m.city}, ${m.state}</h4>
+                                    <h4 class="text-sm font-extrabold text-white">${m.city}</h4>
                                     <p class="text-[11px] font-mono text-gray-400">Primary ZIP: ${m.zip}</p>
                                 </div>
                             </div>
-                            <span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-xl">HIGH DEMAND</span>
+                            <span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-xl">UNLAUNCHED MARKET</span>
                         </div>
 
                         <div class="grid grid-cols-2 gap-2 text-xs">
@@ -1298,14 +1330,9 @@
                             </div>
                         </div>
 
-                        <div class="flex items-center justify-between text-xs bg-gray-900/90 px-3.5 py-2 rounded-xl border border-gray-800 font-mono">
-                            <span class="text-gray-400">Est. Initial MRR:</span>
-                            <span class="text-emerald-400 font-extrabold">$${m.estMrr.toFixed(2)}/mo</span>
-                        </div>
-
                         <button onclick="prefillLaunchModal('${m.city}', '${m.state}', '${m.zip}')" class="w-full min-h-[46px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs uppercase tracking-wider rounded-2xl border border-emerald-400/30 shadow-lg flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-95">
                             <i data-lucide="rocket" class="w-4 h-4"></i>
-                            <span>Launch ${m.city} Market Now →</span>
+                            <span>Launch ${m.city} Market Hub →</span>
                         </button>
                     </div>
                 `).join('');

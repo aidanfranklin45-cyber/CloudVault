@@ -2757,6 +2757,13 @@
                     .eq('facility_id', queryFacilityId)
                     .eq('status', 'pending');
 
+                // Fetch subscriptions to map user logistics_type
+                const { data: subsData } = await supabase.from('subscriptions').select('uid, logistics_type');
+                const subByUid = {};
+                if (subsData) {
+                    subsData.forEach(s => { subByUid[s.uid] = s; });
+                }
+
                 // Render Incoming Scheduled Deliveries sub-table in Tab 1
                 const incomingReqs = (manifests || []).filter(m => m.request_type === 'new_tote_delivery');
                 const incomingTbody = document.getElementById('wbody-incoming-deliveries');
@@ -2908,8 +2915,23 @@
 
                 // ── Tab 2: PULL FROM VAULT CARDS (pending-stage + pending-dispatch) ──
                 const pullItems = (allItems || []).filter(i => i.status === 'pending-stage' || i.status === 'pending-dispatch');
-                const stagingItems = pullItems.filter(i => i.status === 'pending-stage');
-                const valetItems = pullItems.filter(i => i.status === 'pending-dispatch');
+                
+                function isValetItem(i) {
+                    const manifest = manifestByUid[i.uid];
+                    const sub = subByUid[i.uid];
+                    return (manifest && (
+                        manifest.fulfillment_type === 'valet_delivery' ||
+                        manifest.request_type === 'valet_delivery' ||
+                        manifest.fulfillment_type === 'valet_pickup' ||
+                        manifest.request_type === 'valet_pickup'
+                    )) || (sub && (
+                        sub.logistics_type === 'valet_pickup' ||
+                        sub.logistics_type === 'valet_delivery'
+                    )) || i.status === 'pending-dispatch' || i.status === 'out-for-delivery';
+                }
+
+                const stagingItems = pullItems.filter(i => !isValetItem(i));
+                const valetItems = pullItems.filter(i => isValetItem(i));
 
                 if (document.getElementById('cnt-pfilter-all')) document.getElementById('cnt-pfilter-all').textContent = pullItems.length;
                 if (document.getElementById('cnt-pfilter-staging')) document.getElementById('cnt-pfilter-staging').textContent = stagingItems.length;
@@ -2926,12 +2948,17 @@
                     const groups = {};
                     (items || []).forEach(item => {
                         const manifest = manifestByUid[item.uid];
-                        const isValetRequest = manifest && (
+                        const sub = subByUid[item.uid];
+                        const isValetRequest = (manifest && (
                             manifest.fulfillment_type === 'valet_delivery' ||
                             manifest.request_type === 'valet_delivery' ||
-                            manifest.fulfillment_type === 'valet_pickup'
-                        );
-                        const destType = (item.status === 'pending-dispatch' || isValetRequest) ? 'valet_delivery' : 'staging';
+                            manifest.fulfillment_type === 'valet_pickup' ||
+                            manifest.request_type === 'valet_pickup'
+                        )) || (sub && (
+                            sub.logistics_type === 'valet_pickup' ||
+                            sub.logistics_type === 'valet_delivery'
+                        )) || item.status === 'pending-dispatch' || item.status === 'out-for-delivery';
+                        const destType = isValetRequest ? 'valet_delivery' : 'staging';
                         const key = `${item.uid}_${destType}`;
                         if (!groups[key]) {
                             groups[key] = {
@@ -3833,31 +3860,61 @@
             const tbody = document.getElementById('waitlist-table-body');
             const countBadge = document.getElementById('waitlist-total-count');
             try {
-                // Try fetching with deposit_amount; fallback to basic query if column isn't migrated yet on backend
+                // Dynamically fetch active facilities, operational zones, and service areas to build active exclusion set
+                const [{ data: facs }, { data: zones }, { data: serviceAreas }] = await Promise.all([
+                    supabase.from('facilities').select('id, name'),
+                    supabase.from('operational_zones').select('id, city, zip_codes'),
+                    supabase.from('service_areas').select('zip_code, city, active').eq('active', true)
+                ]);
+
+                const activeCitySet = new Set();
+                const activeZipSet = new Set();
+
+                (facs || []).forEach(f => {
+                    if (f.name) activeCitySet.add(f.name.toLowerCase().replace(/ fulfillment center| hub| center/g, '').trim());
+                });
+                (zones || []).forEach(z => {
+                    if (z.city) activeCitySet.add(z.city.toLowerCase().trim());
+                    (z.zip_codes || []).forEach(zip => activeZipSet.add(zip.trim()));
+                });
+                (serviceAreas || []).forEach(s => {
+                    if (s.city) activeCitySet.add(s.city.toLowerCase().trim());
+                    if (s.zip_code) activeZipSet.add(s.zip_code.trim());
+                });
+
                 let res = [];
                 const { data, error } = await supabase.from('waitlist').select('city, zip_code, deposit_amount, created_at');
-                if (error) {
-                    const { data: fallbackData, error: fallbackErr } = await supabase.from('waitlist').select('city, zip_code, created_at');
-                    if (fallbackErr) throw fallbackErr;
-                    res = (fallbackData || []).map(row => ({ ...row, deposit_amount: 25.00 }));
+                if (!error && data) {
+                    res = data;
                 } else {
-                    res = data || [];
+                    const { data: fallbackData } = await supabase.from('waitlist').select('city, zip_code, created_at');
+                    res = (fallbackData || []).map(row => ({ ...row, deposit_amount: 25.00 }));
                 }
-                if (!res || res.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">No priority deposit waitlist requests yet.</td></tr>`;
+
+                // Exclude any waitlist entries that belong to active operational hubs/ZIPs
+                const unlaunchedRes = (res || []).filter(row => {
+                    const c = (row.city || '').toLowerCase().trim();
+                    const z = (row.zip_code || '').trim();
+                    const isCityActive = Array.from(activeCitySet).some(ac => c.includes(ac) || ac.includes(c));
+                    const isZipActive = activeZipSet.has(z);
+                    return !isCityActive && !isZipActive;
+                });
+
+                if (!unlaunchedRes || unlaunchedRes.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500 font-mono text-xs">No unlaunched priority deposit waitlist requests. All cities are active!</td></tr>`;
                     if (countBadge) countBadge.textContent = '0 Deposits ($0)';
                     return;
                 }
 
                 if (countBadge) {
-                    const totalDeposits = res.length;
-                    const totalCapital = res.reduce((sum, r) => sum + (Number(r.deposit_amount) || 25.00), 0);
+                    const totalDeposits = unlaunchedRes.length;
+                    const totalCapital = unlaunchedRes.reduce((sum, r) => sum + (Number(r.deposit_amount) || 25.00), 0);
                     countBadge.textContent = `${totalDeposits} Priority Deposit${totalDeposits !== 1 ? 's' : ''} ($${totalCapital.toLocaleString()})`;
                 }
 
                 // Group waitlist entries by City
                 const cityMap = {};
-                res.forEach(row => {
+                unlaunchedRes.forEach(row => {
                     const city = (row.city && row.city.trim()) || (row.zip_code ? `ZIP: ${row.zip_code}` : 'Unknown');
                     if (!cityMap[city]) {
                         cityMap[city] = { zipCodes: new Set(), count: 0, capital: 0, latest: null };
@@ -3895,7 +3952,7 @@
                 });
             } catch (err) {
                 console.error("Failed to fetch waitlist:", err);
-                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-400">Error loading waitlist.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-400 font-mono text-xs">Error loading waitlist: ${err.message}</td></tr>`;
             }
         }
 
