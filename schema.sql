@@ -610,6 +610,13 @@ BEGIN
     now() + interval '30 days'
   );
 
+  -- Set initial tote status based on logistics_type
+  IF p_logistics_type IN ('valet_pickup', 'valet_delivery') THEN
+    v_initial_status := 'pending-dispatch';
+  ELSE
+    v_initial_status := 'pending-stage';
+  END IF;
+
   -- Dynamic facility lookup from service_areas
   SELECT facility_id INTO v_facility_id
   FROM public.service_areas
@@ -627,7 +634,7 @@ BEGIN
       v_uid,
       public.generate_tote_code(v_facility_id),
       'Empty Tote #' || (i + 1),
-      'pending-stage',
+      v_initial_status,
       v_facility_id
     );
   END LOOP;

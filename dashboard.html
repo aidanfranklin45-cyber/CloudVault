@@ -2556,7 +2556,8 @@
                     (r.requested_items && r.requested_items.includes(id)) || 
                     (r.requested_tote_codes && item.tote_code && r.requested_tote_codes.includes(item.tote_code))
                 );
-                const isValet = (activeReq && activeReq.fulfillment_type === 'valet_delivery') || 
+                const isValet = (activeReq && (activeReq.fulfillment_type === 'valet_delivery' || activeReq.fulfillment_type === 'valet_pickup')) || 
+                                (currentSubscription && (currentSubscription.logistics_type === 'valet_pickup' || currentSubscription.logistics_type === 'valet_delivery')) ||
                                 item.status === 'pending-dispatch' || 
                                 item.status === 'out-for-delivery';
 
