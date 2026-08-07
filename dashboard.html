@@ -355,6 +355,46 @@
                 </div>
             </div>
 
+            <!-- Customer Delivery & Fulfillment Flow Tracker Card -->
+            <div id="customer-fulfillment-flow-card" class="hidden bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 shadow-xl border-2 border-blue-500/30 max-w-4xl mx-auto my-6 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-blue-800/60 pb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-12 h-12 rounded-2xl bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center text-xl border border-blue-400/30">
+                            📦
+                        </div>
+                        <div>
+                            <h3 class="text-base font-extrabold text-white" id="ff-title">Tote Delivery &amp; Retrieval Flow</h3>
+                            <p class="text-xs text-blue-200 font-mono" id="ff-subtitle">Est. Delivery Window: Saturday, Aug 8 • 09:00 AM - 12:00 PM</p>
+                        </div>
+                    </div>
+                    <span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 px-3.5 py-1.5 rounded-xl uppercase tracking-wider shadow-sm" id="ff-status-badge">In Transit</span>
+                </div>
+
+                <!-- Interactive 4-Step Progress Bar -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center pt-2">
+                    <div class="bg-gray-900/60 p-3 rounded-2xl border border-gray-800 space-y-1.5" id="ff-step-1">
+                        <div class="w-8 h-8 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center mx-auto text-xs">✓</div>
+                        <p class="text-[11px] font-extrabold text-white">1. Order Placed</p>
+                        <p class="text-[9px] text-blue-300">Confirmed</p>
+                    </div>
+                    <div class="bg-gray-900/60 p-3 rounded-2xl border border-gray-800 space-y-1.5" id="ff-step-2">
+                        <div class="w-8 h-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center mx-auto text-xs animate-pulse">●</div>
+                        <p class="text-[11px] font-extrabold text-white">2. Vault Staged</p>
+                        <p class="text-[9px] text-blue-300">Prepped at Hub</p>
+                    </div>
+                    <div class="bg-gray-900/60 p-3 rounded-2xl border border-gray-800 space-y-1.5" id="ff-step-3">
+                        <div class="w-8 h-8 rounded-full bg-gray-800 text-gray-500 font-bold flex items-center justify-center mx-auto text-xs">3</div>
+                        <p class="text-[11px] font-bold text-gray-400">3. Out for Delivery</p>
+                        <p class="text-[9px] text-gray-500">Driver En Route</p>
+                    </div>
+                    <div class="bg-gray-900/60 p-3 rounded-2xl border border-gray-800 space-y-1.5" id="ff-step-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-800 text-gray-500 font-bold flex items-center justify-center mx-auto text-xs">4</div>
+                        <p class="text-[11px] font-bold text-gray-400">4. Delivered</p>
+                        <p class="text-[9px] text-gray-500">Customer Premises</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Setup Progress Timeline Stepper -->
             <div id="onboarding-tracker" class="bg-white p-8 sm:p-10 rounded-3xl border border-gray-150 shadow-sm max-w-4xl mx-auto">
                 <h3 class="text-lg font-extrabold text-gray-950 mb-6 text-center">Your CloudVault Setup Progress</h3>
@@ -1389,7 +1429,79 @@
             return (Math.abs(hash) % (totalRooms || 2)) + 1;
         }
 
+        function renderCustomerFulfillmentFlow() {
+            const flowCard = document.getElementById('customer-fulfillment-flow-card');
+            if (!flowCard) return;
+
+            const activeReqs = currentRequests || [];
+            const activeInv = (currentInventory || []).filter(i => 
+                ['pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery'].includes(i.status)
+            );
+
+            if (activeReqs.length === 0 && activeInv.length === 0) {
+                flowCard.classList.add('hidden');
+                return;
+            }
+
+            flowCard.classList.remove('hidden');
+
+            const titleEl = document.getElementById('ff-title');
+            const subEl = document.getElementById('ff-subtitle');
+            const badgeEl = document.getElementById('ff-status-badge');
+            const s1 = document.getElementById('ff-step-1');
+            const s2 = document.getElementById('ff-step-2');
+            const s3 = document.getElementById('ff-step-3');
+            const s4 = document.getElementById('ff-step-4');
+
+            const isValet = activeReqs.some(r => r.fulfillment_type === 'valet_delivery' || r.request_type === 'valet_delivery') ||
+                            activeInv.some(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery');
+
+            const isOutForDelivery = activeInv.some(i => i.status === 'out-for-delivery');
+            const isStagedInRoom = activeInv.some(i => i.status === 'staged');
+            const pin = (currentUser && currentUser.onboarding_pin) || '4829';
+            const roomNum = getAssignedRoom(currentUser ? currentUser.id : null);
+
+            // Compute dynamic delivery date
+            const req = activeReqs[0];
+            const targetDateStr = req && req.target_date ? new Date(req.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Saturday, Aug 8';
+            const timeSlotStr = (req && req.time_slot) || '09:00 AM - 12:00 PM';
+
+            if (isValet) {
+                titleEl.innerHTML = `🚚 Valet Tote Delivery &amp; Retrieval Flow`;
+                badgeEl.textContent = isOutForDelivery ? "OUT FOR DELIVERY" : "DISPATCHED";
+                subEl.textContent = `Est. Delivery Window: ${targetDateStr} • ${timeSlotStr}`;
+
+                s1.innerHTML = `<div class="w-8 h-8 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center mx-auto text-xs">✓</div><p class="text-[11px] font-extrabold text-white">1. Order Placed</p><p class="text-[9px] text-blue-300">Confirmed</p>`;
+                s2.innerHTML = `<div class="w-8 h-8 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center mx-auto text-xs">✓</div><p class="text-[11px] font-extrabold text-white">2. Vault Pulled</p><p class="text-[9px] text-blue-300">Staged at Hub</p>`;
+                
+                if (isOutForDelivery) {
+                    s3.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-500 text-white font-bold flex items-center justify-center mx-auto text-xs animate-pulse">●</div><p class="text-[11px] font-extrabold text-white">3. Out for Delivery</p><p class="text-[9px] text-blue-200 font-bold">Driver En Route</p>`;
+                    s4.innerHTML = `<div class="w-8 h-8 rounded-full bg-gray-800 text-gray-400 font-bold flex items-center justify-center mx-auto text-xs">4</div><p class="text-[11px] font-bold text-gray-400">4. Delivered</p><p class="text-[9px] text-gray-500">Your Premise</p>`;
+                } else {
+                    s3.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center mx-auto text-xs animate-pulse">●</div><p class="text-[11px] font-extrabold text-white">3. Truck Dispatch</p><p class="text-[9px] text-blue-200">Loading on Van</p>`;
+                    s4.innerHTML = `<div class="w-8 h-8 rounded-full bg-gray-800 text-gray-400 font-bold flex items-center justify-center mx-auto text-xs">4</div><p class="text-[11px] font-bold text-gray-400">4. Delivery ETA</p><p class="text-[9px] text-gray-500">${targetDateStr}</p>`;
+                }
+            } else {
+                titleEl.innerHTML = `🚪 Self-Service Pickup Flow (Staging Room #${roomNum})`;
+                badgeEl.textContent = isStagedInRoom ? `READY IN ROOM #${roomNum}` : "PREPARING STAGING";
+                subEl.textContent = `Keypad Access PIN: ${pin} • Staged in Room #${roomNum}`;
+
+                s1.innerHTML = `<div class="w-8 h-8 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center mx-auto text-xs">✓</div><p class="text-[11px] font-extrabold text-white">1. Request Received</p><p class="text-[9px] text-blue-300">Confirmed</p>`;
+                
+                if (isStagedInRoom) {
+                    s2.innerHTML = `<div class="w-8 h-8 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center mx-auto text-xs">✓</div><p class="text-[11px] font-extrabold text-white">2. Vault Pulled</p><p class="text-[9px] text-blue-300">Intake Ready</p>`;
+                    s3.innerHTML = `<div class="w-8 h-8 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center mx-auto text-xs">✓</div><p class="text-[11px] font-extrabold text-white">3. Room #${roomNum}</p><p class="text-[9px] text-emerald-300 font-bold">PIN: ${pin}</p>`;
+                    s4.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-500 text-white font-bold flex items-center justify-center mx-auto text-xs animate-pulse">●</div><p class="text-[11px] font-extrabold text-white">4. Awaiting Pickup</p><p class="text-[9px] text-blue-200">Customer Arrival</p>`;
+                } else {
+                    s2.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center mx-auto text-xs animate-pulse">●</div><p class="text-[11px] font-extrabold text-white">2. Vault Pull</p><p class="text-[9px] text-blue-200">Moving to Staging</p>`;
+                    s3.innerHTML = `<div class="w-8 h-8 rounded-full bg-gray-800 text-gray-400 font-bold flex items-center justify-center mx-auto text-xs">3</div><p class="text-[11px] font-bold text-gray-400">3. Staging Room #${roomNum}</p><p class="text-[9px] text-gray-500">PIN: ${pin}</p>`;
+                    s4.innerHTML = `<div class="w-8 h-8 rounded-full bg-gray-800 text-gray-400 font-bold flex items-center justify-center mx-auto text-xs">4</div><p class="text-[11px] font-bold text-gray-400">4. Customer Pickup</p><p class="text-[9px] text-gray-500">Awaiting Arrival</p>`;
+                }
+            }
+        }
+
         function renderActiveRequests() {
+            renderCustomerFulfillmentFlow();
             const panel = document.getElementById('active-requests-panel');
             const list = document.getElementById('active-requests-list');
 
@@ -2502,6 +2614,7 @@
         }
 
         function renderInventory() {
+            renderCustomerFulfillmentFlow();
             const grid = document.getElementById('tote-grid');
             const empty = document.getElementById('empty-state');
             const tracker = document.getElementById('onboarding-tracker');
