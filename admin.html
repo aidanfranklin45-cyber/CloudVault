@@ -1948,6 +1948,7 @@
         // Render Active Markets List (ZIP controls)
         function renderMarketsList(markets) {
             const listEl = document.getElementById('markets-list');
+            if (!listEl) return;
             listEl.innerHTML = "";
 
             if (markets.length === 0) {
@@ -3847,6 +3848,7 @@
         async function loadWaitlistData() {
             const tbody = document.getElementById('waitlist-table-body');
             const countBadge = document.getElementById('waitlist-total-count');
+            if (!tbody) return;
             try {
                 // Dynamically fetch active facilities, operational zones, and service areas to build active exclusion set
                 const [{ data: facs }, { data: zones }, { data: serviceAreas }] = await Promise.all([
