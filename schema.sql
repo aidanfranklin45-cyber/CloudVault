@@ -98,8 +98,12 @@ CREATE TABLE public.inventory (
     last_scanned_at TIMESTAMPTZ DEFAULT now(),
     last_scanned_by UUID REFERENCES public.users(id),
     activated BOOLEAN DEFAULT false,
+    updated_at TIMESTAMPTZ DEFAULT now(),
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
+
+-- Migration fallback for inventory updated_at
+ALTER TABLE public.inventory ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
 -- Warehouse Physical Locations
 CREATE TABLE IF NOT EXISTS public.warehouse_locations (

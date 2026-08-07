@@ -1162,6 +1162,7 @@
         // State
         // ============================================================
         let currentUser = null;
+        let currentProfile = null;
         let currentUserColor = 'blue';
         let selectedItems = new Set();
         let currentInventory = [];
@@ -1638,45 +1639,6 @@
 
         function renderActiveRequests() {
             renderFulfillmentFlows();
-            // legacy panel hidden — flows rendered by renderFulfillmentFlows above
-            const panel = document.getElementById('active-requests-panel');
-            if (panel) panel.classList.add('hidden');
-        }
-                titleEl.innerHTML = `🚚 Valet Tote Delivery &amp; Retrieval Flow`;
-                badgeEl.textContent = isOutForDelivery ? "OUT FOR DELIVERY" : "DISPATCHED";
-                subEl.textContent = `Est. Delivery Window: ${targetDateStr} • ${timeSlotStr}`;
-
-                s1.innerHTML = `<div class="w-8 h-8 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center mx-auto text-xs">✓</div><p class="text-[11px] font-extrabold text-white">1. Order Placed</p><p class="text-[9px] text-blue-300">Confirmed</p>`;
-                s2.innerHTML = `<div class="w-8 h-8 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center mx-auto text-xs">✓</div><p class="text-[11px] font-extrabold text-white">2. Vault Pulled</p><p class="text-[9px] text-blue-300">Staged at Hub</p>`;
-                
-                if (isOutForDelivery) {
-                    s3.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-500 text-white font-bold flex items-center justify-center mx-auto text-xs animate-pulse">●</div><p class="text-[11px] font-extrabold text-white">3. Out for Delivery</p><p class="text-[9px] text-blue-200 font-bold">Driver En Route</p>`;
-                    s4.innerHTML = `<div class="w-8 h-8 rounded-full bg-gray-800 text-gray-400 font-bold flex items-center justify-center mx-auto text-xs">4</div><p class="text-[11px] font-bold text-gray-400">4. Delivered</p><p class="text-[9px] text-gray-500">Your Premise</p>`;
-                } else {
-                    s3.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center mx-auto text-xs animate-pulse">●</div><p class="text-[11px] font-extrabold text-white">3. Truck Dispatch</p><p class="text-[9px] text-blue-200">Loading on Van</p>`;
-                    s4.innerHTML = `<div class="w-8 h-8 rounded-full bg-gray-800 text-gray-400 font-bold flex items-center justify-center mx-auto text-xs">4</div><p class="text-[11px] font-bold text-gray-400">4. Delivery ETA</p><p class="text-[9px] text-gray-500">${targetDateStr}</p>`;
-                }
-            } else {
-                titleEl.innerHTML = `🚪 Self-Service Pickup Flow (Staging Room #${roomNum})`;
-                badgeEl.textContent = isStagedInRoom ? `READY IN ROOM #${roomNum}` : "PREPARING STAGING";
-                subEl.textContent = `Keypad Access PIN: ${pin} • Staged in Room #${roomNum}`;
-
-                s1.innerHTML = `<div class="w-8 h-8 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center mx-auto text-xs">✓</div><p class="text-[11px] font-extrabold text-white">1. Request Received</p><p class="text-[9px] text-blue-300">Confirmed</p>`;
-                
-                if (isStagedInRoom) {
-                    s2.innerHTML = `<div class="w-8 h-8 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center mx-auto text-xs">✓</div><p class="text-[11px] font-extrabold text-white">2. Vault Pulled</p><p class="text-[9px] text-blue-300">Intake Ready</p>`;
-                    s3.innerHTML = `<div class="w-8 h-8 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center mx-auto text-xs">✓</div><p class="text-[11px] font-extrabold text-white">3. Room #${roomNum}</p><p class="text-[9px] text-emerald-300 font-bold">PIN: ${pin}</p>`;
-                    s4.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-500 text-white font-bold flex items-center justify-center mx-auto text-xs animate-pulse">●</div><p class="text-[11px] font-extrabold text-white">4. Awaiting Pickup</p><p class="text-[9px] text-blue-200">Customer Arrival</p>`;
-                } else {
-                    s2.innerHTML = `<div class="w-8 h-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center mx-auto text-xs animate-pulse">●</div><p class="text-[11px] font-extrabold text-white">2. Vault Pull</p><p class="text-[9px] text-blue-200">Moving to Staging</p>`;
-                    s3.innerHTML = `<div class="w-8 h-8 rounded-full bg-gray-800 text-gray-400 font-bold flex items-center justify-center mx-auto text-xs">3</div><p class="text-[11px] font-bold text-gray-400">3. Staging Room #${roomNum}</p><p class="text-[9px] text-gray-500">PIN: ${pin}</p>`;
-                    s4.innerHTML = `<div class="w-8 h-8 rounded-full bg-gray-800 text-gray-400 font-bold flex items-center justify-center mx-auto text-xs">4</div><p class="text-[11px] font-bold text-gray-400">4. Customer Pickup</p><p class="text-[9px] text-gray-500">Awaiting Arrival</p>`;
-                }
-            }
-        }
-
-        function renderActiveRequests() {
-            renderCustomerFulfillmentFlow();
             const panel = document.getElementById('active-requests-panel');
             const list = document.getElementById('active-requests-list');
 
@@ -2541,6 +2503,7 @@
             if (unsubscribeUsers) supabase.removeChannel(unsubscribeUsers);
             
             const handleProfileUpdate = (profileData) => {
+                currentProfile = profileData;
                 document.getElementById('loading-state').classList.add('hidden');
                 document.getElementById('main-content').classList.remove('hidden');
                 
@@ -2789,7 +2752,7 @@
         }
 
         function renderInventory() {
-            renderCustomerFulfillmentFlow();
+            renderFulfillmentFlows();
             const grid = document.getElementById('tote-grid');
             const empty = document.getElementById('empty-state');
             const tracker = document.getElementById('onboarding-tracker');
