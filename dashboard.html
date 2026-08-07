@@ -432,16 +432,25 @@
                 <p class="text-gray-500 text-xs mt-1">Your registered totes will populate here once you drop them off at the staging room.</p>
             </div>
 
-            <!-- Search & Filter Bar -->
-            <div class="flex flex-col sm:flex-row justify-between items-center bg-white rounded-2xl shadow-sm border border-gray-150 p-4 mb-4 gap-4">
-                <div class="relative w-full sm:w-1/2">
-                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            <!-- Search and Filter Bar -->
+            <div class="flex flex-col sm:flex-row gap-3 mb-4">
+                <div class="relative flex-1">
+                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                        <i data-lucide="search" class="h-4 w-4 text-gray-400"></i>
                     </div>
                     <input type="text" id="search-input" placeholder="Search by label or ID (e.g. CV-1004)..." class="block w-full pl-11 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors sm:text-sm" oninput="handleSearchFilter()">
                 </div>
-                <div class="w-full sm:w-auto">
-                    <select id="status-filter" class="block w-full pl-4 pr-10 py-3 text-base border border-gray-200 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-xl bg-gray-50 text-gray-700 font-semibold cursor-pointer" onchange="handleSearchFilter()">
+                <div class="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
+                    <!-- Customizable Sort Control -->
+                    <select id="sort-by-select" class="block w-full sm:w-auto pl-4 pr-10 py-3 text-base border border-gray-200 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-xl bg-gray-50 text-gray-700 font-semibold cursor-pointer" onchange="handleSortChange()">
+                        <option value="tote_number">Sort: Tote # (Natural 1, 2, 3...)</option>
+                        <option value="category">Sort: Category</option>
+                        <option value="label">Sort: Label (A - Z)</option>
+                        <option value="status">Sort: Status</option>
+                        <option value="created_at">Sort: Date Added</option>
+                    </select>
+                    <!-- Status Filter -->
+                    <select id="status-filter" class="block w-full sm:w-auto pl-4 pr-10 py-3 text-base border border-gray-200 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-xl bg-gray-50 text-gray-700 font-semibold cursor-pointer" onchange="handleSearchFilter()">
                         <option value="all">All Totes</option>
                         <option value="stored">In Storage</option>
                         <option value="staged">Ready for Pickup (Self-Service)</option>
@@ -2460,6 +2469,34 @@
                 .subscribe();
         }
 
+        // Helper to extract human tote numbers (e.g. Empty Tote #1 -> 1, Tote #2 -> 2)
+        function extractToteNumber(item) {
+            const label = item.label || '';
+            const code = item.tote_code || '';
+            
+            const matchLabel = label.match(/#?\s*(\d+)/i);
+            if (matchLabel) {
+                return parseInt(matchLabel[1], 10);
+            }
+            
+            const matchCode = code.match(/(\d+)/);
+            if (matchCode) {
+                return parseInt(matchCode[1], 10);
+            }
+            return 999999;
+        }
+
+        let currentSortMode = localStorage.getItem('cloudvault_tote_sort_mode') || 'tote_number';
+
+        function handleSortChange() {
+            const sortSel = document.getElementById('sort-by-select');
+            if (sortSel) {
+                currentSortMode = sortSel.value;
+                localStorage.setItem('cloudvault_tote_sort_mode', currentSortMode);
+            }
+            renderInventory();
+        }
+
         function handleSearchFilter() {
             renderInventory();
         }
@@ -2468,6 +2505,12 @@
             const grid = document.getElementById('tote-grid');
             const empty = document.getElementById('empty-state');
             const tracker = document.getElementById('onboarding-tracker');
+
+            // Sync sort selector value if loaded
+            const sortSel = document.getElementById('sort-by-select');
+            if (sortSel && sortSel.value !== currentSortMode) {
+                sortSel.value = currentSortMode;
+            }
 
             // Get filter values
             const searchInput = document.getElementById('search-input');
@@ -2509,8 +2552,28 @@
                 return matchesSearch && matchesStatus && matchesCategory;
             });
 
-            // Guarantee stable, fixed physical shelf ordering (sorted deterministically by tote_code)
-            filteredData.sort((a, b) => (a.tote_code || '').localeCompare(b.tote_code || '', undefined, { numeric: true, sensitivity: 'base' }));
+            // Customizable Sorting Logic
+            const sortMode = currentSortMode || 'tote_number';
+            filteredData.sort((a, b) => {
+                if (sortMode === 'tote_number') {
+                    const numA = extractToteNumber(a);
+                    const numB = extractToteNumber(b);
+                    if (numA !== numB) return numA - numB;
+                    return (a.label || '').localeCompare(b.label || '', undefined, { numeric: true });
+                } else if (sortMode === 'category') {
+                    const catA = getItemCategory(a) || 'Other';
+                    const catB = getItemCategory(b) || 'Other';
+                    if (catA !== catB) return catA.localeCompare(catB);
+                    return extractToteNumber(a) - extractToteNumber(b);
+                } else if (sortMode === 'label') {
+                    return (a.label || '').localeCompare(b.label || '', undefined, { numeric: true });
+                } else if (sortMode === 'status') {
+                    return (a.status || '').localeCompare(b.status || '');
+                } else if (sortMode === 'created_at') {
+                    return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+                }
+                return 0;
+            });
 
             tracker.classList.add('hidden');
             grid.classList.remove('hidden');
