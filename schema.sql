@@ -1759,9 +1759,52 @@ BEGIN
     'success', true,
     'tote_code', v_item.tote_code,
     'charged_uid', v_item.uid,
-    'fee', COALESCE(p_fee, 15.00)
+    'fee_charged', COALESCE(p_fee, 15.00)
   );
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ------------------------------------------------------------
+-- RLS DELETE POLICIES & DECOMMISSION RPC
+-- ------------------------------------------------------------
+DROP POLICY IF EXISTS "Executives delete facilities" ON public.facilities;
+CREATE POLICY "Executives delete facilities" ON public.facilities FOR DELETE USING (public.get_user_role() = 'executive'::user_role);
 
+DROP POLICY IF EXISTS "Executives delete operational_zones" ON public.operational_zones;
+CREATE POLICY "Executives delete operational_zones" ON public.operational_zones FOR DELETE USING (public.get_user_role() = 'executive'::user_role);
+
+DROP POLICY IF EXISTS "Executives delete service_areas" ON public.service_areas;
+CREATE POLICY "Executives delete service_areas" ON public.service_areas FOR DELETE USING (public.get_user_role() = 'executive'::user_role);
+
+CREATE OR REPLACE FUNCTION public.decommission_facility(p_facility_id TEXT)
+RETURNS JSONB AS $$
+DECLARE
+  v_fallback_id TEXT;
+  v_fac_name TEXT;
+BEGIN
+  SELECT name INTO v_fac_name FROM public.facilities WHERE id = p_facility_id;
+  IF v_fac_name IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Facility not found');
+  END IF;
+
+  SELECT id INTO v_fallback_id FROM public.facilities WHERE id != p_facility_id LIMIT 1;
+  IF v_fallback_id IS NULL THEN
+    v_fallback_id := 'facility_seattle_north';
+  END IF;
+
+  UPDATE public.users SET assigned_facility_id = v_fallback_id WHERE assigned_facility_id = p_facility_id;
+  UPDATE public.inventory SET facility_id = v_fallback_id WHERE facility_id = p_facility_id;
+
+  DELETE FROM public.warehouse_locations WHERE facility_id = p_facility_id;
+  DELETE FROM public.service_areas WHERE facility_id = p_facility_id;
+  DELETE FROM public.operational_zones WHERE facility_id = p_facility_id;
+  DELETE FROM public.facilities WHERE id = p_facility_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'deleted_id', p_facility_id,
+    'deleted_name', v_fac_name,
+    'reassigned_to', v_fallback_id
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

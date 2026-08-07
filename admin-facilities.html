@@ -1520,20 +1520,24 @@
             }
 
             try {
-                // Delete facility from Supabase
-                const { error: facErr } = await supabase.from('facilities').delete().eq('id', facId);
-                if (facErr) throw facErr;
+                // Call atomic RPC decommission_facility
+                const { data: rpcRes, error: rpcErr } = await supabase.rpc('decommission_facility', { p_facility_id: facId });
 
-                // Clean up associated zone if exists
-                await supabase.from('operational_zones').delete().eq('facility_id', facId);
-                if (currentLoadedZone && currentLoadedZone.id) {
-                    await supabase.from('operational_zones').delete().eq('id', currentLoadedZone.id);
+                if (rpcErr) {
+                    // Fallback direct delete
+                    const { error: facErr } = await supabase.from('facilities').delete().eq('id', facId);
+                    if (facErr) throw facErr;
+                    await supabase.from('operational_zones').delete().eq('facility_id', facId);
+                    if (currentLoadedZone && currentLoadedZone.id) {
+                        await supabase.from('operational_zones').delete().eq('id', currentLoadedZone.id);
+                    }
                 }
 
                 alert(`Successfully decommissioned and deleted ${facName}.`);
 
-                // Reset selection
+                // Reset selection to default facility (e.g. Seattle North)
                 localStorage.removeItem('cloudvault_selected_facility');
+                activeFacilityId = null;
                 await loadFacilitiesDropdown();
                 if (activeFacilityId) {
                     await loadSelectedFacilityConfig(activeFacilityId);
