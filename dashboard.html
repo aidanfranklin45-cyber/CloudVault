@@ -355,44 +355,18 @@
                 </div>
             </div>
 
-            <!-- Customer Delivery & Fulfillment Flow Tracker Card -->
-            <div id="customer-fulfillment-flow-card" class="hidden bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 shadow-xl border-2 border-blue-500/30 max-w-4xl mx-auto my-6 space-y-4">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-blue-800/60 pb-4">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-12 h-12 rounded-2xl bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center text-xl border border-blue-400/30">
-                            📦
-                        </div>
-                        <div>
-                            <h3 class="text-base font-extrabold text-white" id="ff-title">Tote Delivery &amp; Retrieval Flow</h3>
-                            <p class="text-xs text-blue-200 font-mono" id="ff-subtitle">Est. Delivery Window: Saturday, Aug 8 • 09:00 AM - 12:00 PM</p>
-                        </div>
-                    </div>
-                    <span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 px-3.5 py-1.5 rounded-xl uppercase tracking-wider shadow-sm" id="ff-status-badge">In Transit</span>
+            <!-- ══════════════════════════════════════════════
+                 ACTIVE FULFILLMENT FLOWS — one card per active job
+                 Rendered dynamically by renderFulfillmentFlows()
+                 ══════════════════════════════════════════════ -->
+            <div id="fulfillment-flows-section" class="hidden space-y-4 max-w-4xl mx-auto my-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xs font-extrabold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                        <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                        Active Fulfillment Status
+                    </h3>
                 </div>
-
-                <!-- Interactive 4-Step Progress Bar -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center pt-2">
-                    <div class="bg-gray-900/60 p-3 rounded-2xl border border-gray-800 space-y-1.5" id="ff-step-1">
-                        <div class="w-8 h-8 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center mx-auto text-xs">✓</div>
-                        <p class="text-[11px] font-extrabold text-white">1. Order Placed</p>
-                        <p class="text-[9px] text-blue-300">Confirmed</p>
-                    </div>
-                    <div class="bg-gray-900/60 p-3 rounded-2xl border border-gray-800 space-y-1.5" id="ff-step-2">
-                        <div class="w-8 h-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center mx-auto text-xs animate-pulse">●</div>
-                        <p class="text-[11px] font-extrabold text-white">2. Vault Staged</p>
-                        <p class="text-[9px] text-blue-300">Prepped at Hub</p>
-                    </div>
-                    <div class="bg-gray-900/60 p-3 rounded-2xl border border-gray-800 space-y-1.5" id="ff-step-3">
-                        <div class="w-8 h-8 rounded-full bg-gray-800 text-gray-500 font-bold flex items-center justify-center mx-auto text-xs">3</div>
-                        <p class="text-[11px] font-bold text-gray-400">3. Out for Delivery</p>
-                        <p class="text-[9px] text-gray-500">Driver En Route</p>
-                    </div>
-                    <div class="bg-gray-900/60 p-3 rounded-2xl border border-gray-800 space-y-1.5" id="ff-step-4">
-                        <div class="w-8 h-8 rounded-full bg-gray-800 text-gray-500 font-bold flex items-center justify-center mx-auto text-xs">4</div>
-                        <p class="text-[11px] font-bold text-gray-400">4. Delivered</p>
-                        <p class="text-[9px] text-gray-500">Customer Premises</p>
-                    </div>
-                </div>
+                <div id="fulfillment-flows-list" class="space-y-4"></div>
             </div>
 
             <!-- Setup Progress Timeline Stepper -->
@@ -446,22 +420,8 @@
                 <span>Today's 6:00 PM cutoff has passed. Retrieval staging requests will be processed tomorrow.</span>
             </div>
 
-            <!-- Active Retrievals / Staging Requests Panel -->
-            <div id="active-requests-panel" class="hidden space-y-4 max-w-4xl mx-auto mt-6">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <h3 class="text-sm font-extrabold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        Scheduled Retrievals & Access Keypad PINs
-                    </h3>
-                    <!-- Filter Pills for Retrievals -->
-                    <div id="retrieval-type-filter-bar" class="flex items-center gap-1.5 bg-gray-100/80 p-1 rounded-xl border border-gray-200">
-                        <button onclick="setRetrievalFilter('all')" id="rf-pill-all" class="rf-pill bg-white text-gray-900 font-extrabold text-[11px] px-3 py-1 rounded-lg shadow-sm transition-all">All</button>
-                        <button onclick="setRetrievalFilter('staging')" id="rf-pill-staging" class="rf-pill text-gray-600 hover:text-gray-900 font-bold text-[11px] px-3 py-1 rounded-lg transition-all">Self-Service Pickup</button>
-                        <button onclick="setRetrievalFilter('valet_delivery')" id="rf-pill-valet_delivery" class="rf-pill text-gray-600 hover:text-gray-900 font-bold text-[11px] px-3 py-1 rounded-lg transition-all">Valet Storage</button>
-                    </div>
-                </div>
-                <div id="active-requests-list" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
-            </div>
+            <!-- active-requests-panel kept for legacy JS compatibility -->
+            <div id="active-requests-panel" class="hidden"><div id="active-requests-list"></div></div>
 
             <!-- Empty Inventory State -->
             <div id="empty-state" class="hidden text-center py-16 bg-white border border-gray-150 rounded-3xl">
@@ -1429,44 +1389,259 @@
             return (Math.abs(hash) % (totalRooms || 2)) + 1;
         }
 
-        function renderCustomerFulfillmentFlow() {
-            const flowCard = document.getElementById('customer-fulfillment-flow-card');
-            if (!flowCard) return;
+        // ─────────────────────────────────────────────────────────────────────
+        // renderFulfillmentFlows()
+        // Renders one contextual flow card per active job. Four distinct flows:
+        //   A) New Tote Activation → Staging Room Pickup
+        //   B) New Tote Activation → Valet Delivery to Door
+        //   C) Stored Tote Retrieval → Staging Room Pickup
+        //   D) Stored Tote Retrieval → Valet Delivery to Door
+        // ─────────────────────────────────────────────────────────────────────
+        function renderFulfillmentFlows() {
+            const section = document.getElementById('fulfillment-flows-section');
+            const list = document.getElementById('fulfillment-flows-list');
+            if (!section || !list) return;
 
-            const activeReqs = currentRequests || [];
-            const activeInv = (currentInventory || []).filter(i => 
-                ['pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery'].includes(i.status)
-            );
+            const pin = (currentProfile && currentProfile.onboarding_pin) || (currentUser && currentUser.onboarding_pin) || '—';
+            const roomNum = getAssignedRoom(currentUser ? currentUser.id : null);
 
-            if (activeReqs.length === 0 && activeInv.length === 0) {
-                flowCard.classList.add('hidden');
+            // ── Classify inventory items ──────────────────────────────────────
+            // "New tote" = never stored (status is activation-path: pending-stage when it has no history of being stored)
+            // We approximate: if a tote is in activation flow the profile onboarding_status != 'active' 
+            // OR if all totes have status pending-stage/staged and profile is not yet 'active' then it's activation.
+            // Once onboarding is 'active' and a retrieval request exists, it's a retrieval flow.
+
+            const isActivationPhase = currentProfile && currentProfile.onboarding_status !== 'active';
+
+            // Items in active statuses
+            const stagingRoomItems = (currentInventory || []).filter(i => i.status === 'pending-stage' || i.status === 'staged');
+            const valetItems = (currentInventory || []).filter(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery');
+            const retrievalRequests = (currentRequests || []).filter(r => r.request_type === 'retrieval' || r.fulfillment_type === 'valet_delivery' || r.fulfillment_type === 'staging');
+
+            const cards = [];
+
+            // ── Flow A & B: New Tote Activation ──────────────────────────────
+            if (isActivationPhase && (stagingRoomItems.length > 0 || valetItems.length > 0)) {
+                if (stagingRoomItems.length > 0) {
+                    const isStagedReady = stagingRoomItems.some(i => i.status === 'staged');
+                    cards.push(buildFlowCard({
+                        flowType: 'activation-staging',
+                        icon: '📦',
+                        title: 'New Tote Activation — Staging Room Pickup',
+                        subtitle: isStagedReady
+                            ? `Your ${stagingRoomItems.length} tote(s) are ready in Staging Room #${roomNum}`
+                            : `Your ${stagingRoomItems.length} tote(s) are being prepped in the Activation Room`,
+                        badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'ACTIVATION IN PROGRESS',
+                        badgeColor: isStagedReady ? 'emerald' : 'blue',
+                        steps: [
+                            { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
+                            { label: '2. Intake Pull', sub: isStagedReady ? '✓ Intake complete' : 'Pulling from activation bay...', done: isStagedReady, active: !isStagedReady },
+                            { label: '3. Staging Room', sub: isStagedReady ? `Room #${roomNum} • PIN: ${pin}` : 'Awaiting intake pull...', done: isStagedReady, active: false },
+                            { label: '4. With Customer', sub: isStagedReady ? 'Awaiting your pickup' : 'Not yet ready', done: false, active: isStagedReady },
+                        ],
+                        totes: stagingRoomItems,
+                        pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, null, null) : null,
+                    }));
+                }
+
+                if (valetItems.length > 0) {
+                    const isOutForDelivery = valetItems.some(i => i.status === 'out-for-delivery');
+                    const valetReq = retrievalRequests.find(r => r.fulfillment_type === 'valet_delivery');
+                    const dateStr = valetReq && valetReq.target_date ? new Date(valetReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
+                    const timeStr = (valetReq && valetReq.time_slot) || '09:00 AM – 12:00 PM';
+                    cards.push(buildFlowCard({
+                        flowType: 'activation-valet',
+                        icon: '🚚',
+                        title: 'New Tote Activation — Valet Door Delivery',
+                        subtitle: isOutForDelivery ? `Driver en route • ${timeStr}` : `Dispatch window: ${dateStr} • ${timeStr}`,
+                        badgeText: isOutForDelivery ? 'OUT FOR DELIVERY' : 'DISPATCHED',
+                        badgeColor: isOutForDelivery ? 'orange' : 'blue',
+                        steps: [
+                            { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
+                            { label: '2. Intake Pull', sub: '✓ Hub bay allocated', done: true },
+                            { label: '3. On Truck', sub: isOutForDelivery ? 'Driver en route to you' : 'Loading on van', done: false, active: true },
+                            { label: '4. With Customer', sub: isOutForDelivery ? 'Arriving soon' : dateStr, done: false, active: false },
+                        ],
+                        totes: valetItems,
+                        pinBlock: buildValetBlock(timeStr, dateStr),
+                    }));
+                }
+            }
+
+            // ── Flow C & D: Stored Tote Retrieval ────────────────────────────
+            if (!isActivationPhase) {
+                // Separate requests by fulfillment type
+                const stagingReqs = retrievalRequests.filter(r => !r.fulfillment_type || r.fulfillment_type === 'staging');
+                const valetReqs = retrievalRequests.filter(r => r.fulfillment_type === 'valet_delivery');
+
+                // Also pick up unlinked inventory items
+                const linkedIds = new Set(retrievalRequests.flatMap(r => [...(r.requested_items || []), ...(r.requested_tote_codes || [])]));
+                const unlinkedStaging = stagingRoomItems.filter(i => !linkedIds.has(i.id) && !linkedIds.has(i.tote_code));
+                const unlinkedValet = valetItems.filter(i => !linkedIds.has(i.id) && !linkedIds.has(i.tote_code));
+
+                // Flow C: Staging Room Retrieval
+                if (stagingReqs.length > 0 || unlinkedStaging.length > 0) {
+                    const allStagingItems = [
+                        ...stagingRoomItems.filter(i => stagingReqs.some(r => (r.requested_items || []).includes(i.id) || (r.requested_tote_codes || []).includes(i.tote_code))),
+                        ...unlinkedStaging
+                    ];
+                    const isStagedReady = allStagingItems.some(i => i.status === 'staged');
+                    const stagingReq = stagingReqs[0];
+                    const dateStr = stagingReq && stagingReq.target_date ? new Date(stagingReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
+                    const timeStr = (stagingReq && stagingReq.time_slot) || '09:00 AM – 12:00 PM';
+                    cards.push(buildFlowCard({
+                        flowType: 'retrieval-staging',
+                        icon: '🚪',
+                        title: `Tote Retrieval — Staging Room #${roomNum} Pickup`,
+                        subtitle: isStagedReady
+                            ? `Totes are ready • Staging Room #${roomNum} • PIN: ${pin}`
+                            : `Vault pull in progress • ${dateStr} • ${timeStr}`,
+                        badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'VAULT PULL IN PROGRESS',
+                        badgeColor: isStagedReady ? 'emerald' : 'amber',
+                        steps: [
+                            { label: '1. Vault & Intake Pull', sub: isStagedReady ? '✓ Pulled from deep storage' : 'Pulling from storage bay...', done: isStagedReady, active: !isStagedReady },
+                            { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting vault pull...', done: isStagedReady, active: false },
+                            { label: '3. With Customer', sub: isStagedReady ? `PIN: ${pin} — Awaiting pickup` : dateStr, done: false, active: isStagedReady },
+                            { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
+                        ],
+                        totes: allStagingItems.length > 0 ? allStagingItems : stagingRoomItems,
+                        pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : null,
+                    }));
+                }
+
+                // Flow D: Valet Delivery Retrieval
+                if (valetReqs.length > 0 || unlinkedValet.length > 0) {
+                    const allValetItems = [
+                        ...valetItems.filter(i => valetReqs.some(r => (r.requested_items || []).includes(i.id) || (r.requested_tote_codes || []).includes(i.tote_code))),
+                        ...unlinkedValet
+                    ];
+                    const isOutForDelivery = allValetItems.some(i => i.status === 'out-for-delivery');
+                    const valetReq = valetReqs[0];
+                    const dateStr = valetReq && valetReq.target_date ? new Date(valetReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
+                    const timeStr = (valetReq && valetReq.time_slot) || '09:00 AM – 12:00 PM';
+                    cards.push(buildFlowCard({
+                        flowType: 'retrieval-valet',
+                        icon: '🚚',
+                        title: 'Tote Retrieval — Valet Door Delivery',
+                        subtitle: isOutForDelivery ? `Driver en route to you • ${timeStr}` : `Est. delivery: ${dateStr} • ${timeStr}`,
+                        badgeText: isOutForDelivery ? 'OUT FOR DELIVERY' : 'DISPATCHED',
+                        badgeColor: isOutForDelivery ? 'orange' : 'blue',
+                        steps: [
+                            { label: '1. Vault & Intake Pull', sub: '✓ Pulled from deep storage', done: true },
+                            { label: '2. On Truck', sub: isOutForDelivery ? 'Driver en route to you' : 'Loading on van', done: false, active: true },
+                            { label: '3. With Customer', sub: isOutForDelivery ? 'Arriving soon' : dateStr, done: false, active: false },
+                            { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
+                        ],
+                        totes: allValetItems.length > 0 ? allValetItems : valetItems,
+                        pinBlock: buildValetBlock(timeStr, dateStr),
+                    }));
+                }
+            }
+
+            if (cards.length === 0) {
+                section.classList.add('hidden');
                 return;
             }
 
-            flowCard.classList.remove('hidden');
+            section.classList.remove('hidden');
+            list.innerHTML = cards.join('');
+        }
 
-            const titleEl = document.getElementById('ff-title');
-            const subEl = document.getElementById('ff-subtitle');
-            const badgeEl = document.getElementById('ff-status-badge');
-            const s1 = document.getElementById('ff-step-1');
-            const s2 = document.getElementById('ff-step-2');
-            const s3 = document.getElementById('ff-step-3');
-            const s4 = document.getElementById('ff-step-4');
+        // ── Flow card builder helpers ─────────────────────────────────────────
+        function buildFlowCard({ icon, title, subtitle, badgeText, badgeColor, steps, totes, pinBlock }) {
+            const badgeClasses = {
+                emerald: 'text-emerald-400 bg-emerald-500/20 border-emerald-500/40',
+                blue:    'text-blue-300 bg-blue-500/20 border-blue-500/40',
+                amber:   'text-amber-300 bg-amber-500/20 border-amber-500/40',
+                orange:  'text-orange-300 bg-orange-500/20 border-orange-500/40',
+            };
+            const bc = badgeClasses[badgeColor] || badgeClasses.blue;
 
-            const isValet = activeReqs.some(r => r.fulfillment_type === 'valet_delivery' || r.request_type === 'valet_delivery') ||
-                            activeInv.some(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery');
+            const stepsHtml = steps.map((s, i) => {
+                let dot, textColor, subColor;
+                if (s.done) {
+                    dot = `<div class="w-9 h-9 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto text-sm font-extrabold flex-shrink-0">✓</div>`;
+                    textColor = 'text-white'; subColor = 'text-emerald-300';
+                } else if (s.active) {
+                    dot = `<div class="w-9 h-9 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto text-sm font-extrabold flex-shrink-0 animate-pulse">●</div>`;
+                    textColor = 'text-white'; subColor = 'text-blue-200';
+                } else {
+                    dot = `<div class="w-9 h-9 rounded-full bg-gray-800 text-gray-500 flex items-center justify-center mx-auto text-xs font-extrabold flex-shrink-0">${i + 1}</div>`;
+                    textColor = 'text-gray-400'; subColor = 'text-gray-600';
+                }
+                return `
+                    <div class="flex flex-col items-center text-center gap-1.5 min-w-0">
+                        ${dot}
+                        <p class="text-[11px] font-extrabold ${textColor} leading-tight">${s.label}</p>
+                        <p class="text-[9px] ${subColor} leading-tight px-1">${s.sub}</p>
+                    </div>`;
+            }).join('');
 
-            const isOutForDelivery = activeInv.some(i => i.status === 'out-for-delivery');
-            const isStagedInRoom = activeInv.some(i => i.status === 'staged');
-            const pin = (currentUser && currentUser.onboarding_pin) || '4829';
-            const roomNum = getAssignedRoom(currentUser ? currentUser.id : null);
+            const totesHtml = (totes || []).slice(0, 6).map(t => {
+                const label = t.label || t.tote_code || 'Tote';
+                return `<span class="text-[10px] font-bold text-blue-200 bg-gray-800 border border-gray-700 px-2 py-0.5 rounded-lg">${escapeHtml(label)}</span>`;
+            }).join('') + ((totes || []).length > 6 ? `<span class="text-[10px] text-gray-500">+${totes.length - 6} more</span>` : '');
 
-            // Compute dynamic delivery date
-            const req = activeReqs[0];
-            const targetDateStr = req && req.target_date ? new Date(req.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Saturday, Aug 8';
-            const timeSlotStr = (req && req.time_slot) || '09:00 AM - 12:00 PM';
+            return `
+            <div class="bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 text-white rounded-3xl p-5 shadow-xl border border-blue-500/25 space-y-4">
+                <!-- Header -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-blue-800/40 pb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-2xl bg-blue-500/20 flex items-center justify-center text-xl border border-blue-500/30 flex-shrink-0">${icon}</div>
+                        <div>
+                            <h4 class="text-sm font-extrabold text-white leading-tight">${title}</h4>
+                            <p class="text-[11px] text-blue-200 font-mono mt-0.5">${subtitle}</p>
+                        </div>
+                    </div>
+                    <span class="text-[10px] font-extrabold font-mono uppercase tracking-wider px-3 py-1.5 rounded-xl border ${bc} self-start sm:self-center whitespace-nowrap">${badgeText}</span>
+                </div>
 
-            if (isValet) {
+                <!-- 4-Step Progress -->
+                <div class="grid grid-cols-4 gap-2 relative">
+                    <!-- Progress bar track -->
+                    <div class="absolute top-4 left-[12.5%] right-[12.5%] h-0.5 bg-gray-700 hidden sm:block"></div>
+                    ${stepsHtml}
+                </div>
+
+                <!-- Totes in this flow -->
+                ${totesHtml ? `<div class="flex flex-wrap gap-1.5 pt-1 border-t border-blue-900/60">${totesHtml}</div>` : ''}
+
+                <!-- PIN / delivery block -->
+                ${pinBlock || ''}
+            </div>`;
+        }
+
+        function buildPinBlock(pin, roomNum, dateStr, timeStr) {
+            return `
+            <div class="bg-gray-950 border border-emerald-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4">
+                <div class="text-center flex-1">
+                    <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Staging Room #${roomNum} Access PIN</p>
+                    <div class="text-3xl font-mono font-black text-emerald-400 tracking-[0.25em]">${pin}</div>
+                    <button onclick="copyStagingPin()" class="mt-2 text-[10px] font-bold text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded-lg transition">Copy PIN</button>
+                </div>
+                ${dateStr ? `<div class="text-center flex-1 border-t sm:border-t-0 sm:border-l border-gray-800 pt-3 sm:pt-0 sm:pl-4">
+                    <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Your Pickup Window</p>
+                    <p class="text-sm font-extrabold text-white">${dateStr}</p>
+                    <p class="text-xs text-blue-300">${timeStr}</p>
+                </div>` : ''}
+            </div>`;
+        }
+
+        function buildValetBlock(timeStr, dateStr) {
+            return `
+            <div class="bg-gradient-to-r from-blue-900 to-indigo-900 border border-blue-700/60 rounded-2xl p-4 text-center space-y-1">
+                <p class="text-[10px] font-black text-amber-300 uppercase tracking-widest">🚚 Valet Delivery Window</p>
+                <p class="text-xl font-black text-white">${timeStr}</p>
+                <p class="text-xs text-blue-200">Driver scheduled for ${dateStr}</p>
+            </div>`;
+        }
+
+        function renderActiveRequests() {
+            renderFulfillmentFlows();
+            // legacy panel hidden — flows rendered by renderFulfillmentFlows above
+            const panel = document.getElementById('active-requests-panel');
+            if (panel) panel.classList.add('hidden');
+        }
                 titleEl.innerHTML = `🚚 Valet Tote Delivery &amp; Retrieval Flow`;
                 badgeEl.textContent = isOutForDelivery ? "OUT FOR DELIVERY" : "DISPATCHED";
                 subEl.textContent = `Est. Delivery Window: ${targetDateStr} • ${timeSlotStr}`;

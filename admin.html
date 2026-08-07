@@ -3502,12 +3502,21 @@
                     if (r.facility_id === queryFacilityId || r.users?.assigned_facility_id === queryFacilityId) {
                         const uId = r.uid || (r.users ? r.users.id : null);
                         if (uId) {
-                            activeValetUserMap[uId] = {
-                                uid: uId,
-                                users: r.users,
-                                time_slot: r.time_slot || '09:00 AM - 12:00 PM',
-                                requested_items: r.requested_items
-                            };
+                            if (!activeValetUserMap[uId]) {
+                                activeValetUserMap[uId] = {
+                                    uid: uId,
+                                    users: r.users,
+                                    target_date: r.target_date,
+                                    time_slot: r.time_slot || '09:00 AM - 12:00 PM',
+                                    requested_items: []
+                                };
+                            }
+                            const items = r.requested_items || r.requested_tote_codes || [];
+                            items.forEach(it => {
+                                if (!activeValetUserMap[uId].requested_items.includes(it)) {
+                                    activeValetUserMap[uId].requested_items.push(it);
+                                }
+                            });
                         }
                     }
                 });
@@ -3515,13 +3524,19 @@
                 (activeValetTotes || []).forEach(t => {
                     const uId = t.uid;
                     const u = valetUsersMap[uId];
-                    if (uId && !activeValetUserMap[uId]) {
-                        activeValetUserMap[uId] = {
-                            uid: uId,
-                            users: u || { name: `Customer ${uId.substring(0, 6)}` },
-                            time_slot: t.status === 'out-for-delivery' ? 'En Route (In Transit)' : 'Awaiting Vehicle Load',
-                            requested_items: [t.tote_code]
-                        };
+                    if (uId) {
+                        if (!activeValetUserMap[uId]) {
+                            activeValetUserMap[uId] = {
+                                uid: uId,
+                                users: u || { name: `Customer ${uId.substring(0, 6)}` },
+                                target_date: new Date().toISOString().split('T')[0],
+                                time_slot: t.status === 'out-for-delivery' ? '09:00 AM - 12:00 PM (En Route)' : '09:00 AM - 12:00 PM',
+                                requested_items: []
+                            };
+                        }
+                        if (!activeValetUserMap[uId].requested_items.includes(t.tote_code)) {
+                            activeValetUserMap[uId].requested_items.push(t.tote_code);
+                        }
                     }
                 });
 
@@ -3548,18 +3563,27 @@
                             const name = s.users?.name || `Customer ${s.uid.substring(0, 6)}`;
                             const zip = s.users?.zip || s.users?.active_zone || 'Local Area';
                             const slot = s.time_slot || '09:00 AM - 12:00 PM';
+                            const reqDate = s.target_date ? new Date(s.target_date.split('T')[0] + 'T12:00:00') : new Date();
+                            const dateStr = reqDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                            const toteCount = (s.requested_items || []).length || 1;
+
                             return `
-                                <div class="bg-gray-950 border border-gray-850 p-3 rounded-2xl flex items-center justify-between hover:border-blue-500/40 transition">
+                                <div class="bg-gray-950 border border-gray-850 p-3.5 rounded-2xl flex items-center justify-between hover:border-blue-500/40 transition">
                                     <div class="flex items-center space-x-3">
-                                        <div class="w-7 h-7 rounded-xl bg-blue-600/20 text-blue-400 font-bold text-xs flex items-center justify-center border border-blue-500/30 font-mono">
+                                        <div class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 font-bold text-xs flex items-center justify-center border border-blue-500/30 font-mono">
                                             #${idx + 1}
                                         </div>
                                         <div>
-                                            <h5 class="text-xs font-bold text-white">${name}</h5>
-                                            <p class="text-[10px] font-mono text-gray-400">ZIP ${zip} &bull; ${slot}</p>
+                                            <h5 class="text-xs font-extrabold text-white flex items-center gap-2">
+                                                ${name}
+                                                <span class="text-[9px] font-mono text-gray-500">ZIP ${zip}</span>
+                                            </h5>
+                                            <p class="text-[10px] font-mono text-amber-300 font-bold flex items-center gap-1 mt-0.5">
+                                                <i data-lucide="clock" class="w-3 h-3 text-amber-400 inline"></i> ${dateStr} &bull; ${slot}
+                                            </p>
                                         </div>
                                     </div>
-                                    <span class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">${(s.requested_items || s.requested_tote_codes || []).length || 1} Tote(s)</span>
+                                    <span class="text-xs font-black font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/30">${toteCount} TOTE(S)</span>
                                 </div>`;
                         }).join('');
                     }
