@@ -1445,7 +1445,8 @@ $$ LANGUAGE plpgsql;
 -- Secure Barcode Tote Scanning (Staff only) — Fulfillment-Type-Aware & Location-Deterministic
 CREATE OR REPLACE FUNCTION public.scan_tote(
   p_tote_code TEXT,
-  p_expected_status TEXT DEFAULT NULL
+  p_expected_status TEXT DEFAULT NULL,
+  p_target_location_code TEXT DEFAULT NULL
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_uid UUID;
@@ -1467,7 +1468,7 @@ BEGIN
     RAISE EXCEPTION 'Access Denied: Staff clearance required';
   END IF;
 
-  SELECT id, status, uid, activated, location_code, location_type INTO v_item 
+  SELECT id, status, uid, activated, location_code, location_type, facility_id INTO v_item 
   FROM public.inventory 
   WHERE tote_code = p_tote_code LIMIT 1;
 
@@ -1491,13 +1492,13 @@ BEGIN
   -- 1. Activation Step: Un-activated tote -> Lands in Intake Processing Zone (NOT vault!)
   IF v_item.activated = false THEN
     v_next_status := 'pending-stage'::public.inventory_status;
-    v_next_location_code := 'INTAKE-PROCESSING';
-    v_next_location_type := 'intake';
+    v_next_location_code := COALESCE(p_target_location_code, 'INTAKE-PROCESSING');
+    v_next_location_type := CASE WHEN p_target_location_code IS NOT NULL THEN 'vault' ELSE 'intake' END;
 
   -- 2. Vault Slotting or Staging Pull Step
   ELSIF v_item.status = 'pending-stage' THEN
     v_next_status := 'staged'::public.inventory_status;
-    v_next_location_code := 'STAGE-BAY-A1';
+    v_next_location_code := COALESCE(p_target_location_code, 'STAGE-BAY-A1');
     v_next_location_type := 'staging';
 
   ELSIF v_item.status = 'stored' THEN
@@ -1507,7 +1508,7 @@ BEGIN
       v_next_location_type := 'dispatch';
     ELSE
       v_next_status := 'pending-stage'::public.inventory_status;
-      v_next_location_code := 'INTAKE-PULL';
+      v_next_location_code := COALESCE(p_target_location_code, 'INTAKE-PULL');
       v_next_location_type := 'intake';
     END IF;
 
@@ -1528,7 +1529,7 @@ BEGIN
 
   ELSIF v_item.status = 'with-customer' THEN
     v_next_status := 'stored'::public.inventory_status;
-    v_next_location_code := COALESCE(v_item.location_code, 'V-A01-S01');
+    v_next_location_code := COALESCE(p_target_location_code, v_item.location_code, 'V-A01-S01');
     v_next_location_type := 'vault';
 
   -- Stored tote requested by customer
@@ -1539,18 +1540,28 @@ BEGIN
       v_next_location_type := 'dispatch';
     ELSIF v_has_pending_request THEN
       v_next_status := 'pending-stage'::public.inventory_status;
-      v_next_location_code := 'VAULT-PULL-BAY';
+      v_next_location_code := COALESCE(p_target_location_code, 'VAULT-PULL-BAY');
       v_next_location_type := 'vault';
     ELSE
       v_next_status := 'stored'::public.inventory_status;
-      v_next_location_code := COALESCE(v_item.location_code, 'V-A01-S01');
+      v_next_location_code := COALESCE(p_target_location_code, v_item.location_code, 'V-A01-S01');
       v_next_location_type := 'vault';
     END IF;
 
   ELSE
     v_next_status := 'stored'::public.inventory_status;
-    v_next_location_code := 'V-A01-S01';
+    v_next_location_code := COALESCE(p_target_location_code, 'V-A01-S01');
     v_next_location_type := 'vault';
+  END IF;
+
+  -- Overwrite with explicit scanned target location if provided
+  IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' THEN
+    v_next_location_code := p_target_location_code;
+    IF p_target_location_code ILIKE 'ROOM-%' OR p_target_location_code ILIKE '%STAGE%' OR p_target_location_code ILIKE '%BAY%' THEN
+      v_next_location_type := 'staging';
+    ELSE
+      v_next_location_type := 'vault';
+    END IF;
   END IF;
 
   -- Apply physical state transition

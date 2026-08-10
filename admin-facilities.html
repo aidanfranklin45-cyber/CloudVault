@@ -16,6 +16,9 @@
     <!-- Google Fonts Outfit -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
+    <!-- JsBarcode & QRCode for Location Barcode Labels -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         select option {
             background-color: #0b0f19 !important;
@@ -593,10 +596,17 @@
                             <p class="text-[11px] text-gray-400 font-mono" id="conf-vault-preview-text">
                                 Preview: <strong class="text-white">200</strong> vault locations (Format: <span class="text-cyan-400 font-bold">A1-B01-S1</span>)
                             </p>
-                            <button onclick="generateVaultLocationsUI()" id="btn-generate-vault-locations"
-                                class="w-full sm:w-auto bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-cyan-600/20 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider">
-                                <i data-lucide="database" class="w-4 h-4"></i> Generate &amp; Sync Vault Locations
-                            </button>
+                            <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                                <button onclick="openPrintLocationLabelModal('VAULT')"
+                                    class="w-full sm:w-auto bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer">
+                                    <i data-lucide="printer" class="w-4 h-4"></i>
+                                    <span>🖨️ Print Vault Barcodes</span>
+                                </button>
+                                <button onclick="generateVaultLocationsUI()" id="btn-generate-vault-locations"
+                                    class="w-full sm:w-auto bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-cyan-600/20 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider">
+                                    <i data-lucide="database" class="w-4 h-4"></i> Generate &amp; Sync Vault Locations
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -627,10 +637,17 @@
                             <p class="text-[11px] text-gray-400 font-mono" id="conf-staging-preview-text">
                                 Preview: <strong class="text-white">10</strong> staging locations (Format: <span class="text-emerald-400 font-bold">ROOM-1-BAY-01</span>)
                             </p>
-                            <button onclick="generateStagingLocationsUI()" id="btn-generate-staging-locations"
-                                class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider">
-                                <i data-lucide="plus-circle" class="w-4 h-4"></i> Generate &amp; Sync Staging Locations
-                            </button>
+                            <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                                <button onclick="openPrintLocationLabelModal('STAGING')"
+                                    class="w-full sm:w-auto bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer">
+                                    <i data-lucide="printer" class="w-4 h-4"></i>
+                                    <span>🖨️ Print Staging Barcodes</span>
+                                </button>
+                                <button onclick="generateStagingLocationsUI()" id="btn-generate-staging-locations"
+                                    class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider">
+                                    <i data-lucide="plus-circle" class="w-4 h-4"></i> Generate &amp; Sync Staging Locations
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1638,13 +1655,18 @@
         // ===== SECTION 2: PHYSICAL LAYOUT & VAULT RACKS TELEMETRY =====
         async function loadFacilityTelemetry(facilityId) {
             try {
-                const { count: toteCount } = await supabase.from('inventory')
+                const { count: totalLocations } = await supabase.from('warehouse_locations')
                     .select('*', { count: 'exact', head: true })
+                    .eq('facility_id', facilityId)
+                    .eq('zone_type', 'VAULT');
+
+                const { data: storedTotes } = await supabase.from('inventory')
+                    .select('id, location_code, status')
                     .eq('facility_id', facilityId)
                     .in('status', ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery']);
 
-                const storedCount = toteCount || 0;
-                const maxCap = currentLoadedFac?.tote_capacity || 2000;
+                const storedCount = (storedTotes || []).length;
+                const maxCap = totalLocations > 0 ? totalLocations : (currentLoadedFac?.tote_capacity || 2000);
                 const percent = Math.min(100, Math.round((storedCount / maxCap) * 100));
 
                 const badgeEl = document.getElementById('telemetry-capacity-badge');
@@ -1656,25 +1678,75 @@
                 const barEl = document.getElementById('telemetry-occupancy-bar');
                 if (barEl) barEl.style.width = `${percent}%`;
 
-                // Render Vault Aisle Matrix (Aisles V-A01 to V-A04)
+                // Query warehouse_locations for Vault locations to extract actual aisles dynamically
+                const { data: vaultLocs } = await supabase.from('warehouse_locations')
+                    .select('identifier, is_occupied')
+                    .eq('facility_id', facilityId)
+                    .eq('zone_type', 'VAULT');
+
                 const matrixEl = document.getElementById('vault-racks-matrix');
                 if (matrixEl) {
-                    const aisles = ['V-A01', 'V-A02', 'V-A03', 'V-A04'];
-                    matrixEl.innerHTML = aisles.map((aisle, idx) => {
-                        const aisleCapacity = Math.round(maxCap / 4);
-                        const aisleOccupied = Math.min(aisleCapacity, Math.max(0, Math.round(storedCount / 4) + (idx % 2 === 0 ? 10 : -10)));
-                        const aislePct = Math.round((aisleOccupied / aisleCapacity) * 100);
+                    if (vaultLocs && vaultLocs.length > 0) {
+                        const aisleMap = {};
+                        vaultLocs.forEach(loc => {
+                            const code = loc.identifier || '';
+                            let aisleKey = 'V-A01';
+                            if (code.includes('-')) {
+                                const parts = code.split('-');
+                                aisleKey = parts[0];
+                            } else if (/^A\d+/i.test(code)) {
+                                const match = code.match(/^(A\d+)/i);
+                                aisleKey = match ? match[1] : 'V-A01';
+                            }
+                            if (!aisleMap[aisleKey]) aisleMap[aisleKey] = { total: 0, occupied: 0 };
+                            aisleMap[aisleKey].total += 1;
+                        });
 
-                        return `
-                            <div class="bg-gray-950 p-3 rounded-2xl border border-gray-800 space-y-1.5">
-                                <span class="text-xs font-black text-cyan-400 font-mono">${aisle}</span>
-                                <div class="w-full h-1.5 bg-gray-900 rounded-full overflow-hidden">
-                                    <div class="h-full bg-cyan-500 rounded-full" style="width: ${aislePct}%;"></div>
+                        (storedTotes || []).forEach(t => {
+                            const code = t.location_code || '';
+                            if (code) {
+                                const parts = code.split('-');
+                                const aisleKey = parts[0] || 'V-A01';
+                                if (aisleMap[aisleKey]) {
+                                    aisleMap[aisleKey].occupied += 1;
+                                }
+                            }
+                        });
+
+                        const aisleKeys = Object.keys(aisleMap);
+                        matrixEl.innerHTML = aisleKeys.map(aisle => {
+                            const aisleTotal = aisleMap[aisle].total;
+                            const aisleOccupied = Math.min(aisleTotal, aisleMap[aisle].occupied);
+                            const aislePct = aisleTotal > 0 ? Math.round((aisleOccupied / aisleTotal) * 100) : 0;
+
+                            return `
+                                <div class="bg-gray-950 p-3 rounded-2xl border border-gray-800 space-y-1.5">
+                                    <span class="text-xs font-black text-cyan-400 font-mono">${aisle}</span>
+                                    <div class="w-full h-1.5 bg-gray-900 rounded-full overflow-hidden">
+                                        <div class="h-full bg-cyan-500 rounded-full" style="width: ${aislePct}%;"></div>
+                                    </div>
+                                    <span class="text-[9px] font-mono text-gray-500">${aisleOccupied}/${aisleTotal} (${aislePct}%)</span>
                                 </div>
-                                <span class="text-[9px] font-mono text-gray-500">${aisleOccupied}/${aisleCapacity} (${aislePct}%)</span>
-                            </div>
-                        `;
-                    }).join('');
+                            `;
+                        }).join('');
+                    } else {
+                        const aisles = ['V-A01', 'V-A02', 'V-A03', 'V-A04'];
+                        matrixEl.innerHTML = aisles.map(aisle => {
+                            const aisleCapacity = Math.round(maxCap / 4);
+                            const aisleOccupied = (storedTotes || []).filter(t => (t.location_code || '').startsWith(aisle)).length;
+                            const aislePct = aisleCapacity > 0 ? Math.round((aisleOccupied / aisleCapacity) * 100) : 0;
+
+                            return `
+                                <div class="bg-gray-950 p-3 rounded-2xl border border-gray-800 space-y-1.5">
+                                    <span class="text-xs font-black text-cyan-400 font-mono">${aisle}</span>
+                                    <div class="w-full h-1.5 bg-gray-900 rounded-full overflow-hidden">
+                                        <div class="h-full bg-cyan-500 rounded-full" style="width: ${aislePct}%;"></div>
+                                    </div>
+                                    <span class="text-[9px] font-mono text-gray-500">${aisleOccupied}/${aisleCapacity} (${aislePct}%)</span>
+                                </div>
+                            `;
+                        }).join('');
+                    }
                 }
             } catch (e) {
                 console.error("Telemetry error:", e);
@@ -2297,6 +2369,309 @@
                 alert("Failed to decommission facility: " + (err.message || JSON.stringify(err)));
             }
         }
+
+        // =========================================================================
+        // LOCATION BARCODE PRINTING MODULE (Dual QR + CODE128 Format)
+        // =========================================================================
+        let currentPrintedLocationType = 'VAULT';
+        let currentLoadedLocations = [];
+
+        async function openPrintLocationLabelModal(zoneType = 'VAULT') {
+            currentPrintedLocationType = zoneType;
+            const modal = document.getElementById('print-location-modal');
+            if (modal) modal.classList.remove('hidden');
+
+            const titleEl = document.getElementById('print-loc-modal-title');
+            if (titleEl) titleEl.textContent = `Print Location Barcodes (${zoneType === 'VAULT' ? 'Vault Racks' : 'Staging Lockers'})`;
+
+            const facId = currentLoadedFac?.id || activeFacilityId;
+            if (!facId) {
+                alert("Please select a facility first.");
+                return;
+            }
+
+            try {
+                const { data: locs } = await supabase.from('warehouse_locations')
+                    .select('identifier, zone_type')
+                    .eq('facility_id', facId)
+                    .eq('zone_type', zoneType)
+                    .order('identifier', { ascending: true });
+
+                if (locs && locs.length > 0) {
+                    currentLoadedLocations = locs.map(l => l.identifier);
+                } else {
+                    currentLoadedLocations = zoneType === 'VAULT' 
+                        ? ['V-A01-S01', 'V-A01-S02', 'V-A01-S03', 'V-A01-S04', 'V-A02-S01', 'V-A02-S02']
+                        : ['ROOM-1-BAY-01', 'ROOM-1-BAY-02', 'ROOM-1-BAY-03', 'ROOM-1-BAY-04'];
+                }
+
+                const input = document.getElementById('print-loc-code-input');
+                if (input) input.value = currentLoadedLocations.join(', ');
+
+                renderLocationLabelPreview();
+            } catch (e) {
+                console.error("Error loading location barcodes:", e);
+            }
+        }
+
+        function closePrintLocationLabelModal() {
+            const modal = document.getElementById('print-location-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function generateLocationQRDataURL(text) {
+            return new Promise((resolve) => {
+                const tempDiv = document.createElement('div');
+                tempDiv.style.position = 'absolute';
+                tempDiv.style.left = '-9999px';
+                document.body.appendChild(tempDiv);
+
+                try {
+                    if (typeof QRCode === 'function') {
+                        new QRCode(tempDiv, {
+                            text: text,
+                            width: 250,
+                            height: 250,
+                            correctLevel: (window.QRCode && QRCode.CorrectLevel) ? QRCode.CorrectLevel.M : 0
+                        });
+
+                        setTimeout(() => {
+                            const canvas = tempDiv.querySelector('canvas');
+                            const img = tempDiv.querySelector('img');
+                            let url = '';
+                            if (img && img.src && img.src.startsWith('data:')) {
+                                url = img.src;
+                            } else if (canvas) {
+                                url = canvas.toDataURL('image/png');
+                            }
+                            if (!url) {
+                                url = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(text)}&ecc=M&margin=1`;
+                            }
+                            if (tempDiv.parentNode) document.body.removeChild(tempDiv);
+                            resolve(url);
+                        }, 40);
+                    } else {
+                        const url = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(text)}&ecc=M&margin=1`;
+                        if (tempDiv.parentNode) document.body.removeChild(tempDiv);
+                        resolve(url);
+                    }
+                } catch (e) {
+                    if (tempDiv.parentNode) document.body.removeChild(tempDiv);
+                    resolve(`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(text)}&ecc=M&margin=1`);
+                }
+            });
+        }
+
+        async function renderLocationLabelPreview() {
+            const input = document.getElementById('print-loc-code-input');
+            const previewBox = document.getElementById('loc-label-preview-box');
+            const counter = document.getElementById('loc-sheet-counter');
+            if (!previewBox) return;
+
+            const rawVal = input ? input.value.trim() : '';
+            let codes = rawVal.split(',').map(c => c.trim()).filter(Boolean);
+            if (codes.length === 0) codes = ['V-A01-S01'];
+
+            if (counter) {
+                const sheetCount = Math.ceil(codes.length / 4);
+                counter.textContent = `${codes.length} Locations Selected (${sheetCount} Sheet${sheetCount > 1 ? 's' : ''} — 4 Tags/Page)`;
+            }
+
+            const todayStr = new Date().toLocaleDateString();
+            const firstCode = codes[0] || 'V-A01-S01';
+            const qrDataUrl = await generateLocationQRDataURL(firstCode);
+            const facName = (currentLoadedFac?.name || 'CloudVault Facility').toUpperCase();
+
+            previewBox.innerHTML = `
+                <div style="border: 2px dashed #000; padding: 12px; width: 100%; max-width: 420px; background: #ffffff; color: #000000; border-radius: 10px; font-family: monospace; box-sizing: border-box;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px;">
+                        <div>
+                            <strong style="font-size: 15px; text-transform: uppercase; font-weight: 900;">${facName}</strong>
+                            <span style="display: block; font-size: 9px; color: #333; font-family: sans-serif;">Physical Location Tag (${currentPrintedLocationType})</span>
+                        </div>
+                        <span style="font-size: 10px; font-weight: bold; background: #000; color: #fff; padding: 3px 8px; border-radius: 4px;">LOCATION RACK</span>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 90px;">
+                        <div style="flex: 1 1 auto; overflow: hidden; max-width: calc(100% - 110px); text-align: center;">
+                            <svg id="loc-preview-barcode-svg" style="max-width: 100%; height: 38px;"></svg>
+                            <div style="font-size: 16px; font-weight: 900; letter-spacing: 2px; margin-top: 2px; font-family: monospace;">${firstCode}</div>
+                        </div>
+                        <div style="flex: 0 0 100px; width: 100px; max-width: 100px; min-width: 100px; text-align: center; border-left: 2px solid #000; padding-left: 10px; box-sizing: border-box;">
+                            <img src="${qrDataUrl}" style="width: 75px; height: 75px; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto; object-fit: contain; image-rendering: pixelated;" alt="Location QR Code" />
+                            <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 2px; font-family: sans-serif;">FAST-SCAN QR</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 9px; color: #000; margin-top: 8px; border-top: 1px solid #000; padding-top: 4px; font-weight: bold;">
+                        <span>TYPE: ${currentPrintedLocationType}</span>
+                        <span>DATE: ${todayStr}</span>
+                        <span>STATUS: ACTIVE</span>
+                    </div>
+                </div>
+            `;
+
+            setTimeout(() => {
+                const barcodeEl = document.getElementById('loc-preview-barcode-svg');
+                if (barcodeEl && typeof JsBarcode === 'function') {
+                    try {
+                        JsBarcode("#loc-preview-barcode-svg", firstCode, {
+                            format: "CODE128",
+                            width: 1.6,
+                            height: 38,
+                            displayValue: false,
+                            margin: 2
+                        });
+                    } catch (e) { }
+                }
+            }, 50);
+        }
+
+        async function triggerPrintLocationLabels() {
+            const input = document.getElementById('print-loc-code-input');
+            const inputVal = (input ? input.value.trim() : '') || 'V-A01-S01';
+            let codesToPrint = inputVal.split(',').map(c => c.trim()).filter(Boolean);
+
+            if (codesToPrint.length === 0) return;
+
+            const printWin = window.open('', '_blank');
+            if (!printWin) {
+                alert("Please allow popups to print location barcode labels.");
+                return;
+            }
+
+            const todayStr = new Date().toLocaleDateString();
+            const facName = (currentLoadedFac?.name || 'CloudVault Facility').toUpperCase();
+
+            const qrPromises = codesToPrint.map(code => generateLocationQRDataURL(code));
+            const qrUrls = await Promise.all(qrPromises);
+
+            let labelsHtml = '';
+            for (let i = 0; i < codesToPrint.length; i++) {
+                const c = codesToPrint[i];
+                const qrUrl = qrUrls[i];
+                labelsHtml += `
+                    <div class="label-card">
+                        <div class="header">
+                            <div>
+                                <div class="brand">${facName}</div>
+                                <div class="sub font-sans">Physical Location Barcode (${currentPrintedLocationType})</div>
+                            </div>
+                            <div class="badge">RACK TAG</div>
+                        </div>
+                        <div class="body">
+                            <div class="barcode-box">
+                                <svg id="barcode-loc-${i}" class="barcode-svg"></svg>
+                                <div class="code-text">${c}</div>
+                            </div>
+                            <div class="qr-box">
+                                <img src="${qrUrl}" class="qr-img" />
+                                <div class="qr-sub">FAST-SCAN QR</div>
+                            </div>
+                        </div>
+                        <div class="footer font-sans">
+                            <span>ZONE: ${currentPrintedLocationType}</span>
+                            <span>DATE: ${todayStr}</span>
+                            <span>STATUS: ACTIVE</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            printWin.document.write(\`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>CloudVault Location Barcode Sheet</title>
+                    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+                    <style>
+                        @page { size: letter portrait; margin: 0.4in; }
+                        body { font-family: monospace; background: #fff; color: #000; margin: 0; padding: 0; }
+                        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3in; page-break-after: always; }
+                        .label-card { border: 2.5px dashed #000; padding: 12px; background: #fff; border-radius: 8px; box-sizing: border-box; height: 2.3in; display: flex; flex-direction: column; justify-content: space-between; page-break-inside: avoid; }
+                        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 4px; }
+                        .brand { font-size: 13px; font-weight: 900; text-transform: uppercase; }
+                        .sub { font-size: 8px; color: #333; }
+                        .badge { font-size: 9px; font-weight: bold; background: #000; color: #fff; padding: 2px 6px; border-radius: 3px; }
+                        .body { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 1.2in; }
+                        .barcode-box { flex: 1; text-align: center; overflow: hidden; }
+                        .barcode-svg { max-width: 100%; height: 42px; }
+                        .code-text { font-size: 15px; font-weight: 900; letter-spacing: 1.5px; margin-top: 2px; }
+                        .qr-box { flex: 0 0 85px; width: 85px; text-align: center; border-left: 2px solid #000; padding-left: 6px; }
+                        .qr-img { width: 68px; height: 68px; border: 1px solid #000; padding: 1px; object-fit: contain; }
+                        .qr-sub { font-size: 7px; font-weight: bold; margin-top: 1px; }
+                        .footer { display: flex; justify-content: space-between; font-size: 8px; font-weight: bold; border-top: 1px solid #000; padding-top: 4px; }
+                        .font-sans { font-family: sans-serif; }
+                    </style>
+                </head>
+                <body>
+                    <div class="grid-container">
+                        \${labelsHtml}
+                    </div>
+                    <script>
+                        window.onload = function() {
+                            const codes = \${JSON.stringify(codesToPrint)};
+                            codes.forEach((c, idx) => {
+                                try {
+                                    JsBarcode("#barcode-loc-" + idx, c, {
+                                        format: "CODE128",
+                                        width: 1.6,
+                                        height: 42,
+                                        displayValue: false,
+                                        margin: 2
+                                    });
+                                } catch(e) {}
+                            });
+                            setTimeout(function() {
+                                window.print();
+                            }, 400);
+                        };
+                    <\/script>
+                </body>
+                </html>
+            \`);
+            printWin.document.close();
+        }
     </script>
+
+    <!-- PRINTABLE LOCATION BARCODES MODAL -->
+    <div id="print-location-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-gray-950 border border-gray-800 rounded-3xl max-w-2xl w-full p-6 space-y-6 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-gray-850 pb-4">
+                <div class="flex items-center space-x-2.5">
+                    <i data-lucide="printer" class="w-5 h-5 text-cyan-400"></i>
+                    <h3 class="text-base font-extrabold text-white" id="print-loc-modal-title">Print Location Barcodes</h3>
+                </div>
+                <button onclick="closePrintLocationLabelModal()" class="text-gray-500 hover:text-white transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Target Locations (Comma Separated)</label>
+                    <textarea id="print-loc-code-input" oninput="renderLocationLabelPreview()" rows="3"
+                        class="w-full bg-gray-900 border border-gray-800 rounded-xl p-3 text-xs font-mono text-cyan-300 focus:border-cyan-500 outline-none transition"
+                        placeholder="V-A01-S01, V-A01-S02, ROOM-1-BAY-01..."></textarea>
+                    <p class="text-[10px] text-gray-500 mt-1 font-mono" id="loc-sheet-counter">0 Locations Selected</p>
+                </div>
+
+                <!-- Label Preview Box -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold uppercase text-gray-400">Print Label Preview (Industrial Weatherproof Dual Tag)</label>
+                    <div id="loc-label-preview-box" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex justify-center items-center min-h-[160px]">
+                        <!-- Rendered preview card -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end space-x-3 pt-2 border-t border-gray-850">
+                <button onclick="closePrintLocationLabelModal()" class="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-gray-400 text-xs font-bold rounded-xl transition">
+                    Cancel
+                </button>
+                <button onclick="triggerPrintLocationLabels()" class="px-5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs rounded-xl shadow-lg flex items-center gap-1.5 cursor-pointer">
+                    <i data-lucide="printer" class="w-4 h-4"></i> Print Location Barcode Sheet
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
