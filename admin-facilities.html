@@ -1523,10 +1523,10 @@
                     };
                 }
 
-                // Dynamically determine total staging rooms from RPC, facility specs, or warehouse locations
-                let numRooms = resData.numStagingRooms || currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 3;
+                // Dynamically calculate total staging rooms strictly from RPC, facility record, or warehouse_locations
+                let numRooms = (resData && typeof resData.numStagingRooms === 'number' && resData.numStagingRooms > 0) ? resData.numStagingRooms : (currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 0);
                 
-                // Check if warehouse_locations has distinct STAGING room identifiers
+                // Query warehouse_locations for distinct STAGING room numbers
                 const { data: stgLocs } = await supabase.from('warehouse_locations')
                     .select('identifier')
                     .eq('facility_id', facilityId)
@@ -1541,8 +1541,17 @@
                     if (maxRoom > numRooms) numRooms = maxRoom;
                 }
 
-                numRooms = Math.max(numRooms, 3);
                 const reservations = resData.reservations || [];
+
+                if (numRooms === 0) {
+                    gridEl.innerHTML = `<div class="col-span-full bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2 font-mono">
+                        <i data-lucide="door-closed" class="w-8 h-8 text-amber-400 mx-auto"></i>
+                        <p class="text-sm text-gray-300 font-bold">No Staging Rooms Configured for this Facility</p>
+                        <p class="text-xs text-gray-500">Use the Warehouse Layout Configurator below or facility specs above to define staging rooms.</p>
+                    </div>`;
+                    lucide.createIcons();
+                    return;
+                }
 
                 let html = '';
                 for (let r = 1; r <= numRooms; r++) {

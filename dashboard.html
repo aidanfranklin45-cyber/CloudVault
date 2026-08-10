@@ -3088,11 +3088,25 @@
             if (!selectEl || !dateStr) return;
 
             const targetFacId = facilityId || 'facility_seattle_north';
-            let stagingCap = 2; // Default limit
+            let stagingCap = 0;
 
             try {
                 const { data: fac } = await supabase.from('facilities').select('num_staging_rooms, staging_rooms').eq('id', targetFacId).maybeSingle();
-                if (fac) stagingCap = fac.num_staging_rooms || fac.staging_rooms || 2;
+                if (fac) stagingCap = fac.num_staging_rooms || fac.staging_rooms || 0;
+
+                const { data: stgLocs } = await supabase.from('warehouse_locations')
+                    .select('identifier')
+                    .eq('facility_id', targetFacId)
+                    .eq('zone_type', 'STAGING');
+
+                if (stgLocs && stgLocs.length > 0) {
+                    const roomNums = stgLocs.map(l => {
+                        const match = (l.identifier || '').match(/ROOM-(\d+)/i);
+                        return match ? parseInt(match[1], 10) : 1;
+                    });
+                    const maxRoom = Math.max(...roomNums, 0);
+                    if (maxRoom > stagingCap) stagingCap = maxRoom;
+                }
             } catch (e) {
                 console.warn('Could not fetch staging rooms capacity:', e);
             }
