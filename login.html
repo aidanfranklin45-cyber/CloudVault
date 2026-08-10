@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CloudVault | Sign In</title>
+    <!-- Favicon -->
     <link rel="icon" type="image/png" href="logo.png">
+    <link rel="shortcut icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
     <!-- PostHog Analytics -->
     <script>
         !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}var c=e;for(void 0!==a?c=e[a]=[]:a="posthog",c.people=c.people||[],c.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},c.people.toString=function(){return c.toString(1)+".people (stub)"},p="capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures onSessionId".split(" "),r=0;r<p.length;r++)g(c,p[r]);e._i.push([i,s,a])},e.__SV=1.0,o=t.createElement("script"),o.type="text/javascript",o.async=!0,o.src="https://us-assets.i.posthog.com/static/array.js",n=t.getElementsByTagName("script")[0],n.parentNode.insertBefore(o,n))}(document,window.posthog||[]);
@@ -25,7 +28,10 @@
     <!-- Header -->
     <header class="bg-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <a href="index.html" class="text-2xl font-bold tracking-tighter text-blue-600">CloudVault</a>
+            <a href="index.html" class="text-2xl font-bold tracking-tighter text-blue-600 flex items-center gap-2">
+                <img src="logo.png" alt="CloudVault Logo" class="w-8 h-8 object-contain rounded">
+                <span>CloudVault</span>
+            </a>
             <a href="index.html" class="text-sm font-semibold text-gray-500 hover:text-gray-900">← Back to Home</a>
         </div>
     </header>

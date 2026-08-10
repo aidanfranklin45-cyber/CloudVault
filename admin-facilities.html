@@ -4,7 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CloudVault — Executive Facility & Economic Configuration Portal</title>
+    <title>CloudVault — Executive Facility &amp; Economic Configuration Portal</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="shortcut icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
@@ -115,10 +119,7 @@
             <!-- Brand & Nav Tabs -->
             <div class="flex items-center space-x-6">
                 <a href="admin.html" class="flex items-center space-x-3 group">
-                    <div
-                        class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-105 transition">
-                        <i data-lucide="shield" class="w-5 h-5 text-white"></i>
-                    </div>
+                    <img src="logo.png" alt="CloudVault Logo" class="w-10 h-10 object-contain rounded-2xl group-hover:scale-105 transition shadow-lg shadow-blue-500/20">
                     <div>
                         <h1 class="text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
                             CloudVault <span
@@ -903,6 +904,34 @@
                 .replace(/'/g, '&#039;');
         }
 
+        function showToast(message, type = 'success') {
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                container.className = 'fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl border text-xs font-bold transition-all transform translate-y-2 opacity-0 ${
+                type === 'error' 
+                    ? 'bg-gray-900 border-red-500/50 text-red-300' 
+                    : 'bg-gray-900 border-emerald-500/50 text-emerald-300'
+            }`;
+            toast.innerHTML = `<span>${message}</span>`;
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
             const dateInput = document.getElementById('staging-date-select');
@@ -1033,7 +1062,182 @@
             await loadMarketZoneData(fac.id);
             await loadFacilityTelemetry(fac.id);
             await loadStagingRoomSchedule(fac.id, selectedStagingDate);
+            await loadWarehouseLocationCount(fac.id);
             calculatePnL();
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // WAREHOUSE LAYOUT CONFIGURATOR — Matrix Generation & Batch Sync Logic
+        // ─────────────────────────────────────────────────────────────────────
+        function generateVaultLocations(facilityId, totalAisles, baysPerAisle, shelvesPerBay) {
+            const locations = [];
+            for (let a = 1; a <= totalAisles; a++) {
+                for (let b = 1; b <= baysPerAisle; b++) {
+                    for (let s = 1; s <= shelvesPerBay; s++) {
+                        const bayStr = String(b).padStart(2, '0');
+                        const shelfStr = String(s).padStart(1, '0');
+                        const identifier = `A${a}-B${bayStr}-S${shelfStr}`;
+                        locations.push({
+                            facility_id: facilityId,
+                            zone_type: 'VAULT',
+                            identifier: identifier,
+                            is_occupied: false
+                        });
+                    }
+                }
+            }
+            return locations;
+        }
+
+        function updateVaultPreviewText() {
+            const aisles = parseInt(document.getElementById('conf-vault-aisles').value) || 0;
+            const bays = parseInt(document.getElementById('conf-vault-bays').value) || 0;
+            const shelves = parseInt(document.getElementById('conf-vault-shelves').value) || 0;
+            const total = aisles * bays * shelves;
+            const el = document.getElementById('conf-vault-preview-text');
+            if (el) {
+                el.innerHTML = `Preview: <strong class="text-white">${total}</strong> vault locations (Format: <span class="text-cyan-400 font-bold">A1-B01-S1</span>)`;
+            }
+        }
+
+        function updateStagingPreviewText() {
+            const roomId = (document.getElementById('conf-staging-room-id').value || 'ROOM-1').trim().toUpperCase();
+            const bays = parseInt(document.getElementById('conf-staging-room-bays').value) || 0;
+            const el = document.getElementById('conf-staging-preview-text');
+            if (el) {
+                el.innerHTML = `Preview: <strong class="text-white">${bays}</strong> staging locations (Format: <span class="text-emerald-400 font-bold">${escapeHtml(roomId)}-BAY-01</span>)`;
+            }
+        }
+
+        async function loadWarehouseLocationCount(facilityId) {
+            const badge = document.getElementById('conf-total-locations-badge');
+            if (!badge || !facilityId) return;
+
+            try {
+                const { count, error } = await supabase
+                    .from('warehouse_locations')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('facility_id', facilityId);
+
+                if (!error && count !== null) {
+                    badge.textContent = `${count} Location${count === 1 ? '' : 's'}`;
+                }
+            } catch (e) {
+                console.warn("Could not load location count:", e);
+            }
+        }
+
+        async function generateVaultLocationsUI() {
+            if (!currentLoadedFac || !currentLoadedFac.id) {
+                alert("Please select a valid facility before generating vault locations.");
+                return;
+            }
+
+            const aisles = parseInt(document.getElementById('conf-vault-aisles').value) || 0;
+            const bays = parseInt(document.getElementById('conf-vault-bays').value) || 0;
+            const shelves = parseInt(document.getElementById('conf-vault-shelves').value) || 0;
+
+            if (aisles <= 0 || bays <= 0 || shelves <= 0) {
+                alert("Please enter positive numbers for aisles, bays, and shelves.");
+                return;
+            }
+
+            const total = aisles * bays * shelves;
+            if (!confirm(`Are you sure you want to generate and sync ${total} Vault locations for ${currentLoadedFac.name}?`)) {
+                return;
+            }
+
+            const btn = document.getElementById('btn-generate-vault-locations');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Syncing ${total} Locations...`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            try {
+                const locations = generateVaultLocations(currentLoadedFac.id, aisles, bays, shelves);
+
+                // Upsert in batches of 500 to prevent payload timeouts
+                const batchSize = 500;
+                for (let i = 0; i < locations.length; i += batchSize) {
+                    const chunk = locations.slice(i, i + batchSize);
+                    const { error } = await supabase
+                        .from('warehouse_locations')
+                        .upsert(chunk, { onConflict: 'facility_id,identifier' });
+                    if (error) throw error;
+                }
+
+                if (typeof showToast === 'function') {
+                    showToast(`🚀 Successfully generated & synced ${total} Vault locations for ${currentLoadedFac.name}!`);
+                } else {
+                    alert(`🚀 Successfully generated & synced ${total} Vault locations for ${currentLoadedFac.name}!`);
+                }
+                await loadWarehouseLocationCount(currentLoadedFac.id);
+            } catch (err) {
+                console.error("Failed to generate vault locations:", err);
+                alert(`Error syncing locations: ${err.message || err}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        }
+
+        async function generateStagingLocationsUI() {
+            if (!currentLoadedFac || !currentLoadedFac.id) {
+                alert("Please select a valid facility before generating staging locations.");
+                return;
+            }
+
+            const roomId = (document.getElementById('conf-staging-room-id').value || 'ROOM-1').trim().toUpperCase();
+            const bays = parseInt(document.getElementById('conf-staging-room-bays').value) || 0;
+
+            if (bays <= 0) {
+                alert("Please enter a positive number of bays/lockers.");
+                return;
+            }
+
+            if (!confirm(`Generate and sync ${bays} Staging locations (${roomId}) for ${currentLoadedFac.name}?`)) {
+                return;
+            }
+
+            const btn = document.getElementById('btn-generate-staging-locations');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Syncing ${bays} Lockers...`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            try {
+                const locations = [];
+                for (let b = 1; b <= bays; b++) {
+                    const bayStr = String(b).padStart(2, '0');
+                    locations.push({
+                        facility_id: currentLoadedFac.id,
+                        zone_type: 'STAGING',
+                        identifier: `${roomId}-BAY-${bayStr}`,
+                        is_occupied: false
+                    });
+                }
+
+                const { error } = await supabase
+                    .from('warehouse_locations')
+                    .upsert(locations, { onConflict: 'facility_id,identifier' });
+
+                if (error) throw error;
+
+                if (typeof showToast === 'function') {
+                    showToast(`✅ Successfully synced ${bays} Staging Room locations (${roomId})!`);
+                } else {
+                    alert(`✅ Successfully synced ${bays} Staging Room locations (${roomId})!`);
+                }
+                await loadWarehouseLocationCount(currentLoadedFac.id);
+            } catch (err) {
+                console.error("Failed to generate staging locations:", err);
+                alert(`Error syncing staging locations: ${err.message || err}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
         }
 
         async function loadMarketZoneData(fid) {

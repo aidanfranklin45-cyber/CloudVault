@@ -123,6 +123,27 @@ CREATE TABLE IF NOT EXISTS public.warehouse_locations (
 ALTER TABLE public.warehouse_locations ADD COLUMN IF NOT EXISTS zone_type VARCHAR(50) DEFAULT 'VAULT';
 ALTER TABLE public.warehouse_locations ADD COLUMN IF NOT EXISTS identifier VARCHAR(100);
 ALTER TABLE public.warehouse_locations ADD COLUMN IF NOT EXISTS is_occupied BOOLEAN DEFAULT false;
+ALTER TABLE public.warehouse_locations ALTER COLUMN location_code DROP NOT NULL;
+ALTER TABLE public.warehouse_locations ALTER COLUMN location_type DROP NOT NULL;
+
+-- Trigger to auto-sync location_code = identifier if location_code is omitted
+CREATE OR REPLACE FUNCTION public.sync_warehouse_location_code()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.location_code IS NULL OR NEW.location_code = '' THEN
+    NEW.location_code := NEW.identifier;
+  END IF;
+  IF NEW.location_type IS NULL OR NEW.location_type = '' THEN
+    NEW.location_type := NEW.zone_type;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_warehouse_location_code ON public.warehouse_locations;
+CREATE TRIGGER trg_sync_warehouse_location_code
+BEFORE INSERT OR UPDATE ON public.warehouse_locations
+FOR EACH ROW EXECUTE FUNCTION public.sync_warehouse_location_code();
 
 -- Index on facility_id
 CREATE INDEX IF NOT EXISTS idx_warehouse_locations_facility_id ON public.warehouse_locations(facility_id);
