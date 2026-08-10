@@ -1254,6 +1254,8 @@ DECLARE
   v_user_role public.user_role;
   v_item RECORD;
   v_new_status public.inventory_status;
+  v_target_loc RECORD;
+  v_current_count INTEGER;
 BEGIN
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
@@ -1265,12 +1267,30 @@ BEGIN
     RAISE EXCEPTION 'Access Denied: Staff clearance required';
   END IF;
 
-  SELECT id, tote_code, uid, status, facility_id, activated INTO v_item 
+  SELECT id, tote_code, uid, status, facility_id, location_id, activated INTO v_item 
   FROM public.inventory 
   WHERE tote_code = p_tote_code LIMIT 1;
 
   IF v_item IS NULL THEN
     RAISE EXCEPTION 'Fail-Fast Error: Tote code % not found in system', p_tote_code;
+  END IF;
+
+  -- Check if target location is already full
+  IF p_location_code IS NOT NULL AND v_item.facility_id IS NOT NULL THEN
+    SELECT id, is_occupied, COALESCE(capacity, 1) as capacity INTO v_target_loc
+    FROM public.warehouse_locations
+    WHERE facility_id = v_item.facility_id AND (identifier = p_location_code OR location_code = p_location_code)
+    LIMIT 1;
+
+    IF v_target_loc IS NOT NULL THEN
+      SELECT COUNT(*) INTO v_current_count
+      FROM public.inventory
+      WHERE (location_id = v_target_loc.id OR location_code = p_location_code) AND id != v_item.id;
+
+      IF (v_item.location_id IS NULL OR v_item.location_id != v_target_loc.id) AND (v_target_loc.is_occupied OR v_current_count >= v_target_loc.capacity) THEN
+        RAISE EXCEPTION 'Location % is already full (%/% totes occupied)', p_location_code, GREATEST(v_current_count, 1), v_target_loc.capacity;
+      END IF;
+    END IF;
   END IF;
 
   -- Determine status based on target location type
@@ -1292,6 +1312,7 @@ BEGIN
   UPDATE public.inventory
   SET location_code = p_location_code,
       location_type = p_location_type,
+      location_id = COALESCE(v_target_loc.id, location_id),
       status = v_new_status,
       activated = true,
       last_scanned_at = now(),
@@ -1631,6 +1652,299 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- =========================================================================
+-- EVENT 1: TOTE RETURN & VAULT SHELVING HANDLER
+-- =========================================================================
+CREATE OR REPLACE FUNCTION public.process_tote_return(
+  p_tote_code TEXT,
+  p_target_location_code TEXT DEFAULT NULL
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_uid UUID;
+  v_item RECORD;
+  v_user_role public.user_role;
+  v_assigned_location_code TEXT;
+BEGIN
+  v_uid := auth.uid();
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
+  IF v_user_role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
+    RAISE EXCEPTION 'Access Denied: Staff clearance required';
+  END IF;
+
+  SELECT id, tote_code, status, uid, location_code, facility_id INTO v_item 
+  FROM public.inventory 
+  WHERE tote_code = p_tote_code LIMIT 1;
+
+  IF v_item IS NULL THEN
+    RAISE EXCEPTION 'Return Error: Tote % not found in inventory system', p_tote_code;
+  END IF;
+
+  IF v_item.status NOT IN ('with-customer', 'out-for-delivery', 'stored', 'staged') THEN
+    RAISE EXCEPTION 'Return Error: Tote % is in status % and cannot be processed for return', p_tote_code, v_item.status;
+  END IF;
+
+  IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' AND p_target_location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING') THEN
+    v_assigned_location_code := p_target_location_code;
+  ELSE
+    SELECT COALESCE(identifier, location_code) INTO v_assigned_location_code
+    FROM public.warehouse_locations
+    WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
+      AND (zone_type = 'VAULT' OR location_type = 'vault' OR identifier ILIKE 'V-%')
+      AND (is_occupied = false OR is_occupied IS NULL)
+    ORDER BY created_at ASC
+    LIMIT 1;
+
+    IF v_assigned_location_code IS NULL THEN
+      RAISE EXCEPTION 'Return Error: No available vault locations in database. Please scan a shelf barcode or generate vault locations in Facility Config.';
+    END IF;
+  END IF;
+
+  UPDATE public.inventory
+  SET status = 'stored'::public.inventory_status,
+      location_code = v_assigned_location_code,
+      location_type = 'vault',
+      activated = true,
+      last_scanned_at = now(),
+      last_scanned_by = v_uid
+  WHERE id = v_item.id;
+
+  IF v_item.location_code IS NOT NULL AND v_item.location_code <> v_assigned_location_code THEN
+    UPDATE public.warehouse_locations
+    SET is_occupied = false, assigned_tote_id = NULL
+    WHERE (identifier = v_item.location_code OR location_code = v_item.location_code)
+      AND (facility_id = v_item.facility_id OR v_item.facility_id IS NULL);
+  END IF;
+
+  UPDATE public.warehouse_locations
+  SET is_occupied = true, assigned_tote_id = v_item.id
+  WHERE (identifier = v_assigned_location_code OR location_code = v_assigned_location_code)
+    AND (facility_id = v_item.facility_id OR v_item.facility_id IS NULL);
+
+  UPDATE public.access_requests
+  SET status = 'completed'
+  WHERE uid = v_item.uid AND status = 'pending'
+    AND (requested_items IS NULL OR cardinality(requested_items) = 0 OR v_item.id = ANY(requested_items) OR (requested_tote_codes IS NOT NULL AND v_item.tote_code = ANY(requested_tote_codes)));
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'event', 'TOTE_RETURNED',
+    'toteCode', p_tote_code,
+    'nextStatus', 'stored',
+    'locationCode', v_assigned_location_code,
+    'locationType', 'vault',
+    'customerUid', v_item.uid,
+    'message', 'Tote successfully returned and shelved in vault'
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- =========================================================================
+-- EVENT 2: SELECTIVE CUSTOMER RETRIEVAL REQUEST HANDLER
+-- =========================================================================
+CREATE OR REPLACE FUNCTION public.submit_customer_retrieval(
+  p_uid UUID,
+  p_tote_ids UUID[],
+  p_fulfillment_type TEXT DEFAULT 'self_serve_pickup',
+  p_target_date DATE DEFAULT CURRENT_DATE,
+  p_time_slot TEXT DEFAULT '09:00 AM - 12:00 PM',
+  p_delivery_notes TEXT DEFAULT NULL
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_user_facility TEXT;
+  v_pin TEXT;
+  v_next_status public.inventory_status;
+  v_req_id UUID;
+  v_tote_codes TEXT[];
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  IF p_tote_ids IS NULL OR cardinality(p_tote_ids) = 0 THEN
+    RAISE EXCEPTION 'Retrieval Error: At least one tote must be selected for retrieval';
+  END IF;
+
+  SELECT array_agg(tote_code) INTO v_tote_codes
+  FROM public.inventory
+  WHERE id = ANY(p_tote_ids) AND uid = p_uid;
+
+  IF v_tote_codes IS NULL OR cardinality(v_tote_codes) = 0 THEN
+    RAISE EXCEPTION 'Retrieval Error: Selected totes do not belong to customer or were not found';
+  END IF;
+
+  SELECT assigned_facility_id INTO v_user_facility FROM public.users WHERE id = p_uid;
+  IF v_user_facility IS NULL THEN
+    v_user_facility := 'facility_seattle_north';
+  END IF;
+
+  v_pin := lpad(floor(random() * 10000)::text, 4, '0');
+  v_next_status := CASE WHEN p_fulfillment_type = 'valet_delivery' THEN 'pending-dispatch'::public.inventory_status ELSE 'pending-stage'::public.inventory_status END;
+
+  UPDATE public.inventory
+  SET status = v_next_status,
+      last_scanned_at = now()
+  WHERE id = ANY(p_tote_ids) AND uid = p_uid;
+
+  INSERT INTO public.access_requests (
+    uid, request_type, fulfillment_type, requested_items, requested_tote_codes, facility_id, pin, pin_expires_at, status, target_date, time_slot, delivery_notes
+  ) VALUES (
+    p_uid,
+    'retrieval',
+    p_fulfillment_type,
+    p_tote_ids,
+    v_tote_codes,
+    v_user_facility,
+    v_pin,
+    now() + interval '48 hours',
+    'pending',
+    p_target_date,
+    p_time_slot,
+    p_delivery_notes
+  ) RETURNING id INTO v_req_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'event', 'RETRIEVAL_SUBMITTED',
+    'requestId', v_req_id,
+    'requestedToteIds', p_tote_ids,
+    'requestedToteCodes', v_tote_codes,
+    'fulfillmentType', p_fulfillment_type,
+    'pin', v_pin,
+    'targetDate', p_target_date,
+    'timeSlot', p_time_slot
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- =========================================================================
+-- EVENT 3: VAULT PULL TO STAGING / DISPATCH HANDLER
+-- =========================================================================
+CREATE OR REPLACE FUNCTION public.process_vault_pull(
+  p_tote_code TEXT,
+  p_target_staging_code TEXT DEFAULT NULL
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_uid UUID;
+  v_item RECORD;
+  v_user_role public.user_role;
+  v_next_status public.inventory_status;
+  v_next_location_code TEXT;
+  v_next_location_type TEXT;
+  v_customer_pin TEXT;
+BEGIN
+  v_uid := auth.uid();
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
+  IF v_user_role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
+    RAISE EXCEPTION 'Access Denied: Staff clearance required';
+  END IF;
+
+  SELECT id, tote_code, status, uid, facility_id INTO v_item 
+  FROM public.inventory 
+  WHERE tote_code = p_tote_code LIMIT 1;
+
+  IF v_item IS NULL THEN
+    RAISE EXCEPTION 'Pull Error: Tote % not found in inventory', p_tote_code;
+  END IF;
+
+  IF v_item.status = 'pending-dispatch' OR p_target_staging_code ILIKE '%TRUCK%' OR p_target_staging_code ILIKE '%DISPATCH%' THEN
+    v_next_status := 'out-for-delivery'::public.inventory_status;
+    v_next_location_code := COALESCE(p_target_staging_code, 'VALET-TRUCK-A');
+    v_next_location_type := 'dispatch';
+  ELSE
+    v_next_status := 'staged'::public.inventory_status;
+    v_next_location_code := COALESCE(p_target_staging_code, 'STAGE-BAY-A1');
+    v_next_location_type := 'staging';
+  END IF;
+
+  UPDATE public.inventory
+  SET status = v_next_status,
+      location_code = v_next_location_code,
+      location_type = v_next_location_type,
+      activated = true,
+      last_scanned_at = now(),
+      last_scanned_by = v_uid
+  WHERE id = v_item.id;
+
+  SELECT pin INTO v_customer_pin
+  FROM public.access_requests
+  WHERE uid = v_item.uid AND status = 'pending'
+  ORDER BY requested_at DESC LIMIT 1;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'event', 'PULLED_TO_STAGING',
+    'toteCode', p_tote_code,
+    'nextStatus', v_next_status,
+    'locationCode', v_next_location_code,
+    'locationType', v_next_location_type,
+    'customerPin', v_customer_pin,
+    'customerUid', v_item.uid
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- =========================================================================
+-- EVENT 4: TOTE INTAKE & ACTIVATION HANDLER
+-- =========================================================================
+CREATE OR REPLACE FUNCTION public.process_tote_activation(
+  p_tote_code TEXT,
+  p_intake_location_code TEXT DEFAULT 'INTAKE-PROCESSING'
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_uid UUID;
+  v_item RECORD;
+  v_user_role public.user_role;
+BEGIN
+  v_uid := auth.uid();
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
+  IF v_user_role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
+    RAISE EXCEPTION 'Access Denied: Staff clearance required';
+  END IF;
+
+  SELECT id, tote_code, status, uid INTO v_item 
+  FROM public.inventory 
+  WHERE tote_code = p_tote_code LIMIT 1;
+
+  IF v_item IS NULL THEN
+    RAISE EXCEPTION 'Activation Error: Tote % not found in inventory', p_tote_code;
+  END IF;
+
+  UPDATE public.inventory
+  SET status = 'pending-stage'::public.inventory_status,
+      location_code = COALESCE(p_intake_location_code, 'INTAKE-PROCESSING'),
+      location_type = 'intake',
+      activated = true,
+      last_scanned_at = now(),
+      last_scanned_by = v_uid
+  WHERE id = v_item.id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'event', 'TOTE_ACTIVATED',
+    'toteCode', p_tote_code,
+    'nextStatus', 'pending-stage',
+    'locationCode', COALESCE(p_intake_location_code, 'INTAKE-PROCESSING'),
+    'locationType', 'intake',
+    'customerUid', v_item.uid
+  );
+END;
+$$ LANGUAGE plpgsql;
+
 -- ============================================================
 -- Automated Onboarding Status Trigger
 -- ============================================================
@@ -1935,6 +2249,7 @@ DECLARE
   v_current_count INTEGER;
   v_old_count INTEGER;
   v_tote_code TEXT;
+  v_is_occupied BOOLEAN;
 BEGIN
   -- 1. Verify tote exists and fetch current location
   SELECT location_id, tote_code INTO v_old_location_id, v_tote_code
@@ -1947,8 +2262,8 @@ BEGIN
 
   -- 2. Verify new location if provided
   IF p_new_location_id IS NOT NULL THEN
-    SELECT zone_type, COALESCE(capacity, 1), identifier
-    INTO v_new_zone_type, v_capacity, v_new_identifier
+    SELECT zone_type, COALESCE(capacity, 1), identifier, is_occupied
+    INTO v_new_zone_type, v_capacity, v_new_identifier, v_is_occupied
     FROM public.warehouse_locations
     WHERE id = p_new_location_id;
 
@@ -1956,14 +2271,14 @@ BEGIN
       RAISE EXCEPTION 'Target location with ID % not found', p_new_location_id;
     END IF;
 
-    -- Count active totes assigned to target location (excluding current tote if re-slotting)
+    -- Count active totes assigned to target location or matching identifier (excluding current tote if re-slotting)
     SELECT COUNT(*) INTO v_current_count 
     FROM public.inventory 
-    WHERE location_id = p_new_location_id AND id != p_tote_id;
+    WHERE (location_id = p_new_location_id OR location_code = v_new_identifier) AND id != p_tote_id;
 
-    -- Fail-Fast Logic: Check if at or above capacity limit
-    IF v_current_count >= v_capacity THEN
-      RAISE EXCEPTION 'Location % is already at maximum capacity (%/% totes)', v_new_identifier, v_current_count, v_capacity;
+    -- Fail-Fast Logic: Check if at/above capacity limit or if location is marked full
+    IF (v_old_location_id IS NULL OR v_old_location_id != p_new_location_id) AND (v_is_occupied OR v_current_count >= v_capacity) THEN
+      RAISE EXCEPTION 'Location % is already full (%/% totes occupied)', v_new_identifier, GREATEST(v_current_count, 1), v_capacity;
     END IF;
   END IF;
 

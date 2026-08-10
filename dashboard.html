@@ -3327,22 +3327,25 @@
             const timeSlot = slotInput ? slotInput.value : '09:00 AM - 12:00 PM';
 
             try {
-                let { data, error } = await supabase.rpc('request_staging', {
+                let { data, error } = await supabase.rpc('submit_customer_retrieval', {
+                    p_uid: currentUser.id,
                     p_tote_ids: Array.from(selectedItems),
                     p_fulfillment_type: retrievalLogisticsType,
-                    p_delivery_notes: deliveryNotes,
                     p_target_date: targetDate,
                     p_time_slot: timeSlot,
-                    p_surge_fee: selectedReservationSurge.fee,
-                    p_surge_tier: selectedReservationSurge.tier
+                    p_delivery_notes: deliveryNotes
                 });
 
-                if (error && error.message && error.message.includes('function')) {
-                    // Resilient fallback for pre-existing RPC signatures on live Supabase instances
+                if (error) {
+                    // Fallback to request_staging RPC
                     const fallbackRes = await supabase.rpc('request_staging', {
                         p_tote_ids: Array.from(selectedItems),
                         p_fulfillment_type: retrievalLogisticsType,
-                        p_delivery_notes: deliveryNotes
+                        p_delivery_notes: deliveryNotes,
+                        p_target_date: targetDate,
+                        p_time_slot: timeSlot,
+                        p_surge_fee: selectedReservationSurge.fee,
+                        p_surge_tier: selectedReservationSurge.tier
                     });
                     data = fallbackRes.data;
                     error = fallbackRes.error;

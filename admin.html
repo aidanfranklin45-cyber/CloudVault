@@ -3499,26 +3499,65 @@
             }
 
             try {
-                const rpcParams = {
-                    p_tote_code: barcode,
-                    p_expected_status: expectedStatus
-                };
-                if (window.activeTargetLocationCode) {
-                    rpcParams.p_target_location_code = window.activeTargetLocationCode;
+                let data, error;
+                const targetLoc = window.activeTargetLocationCode || null;
+
+                // Inspect current tote status in local state or query to pick dedicated handler
+                const { data: checkTote } = await supabase.from('inventory').select('status').eq('tote_code', barcode).maybeSingle();
+                const currentStatus = checkTote ? checkTote.status : null;
+
+                // Event Routing:
+                // Event 1: Customer Return to Vault
+                if (expectedStatus === 'stored' || expectedStatus === 'returned' || currentStatus === 'with-customer' || currentStatus === 'out-for-delivery') {
+                    const res = await supabase.rpc('process_tote_return', {
+                        p_tote_code: barcode,
+                        p_target_location_code: targetLoc
+                    });
+                    data = res.data;
+                    error = res.error;
+                } 
+                // Event 3: Vault Pull to Staging or Dispatch
+                else if (expectedStatus === 'staged' || expectedStatus === 'pending-dispatch' || currentStatus === 'pending-stage' || currentStatus === 'pending-dispatch') {
+                    const res = await supabase.rpc('process_vault_pull', {
+                        p_tote_code: barcode,
+                        p_target_staging_code: targetLoc
+                    });
+                    data = res.data;
+                    error = res.error;
+                }
+                // Event 4: Intake & Activation
+                else if (expectedStatus === 'activate' || (checkTote && checkTote.activated === false)) {
+                    const res = await supabase.rpc('process_tote_activation', {
+                        p_tote_code: barcode,
+                        p_intake_location_code: targetLoc || 'INTAKE-PROCESSING'
+                    });
+                    data = res.data;
+                    error = res.error;
+                }
+                // Fallback to scan_tote
+                else {
+                    const rpcParams = {
+                        p_tote_code: barcode,
+                        p_expected_status: expectedStatus
+                    };
+                    if (targetLoc) rpcParams.p_target_location_code = targetLoc;
+
+                    const res = await supabase.rpc('scan_tote', rpcParams);
+                    data = res.data;
+                    error = res.error;
                 }
 
-                const { data, error } = await supabase.rpc('scan_tote', rpcParams);
                 if (error) throw error;
-                const nextStatus = data.nextStatus;
-                const locCode = data.locationCode || window.activeTargetLocationCode || 'INTAKE-PROCESSING';
+                const nextStatus = data.nextStatus || data.status;
+                const locCode = data.locationCode || data.assigned_location || window.activeTargetLocationCode || 'INTAKE-PROCESSING';
 
                 let transitionDesc = `${nextStatus} [📍 ${locCode}]`;
                 if (nextStatus === 'pending-stage') transitionDesc = `Activated — Moved to Intake Zone [📍 ${locCode}]`;
-                if (nextStatus === 'staged') transitionDesc = `Moved to Staging Room [📍 ${locCode}]`;
-                if (nextStatus === 'pending-dispatch') transitionDesc = `Activated — Queued for Driver [📍 ${locCode}]`;
-                if (nextStatus === 'out-for-delivery') transitionDesc = `Loaded on Driver — Out for Delivery [📍 ${locCode}]`;
+                if (nextStatus === 'staged') transitionDesc = `Moved to Staging Room Locker [📍 ${locCode}]`;
+                if (nextStatus === 'pending-dispatch') transitionDesc = `Queued for Driver Dispatch [📍 ${locCode}]`;
+                if (nextStatus === 'out-for-delivery') transitionDesc = `Loaded on Driver Truck [📍 ${locCode}]`;
                 if (nextStatus === 'with-customer') transitionDesc = `Delivered — With Customer [📍 ${locCode}]`;
-                if (nextStatus === 'stored') transitionDesc = `Returned & Shelved in Vault [📍 ${locCode}]`;
+                if (nextStatus === 'stored') transitionDesc = `Returned & Shelved in Vault Bay [📍 ${locCode}]`;
 
                 triggerScanFeedbackOverlay(true, transitionDesc, barcode);
 
@@ -4911,8 +4950,14 @@
                             const option = document.createElement('option');
                             option.value = loc.id;
                             option.selected = isCurr;
-                            option.className = isCurr ? 'bg-cyan-950 text-cyan-300 font-bold' : (loc.is_occupied ? 'bg-gray-950 text-gray-500' : 'bg-gray-950 text-white font-mono');
-                            option.textContent = `${loc.identifier} (${loc.zone_type}) ${loc.is_occupied ? '[FULL]' : '[AVAILABLE]'}`;
+                            if (loc.is_occupied && !isCurr) {
+                                option.disabled = true;
+                                option.className = 'bg-gray-950 text-red-500 font-mono italic opacity-50 cursor-not-allowed';
+                                option.textContent = `${loc.identifier} (${loc.zone_type}) [FULL - OCCUPIED]`;
+                            } else {
+                                option.className = isCurr ? 'bg-cyan-950 text-cyan-300 font-bold' : 'bg-gray-950 text-white font-mono';
+                                option.textContent = `${loc.identifier} (${loc.zone_type}) ${loc.is_occupied ? '[FULL (CURRENT)]' : '[AVAILABLE]'}`;
+                            }
                             locationSel.appendChild(option);
                         });
                     } else {
@@ -4932,8 +4977,14 @@
             const locationSel = document.getElementById('tmm-location-select');
             if (!locationSel) return;
 
+            const selectedOpt = locationSel.options[locationSel.selectedIndex];
+            if (selectedOpt && selectedOpt.disabled) {
+                alert("⚠️ Slotting Denied: The selected shelf/location is already full! Please select an available shelf location.");
+                return;
+            }
+
             const newLocationId = locationSel.value || null;
-            const newLocationText = locationSel.options[locationSel.selectedIndex]?.text || 'Unassigned';
+            const newLocationText = selectedOpt?.text || 'Unassigned';
 
             try {
                 const { data, error } = await supabase.rpc('move_tote_location', {
