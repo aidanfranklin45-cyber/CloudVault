@@ -1469,18 +1469,21 @@ BEGIN
   END IF;
 
   SELECT id, status, uid, activated, location_code, location_type, facility_id INTO v_item 
-  FROM public.inventory 
-  WHERE tote_code = p_tote_code LIMIT 1;
-
   IF v_item IS NULL THEN
     RAISE EXCEPTION 'Fail-Fast Error: Tote code % not found in system', p_tote_code;
   END IF;
 
-  -- Look up fulfillment type from active access request
+  -- Look up fulfillment type from active access request ONLY if this specific tote was requested
   SELECT ar.fulfillment_type INTO v_fulfillment_type
   FROM public.access_requests ar
   WHERE ar.uid = v_item.uid
     AND ar.status = 'pending'
+    AND (
+      ar.requested_items IS NULL 
+      OR cardinality(ar.requested_items) = 0
+      OR v_item.id = ANY(ar.requested_items)
+      OR v_item.tote_code = ANY(ar.requested_tote_codes)
+    )
   ORDER BY ar.requested_at DESC
   LIMIT 1;
 
@@ -1488,29 +1491,16 @@ BEGIN
     v_has_pending_request := TRUE;
   END IF;
 
-  -- Physical Lifecycle State Transitions:
-  -- 1. Activation Step: Un-activated tote -> Lands in Intake Processing Zone (NOT vault!)
+  -- Determine physical state transition
   IF v_item.activated = false THEN
     v_next_status := 'pending-stage'::public.inventory_status;
     v_next_location_code := COALESCE(p_target_location_code, 'INTAKE-PROCESSING');
     v_next_location_type := CASE WHEN p_target_location_code IS NOT NULL THEN 'vault' ELSE 'intake' END;
 
-  -- 2. Vault Slotting or Staging Pull Step
   ELSIF v_item.status = 'pending-stage' THEN
     v_next_status := 'staged'::public.inventory_status;
-    v_next_location_code := COALESCE(p_target_location_code, 'STAGE-BAY-A1');
+    v_next_location_code := p_target_location_code;
     v_next_location_type := 'staging';
-
-  ELSIF v_item.status = 'stored' THEN
-    IF v_has_pending_request AND v_fulfillment_type = 'valet_delivery' THEN
-      v_next_status := 'pending-dispatch'::public.inventory_status;
-      v_next_location_code := 'DISPATCH-BAY-1';
-      v_next_location_type := 'dispatch';
-    ELSE
-      v_next_status := 'pending-stage'::public.inventory_status;
-      v_next_location_code := COALESCE(p_target_location_code, 'INTAKE-PULL');
-      v_next_location_type := 'intake';
-    END IF;
 
   ELSIF v_item.status = 'staged' THEN
     v_next_status := 'with-customer'::public.inventory_status;
@@ -1536,7 +1526,7 @@ BEGIN
     IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' AND p_target_location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A') THEN
       v_next_location_code := p_target_location_code;
     ELSE
-      -- 2. Dynamically pick an available unoccupied vault location for this facility
+      -- 2. Dynamically pick an available unoccupied vault location from database
       SELECT COALESCE(identifier, location_code) INTO v_next_location_code
       FROM public.warehouse_locations
       WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
@@ -1545,9 +1535,9 @@ BEGIN
       ORDER BY created_at ASC
       LIMIT 1;
 
-      -- 3. Fallback to default vault bay if no unassigned slots are found
+      -- 3. Strict failure if no real location is available (NO hardcoded fallbacks allowed!)
       IF v_next_location_code IS NULL THEN
-        v_next_location_code := 'V-A01-S01';
+        RAISE EXCEPTION 'No Available Warehouse Location: Please scan or set a target shelf/bay barcode, or generate vault locations in Facility Config.';
       END IF;
     END IF;
 
@@ -1558,7 +1548,7 @@ BEGIN
       v_next_location_type := 'dispatch';
     ELSIF v_has_pending_request THEN
       v_next_status := 'pending-stage'::public.inventory_status;
-      v_next_location_code := COALESCE(p_target_location_code, 'VAULT-PULL-BAY');
+      v_next_location_code := p_target_location_code;
       v_next_location_type := 'vault';
     ELSE
       v_next_status := 'stored'::public.inventory_status;
@@ -1578,15 +1568,29 @@ BEGIN
         LIMIT 1;
 
         IF v_next_location_code IS NULL THEN
-          v_next_location_code := 'V-A01-S01';
+          RAISE EXCEPTION 'No Available Warehouse Location: Please scan or set a target shelf/bay barcode, or generate vault locations in Facility Config.';
         END IF;
       END IF;
     END IF;
 
   ELSE
     v_next_status := 'stored'::public.inventory_status;
-    v_next_location_code := COALESCE(p_target_location_code, 'V-A01-S01');
     v_next_location_type := 'vault';
+    IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' THEN
+      v_next_location_code := p_target_location_code;
+    ELSE
+      SELECT COALESCE(identifier, location_code) INTO v_next_location_code
+      FROM public.warehouse_locations
+      WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
+        AND (zone_type = 'VAULT' OR location_type = 'vault' OR identifier ILIKE 'V-%')
+        AND (is_occupied = false OR is_occupied IS NULL)
+      ORDER BY created_at ASC
+      LIMIT 1;
+
+      IF v_next_location_code IS NULL THEN
+        RAISE EXCEPTION 'No Available Warehouse Location: Please scan or set a target shelf/bay barcode, or generate vault locations in Facility Config.';
+      END IF;
+    END IF;
   END IF;
 
   -- Overwrite with explicit scanned target location if provided
