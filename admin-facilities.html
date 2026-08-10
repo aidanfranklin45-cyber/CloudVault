@@ -2487,14 +2487,23 @@
                     try {
                         console.log('[Print Barcodes] Triggered openPrintLocationLabelModal with zone:', zoneType);
                         window.currentPrintedLocationType = zoneType;
+
                         let modal = document.getElementById('print-location-modal') || document.getElementById('print-location-label-modal');
                         if (!modal) {
                             console.error('[Print Barcodes Error] Print modal element not found in DOM');
                             alert('Print location modal container is missing from page layout.');
                             return;
                         }
-                        modal.classList.remove('hidden');
+
+                        // Ensure modal is attached directly to document.body so stacking context is top-level
+                        if (modal.parentElement !== document.body) {
+                            document.body.appendChild(modal);
+                        }
+
+                        // Set top z-index and show modal
+                        modal.style.zIndex = '99999';
                         modal.style.display = 'flex';
+                        modal.classList.remove('hidden');
 
                         const titleEl = document.getElementById('print-loc-modal-title');
                         if (titleEl) {
@@ -2534,6 +2543,11 @@
                         if (input) input.value = window.currentLoadedLocations.join(', ');
 
                         window.renderLocationLabelPreview();
+
+                        // Directly trigger print generator for instant printing off the get-go
+                        setTimeout(() => {
+                            window.triggerPrintLocationLabels();
+                        }, 100);
 
                         // Asynchronously check DB for synced locations in background
                         const facId = currentLoadedFac?.id || activeFacilityId;
