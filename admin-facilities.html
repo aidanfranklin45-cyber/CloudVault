@@ -386,7 +386,7 @@
                         <div>
                             <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Staging
                                 Rooms</label>
-                            <input type="number" id="conf-staging-rooms" class="fspec-input w-full" placeholder="2">
+                            <input type="number" id="conf-staging-rooms" oninput="onStagingRoomsInputChange()" class="fspec-input w-full" placeholder="2">
                         </div>
                     </div>
                 </div>
@@ -1397,12 +1397,20 @@
 
                 if (error) throw error;
 
+                const confStgInput = document.getElementById('conf-staging-rooms');
+                if (confStgInput) confStgInput.value = bays;
+                if (currentLoadedFac) {
+                    currentLoadedFac.num_staging_rooms = bays;
+                    currentLoadedFac.staging_rooms = bays;
+                }
+
                 if (typeof showToast === 'function') {
                     showToast(`✅ Successfully synced ${bays} Staging Room locations (${roomId})!`);
                 } else {
                     alert(`✅ Successfully synced ${bays} Staging Room locations (${roomId})!`);
                 }
                 await loadWarehouseLocationCount(currentLoadedFac.id);
+                await loadStagingRoomSchedule(currentLoadedFac.id, selectedStagingDate);
             } catch (err) {
                 console.error("Failed to generate staging locations:", err);
                 alert(`Error syncing staging locations: ${err.message || err}`);
@@ -1410,6 +1418,17 @@
                 btn.disabled = false;
                 btn.innerHTML = originalText;
                 if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        }
+
+        function onStagingRoomsInputChange() {
+            const val = parseInt(document.getElementById('conf-staging-rooms').value, 10);
+            if (!isNaN(val) && val >= 0) {
+                if (currentLoadedFac) {
+                    currentLoadedFac.num_staging_rooms = val;
+                    currentLoadedFac.staging_rooms = val;
+                }
+                loadStagingRoomSchedule(activeFacilityId, selectedStagingDate);
             }
         }
 
@@ -1553,22 +1572,37 @@
                     };
                 }
 
-                // Dynamically calculate total staging rooms strictly from RPC, facility record, or warehouse_locations
-                let numRooms = (resData && typeof resData.numStagingRooms === 'number' && resData.numStagingRooms > 0) ? resData.numStagingRooms : (currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 0);
-                
-                // Query warehouse_locations for distinct STAGING room numbers
+                // Dynamically calculate total staging rooms from input, facility record, or warehouse_locations
+                const confInputVal = parseInt(document.getElementById('conf-staging-rooms')?.value, 10);
+                const facObjVal = parseInt(currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms, 10);
+
+                let locCount = 0;
+                let maxRoomFromLocs = 0;
+
                 const { data: stgLocs } = await supabase.from('warehouse_locations')
                     .select('identifier')
                     .eq('facility_id', facilityId)
                     .eq('zone_type', 'STAGING');
 
                 if (stgLocs && stgLocs.length > 0) {
+                    locCount = stgLocs.length;
                     const roomNums = stgLocs.map(l => {
                         const match = (l.identifier || '').match(/ROOM-(\d+)/i);
                         return match ? parseInt(match[1], 10) : 1;
                     });
-                    const maxRoom = Math.max(...roomNums, 0);
-                    if (maxRoom > numRooms) numRooms = maxRoom;
+                    maxRoomFromLocs = Math.max(...roomNums, 0);
+                }
+
+                // Prioritize live input value, facility config object, or location count/max room number
+                let numRooms = Math.max(
+                    confInputVal || 0,
+                    facObjVal || 0,
+                    maxRoomFromLocs || 0,
+                    locCount || 0
+                );
+
+                if (numRooms === 0 && resData && typeof resData.numStagingRooms === 'number' && resData.numStagingRooms > 0) {
+                    numRooms = resData.numStagingRooms;
                 }
 
                 const reservations = resData.reservations || [];
