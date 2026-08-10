@@ -2516,7 +2516,7 @@
                             const aisles = parseInt(document.getElementById('conf-vault-aisles')?.value || '5', 10);
                             const bays = parseInt(document.getElementById('conf-vault-bays')?.value || '10', 10);
                             const shelves = parseInt(document.getElementById('conf-vault-shelves')?.value || '4', 10);
-                            const maxPrint = Math.min(aisles * bays * shelves, 12);
+                            const maxPrint = Math.min(aisles * bays * shelves, 200);
                             let count = 0;
                             for (let a = 1; a <= aisles && count < maxPrint; a++) {
                                 for (let b = 1; b <= bays && count < maxPrint; b++) {
@@ -2530,7 +2530,7 @@
                         } else {
                             const roomId = document.getElementById('conf-staging-room-id')?.value.trim() || 'ROOM-1';
                             const bays = parseInt(document.getElementById('conf-staging-room-bays')?.value || '10', 10);
-                            const maxPrint = Math.min(bays, 12);
+                            const maxPrint = Math.min(bays, 100);
                             for (let b = 1; b <= maxPrint; b++) {
                                 const bayStr = b < 10 ? '0' + b : '' + b;
                                 generatedCodes.push(`${roomId}-BAY-${bayStr}`);
@@ -2722,8 +2722,6 @@
                         let labelsHtml = '';
                         for (let i = 0; i < codesToPrint.length; i++) {
                             const c = codesToPrint[i];
-                            const barcodeDataUrl = window.generateLocationBarcodeDataURL(c);
-                            const qrDataUrl = window.generateLocationQRDataURL(c);
 
                             labelsHtml += `
                         <div class="label-card">
@@ -2736,12 +2734,12 @@
                             </div>
                             <div class="body">
                                 <div class="barcode-box">
-                                    <img src="${barcodeDataUrl}" class="barcode-img" alt="Barcode" />
+                                    <svg id="barcode-loc-${i}" class="barcode-svg"></svg>
                                     <div class="code-text">${c}</div>
                                 </div>
                                 <div class="qr-box">
-                                    <img src="${qrDataUrl}" class="qr-img" alt="QR" />
-                                    <div class="qr-sub">FAST-SCAN QR</div>
+                                    <div id="qr-loc-${i}" class="qr-container"></div>
+                                    <div class="qr-sub font-sans">FAST-SCAN QR</div>
                                 </div>
                             </div>
                             <div class="footer font-sans">
@@ -2758,6 +2756,8 @@
                     <html>
                     <head>
                         <title>CloudVault Location Barcode Sheet</title>
+                        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+                        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
                         <style>
                             @page { size: letter portrait; margin: 0.4in; }
                             body { font-family: monospace; background: #fff; color: #000; margin: 0; padding: 0; }
@@ -2769,10 +2769,11 @@
                             .badge { font-size: 9px; font-weight: bold; background: #000; color: #fff; padding: 2px 6px; border-radius: 3px; }
                             .body { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 1.2in; }
                             .barcode-box { flex: 1; text-align: center; overflow: hidden; }
-                            .barcode-img { max-width: 100%; height: 42px; object-fit: contain; }
+                            .barcode-svg { max-width: 100%; height: 42px; }
                             .code-text { font-size: 15px; font-weight: 900; letter-spacing: 1.5px; margin-top: 2px; }
                             .qr-box { flex: 0 0 85px; width: 85px; text-align: center; border-left: 2px solid #000; padding-left: 6px; }
-                            .qr-img { width: 68px; height: 68px; border: 1px solid #000; padding: 1px; object-fit: contain; image-rendering: pixelated; }
+                            .qr-container { width: 68px; height: 68px; margin: 0 auto; }
+                            .qr-container canvas, .qr-container img { width: 68px !important; height: 68px !important; border: 1px solid #000; padding: 1px; object-fit: contain; image-rendering: pixelated; box-sizing: border-box; }
                             .qr-sub { font-size: 7px; font-weight: bold; margin-top: 1px; }
                             .footer { display: flex; justify-content: space-between; font-size: 8px; font-weight: bold; border-top: 1px solid #000; padding-top: 4px; }
                             .font-sans { font-family: sans-serif; }
@@ -2783,8 +2784,43 @@
                             ${labelsHtml}
                         </div>
                         <script>
-                            window.focus();
-                            window.print();
+                            function doPrint() {
+                                const codes = ${JSON.stringify(codesToPrint)};
+                                codes.forEach((c, idx) => {
+                                    try {
+                                        if (typeof JsBarcode === 'function') {
+                                            JsBarcode("#barcode-loc-" + idx, c, {
+                                                format: "CODE128",
+                                                width: 1.6,
+                                                height: 42,
+                                                displayValue: false,
+                                                margin: 2
+                                            });
+                                        }
+                                    } catch(e) { console.error('Barcode error:', e); }
+
+                                    try {
+                                        const qrEl = document.getElementById("qr-loc-" + idx);
+                                        if (qrEl && typeof QRCode === 'function') {
+                                            new QRCode(qrEl, {
+                                                text: c,
+                                                width: 68,
+                                                height: 68,
+                                                correctLevel: QRCode.CorrectLevel.M
+                                            });
+                                        }
+                                    } catch(e) { console.error('QR error:', e); }
+                                });
+                                setTimeout(function() {
+                                    window.focus();
+                                    window.print();
+                                }, 300);
+                            }
+                            if (document.readyState === 'complete') {
+                                doPrint();
+                            } else {
+                                window.onload = doPrint;
+                            }
                         <\/script>
                     </body>
                     </html>
