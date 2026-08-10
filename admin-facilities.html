@@ -635,10 +635,10 @@
 
             </div>
 
-        </div>
+        </div> <!-- Close grid-cols-12 container -->
 
         <!-- SECTION 5: UNLAUNCHED MARKET WAITLIST & EXPANSION DEMAND PORTAL -->
-        <div class="glass-panel p-6 rounded-3xl space-y-6 border border-emerald-500/20 col-span-1 lg:col-span-2">
+        <div class="glass-panel p-6 rounded-3xl space-y-6 border border-emerald-500/20 w-full">
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-5">
                 <div class="space-y-1">
                     <h3 class="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
@@ -1507,7 +1507,7 @@
                         .in('status', ['pending', 'staged', 'out-for-delivery']);
                     
                     resData = {
-                        numStagingRooms: currentLoadedFac?.num_staging_rooms || 2,
+                        numStagingRooms: currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 3,
                         reservations: (reqs || []).map(r => ({
                             id: r.id,
                             uid: r.uid,
@@ -1523,7 +1523,25 @@
                     };
                 }
 
-                const numRooms = resData.numStagingRooms || 2;
+                // Dynamically determine total staging rooms from RPC, facility specs, or warehouse locations
+                let numRooms = resData.numStagingRooms || currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 3;
+                
+                // Check if warehouse_locations has distinct STAGING room identifiers
+                const { data: stgLocs } = await supabase.from('warehouse_locations')
+                    .select('identifier')
+                    .eq('facility_id', facilityId)
+                    .eq('zone_type', 'STAGING');
+
+                if (stgLocs && stgLocs.length > 0) {
+                    const roomNums = stgLocs.map(l => {
+                        const match = (l.identifier || '').match(/ROOM-(\d+)/i);
+                        return match ? parseInt(match[1], 10) : 1;
+                    });
+                    const maxRoom = Math.max(...roomNums, 0);
+                    if (maxRoom > numRooms) numRooms = maxRoom;
+                }
+
+                numRooms = Math.max(numRooms, 3);
                 const reservations = resData.reservations || [];
 
                 let html = '';

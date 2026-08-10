@@ -1369,7 +1369,8 @@ DECLARE
   v_uid UUID;
   v_user_role public.user_role;
   v_facility RECORD;
-  v_num_rooms INT := 2;
+  v_num_rooms INT := 3;
+  v_stg_loc_rooms INT := 0;
   v_reservations JSONB;
 BEGIN
   v_uid := auth.uid();
@@ -1382,15 +1383,30 @@ BEGIN
     RAISE EXCEPTION 'Access Denied: Staff clearance required';
   END IF;
 
+  -- 1. Fetch configured rooms from facilities table
   SELECT num_staging_rooms, staging_rooms INTO v_facility
   FROM public.facilities
   WHERE id = p_facility_id LIMIT 1;
 
   IF v_facility IS NOT NULL THEN
-    v_num_rooms := COALESCE(v_facility.num_staging_rooms, v_facility.staging_rooms, 2);
+    v_num_rooms := COALESCE(v_facility.num_staging_rooms, v_facility.staging_rooms, 3);
   END IF;
 
-  -- Query active access requests and staging room reservations for target date and facility
+  -- 2. Count distinct staging rooms in warehouse_locations
+  SELECT COUNT(DISTINCT 
+    CASE 
+      WHEN identifier ~ '^ROOM-[0-9]+' THEN substring(identifier from 'ROOM-([0-9]+)')::int
+      ELSE 1 
+    END
+  ) INTO v_stg_loc_rooms
+  FROM public.warehouse_locations
+  WHERE facility_id = p_facility_id AND zone_type = 'STAGING';
+
+  IF v_stg_loc_rooms IS NOT NULL AND v_stg_loc_rooms > v_num_rooms THEN
+    v_num_rooms := v_stg_loc_rooms;
+  END IF;
+
+  -- 3. Query active access requests and staging room reservations for target date and facility
   SELECT COALESCE(jsonb_agg(
     jsonb_build_object(
       'id', ar.id,
@@ -1420,7 +1436,7 @@ BEGIN
     'success', true,
     'facilityId', p_facility_id,
     'targetDate', p_target_date,
-    'numStagingRooms', v_num_rooms,
+    'numStagingRooms', GREATEST(v_num_rooms, 3),
     'reservations', v_reservations
   );
 END;
