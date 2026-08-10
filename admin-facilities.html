@@ -2604,23 +2604,27 @@
                         ${labelsHtml}
                     </div>
                     <script>
-                        window.onload = function() {
+                        function doPrint() {
                             const codes = ${JSON.stringify(codesToPrint)};
                             codes.forEach((c, idx) => {
                                 try {
-                                    JsBarcode("#barcode-loc-" + idx, c, {
-                                        format: "CODE128",
-                                        width: 1.6,
-                                        height: 42,
-                                        displayValue: false,
-                                        margin: 2
-                                    });
-                                } catch(e) {}
+                                    if (typeof JsBarcode === 'function') {
+                                        JsBarcode("#barcode-loc-" + idx, c, {
+                                            format: "CODE128",
+                                            width: 1.6,
+                                            height: 42,
+                                            displayValue: false,
+                                            margin: 2
+                                        });
+                                    }
+                                } catch(e) { console.error(e); }
                             });
                             setTimeout(function() {
+                                window.focus();
                                 window.print();
-                            }, 400);
-                        };
+                            }, 350);
+                        }
+                        doPrint();
                     <\/script>
                 </body>
                 </html>
