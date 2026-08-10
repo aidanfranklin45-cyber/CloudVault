@@ -630,9 +630,9 @@
                             class="text-cyan-400 font-bold">A1-B01-S1</span>)
                     </p>
                     <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                        <button type="button" onclick="openPrintLocationLabelModal('VAULT')"
-                            class="w-full sm:w-auto bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer">
-                            <i data-lucide="printer" class="w-4 h-4"></i>
+                        <button type="button" id="btn-print-vault-barcodes" onclick="window.openPrintLocationLabelModal('VAULT')"
+                            class="w-full sm:w-auto bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md">
+                            <i data-lucide="printer" class="w-4 h-4 text-blue-400"></i>
                             <span>🖨️ Print Vault Barcodes</span>
                         </button>
                         <button onclick="generateVaultLocationsUI()" id="btn-generate-vault-locations"
@@ -674,9 +674,9 @@
                             class="text-emerald-400 font-bold">ROOM-1-BAY-01</span>)
                     </p>
                     <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                        <button type="button" onclick="openPrintLocationLabelModal('STAGING')"
-                            class="w-full sm:w-auto bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer">
-                            <i data-lucide="printer" class="w-4 h-4"></i>
+                        <button type="button" id="btn-print-staging-barcodes" onclick="window.openPrintLocationLabelModal('STAGING')"
+                            class="w-full sm:w-auto bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md">
+                            <i data-lucide="printer" class="w-4 h-4 text-emerald-400"></i>
                             <span>🖨️ Print Staging Barcodes</span>
                         </button>
                         <button onclick="generateStagingLocationsUI()" id="btn-generate-staging-locations"
@@ -2483,8 +2483,9 @@
                 window.currentPrintedLocationType = 'VAULT';
                 window.currentLoadedLocations = [];
 
-                window.openPrintLocationLabelModal = async function (zoneType = 'VAULT') {
+                window.openPrintLocationLabelModal = function (zoneType = 'VAULT') {
                     try {
+                        console.log('[Print Barcodes] Triggered openPrintLocationLabelModal with zone:', zoneType);
                         window.currentPrintedLocationType = zoneType;
                         let modal = document.getElementById('print-location-modal') || document.getElementById('print-location-label-modal');
                         if (!modal) {
@@ -2500,35 +2501,58 @@
                             titleEl.textContent = `Print Location Barcodes (${zoneType === 'VAULT' ? 'Vault Racks' : 'Staging Lockers'})`;
                         }
 
-                        const facId = currentLoadedFac?.id || activeFacilityId;
-                        if (facId && typeof supabase !== 'undefined') {
-                            const { data: locs, error: locErr } = await supabase.from('warehouse_locations')
-                                .select('identifier, zone_type')
-                                .eq('facility_id', facId)
-                                .eq('zone_type', zoneType)
-                                .order('identifier', { ascending: true });
-
-                            if (locErr) {
-                                console.warn('[Print Barcodes Warning] Supabase fetch error, using defaults:', locErr);
-                            }
-
-                            if (locs && locs.length > 0) {
-                                window.currentLoadedLocations = locs.map(l => l.identifier);
-                            } else {
-                                window.currentLoadedLocations = zoneType === 'VAULT'
-                                    ? ['V-A01-S01', 'V-A01-S02', 'V-A01-S03', 'V-A01-S04', 'V-A02-S01', 'V-A02-S02']
-                                    : ['ROOM-1-BAY-01', 'ROOM-1-BAY-02', 'ROOM-1-BAY-03', 'ROOM-1-BAY-04'];
+                        // Generate locations synchronously from current active inputs for instant 0ms preview
+                        let generatedCodes = [];
+                        if (zoneType === 'VAULT') {
+                            const aisles = parseInt(document.getElementById('conf-vault-aisles')?.value || '5', 10);
+                            const bays = parseInt(document.getElementById('conf-vault-bays')?.value || '10', 10);
+                            const shelves = parseInt(document.getElementById('conf-vault-shelves')?.value || '4', 10);
+                            const maxPrint = Math.min(aisles * bays * shelves, 12);
+                            let count = 0;
+                            for (let a = 1; a <= aisles && count < maxPrint; a++) {
+                                for (let b = 1; b <= bays && count < maxPrint; b++) {
+                                    const bayStr = b < 10 ? '0' + b : '' + b;
+                                    for (let s = 1; s <= shelves && count < maxPrint; s++) {
+                                        generatedCodes.push(`A${a}-B${bayStr}-S${s}`);
+                                        count++;
+                                    }
+                                }
                             }
                         } else {
-                            window.currentLoadedLocations = zoneType === 'VAULT'
-                                ? ['V-A01-S01', 'V-A01-S02', 'V-A01-S03', 'V-A01-S04']
-                                : ['ROOM-1-BAY-01', 'ROOM-1-BAY-02', 'ROOM-1-BAY-03'];
+                            const roomId = document.getElementById('conf-staging-room-id')?.value.trim() || 'ROOM-1';
+                            const bays = parseInt(document.getElementById('conf-staging-room-bays')?.value || '10', 10);
+                            const maxPrint = Math.min(bays, 12);
+                            for (let b = 1; b <= maxPrint; b++) {
+                                const bayStr = b < 10 ? '0' + b : '' + b;
+                                generatedCodes.push(`${roomId}-BAY-${bayStr}`);
+                            }
                         }
+
+                        window.currentLoadedLocations = generatedCodes;
 
                         const input = document.getElementById('print-loc-code-input');
                         if (input) input.value = window.currentLoadedLocations.join(', ');
 
                         window.renderLocationLabelPreview();
+
+                        // Asynchronously check DB for synced locations in background
+                        const facId = currentLoadedFac?.id || activeFacilityId;
+                        if (facId && typeof supabase !== 'undefined') {
+                            supabase.from('warehouse_locations')
+                                .select('identifier, zone_type')
+                                .eq('facility_id', facId)
+                                .eq('zone_type', zoneType)
+                                .order('identifier', { ascending: true })
+                                .then(({ data: locs }) => {
+                                    if (locs && locs.length > 0) {
+                                        const dbCodes = locs.map(l => l.identifier);
+                                        window.currentLoadedLocations = dbCodes;
+                                        if (input) input.value = dbCodes.join(', ');
+                                        window.renderLocationLabelPreview();
+                                    }
+                                })
+                                .catch(err => console.warn('[Print Barcodes] DB locations fetch fallback:', err));
+                        }
                     } catch (e) {
                         console.error("[Print Barcodes Error] Failed inside openPrintLocationLabelModal:", e);
                         alert("Could not open barcode print modal: " + (e.message || e));
@@ -2732,6 +2756,30 @@
                         alert("Failed to trigger print: " + (e.message || e));
                     }
                 };
+
+                // Bind direct event listeners to guaranteed button IDs
+                function initPrintButtonListeners() {
+                    const vBtn = document.getElementById('btn-print-vault-barcodes');
+                    if (vBtn) {
+                        vBtn.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            window.openPrintLocationLabelModal('VAULT');
+                        });
+                    }
+                    const sBtn = document.getElementById('btn-print-staging-barcodes');
+                    if (sBtn) {
+                        sBtn.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            window.openPrintLocationLabelModal('STAGING');
+                        });
+                    }
+                }
+
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initPrintButtonListeners);
+                } else {
+                    initPrintButtonListeners();
+                }
             </script>
 
             <!-- PRINTABLE LOCATION BARCODES MODAL -->
