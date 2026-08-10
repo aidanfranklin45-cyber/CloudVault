@@ -1089,21 +1089,25 @@
 
             try {
                 if (typeof supabase !== 'undefined') {
-                    const { data: { session } } = await supabase.auth.getSession();
+                    const [{ data: sessionData }] = await Promise.all([
+                        supabase.auth.getSession(),
+                        loadFacilitiesDropdown()
+                    ]);
+
+                    const session = sessionData?.session;
                     if (session?.user) {
                         const { data: profile } = await supabase.from('users').select('*').eq('id', session.user.id).single();
-                        if (profile) {
-                            actualUserRole = profile.role;
-                            if (profile.role !== 'executive') {
-                                alert("Executive clearance required to access Facility Configuration.");
-                                window.location.href = 'admin.html';
-                                return;
-                            }
+                        if (profile && profile.role !== 'executive') {
+                            alert("Executive clearance required to access Facility Configuration.");
+                            window.location.href = 'admin.html';
+                            return;
                         }
                     }
-                    await loadFacilitiesDropdown();
-                    await loadSelectedFacilityConfig(activeFacilityId);
-                    await loadUnlaunchedMarketWaitlists();
+
+                    await Promise.all([
+                        loadSelectedFacilityConfig(activeFacilityId),
+                        loadUnlaunchedMarketWaitlists()
+                    ]);
                 }
             } catch (e) {
                 console.error("Config DOMInit failure:", e);
@@ -1208,11 +1212,13 @@
             document.getElementById('conf-valet-base').value = Number(fac.valet_base) || 15.00;
             document.getElementById('conf-valet-adder').value = Number(fac.valet_tote_adder) || 1.00;
 
-            // Fetch operational zone / deposits
-            await loadMarketZoneData(fac.id);
-            await loadFacilityTelemetry(fac.id);
-            await loadStagingRoomSchedule(fac.id, selectedStagingDate);
-            await loadWarehouseLocationCount(fac.id);
+            // Fetch operational zone, telemetry, schedule, and location counts in parallel
+            await Promise.all([
+                loadMarketZoneData(fac.id),
+                loadFacilityTelemetry(fac.id),
+                loadStagingRoomSchedule(fac.id, selectedStagingDate),
+                loadWarehouseLocationCount(fac.id)
+            ]);
             calculatePnL();
         }
 
