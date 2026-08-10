@@ -2454,49 +2454,10 @@
         }
 
         function generateLocationQRDataURL(text) {
-            return new Promise((resolve) => {
-                const tempDiv = document.createElement('div');
-                tempDiv.style.position = 'absolute';
-                tempDiv.style.left = '-9999px';
-                document.body.appendChild(tempDiv);
-
-                try {
-                    if (typeof QRCode === 'function') {
-                        new QRCode(tempDiv, {
-                            text: text,
-                            width: 250,
-                            height: 250,
-                            correctLevel: (window.QRCode && QRCode.CorrectLevel) ? QRCode.CorrectLevel.M : 0
-                        });
-
-                        setTimeout(() => {
-                            const canvas = tempDiv.querySelector('canvas');
-                            const img = tempDiv.querySelector('img');
-                            let url = '';
-                            if (img && img.src && img.src.startsWith('data:')) {
-                                url = img.src;
-                            } else if (canvas) {
-                                url = canvas.toDataURL('image/png');
-                            }
-                            if (!url) {
-                                url = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(text)}&ecc=M&margin=1`;
-                            }
-                            if (tempDiv.parentNode) document.body.removeChild(tempDiv);
-                            resolve(url);
-                        }, 40);
-                    } else {
-                        const url = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(text)}&ecc=M&margin=1`;
-                        if (tempDiv.parentNode) document.body.removeChild(tempDiv);
-                        resolve(url);
-                    }
-                } catch (e) {
-                    if (tempDiv.parentNode) document.body.removeChild(tempDiv);
-                    resolve(`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(text)}&ecc=M&margin=1`);
-                }
-            });
+            return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(text)}&ecc=M&margin=1`;
         }
 
-        async function renderLocationLabelPreview() {
+        function renderLocationLabelPreview() {
             const input = document.getElementById('print-loc-code-input');
             const previewBox = document.getElementById('loc-label-preview-box');
             const counter = document.getElementById('loc-sheet-counter');
@@ -2513,7 +2474,7 @@
 
             const todayStr = new Date().toLocaleDateString();
             const firstCode = codes[0] || 'V-A01-S01';
-            const qrDataUrl = await generateLocationQRDataURL(firstCode);
+            const qrDataUrl = generateLocationQRDataURL(firstCode);
             const facName = (currentLoadedFac?.name || 'CloudVault Facility').toUpperCase();
 
             previewBox.innerHTML = `
@@ -2559,29 +2520,29 @@
             }, 50);
         }
 
-        async function triggerPrintLocationLabels() {
+        function triggerPrintLocationLabels() {
             const input = document.getElementById('print-loc-code-input');
             const inputVal = (input ? input.value.trim() : '') || 'V-A01-S01';
             let codesToPrint = inputVal.split(',').map(c => c.trim()).filter(Boolean);
 
-            if (codesToPrint.length === 0) return;
+            if (codesToPrint.length === 0) {
+                alert("Please enter or select at least one location code to print.");
+                return;
+            }
 
             const printWin = window.open('', '_blank');
             if (!printWin) {
-                alert("Please allow popups to print location barcode labels.");
+                alert("Please allow popups in your browser to print location barcode labels.");
                 return;
             }
 
             const todayStr = new Date().toLocaleDateString();
             const facName = (currentLoadedFac?.name || 'CloudVault Facility').toUpperCase();
 
-            const qrPromises = codesToPrint.map(code => generateLocationQRDataURL(code));
-            const qrUrls = await Promise.all(qrPromises);
-
             let labelsHtml = '';
             for (let i = 0; i < codesToPrint.length; i++) {
                 const c = codesToPrint[i];
-                const qrUrl = qrUrls[i];
+                const qrUrl = generateLocationQRDataURL(c);
                 labelsHtml += `
                     <div class="label-card">
                         <div class="header">
