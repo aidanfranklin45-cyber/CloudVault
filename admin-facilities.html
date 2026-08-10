@@ -1770,7 +1770,7 @@
                         const { data: storedTotes } = await supabase.from('inventory')
                             .select('id, location_code, status')
                             .eq('facility_id', facilityId)
-                            .in('status', ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery']);
+                            .eq('status', 'stored');
 
                         const storedCount = (storedTotes || []).length;
                         const maxCap = totalLocations > 0 ? totalLocations : (currentLoadedFac?.tote_capacity || 2000);

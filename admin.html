@@ -1848,7 +1848,7 @@
                         mrr = subs.reduce((acc, sub) => acc + Number(sub.recurring_storage), 0);
                     }
 
-                    const { count: activeTotes } = await supabase.from('inventory').select('*', { count: 'exact', head: true }).in('status', ['stored', 'staged', 'pending-stage']);
+                    const { count: activeTotes } = await supabase.from('inventory').select('*', { count: 'exact', head: true }).eq('status', 'stored');
 
                     document.getElementById('exec-mrr').textContent = `$${mrr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                     const mrrSubtext = document.getElementById('exec-mrr-subtext');
@@ -2268,7 +2268,7 @@
                 // Read active capacity dynamically from real inventory
                 const { count: activeCount } = await supabase.from('inventory').select('*', { count: 'exact', head: true })
                     .eq('facility_id', facilityId)
-                    .in('status', ['stored', 'staged', 'pending-stage']);
+                    .eq('status', 'stored');
                 const active = activeCount || 0;
 
                 const capacityPct = Math.round(((active * sqftTote) / usable) * 100);
@@ -3337,12 +3337,14 @@
             try {
                 const { data, error } = await supabase.rpc('batch_stage_customer_totes', {
                     p_customer_uid: customerUid,
-                    p_staging_location_code: targetLoc.trim().toUpperCase()
+                    p_target_location: targetLoc.trim().toUpperCase()
                 });
 
                 if (error) throw error;
 
-                triggerScanFeedbackOverlay(true, `Batch Staged Totes for ${customerName} to ${targetLoc}`, customerName);
+                const count = data?.totesUpdated || 0;
+                const finalLoc = data?.targetLocation || targetLoc.trim().toUpperCase();
+                triggerScanFeedbackOverlay(true, `Batch Staged ${count} Tote(s) for ${customerName} to ${finalLoc}`, customerName);
                 loadWorkerQueues();
             } catch (e) {
                 console.error("Batch staging failed:", e);
@@ -3497,8 +3499,8 @@
                 const currentStatus = checkTote ? checkTote.status : null;
 
                 // Event Routing:
-                // Event 1: Customer Return to Vault
-                if (expectedStatus === 'stored' || expectedStatus === 'returned' || currentStatus === 'with-customer' || currentStatus === 'out-for-delivery') {
+                // Event 1: Customer Return to Vault (Reshelving into Vault)
+                if (expectedStatus !== 'with-customer' && (expectedStatus === 'stored' || expectedStatus === 'returned' || currentStatus === 'with-customer')) {
                     if (!targetLoc) {
                         triggerScanFeedbackOverlay(false, "Target Location Required: Please scan a shelf/bay barcode or click 'Set Target Shelf/Bay' before reshelving totes.");
                         if (terminalOutput) {
@@ -3520,7 +3522,7 @@
                     error = res.error;
                 } 
                 // Event 3: Vault Pull to Staging or Dispatch
-                else if (expectedStatus === 'staged' || expectedStatus === 'pending-dispatch' || currentStatus === 'pending-stage' || currentStatus === 'pending-dispatch') {
+                else if (expectedStatus !== 'with-customer' && (expectedStatus === 'staged' || expectedStatus === 'pending-dispatch' || currentStatus === 'pending-stage' || currentStatus === 'pending-dispatch')) {
                     const res = await supabase.rpc('process_vault_pull', {
                         p_tote_code: barcode,
                         p_target_staging_code: targetLoc

@@ -1340,13 +1340,17 @@ $$ LANGUAGE plpgsql;
 -- Batch Stage Customer Totes (Single-Customer Order Fulfillment)
 CREATE OR REPLACE FUNCTION public.batch_stage_customer_totes(
   p_customer_uid UUID,
-  p_target_location TEXT DEFAULT 'STAGE-BAY-A1'
+  p_target_location TEXT DEFAULT 'STAGE-BAY-A1',
+  p_staging_location_code TEXT DEFAULT NULL
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_uid UUID;
   v_user_role public.user_role;
   v_updated_count INT := 0;
+  v_effective_location TEXT;
 BEGIN
+  v_effective_location := COALESCE(NULLIF(p_staging_location_code, ''), NULLIF(p_target_location, ''), 'STAGE-BAY-A1');
+
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'Unauthenticated';
@@ -1360,7 +1364,7 @@ BEGIN
   -- Update all pending totes for this customer
   UPDATE public.inventory
   SET status = CASE WHEN status = 'pending-dispatch' THEN 'out-for-delivery'::public.inventory_status ELSE 'staged'::public.inventory_status END,
-      location_code = p_target_location,
+      location_code = v_effective_location,
       location_type = CASE WHEN status = 'pending-dispatch' THEN 'dispatch' ELSE 'staging' END,
       activated = true,
       last_scanned_at = now(),
@@ -1379,8 +1383,11 @@ BEGIN
     'success', true,
     'customerUid', p_customer_uid,
     'totesUpdated', v_updated_count,
-    'targetLocation', p_target_location
+    'targetLocation', v_effective_location
   );
+END;
+$$ LANGUAGE plpgsql;
+
 -- Staging Schedule & Reservation Calendar RPC
 CREATE OR REPLACE FUNCTION public.get_facility_staging_schedule(
   p_facility_id TEXT,
@@ -1542,24 +1549,11 @@ BEGIN
     v_next_status := 'stored'::public.inventory_status;
     v_next_location_type := 'vault';
 
-    -- Target location priority logic when returning to vault:
-    -- 1. Use explicit scanned/locked target location if provided
-    IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' AND p_target_location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A') THEN
+    -- Require explicit scanned/locked target location when returning to vault
+    IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' AND p_target_location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING') THEN
       v_next_location_code := p_target_location_code;
     ELSE
-      -- 2. Dynamically pick an available unoccupied vault location from database
-      SELECT COALESCE(identifier, location_code) INTO v_next_location_code
-      FROM public.warehouse_locations
-      WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
-        AND (zone_type = 'VAULT' OR location_type = 'vault' OR identifier ILIKE 'V-%')
-        AND (is_occupied = false OR is_occupied IS NULL)
-      ORDER BY created_at ASC
-      LIMIT 1;
-
-      -- 3. Strict failure if no real location is available (NO hardcoded fallbacks allowed!)
-      IF v_next_location_code IS NULL THEN
-        RAISE EXCEPTION 'No Available Warehouse Location: Please scan or set a target shelf/bay barcode, or generate vault locations in Facility Config.';
-      END IF;
+      RAISE EXCEPTION 'Target Location Required: Please scan or set a target shelf/bay location barcode before executing a reshelf.';
     END IF;
 
   ELSIF v_item.status = 'stored' THEN
@@ -1687,21 +1681,11 @@ BEGIN
     RAISE EXCEPTION 'Return Error: Tote % is in status % and cannot be processed for return', p_tote_code, v_item.status;
   END IF;
 
-  IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' AND p_target_location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING') THEN
-    v_assigned_location_code := p_target_location_code;
-  ELSE
-    SELECT COALESCE(identifier, location_code) INTO v_assigned_location_code
-    FROM public.warehouse_locations
-    WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
-      AND (zone_type = 'VAULT' OR location_type = 'vault' OR identifier ILIKE 'V-%')
-      AND (is_occupied = false OR is_occupied IS NULL)
-    ORDER BY created_at ASC
-    LIMIT 1;
-
-    IF v_assigned_location_code IS NULL THEN
-      RAISE EXCEPTION 'Return Error: No available vault locations in database. Please scan a shelf barcode or generate vault locations in Facility Config.';
-    END IF;
+  IF p_target_location_code IS NULL OR trim(p_target_location_code) = '' OR p_target_location_code IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING') THEN
+    RAISE EXCEPTION 'Target Location Required: Please scan a shelf/bay barcode or set a Target Shelf/Bay before executing a reshelf for tote %.', p_tote_code;
   END IF;
+
+  v_assigned_location_code := trim(p_target_location_code);
 
   UPDATE public.inventory
   SET status = 'stored'::public.inventory_status,
