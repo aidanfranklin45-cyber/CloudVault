@@ -3290,7 +3290,7 @@
                                 </div>
 
                                 <!-- Full-Width 60px Ergonomic Industrial Action Button -->
-                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('with-customer')" class="w-full min-h-[60px] bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-purple-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('stored')" class="w-full min-h-[60px] bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-purple-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                     <i data-lucide="package-check" class="w-6 h-6"></i>
                                     <span>${returnLabel} (${firstCode}) →</span>
                                 </button>
@@ -3305,24 +3305,12 @@
 
         // Slot Tote to Physical Vault Coordinate
         async function slotToteToVault(toteCode) {
-            let suggestedSlot = window.activeTargetLocationCode;
-            if (!suggestedSlot) {
-                try {
-                    const facId = window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
-                    const { data: loc } = await supabase.from('warehouse_locations')
-                        .select('identifier')
-                        .eq('facility_id', facId)
-                        .eq('zone_type', 'VAULT')
-                        .eq('is_occupied', false)
-                        .limit(1)
-                        .maybeSingle();
-                    suggestedSlot = loc?.identifier || 'V-A01-S01';
-                } catch (e) {
-                    suggestedSlot = 'V-A01-S01';
-                }
-            }
+            let suggestedSlot = window.activeTargetLocationCode || '';
             const vaultSlot = prompt(`Enter Physical Vault Location Coordinate (e.g. Aisle/Bay/Shelf like V-A01-S12) for Tote ${toteCode}:`, suggestedSlot);
-            if (!vaultSlot || !vaultSlot.trim()) return;
+            if (!vaultSlot || !vaultSlot.trim()) {
+                alert("⚠️ Target Location Required: Reshelving requires setting a target shelf or bay location first.");
+                return;
+            }
 
             try {
                 const { data, error } = await supabase.rpc('slot_tote_location', {
@@ -3349,16 +3337,17 @@
             try {
                 const { data, error } = await supabase.rpc('batch_stage_customer_totes', {
                     p_customer_uid: customerUid,
-                    p_target_location: targetLoc.trim().toUpperCase()
+                    p_staging_location_code: targetLoc.trim().toUpperCase()
                 });
+
                 if (error) throw error;
 
-                triggerScanFeedbackOverlay(true, `Batch Staged ${data.totesUpdated || 0} Tote(s) for ${customerName} to ${data.targetLocation}`);
+                triggerScanFeedbackOverlay(true, `Batch Staged Totes for ${customerName} to ${targetLoc}`, customerName);
                 loadWorkerQueues();
             } catch (e) {
                 console.error("Batch staging failed:", e);
                 triggerScanFeedbackOverlay(false, e.message || "Batch staging failed.");
-                alert("Fail-Fast Error: " + (e.message || "Batch staging failed"));
+                alert("Batch Staging Failed: " + (e.message || "Operation failed"));
             }
         }
 
@@ -3397,6 +3386,7 @@
             }
         }
 
+        let currentMasterTote = null;
         window.activeTargetLocationCode = null;
 
         function setTargetLocationLock(locCode) {
@@ -3431,7 +3421,7 @@
         }
 
         function promptManualTargetLocation() {
-            const current = window.activeTargetLocationCode || 'V-A01-S01';
+            const current = window.activeTargetLocationCode || '';
             const input = prompt("Enter or Paste Target Location Code (Vault shelf e.g. V-A01-S01 or Staging locker e.g. ROOM-1-BAY-01):", current);
             if (input && input.trim()) {
                 setTargetLocationLock(input.trim());
@@ -3509,6 +3499,19 @@
                 // Event Routing:
                 // Event 1: Customer Return to Vault
                 if (expectedStatus === 'stored' || expectedStatus === 'returned' || currentStatus === 'with-customer' || currentStatus === 'out-for-delivery') {
+                    if (!targetLoc) {
+                        triggerScanFeedbackOverlay(false, "Target Location Required: Please scan a shelf/bay barcode or click 'Set Target Shelf/Bay' before reshelving totes.");
+                        if (terminalOutput) {
+                            terminalOutput.innerHTML = `
+                                <span class="text-amber-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="map-pin-off" class="w-4 h-4 text-amber-400"></i> Target Shelf/Bay Required</span>
+                                <span class="text-[10px] text-amber-300 mt-1 font-mono">Please scan a shelf/bay barcode (e.g. V-A01-S01) or click "Set Target Shelf/Bay" above before executing a reshelf.</span>
+                            `;
+                            if (typeof lucide !== 'undefined') lucide.createIcons();
+                        }
+                        if (barcodeInput) barcodeInput.focus();
+                        return;
+                    }
+
                     const res = await supabase.rpc('process_tote_return', {
                         p_tote_code: barcode,
                         p_target_location_code: targetLoc
@@ -4746,7 +4749,6 @@
         // =========================================================================
         // Tote Master Control & Telemetry System (Manager & Executive Only)
         // =========================================================================
-        let currentMasterTote = null;
 
         function calculateTenureString(timestamp) {
             if (!timestamp) return "N/A";
