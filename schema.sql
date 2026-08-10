@@ -1529,10 +1529,28 @@ BEGIN
 
   ELSIF v_item.status = 'with-customer' THEN
     v_next_status := 'stored'::public.inventory_status;
-    v_next_location_code := COALESCE(p_target_location_code, v_item.location_code, 'V-A01-S01');
     v_next_location_type := 'vault';
 
-  -- Stored tote requested by customer
+    -- Target location priority logic when returning to vault:
+    -- 1. Use explicit scanned/locked target location if provided
+    IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' AND p_target_location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A') THEN
+      v_next_location_code := p_target_location_code;
+    ELSE
+      -- 2. Dynamically pick an available unoccupied vault location for this facility
+      SELECT COALESCE(identifier, location_code) INTO v_next_location_code
+      FROM public.warehouse_locations
+      WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
+        AND (zone_type = 'VAULT' OR location_type = 'vault' OR identifier ILIKE 'V-%')
+        AND (is_occupied = false OR is_occupied IS NULL)
+      ORDER BY created_at ASC
+      LIMIT 1;
+
+      -- 3. Fallback to default vault bay if no unassigned slots are found
+      IF v_next_location_code IS NULL THEN
+        v_next_location_code := 'V-A01-S01';
+      END IF;
+    END IF;
+
   ELSIF v_item.status = 'stored' THEN
     IF v_has_pending_request AND v_fulfillment_type = 'valet_delivery' THEN
       v_next_status := 'pending-dispatch'::public.inventory_status;
@@ -1544,8 +1562,25 @@ BEGIN
       v_next_location_type := 'vault';
     ELSE
       v_next_status := 'stored'::public.inventory_status;
-      v_next_location_code := COALESCE(p_target_location_code, v_item.location_code, 'V-A01-S01');
       v_next_location_type := 'vault';
+
+      IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' THEN
+        v_next_location_code := p_target_location_code;
+      ELSIF v_item.location_code IS NOT NULL AND v_item.location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING') THEN
+        v_next_location_code := v_item.location_code;
+      ELSE
+        SELECT COALESCE(identifier, location_code) INTO v_next_location_code
+        FROM public.warehouse_locations
+        WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
+          AND (zone_type = 'VAULT' OR location_type = 'vault' OR identifier ILIKE 'V-%')
+          AND (is_occupied = false OR is_occupied IS NULL)
+        ORDER BY created_at ASC
+        LIMIT 1;
+
+        IF v_next_location_code IS NULL THEN
+          v_next_location_code := 'V-A01-S01';
+        END IF;
+      END IF;
     END IF;
 
   ELSE
