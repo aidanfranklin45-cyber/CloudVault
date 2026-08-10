@@ -2411,20 +2411,24 @@
         let currentLoadedLocations = [];
 
         async function openPrintLocationLabelModal(zoneType = 'VAULT') {
-            currentPrintedLocationType = zoneType;
-            const modal = document.getElementById('print-location-modal');
-            if (modal) modal.classList.remove('hidden');
-
-            const titleEl = document.getElementById('print-loc-modal-title');
-            if (titleEl) titleEl.textContent = `Print Location Barcodes (${zoneType === 'VAULT' ? 'Vault Racks' : 'Staging Lockers'})`;
-
-            const facId = currentLoadedFac?.id || activeFacilityId;
-            if (!facId) {
-                alert("Please select a facility first.");
-                return;
-            }
-
             try {
+                currentPrintedLocationType = zoneType;
+                const modal = document.getElementById('print-location-modal');
+                if (!modal) {
+                    alert('Error: print-location-modal element not found in DOM');
+                    return;
+                }
+                modal.classList.remove('hidden');
+
+                const titleEl = document.getElementById('print-loc-modal-title');
+                if (titleEl) titleEl.textContent = `Print Location Barcodes (${zoneType === 'VAULT' ? 'Vault Racks' : 'Staging Lockers'})`;
+
+                const facId = currentLoadedFac?.id || activeFacilityId;
+                if (!facId) {
+                    alert("Please select a facility first.");
+                    return;
+                }
+
                 const { data: locs } = await supabase.from('warehouse_locations')
                     .select('identifier, zone_type')
                     .eq('facility_id', facId)
@@ -2444,7 +2448,8 @@
 
                 renderLocationLabelPreview();
             } catch (e) {
-                console.error("Error loading location barcodes:", e);
+                console.error("Error in openPrintLocationLabelModal:", e);
+                alert("Error opening print modal: " + (e.message || e));
             }
         }
 
