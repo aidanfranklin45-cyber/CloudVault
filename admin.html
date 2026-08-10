@@ -821,17 +821,25 @@
                 </div>
 
                 <!-- Master Search Input Bar -->
-                <div class="relative">
-                    <div class="relative flex items-center">
-                        <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-4 pointer-events-none"></i>
-                        <input type="text" id="master-tote-search-input" oninput="onMasterToteSearchInput(this.value)"
-                            onkeydown="if(event.key==='Enter') executeMasterToteSearch(this.value)"
-                            placeholder="🔍 Scan barcode or search tote code (e.g. CV-SEA-7DPK), customer name, or email..."
-                            class="w-full bg-gray-950 border-2 border-gray-800 focus:border-indigo-500 rounded-2xl pl-12 pr-28 py-3.5 text-sm text-white font-mono placeholder:font-sans placeholder:text-gray-500 outline-none transition shadow-inner">
-                        <button
-                            onclick="executeMasterToteSearch(document.getElementById('master-tote-search-input').value)"
-                            class="absolute right-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md flex items-center gap-1.5 cursor-pointer">
-                            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i> Inspect
+                <div class="relative space-y-3">
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                        <div class="relative flex-1 flex items-center">
+                            <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-4 pointer-events-none"></i>
+                            <input type="text" id="master-tote-search-input" oninput="onMasterToteSearchInput(this.value)"
+                                onkeydown="if(event.key==='Enter') executeMasterToteSearch(this.value)"
+                                placeholder="🔍 Scan barcode or search tote code (e.g. CV-SEA-7DPK), customer name, or email..."
+                                class="w-full bg-gray-950 border-2 border-gray-800 focus:border-indigo-500 rounded-2xl pl-12 pr-28 py-3.5 text-sm text-white font-mono placeholder:font-sans placeholder:text-gray-500 outline-none transition shadow-inner">
+                            <button
+                                onclick="executeMasterToteSearch(document.getElementById('master-tote-search-input').value)"
+                                class="absolute right-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md flex items-center gap-1.5 cursor-pointer">
+                                <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i> Inspect
+                            </button>
+                        </div>
+                        <button id="btn-customer-billing-drawer"
+                            onclick="openCustomerBillingDrawer()"
+                            class="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 font-bold text-xs px-4 py-3.5 rounded-2xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer min-h-[44px]">
+                            <i data-lucide="user-check" class="w-4 h-4 text-purple-400"></i>
+                            <span>👤 Customer Profile &amp; Billing</span>
                         </button>
                     </div>
 
@@ -4843,22 +4851,364 @@
             }
         }
 
+        window.currentSelectedCustomer = null;
+
+        async function openCustomerBillingDrawer(userOrId) {
+            let user = null;
+            if (typeof userOrId === 'object' && userOrId !== null) {
+                user = userOrId;
+            } else if (typeof userOrId === 'string' && userOrId.trim()) {
+                const { data } = await supabase.from('users').select('*').eq('id', userOrId.trim()).maybeSingle();
+                user = data;
+            } else if (window.currentSelectedCustomer) {
+                user = window.currentSelectedCustomer;
+            } else {
+                const searchInput = document.getElementById('master-tote-search-input');
+                const q = searchInput ? searchInput.value.trim() : '';
+                if (q) {
+                    const { data } = await supabase.from('users').select('*').or(`email.ilike.%${q}%,name.ilike.%${q}%`).limit(1).maybeSingle();
+                    user = data;
+                }
+            }
+
+            const drawer = document.getElementById('customer-billing-drawer');
+            const backdrop = document.getElementById('customer-billing-drawer-backdrop');
+            if (!drawer) return;
+
+            if (backdrop) backdrop.classList.remove('hidden');
+            drawer.classList.remove('hidden', 'translate-x-full');
+            drawer.classList.add('translate-x-0');
+
+            if (!user) {
+                document.getElementById('cbd-customer-name').textContent = 'No Customer Selected';
+                document.getElementById('cbd-customer-email').textContent = 'Search a customer email or tote to view telemetry';
+                document.getElementById('cbd-customer-totes-count').textContent = '0 Totes';
+                document.getElementById('cbd-customer-rate').textContent = '$5.00/tote/mo';
+                document.getElementById('cbd-customer-payment-card').textContent = '💳 Card on File';
+
+                document.getElementById('cbd-totes-list').innerHTML = `
+                    <div class="p-8 text-center text-xs text-gray-500 font-mono bg-gray-900/50 rounded-2xl border border-gray-850">
+                        <i data-lucide="search" class="w-8 h-8 mx-auto text-gray-600 mb-2"></i>
+                        <p class="font-bold text-gray-400">No Active Customer Loaded</p>
+                        <p class="mt-1">Please enter a customer email or search tote barcode above to inspect telemetry &amp; billing.</p>
+                    </div>
+                `;
+                document.getElementById('cbd-billing-list').innerHTML = `
+                    <div class="p-8 text-center text-xs text-gray-500 font-mono bg-gray-900/50 rounded-2xl border border-gray-850">
+                        <i data-lucide="receipt" class="w-8 h-8 mx-auto text-gray-600 mb-2"></i>
+                        <p class="font-bold text-gray-400">No Billing Records Loaded</p>
+                        <p class="mt-1">Select an active customer record to view invoice receipts and issue refunds.</p>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                return;
+            }
+
+            window.currentSelectedCustomer = user;
+
+            document.getElementById('cbd-customer-name').textContent = user.name || 'Customer';
+            document.getElementById('cbd-customer-email').textContent = user.email || 'N/A';
+            
+            const { data: userTotes } = await supabase.from('inventory').select('*').eq('uid', user.id);
+            const toteCount = (userTotes || []).length;
+            document.getElementById('cbd-customer-totes-count').textContent = `${toteCount} Tote${toteCount !== 1 ? 's' : ''}`;
+
+            // Calculate dynamic tier rate ($1-$5/tote)
+            let tierRate = 5.00;
+            if (toteCount > 100) tierRate = 2.00;
+            else if (toteCount > 50) tierRate = 3.00;
+            else if (toteCount > 10) tierRate = 4.00;
+
+            const totalMonthly = toteCount * tierRate;
+            document.getElementById('cbd-customer-rate').textContent = `$${tierRate.toFixed(2)}/tote/mo ($${totalMonthly.toFixed(2)} total)`;
+
+            const cardBrand = user.card_brand || user.payment_method_brand || 'Visa';
+            const cardLast4 = user.card_last4 || user.payment_method_last4 || '4242';
+            document.getElementById('cbd-customer-payment-card').textContent = `💳 ${cardBrand} •••• ${cardLast4}`;
+
+            loadCustomerTotesList(user.id, userTotes);
+            loadCustomerBillingHistory(user.id);
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function closeCustomerBillingDrawer() {
+            const drawer = document.getElementById('customer-billing-drawer');
+            const backdrop = document.getElementById('customer-billing-drawer-backdrop');
+            if (drawer) {
+                drawer.classList.add('translate-x-full');
+                drawer.classList.remove('translate-x-0');
+                setTimeout(() => drawer.classList.add('hidden'), 300);
+            }
+            if (backdrop) backdrop.classList.add('hidden');
+        }
+
+        function switchCustomerDrawerTab(tabName) {
+            const totesBtn = document.getElementById('cbd-tab-totes-btn');
+            const billingBtn = document.getElementById('cbd-tab-billing-btn');
+            const totesPanel = document.getElementById('cbd-tab-totes-panel');
+            const billingPanel = document.getElementById('cbd-tab-billing-panel');
+
+            if (!totesBtn || !billingBtn || !totesPanel || !billingPanel) return;
+
+            if (tabName === 'billing') {
+                totesBtn.className = 'flex-1 py-3 px-4 font-bold text-xs rounded-xl border border-gray-800 bg-gray-900 text-gray-400 transition flex items-center justify-center gap-2 min-h-[44px] cursor-pointer';
+                billingBtn.className = 'flex-1 py-3 px-4 font-bold text-xs rounded-xl border border-purple-500/40 bg-purple-500/20 text-purple-300 transition flex items-center justify-center gap-2 min-h-[44px] cursor-pointer';
+                totesPanel.classList.add('hidden');
+                billingPanel.classList.remove('hidden');
+            } else {
+                totesBtn.className = 'flex-1 py-3 px-4 font-bold text-xs rounded-xl border border-purple-500/40 bg-purple-500/20 text-purple-300 transition flex items-center justify-center gap-2 min-h-[44px] cursor-pointer';
+                billingBtn.className = 'flex-1 py-3 px-4 font-bold text-xs rounded-xl border border-gray-800 bg-gray-900 text-gray-400 transition flex items-center justify-center gap-2 min-h-[44px] cursor-pointer';
+                totesPanel.classList.remove('hidden');
+                billingPanel.classList.add('hidden');
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function loadCustomerTotesList(userId, totesData) {
+            const listEl = document.getElementById('cbd-totes-list');
+            if (!listEl) return;
+
+            const totes = totesData || [];
+            if (totes.length === 0) {
+                listEl.innerHTML = `
+                    <div class="p-8 text-center text-xs text-gray-500 font-mono bg-gray-900/50 rounded-2xl border border-gray-850 space-y-1">
+                        <p class="font-bold text-gray-400">No Stored Totes Found</p>
+                        <p>This customer does not have any active or stored totes assigned.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            listEl.innerHTML = totes.map(t => {
+                const locCode = t.location_code || t.location_identifier || 'Unassigned';
+                const labelName = t.label || t.label_name || 'Standard Tote';
+                const status = t.status || 'stored';
+                const statusClass = status === 'stored' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : status === 'staged' ? 'bg-green-500/10 text-green-400 border-green-500/30'
+                    : status === 'out-for-delivery' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+
+                return `
+                    <div onclick="closeCustomerBillingDrawer();openToteMasterModal('${t.id}')"
+                        class="min-h-[44px] cursor-pointer hover:border-indigo-500/50 hover:bg-gray-900 transition bg-gray-900/80 rounded-2xl p-4 border border-gray-800 flex items-center justify-between shadow-md group">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 font-mono font-bold flex items-center justify-center text-sm border border-indigo-500/20 group-hover:scale-105 transition">
+                                📦
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-bold text-white font-mono">${t.tote_code}</span>
+                                    <span class="text-xs text-gray-400 font-medium font-sans">&bull; ${escapeHtml(labelName)}</span>
+                                </div>
+                                <p class="text-[11px] text-gray-400 font-mono mt-0.5">Location: <strong class="text-cyan-300 font-bold">${locCode}</strong></p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border font-mono ${statusClass}">${status}</span>
+                            <i data-lucide="chevron-right" class="w-4 h-4 text-gray-500 group-hover:text-white transition"></i>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        async function loadCustomerBillingHistory(userId) {
+            const listEl = document.getElementById('cbd-billing-list');
+            if (!listEl) return;
+
+            try {
+                let invoices = null;
+
+                const { data: invData, error: invErr } = await supabase
+                    .from('billing_invoices')
+                    .select('*')
+                    .eq('uid', userId)
+                    .order('created_at', { ascending: false });
+
+                if (!invErr && invData && invData.length > 0) {
+                    invoices = invData;
+                } else {
+                    const { data: chargeData } = await supabase
+                        .from('charges_ledger')
+                        .select('*')
+                        .eq('uid', userId)
+                        .order('charged_at', { ascending: false });
+                    invoices = chargeData || [];
+                }
+
+                if (!invoices || invoices.length === 0) {
+                    listEl.innerHTML = `
+                        <div class="p-8 text-center text-xs text-gray-500 font-mono bg-gray-900/50 rounded-2xl border border-gray-850 space-y-1">
+                            <p class="font-bold text-gray-400">No Billing History Found</p>
+                            <p>No Stripe invoices or charges recorded for this customer account.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                listEl.innerHTML = `
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-850 bg-gray-900/60 font-mono">
+                                <th class="py-3 px-4">Invoice / Stripe ID</th>
+                                <th class="py-3 px-4">Period / Date</th>
+                                <th class="py-3 px-4">Amount</th>
+                                <th class="py-3 px-4">Status</th>
+                                <th class="py-3 px-4 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-850 text-xs">
+                            ${invoices.map(inv => {
+                                const rawId = inv.stripe_invoice_id || inv.id || 'INV-UNKNOWN';
+                                const invId = typeof rawId === 'string' ? rawId : String(rawId);
+                                const dateVal = inv.billing_period || inv.created_at || inv.charged_at;
+                                const dateStr = dateVal ? new Date(dateVal).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+                                const amount = Number(inv.amount || 0).toFixed(2);
+                                const status = (inv.status || 'paid').toLowerCase();
+                                
+                                const isPaid = (status === 'paid' || status === 'succeeded' || status === 'success');
+                                const isRefunded = (status === 'refunded');
+
+                                const statusBadge = isPaid
+                                    ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Paid</span>`
+                                    : isRefunded
+                                    ? `<span class="bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Refunded</span>`
+                                    : `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">${status}</span>`;
+
+                                return `
+                                    <tr class="hover:bg-gray-900/50 transition">
+                                        <td class="py-3.5 px-4 font-mono font-bold text-white">${escapeHtml(invId.substring(0, 18))}</td>
+                                        <td class="py-3.5 px-4 font-mono text-gray-400">${dateStr}</td>
+                                        <td class="py-3.5 px-4 font-mono font-bold text-emerald-400">$${amount}</td>
+                                        <td class="py-3.5 px-4">${statusBadge}</td>
+                                        <td class="py-3.5 px-4 text-right">
+                                            ${isPaid ? `
+                                                <button onclick="triggerOneClickRefund('${invId}', ${inv.amount})"
+                                                    class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-xs px-3 py-2 rounded-xl transition inline-flex items-center gap-1 cursor-pointer min-h-[44px]">
+                                                    💸 Refund
+                                                </button>
+                                            ` : `<span class="text-[10px] text-gray-600 font-mono">—</span>`}
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (err) {
+                console.error("Failed to load billing history:", err);
+                listEl.innerHTML = `<div class="p-6 text-center text-xs text-red-500 font-mono">Error loading billing history: ${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        async function triggerOneClickRefund(invoiceId, maxAmount) {
+            const safeMax = Number(maxAmount) || 0;
+            const amountStr = prompt(`Enter refund amount for Invoice #${invoiceId.substring(0, 8)} (Max: $${safeMax.toFixed(2)}):`, safeMax.toFixed(2));
+            if (amountStr === null) return;
+
+            const refundAmount = parseFloat(amountStr);
+            if (isNaN(refundAmount) || refundAmount <= 0 || refundAmount > safeMax) {
+                alert(`⚠️ Invalid refund amount. Must be a number between $0.01 and $${safeMax.toFixed(2)}.`);
+                return;
+            }
+
+            const reason = prompt("Enter reason for issuing Stripe refund:", "Customer Service Credit / Refund") || "Customer Service Refund";
+
+            if (!confirm(`Are you sure you want to issue a $${refundAmount.toFixed(2)} refund for Invoice #${invoiceId.substring(0, 8)}?`)) {
+                return;
+            }
+
+            try {
+                const supabaseUrl = window.SUPABASE_URL || 'https://xpxvebncrjvyksvtufgj.supabase.co';
+                const { data: sessionData } = await supabase.auth.getSession();
+                const token = sessionData?.session?.access_token || '';
+
+                const response = await fetch(`${supabaseUrl}/functions/v1/process-refund`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        invoice_id: invoiceId,
+                        amount: refundAmount,
+                        reason: reason
+                    })
+                });
+
+                let result = {};
+                try {
+                    result = await response.json();
+                } catch(e) {}
+
+                if (!response.ok) {
+                    throw new Error(result.message || result.error || `Server responded with status ${response.status}`);
+                }
+
+                if (typeof triggerScanFeedbackOverlay === 'function') {
+                    triggerScanFeedbackOverlay(true, `Refund of $${refundAmount.toFixed(2)} issued successfully!`, invoiceId);
+                }
+                alert(`💸 Refund Success: $${refundAmount.toFixed(2)} refunded for Invoice #${invoiceId.substring(0, 8)}!`);
+
+                await supabase.from('billing_invoices').update({ status: 'refunded' }).eq('id', invoiceId);
+                await supabase.from('charges_ledger').update({ status: 'refunded' }).eq('id', invoiceId);
+
+                if (window.currentSelectedCustomer) {
+                    loadCustomerBillingHistory(window.currentSelectedCustomer.id);
+                }
+            } catch (err) {
+                console.error("One-click refund processing note:", err);
+                if (confirm(`Refund action notice: "${err.message}". Mark invoice status as 'refunded' in system database ledger?`)) {
+                    await supabase.from('billing_invoices').update({ status: 'refunded' }).eq('id', invoiceId);
+                    await supabase.from('charges_ledger').update({ status: 'refunded' }).eq('id', invoiceId);
+                    if (typeof triggerScanFeedbackOverlay === 'function') {
+                        triggerScanFeedbackOverlay(true, `Refund $${refundAmount.toFixed(2)} logged in ledger`, invoiceId);
+                    }
+                    if (window.currentSelectedCustomer) {
+                        loadCustomerBillingHistory(window.currentSelectedCustomer.id);
+                    }
+                }
+            }
+        }
+
         async function executeMasterToteSearch(query) {
             const q = (query || '').trim();
             if (!q) return;
 
+            // Search matching customer user record by email or name
+            const { data: users } = await supabase.from('users')
+                .select('*')
+                .or(`email.ilike.%${q}%,name.ilike.%${q}%`)
+                .limit(1);
+
+            if (users && users.length > 0) {
+                window.currentSelectedCustomer = users[0];
+                openCustomerBillingDrawer(users[0]);
+                return;
+            }
+
             const { data: items } = await supabase.from('inventory')
-                .select('id')
+                .select('id, uid, users!uid(*)')
                 .or(`tote_code.eq.${q.toUpperCase()},tote_code.ilike.%${q}%`)
                 .limit(1);
 
             if (items && items.length > 0) {
+                if (items[0].users) {
+                    window.currentSelectedCustomer = items[0].users;
+                }
                 openToteMasterModal(items[0].id);
             } else {
                 onMasterToteSearchInput(q);
             }
         }
 
+        window.openCustomerBillingDrawer = openCustomerBillingDrawer;
+        window.closeCustomerBillingDrawer = closeCustomerBillingDrawer;
+        window.switchCustomerDrawerTab = switchCustomerDrawerTab;
+        window.triggerOneClickRefund = triggerOneClickRefund;
         window.onMasterToteSearchInput = onMasterToteSearchInput;
         window.executeMasterToteSearch = executeMasterToteSearch;
         window.openToteMasterModal = openToteMasterModal;
@@ -5865,6 +6215,92 @@
                     class="w-1/2 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-red-600/30 flex items-center justify-center gap-2">
                     <i data-lucide="lock" class="w-4 h-4"></i> Authorize Action
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide-Over Customer Profile & Billing Drawer (#customer-billing-drawer) -->
+    <div id="customer-billing-drawer-backdrop" onclick="closeCustomerBillingDrawer()"
+        class="hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm transition-opacity duration-300"></div>
+
+    <div id="customer-billing-drawer"
+        class="hidden fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-gray-950 border-l border-gray-800 shadow-2xl flex flex-col transition-transform duration-300 transform translate-x-full">
+        <!-- Drawer Header -->
+        <div class="p-6 border-b border-gray-800 space-y-4 bg-gray-950/90 backdrop-blur">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 rounded-2xl bg-purple-500/20 text-purple-400 font-black flex items-center justify-center text-lg border border-purple-500/30">
+                        👤
+                    </div>
+                    <div>
+                        <h3 id="cbd-customer-name" class="font-black text-white text-xl">Customer Profile</h3>
+                        <p id="cbd-customer-email" class="text-xs text-gray-400 font-mono">Select a customer or search email</p>
+                    </div>
+                </div>
+                <button onclick="closeCustomerBillingDrawer()"
+                    class="text-gray-400 hover:text-white p-2.5 rounded-xl bg-gray-900 border border-gray-800 transition min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
+                    title="Close Drawer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Customer Summary Telemetry Bar -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
+                <div class="bg-gray-900/80 p-3 rounded-2xl border border-gray-800 space-y-0.5">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase">Active Totes</span>
+                    <p id="cbd-customer-totes-count" class="font-black text-white font-mono text-base">0 Totes</p>
+                </div>
+                <div class="bg-gray-900/80 p-3 rounded-2xl border border-gray-800 space-y-0.5">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase">Monthly Tier Rate</span>
+                    <p id="cbd-customer-rate" class="font-black text-indigo-400 font-mono text-xs font-bold">$5.00/tote/mo</p>
+                </div>
+                <div class="bg-gray-900/80 p-3 rounded-2xl border border-gray-800 space-y-0.5">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase">Payment Card (Stripe)</span>
+                    <p id="cbd-customer-payment-card" class="font-bold text-emerald-400 font-mono text-xs flex items-center gap-1">💳 Visa •••• 4242</p>
+                </div>
+            </div>
+
+            <!-- Tab Navigation Buttons -->
+            <div class="flex border-b border-gray-800 gap-2 pt-2">
+                <button id="cbd-tab-totes-btn" onclick="switchCustomerDrawerTab('totes')"
+                    class="flex-1 py-3 px-4 font-bold text-xs rounded-xl border border-purple-500/40 bg-purple-500/20 text-purple-300 transition flex items-center justify-center gap-2 min-h-[44px] cursor-pointer">
+                    <i data-lucide="boxes" class="w-4 h-4"></i>
+                    <span>Tab 1: Stored Totes List</span>
+                </button>
+                <button id="cbd-tab-billing-btn" onclick="switchCustomerDrawerTab('billing')"
+                    class="flex-1 py-3 px-4 font-bold text-xs rounded-xl border border-gray-800 bg-gray-900 text-gray-400 transition flex items-center justify-center gap-2 min-h-[44px] cursor-pointer">
+                    <i data-lucide="receipt" class="w-4 h-4"></i>
+                    <span>Tab 2: Billing History &amp; Refunds</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Drawer Content Body (Scrollable) -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <!-- Tab 1 Panel: Stored Totes List -->
+            <div id="cbd-tab-totes-panel" class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-extrabold uppercase text-gray-400 tracking-wider flex items-center gap-1.5">
+                        <i data-lucide="package" class="w-4 h-4 text-indigo-400"></i> Customer Owned Totes &amp; Location Inspector
+                    </h4>
+                    <span class="text-[10px] text-gray-500 font-mono">Click card to inspect</span>
+                </div>
+                <div id="cbd-totes-list" class="space-y-3">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Tab 2 Panel: Billing History & Refunds Table -->
+            <div id="cbd-tab-billing-panel" class="hidden space-y-4">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-extrabold uppercase text-gray-400 tracking-wider flex items-center gap-1.5">
+                        <i data-lucide="credit-card" class="w-4 h-4 text-emerald-400"></i> Stripe Billing Receipts &amp; 1-Click Refunds
+                    </h4>
+                    <span class="text-[10px] text-gray-500 font-mono">Real-Time Sync</span>
+                </div>
+                <div id="cbd-billing-list" class="overflow-x-auto border border-gray-850 rounded-2xl bg-gray-950">
+                    <!-- Populated dynamically -->
+                </div>
             </div>
         </div>
     </div>
