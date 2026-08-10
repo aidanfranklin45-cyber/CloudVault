@@ -1864,8 +1864,10 @@ CREATE OR REPLACE FUNCTION public.move_tote_location(
 DECLARE
   v_old_location_id UUID;
   v_new_zone_type VARCHAR(50);
-  v_new_is_occupied BOOLEAN;
   v_new_identifier VARCHAR(100);
+  v_capacity INTEGER;
+  v_current_count INTEGER;
+  v_old_count INTEGER;
   v_tote_code TEXT;
 BEGIN
   -- 1. Verify tote exists and fetch current location
@@ -1879,8 +1881,8 @@ BEGIN
 
   -- 2. Verify new location if provided
   IF p_new_location_id IS NOT NULL THEN
-    SELECT zone_type, is_occupied, identifier
-    INTO v_new_zone_type, v_new_is_occupied, v_new_identifier
+    SELECT zone_type, COALESCE(capacity, 1), identifier
+    INTO v_new_zone_type, v_capacity, v_new_identifier
     FROM public.warehouse_locations
     WHERE id = p_new_location_id;
 
@@ -1888,27 +1890,18 @@ BEGIN
       RAISE EXCEPTION 'Target location with ID % not found', p_new_location_id;
     END IF;
 
-    -- Fail-Fast Logic: Check if occupied (specifically for VAULT zone or any restricted location)
-    IF (v_new_zone_type = 'VAULT' OR v_new_zone_type IS NOT NULL) AND v_new_is_occupied = true THEN
-      RAISE EXCEPTION 'Location is already occupied';
+    -- Count active totes assigned to target location (excluding current tote if re-slotting)
+    SELECT COUNT(*) INTO v_current_count 
+    FROM public.inventory 
+    WHERE location_id = p_new_location_id AND id != p_tote_id;
+
+    -- Fail-Fast Logic: Check if at or above capacity limit
+    IF v_current_count >= v_capacity THEN
+      RAISE EXCEPTION 'Location % is already at maximum capacity (%/% totes)', v_new_identifier, v_current_count, v_capacity;
     END IF;
   END IF;
 
   -- 3. Atomic Location Update
-  -- Clear old location occupation status if moving from a previous location
-  IF v_old_location_id IS NOT NULL AND v_old_location_id != p_new_location_id THEN
-    UPDATE public.warehouse_locations
-    SET is_occupied = false
-    WHERE id = v_old_location_id;
-  END IF;
-
-  -- Set new location as occupied
-  IF p_new_location_id IS NOT NULL THEN
-    UPDATE public.warehouse_locations
-    SET is_occupied = true
-    WHERE id = p_new_location_id;
-  END IF;
-
   -- Update tote location_id
   UPDATE public.inventory
   SET location_id = p_new_location_id,
@@ -1917,13 +1910,31 @@ BEGIN
       updated_at = now()
   WHERE id = p_tote_id;
 
+  -- Recalculate occupation status for old location
+  IF v_old_location_id IS NOT NULL AND (p_new_location_id IS NULL OR v_old_location_id != p_new_location_id) THEN
+    SELECT COUNT(*) INTO v_old_count FROM public.inventory WHERE location_id = v_old_location_id;
+    UPDATE public.warehouse_locations
+    SET is_occupied = (v_old_count >= COALESCE(capacity, 1))
+    WHERE id = v_old_location_id;
+  END IF;
+
+  -- Recalculate occupation status for new location
+  IF p_new_location_id IS NOT NULL THEN
+    SELECT COUNT(*) INTO v_current_count FROM public.inventory WHERE location_id = v_new_location_id;
+    UPDATE public.warehouse_locations
+    SET is_occupied = (v_current_count >= COALESCE(capacity, 1))
+    WHERE id = p_new_location_id;
+  END IF;
+
   RETURN jsonb_build_object(
     'success', true,
     'tote_id', p_tote_id,
     'tote_code', v_tote_code,
     'old_location_id', v_old_location_id,
     'new_location_id', p_new_location_id,
-    'new_identifier', v_new_identifier
+    'new_identifier', v_new_identifier,
+    'totes_at_location', v_current_count,
+    'location_capacity', v_capacity
   );
 END;
 $$ LANGUAGE plpgsql;
