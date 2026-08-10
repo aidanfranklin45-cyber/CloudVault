@@ -2588,39 +2588,60 @@
                 window.generateLocationBarcodeDataURL = function (code) {
                     try {
                         const canvas = document.createElement('canvas');
+                        canvas.width = 300;
+                        canvas.height = 60;
                         if (typeof JsBarcode === 'function') {
                             JsBarcode(canvas, code, {
                                 format: "CODE128",
                                 width: 2,
-                                height: 50,
+                                height: 48,
                                 displayValue: false,
                                 margin: 2
                             });
-                            return canvas.toDataURL("image/png");
+                            const dataUrl = canvas.toDataURL("image/png");
+                            if (dataUrl && dataUrl.length > 100) return dataUrl;
                         }
                     } catch (e) {
-                        console.warn('[Barcode Gen Error]', e);
+                        console.warn('[Barcode Gen Warning]', e);
                     }
                     return '';
                 };
 
                 window.generateLocationQRDataURL = function (code) {
                     try {
-                        const div = document.createElement('div');
+                        const wrapper = document.createElement('div');
+                        wrapper.style.position = 'fixed';
+                        wrapper.style.left = '-9999px';
+                        wrapper.style.top = '-9999px';
+                        wrapper.style.visibility = 'hidden';
+                        document.body.appendChild(wrapper);
+
                         if (typeof QRCode === 'function') {
-                            new QRCode(div, {
+                            new QRCode(wrapper, {
                                 text: code,
-                                width: 120,
-                                height: 120,
+                                width: 140,
+                                height: 140,
                                 correctLevel: QRCode.CorrectLevel.M
                             });
-                            const canvas = div.querySelector('canvas');
-                            if (canvas) return canvas.toDataURL("image/png");
-                            const img = div.querySelector('img');
-                            if (img && img.src) return img.src;
+
+                            const canvas = wrapper.querySelector('canvas');
+                            let result = '';
+                            if (canvas) {
+                                result = canvas.toDataURL("image/png");
+                            }
+                            if (!result || result.length < 200) {
+                                const img = wrapper.querySelector('img');
+                                if (img && img.src && img.src.length > 200) {
+                                    result = img.src;
+                                }
+                            }
+                            document.body.removeChild(wrapper);
+                            if (result && result.length > 200) return result;
+                        } else {
+                            if (wrapper.parentNode) document.body.removeChild(wrapper);
                         }
                     } catch (e) {
-                        console.warn('[QR Gen Error]', e);
+                        console.warn('[QR Gen Warning]', e);
                     }
                     return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(code)}&ecc=M&margin=1`;
                 };
