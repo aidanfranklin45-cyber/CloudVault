@@ -725,7 +725,7 @@
                                     </div>
                                     <div class="flex items-center space-x-4">
                                         <div class="counter-btn" onclick="updateCalc('totes', -1)">-</div>
-                                        <input type="number" id="calc-totes" value="5" min="0" max="500"
+                                        <input type="number" id="calc-totes" value="5" min="1" max="500"
                                             class="w-20 text-center font-bold text-xl py-2 border border-gray-300 rounded-lg"
                                             oninput="handleCalcTotesInput()">
                                         <div class="counter-btn" onclick="updateCalc('totes', 1)">+</div>
@@ -1470,9 +1470,9 @@
         // Calculator Logic
         function updateCalc(type, amount) {
             const input = document.getElementById(`calc-${type}`);
-            let val = parseInt(input.value) || 0;
+            let val = parseInt(input.value) || 1;
             val += amount;
-            if (val < 0) val = 0;
+            if (val < 1) val = 1;
             input.value = val;
             calculateTotal();
         }
@@ -1487,21 +1487,22 @@
 
         function handleCalcTotesInput() {
             const input = document.getElementById('calc-totes');
-            let val = parseInt(input.value) || 0;
-            if (val < 0) val = 0;
+            let val = parseInt(input.value);
+            if (isNaN(val) || val < 1) val = 1;
             if (val > 500) val = 500;
             input.value = val;
             calculateTotal();
         }
 
         function setCalcTotes(val) {
-            document.getElementById('calc-totes').value = val;
+            document.getElementById('calc-totes').value = Math.max(1, val);
             calculateTotal();
         }
 
         function setFlowTotes(val) {
-            document.getElementById('flow-totes').value = val;
-            flowData.totes = val;
+            const cleanVal = Math.max(1, val);
+            document.getElementById('flow-totes').value = cleanVal;
+            flowData.totes = cleanVal;
             calculateFlowTotal();
         }
 
@@ -1526,7 +1527,7 @@
         }
 
         function calculateTotal() {
-            const totes = parseInt(document.getElementById('calc-totes').value) || 0;
+            const totes = Math.max(1, parseInt(document.getElementById('calc-totes').value) || 1);
             const { rate, label, tier } = getTierRate(totes);
             const monthly = Math.round(totes * rate * 100) / 100;
             const isValet = flowData.logisticsType === 'valet_pickup';
@@ -1638,19 +1639,16 @@
             document.getElementById('view-landing').classList.add('hidden-section');
             document.getElementById('view-form').classList.remove('hidden-section');
 
-            // Set initial flowData from calculator values if source is calculator, else set defaults
+            const calcTotes = parseInt(document.getElementById('calc-totes').value) || 5;
             if (source === 'calculator') {
-                const totes = parseInt(document.getElementById('calc-totes').value) || 5;
-                flowData.totes = totes;
-                // logisticsType is already set via selectLogistics
-            } else {
-                flowData.totes = 5;
+                flowData.totes = Math.max(1, calcTotes);
+            } else if (!flowData.totes || flowData.totes < 1) {
+                flowData.totes = Math.max(1, calcTotes);
                 flowData.logisticsType = 'self_service';
             }
 
-            // Sync Step 2 inputs to match flowData
             document.getElementById('flow-totes').value = flowData.totes;
-            selectFlowLogistics(flowData.logisticsType);
+            selectFlowLogistics(flowData.logisticsType || 'self_service');
 
             document.getElementById('flow-summary').classList.remove('hidden-section');
             showStep(1);
@@ -1658,7 +1656,9 @@
         }
 
         function goBack() {
-            if (currentStep > 1) {
+            if (currentStep === 'waitlist') {
+                showStep(2);
+            } else if (typeof currentStep === 'number' && currentStep > 1) {
                 showStep(currentStep - 1);
             } else {
                 document.getElementById('view-form').classList.add('hidden-section');
@@ -1710,8 +1710,8 @@
 
         function handleFlowTotesInput() {
             const input = document.getElementById('flow-totes');
-            let val = parseInt(input.value) || 1;
-            if (val < 1) val = 1;
+            let val = parseInt(input.value);
+            if (isNaN(val) || val < 1) val = 1;
             if (val > 500) val = 500;
             input.value = val;
             flowData.totes = val;
@@ -1720,7 +1720,7 @@
 
         function updateFlowCalc(amount) {
             const input = document.getElementById('flow-totes');
-            let val = parseInt(input.value) || 0;
+            let val = parseInt(input.value) || 1;
             val += amount;
             if (val < 1) val = 1;
             input.value = val;
