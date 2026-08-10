@@ -4,19 +4,81 @@
 const SUPABASE_URL = "https://xbxvebnrjryvksvtufqj.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_-cW5neaZRGmicOHaHw1n3g_laY5yFZQ";
 
+// Custom Storage Engine supporting "Remember Me" toggle (localStorage vs sessionStorage)
+const customStorageEngine = {
+    getItem: (key) => {
+        const isRemember = localStorage.getItem('cv_remember_me') === 'true';
+        if (isRemember) {
+            return localStorage.getItem(key) || sessionStorage.getItem(key);
+        }
+        return sessionStorage.getItem(key) || localStorage.getItem(key);
+    },
+    setItem: (key, value) => {
+        const isRemember = localStorage.getItem('cv_remember_me') === 'true';
+        if (isRemember) {
+            localStorage.setItem(key, value);
+            sessionStorage.removeItem(key);
+        } else {
+            sessionStorage.setItem(key, value);
+            localStorage.removeItem(key);
+        }
+    },
+    removeItem: (key) => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+    }
+};
+
 // Initialize Supabase Client
-// The CDN v2 bundle exposes the library as window.supabase (the module namespace).
-// We call createClient and assign the resulting CLIENT back to window.supabase
-// so all pages can simply reference `supabase` as a global.
 const { createClient } = window.supabase;
 window.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
-        storage: window.localStorage,
+        storage: customStorageEngine,
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true
     }
 });
+
+// 30-Minute Inactivity Auto-Logout Tracker
+function initInactivityTracker(timeoutMinutes = 30) {
+    const isPublicPage = window.location.pathname.endsWith('login.html') || window.location.pathname.endsWith('index.html') || window.location.pathname === '/';
+    if (isPublicPage) return;
+
+    const INACTIVITY_LIMIT_MS = timeoutMinutes * 60 * 1000;
+    let idleTimer = null;
+
+    async function handleAutoLogout() {
+        console.warn(`User inactive for ${timeoutMinutes} minutes. Auto-logging out...`);
+        try {
+            await window.supabase.auth.signOut();
+        } catch (e) {
+            console.error('Auto logout error:', e);
+        }
+        clearUserCache();
+        localStorage.removeItem('cv_remember_me');
+        sessionStorage.clear();
+        window.location.href = 'login.html?reason=inactivity';
+    }
+
+    function resetIdleTimer() {
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(handleAutoLogout, INACTIVITY_LIMIT_MS);
+    }
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    activityEvents.forEach(evt => {
+        window.addEventListener(evt, resetIdleTimer, { passive: true });
+    });
+
+    resetIdleTimer();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => initInactivityTracker(30));
+} else {
+    initInactivityTracker(30);
+}
 
 // Helper to get profile from public.users table with 5-minute TTL
 async function getCachedUserProfile(uid) {

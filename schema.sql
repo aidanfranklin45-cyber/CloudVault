@@ -102,21 +102,33 @@ CREATE TABLE public.inventory (
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
--- Migration fallback for inventory updated_at
+-- Migration fallbacks for inventory
 ALTER TABLE public.inventory ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE public.inventory ADD COLUMN IF NOT EXISTS location_id UUID REFERENCES public.warehouse_locations(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_inventory_location_id ON public.inventory(location_id);
 
 -- Warehouse Physical Locations
 CREATE TABLE IF NOT EXISTS public.warehouse_locations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     facility_id TEXT REFERENCES public.facilities(id) ON DELETE CASCADE,
-    location_code TEXT NOT NULL,
-    location_type TEXT NOT NULL,
+    zone_type VARCHAR(50) NOT NULL CHECK (zone_type IN ('VAULT', 'STAGING', 'LOGISTICS')),
+    identifier VARCHAR(100) NOT NULL,
+    is_occupied BOOLEAN DEFAULT false NOT NULL,
     capacity INTEGER DEFAULT 1,
-    is_occupied BOOLEAN DEFAULT false,
     assigned_tote_id UUID REFERENCES public.inventory(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
-    UNIQUE(facility_id, location_code)
+    UNIQUE(facility_id, identifier)
 );
+
+ALTER TABLE public.warehouse_locations ADD COLUMN IF NOT EXISTS zone_type VARCHAR(50) DEFAULT 'VAULT';
+ALTER TABLE public.warehouse_locations ADD COLUMN IF NOT EXISTS identifier VARCHAR(100);
+ALTER TABLE public.warehouse_locations ADD COLUMN IF NOT EXISTS is_occupied BOOLEAN DEFAULT false;
+
+-- Index on facility_id
+CREATE INDEX IF NOT EXISTS idx_warehouse_locations_facility_id ON public.warehouse_locations(facility_id);
+
+-- Enable RLS
+ALTER TABLE public.warehouse_locations ENABLE ROW LEVEL SECURITY;
 
 -- Subscriptions
 CREATE TABLE public.subscriptions (
@@ -1819,3 +1831,78 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ─────────────────────────────────────────────────────────────────────
+-- move_tote_location RPC (Warehouse Digital Mapping Slotting Engine)
+-- ─────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.move_tote_location(
+  p_tote_id UUID,
+  p_new_location_id UUID
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_old_location_id UUID;
+  v_new_zone_type VARCHAR(50);
+  v_new_is_occupied BOOLEAN;
+  v_new_identifier VARCHAR(100);
+  v_tote_code TEXT;
+BEGIN
+  -- 1. Verify tote exists and fetch current location
+  SELECT location_id, tote_code INTO v_old_location_id, v_tote_code
+  FROM public.inventory
+  WHERE id = p_tote_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Tote with ID % not found', p_tote_id;
+  END IF;
+
+  -- 2. Verify new location if provided
+  IF p_new_location_id IS NOT NULL THEN
+    SELECT zone_type, is_occupied, identifier
+    INTO v_new_zone_type, v_new_is_occupied, v_new_identifier
+    FROM public.warehouse_locations
+    WHERE id = p_new_location_id;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Target location with ID % not found', p_new_location_id;
+    END IF;
+
+    -- Fail-Fast Logic: Check if occupied (specifically for VAULT zone or any restricted location)
+    IF (v_new_zone_type = 'VAULT' OR v_new_zone_type IS NOT NULL) AND v_new_is_occupied = true THEN
+      RAISE EXCEPTION 'Location is already occupied';
+    END IF;
+  END IF;
+
+  -- 3. Atomic Location Update
+  -- Clear old location occupation status if moving from a previous location
+  IF v_old_location_id IS NOT NULL AND v_old_location_id != p_new_location_id THEN
+    UPDATE public.warehouse_locations
+    SET is_occupied = false
+    WHERE id = v_old_location_id;
+  END IF;
+
+  -- Set new location as occupied
+  IF p_new_location_id IS NOT NULL THEN
+    UPDATE public.warehouse_locations
+    SET is_occupied = true
+    WHERE id = p_new_location_id;
+  END IF;
+
+  -- Update tote location_id
+  UPDATE public.inventory
+  SET location_id = p_new_location_id,
+      location_code = COALESCE(v_new_identifier, location_code),
+      last_scanned_at = now(),
+      updated_at = now()
+  WHERE id = p_tote_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'tote_id', p_tote_id,
+    'tote_code', v_tote_code,
+    'old_location_id', v_old_location_id,
+    'new_location_id', p_new_location_id,
+    'new_identifier', v_new_identifier
+  );
+END;
+$$ LANGUAGE plpgsql;

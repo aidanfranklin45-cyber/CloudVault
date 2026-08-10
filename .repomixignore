@@ -1,6 +1,40 @@
+# Build directories and outputs
 dist/
 package/dist/
-*.map
 graphify-out/
 node_modules/
+.firebase/
+.cache/
 repomix-output.xml
+
+# Lockfiles
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+skills-lock.json
+
+# Heavy assets, images, icons, and media
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.webp
+*.mp4
+*.pdf
+logo.png
+
+# Compressed archives and packages
+*.tgz
+*.tar.gz
+*.zip
+
+# Database migrations and historical dumps
+supabase/migrations/
+schema_backup.sql
+
+# Source maps and temporary test scripts
+*.map
+temp*.js
+test.js

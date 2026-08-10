@@ -546,6 +546,90 @@
                             </button>
                         </div>
                     </div>
+                <!-- Card 5: Warehouse Layout Configurator (Digital Mapping Engine) -->
+                <div class="glass-panel p-6 rounded-3xl space-y-6 border border-cyan-500/20 col-span-1 lg:col-span-2">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800 pb-4">
+                        <div>
+                            <h3 class="text-sm font-extrabold uppercase text-cyan-400 tracking-wider flex items-center gap-2">
+                                <i data-lucide="grid" class="w-4 h-4 text-cyan-400"></i> Warehouse Layout Configurator — Digital Location Engine
+                            </h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Generate deterministic physical location coordinates for vault shelves and staging room lockers.</p>
+                        </div>
+                        <div class="flex items-center gap-2 bg-gray-950 px-3.5 py-1.5 rounded-xl border border-gray-800 font-mono text-xs shadow-inner">
+                            <span class="text-gray-400 font-bold">Location Inventory:</span>
+                            <span class="text-cyan-400 font-extrabold" id="conf-total-locations-badge">0 Locations</span>
+                        </div>
+                    </div>
+
+                    <!-- Generator Sub-Panel 1: Vault Grid Generator -->
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-extrabold uppercase text-white tracking-wider flex items-center gap-2">
+                                <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i> Generate Vault Grid
+                            </h4>
+                            <span class="text-[10px] text-gray-500 font-mono">Format: Aisle-Bay-Shelf</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Total Aisles</label>
+                                <input type="number" min="1" max="100" id="conf-vault-aisles" oninput="updateVaultPreviewText()"
+                                    class="fspec-input w-full font-mono text-cyan-300" placeholder="5" value="5">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Bays per Aisle</label>
+                                <input type="number" min="1" max="100" id="conf-vault-bays" oninput="updateVaultPreviewText()"
+                                    class="fspec-input w-full font-mono text-cyan-300" placeholder="10" value="10">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Shelves per Bay</label>
+                                <input type="number" min="1" max="50" id="conf-vault-shelves" oninput="updateVaultPreviewText()"
+                                    class="fspec-input w-full font-mono text-cyan-300" placeholder="4" value="4">
+                            </div>
+                        </div>
+                        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                            <p class="text-[11px] text-gray-400 font-mono" id="conf-vault-preview-text">
+                                Preview: <strong class="text-white">200</strong> vault locations (Format: <span class="text-cyan-400 font-bold">A1-B01-S1</span>)
+                            </p>
+                            <button onclick="generateVaultLocationsUI()" id="btn-generate-vault-locations"
+                                class="w-full sm:w-auto bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-cyan-600/20 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider">
+                                <i data-lucide="database" class="w-4 h-4"></i> Generate &amp; Sync Vault Locations
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="border-t border-gray-800/80 my-2"></div>
+
+                    <!-- Generator Sub-Panel 2: Staging Room Builder (Secondary UI) -->
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-extrabold uppercase text-white tracking-wider flex items-center gap-2">
+                                <i data-lucide="door-open" class="w-3.5 h-3.5 text-emerald-400"></i> Staging Room Builder
+                            </h4>
+                            <span class="text-[10px] text-gray-500 font-mono">Format: Room-Bay</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Room Identifier</label>
+                                <input type="text" id="conf-staging-room-id" oninput="updateStagingPreviewText()"
+                                    class="fspec-input w-full font-mono text-emerald-300" placeholder="ROOM-1" value="ROOM-1">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Total Bays / Lockers</label>
+                                <input type="number" min="1" max="100" id="conf-staging-room-bays" oninput="updateStagingPreviewText()"
+                                    class="fspec-input w-full font-mono text-emerald-300" placeholder="10" value="10">
+                            </div>
+                        </div>
+                        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                            <p class="text-[11px] text-gray-400 font-mono" id="conf-staging-preview-text">
+                                Preview: <strong class="text-white">10</strong> staging locations (Format: <span class="text-emerald-400 font-bold">ROOM-1-BAY-01</span>)
+                            </p>
+                            <button onclick="generateStagingLocationsUI()" id="btn-generate-staging-locations"
+                                class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider">
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i> Generate &amp; Sync Staging Locations
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
             </div>
@@ -1462,7 +1546,7 @@
 
                 // Update operational zone deposit & active status
                 const zoneId = currentLoadedZone ? currentLoadedZone.id : `zone_${currentLoadedFac.id.replace('facility_', '')}`;
-                const zoneCity = (currentLoadedZone && currentLoadedZone.city) || updatedFac.city || updatedFac.name || 'Yakima';
+                const zoneCity = (currentLoadedZone && currentLoadedZone.city) || updatedFac.city || updatedFac.name || 'Active Market';
                 const zoneZips = currentLoadedZone ? (currentLoadedZone.zip_codes || []) : [];
 
                 const { error: zoneErr } = await supabase.from('operational_zones').upsert({

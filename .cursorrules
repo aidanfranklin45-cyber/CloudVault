@@ -1,0 +1,14 @@
+# CURSOR & AGENT TOKEN OPTIMIZATION RULES
+
+## 1. Just-In-Time Context (JIT) Policy
+- **Localized Edits & Bug Fixes**: Always fetch ONLY the specific file or function needed for the issue. Do NOT read unreferenced files or dump the full project tree.
+- **Search First**: Use `grep_search` or targeted symbol search to pinpoint exact code blocks before opening files.
+- **Targeted Reading**: Inspect only the lines relevant to the bug or feature being modified.
+
+## 2. Repomix & Full Codebase Bundles
+- Reserve full codebase bundles or `repomix` dumps strictly for large architectural refactoring requested explicitly by the user.
+- Always respect `.repomixignore` to filter out `package-lock.json`, build directories (`dist/`, `graphify-out/`), static images/media, and temporary scripts.
+
+## 3. Circuit Breaker & Verification
+- If a tool error repeats twice, halt and re-evaluate rather than looping.
+- Run build/deploy/test verification after edits.

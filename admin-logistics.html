@@ -397,17 +397,12 @@
             const zipInput = document.getElementById('relocate-target-zip-input');
             if (!zipInput || !facId) return;
 
-            // Find zone matching this facility ID
-            const zone = allZonesList.find(z => z.facility_id === facId || (facId.includes('yakima') && (z.id || '').includes('yakima')) || (facId.includes('pdx') && (z.id || '').includes('pdx')));
+            // Dynamically match zone by facility_id
+            const zone = allZonesList.find(z => z.facility_id === facId);
             if (zone && zone.zip_codes && zone.zip_codes.length > 0) {
                 zipInput.value = zone.zip_codes[0];
             } else {
-                if (facId.includes('yakima')) zipInput.value = '98908';
-                else if (facId.includes('portland')) zipInput.value = '97201';
-                else if (facId.includes('denver')) zipInput.value = '80202';
-                else if (facId.includes('spokane')) zipInput.value = '99201';
-                else if (facId.includes('austin')) zipInput.value = '78701';
-                else zipInput.value = '98101';
+                zipInput.value = '';
             }
         }
 
