@@ -638,9 +638,9 @@
         </div>
 
         <!-- SECTION 5: UNLAUNCHED MARKET WAITLIST & EXPANSION DEMAND PORTAL -->
-        <div class="glass-panel p-6 rounded-3xl space-y-6 border border-emerald-500/20">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-4">
-                <div>
+        <div class="glass-panel p-6 rounded-3xl space-y-6 border border-emerald-500/20 col-span-1 lg:col-span-2">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-5">
+                <div class="space-y-1">
                     <h3 class="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
                         <i data-lucide="sparkles" class="w-5 h-5 text-emerald-400"></i> Unlaunched Market Waitlists &amp; Expansion Demand
                     </h3>
@@ -650,7 +650,7 @@
                     <!-- Global Unlaunched Deposit Customization Controller -->
                     <div class="flex items-center gap-2 bg-gray-950 border border-emerald-500/30 rounded-2xl px-3 py-1.5 font-mono text-xs shadow-inner">
                         <span class="text-gray-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1">
-                            <i data-lucide="dollar-sign" class="w-3.5 h-3.5 text-emerald-400"></i> Global Deposit:
+                            <i data-lucide="dollar-sign" class="w-3.5 h-3.5 text-emerald-400"></i> Deposit:
                         </span>
                         <span class="text-emerald-400 font-extrabold">$</span>
                         <input type="number" id="global-unlaunched-deposit-input" step="5" min="0" value="25" class="w-16 bg-gray-900 text-white font-extrabold text-xs px-2 py-1 rounded-xl border border-gray-800 focus:outline-none focus:border-emerald-500 text-center">
@@ -659,12 +659,12 @@
                         </button>
                     </div>
 
-                    <button onclick="openAddLeadModal()" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs px-3.5 py-2 rounded-2xl border border-blue-400/30 shadow-lg flex items-center gap-1.5 transition transform active:scale-95 cursor-pointer">
+                    <button onclick="openAddLeadModal()" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs px-3.5 py-2 rounded-2xl border border-blue-400/30 shadow-lg flex items-center gap-1.5 transition transform active:scale-95 cursor-pointer whitespace-nowrap">
                         <i data-lucide="user-plus" class="w-4 h-4"></i>
                         <span>+ Add Market Lead</span>
                     </button>
 
-                    <span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl" id="waitlist-total-badge">0 Market Signups</span>
+                    <span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl whitespace-nowrap" id="waitlist-total-badge">0 Market Signups</span>
                 </div>
             </div>
 

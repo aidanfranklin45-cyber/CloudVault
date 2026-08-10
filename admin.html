@@ -4735,6 +4735,7 @@
         window.executeReassignFacilityFromModal = executeReassignFacilityFromModal;
         window.executeSaveToteLabelFromModal = executeSaveToteLabelFromModal;
         window.executeForceStatusOverrideFromModal = executeForceStatusOverrideFromModal;
+        window.executeSlotToteFromModal = executeSlotToteFromModal;
 
         async function openToteMasterModal(toteId) {
             const resultsBox = document.getElementById('master-tote-search-results');
@@ -4800,18 +4801,67 @@
                 document.getElementById('tmm-tote-room').textContent = `Staging Room #${typeof getAssignedRoom === 'function' ? getAssignedRoom(item.uid) : '1'}`;
                 document.getElementById('tmm-tote-created-at').textContent = item.created_at ? new Date(item.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
-                // Populate Inputs
-                const editLabelInput = document.getElementById('tmm-edit-label-input');
-                if (editLabelInput) editLabelInput.value = item.label || '';
-                const reassignSel = document.getElementById('tmm-reassign-facility-select');
-                if (reassignSel && item.facility_id) reassignSel.value = item.facility_id;
-                const overrideSel = document.getElementById('tmm-status-override-select');
-                if (overrideSel) overrideSel.value = item.status || 'stored';
+                // Populate Location Telemetry & Select Dropdown
+                const currentLocText = item.location_code || item.location_identifier || 'Unassigned';
+                const locBadge = document.getElementById('tmm-current-location-badge');
+                if (locBadge) locBadge.textContent = `Current: ${currentLocText}`;
+
+                const locationSel = document.getElementById('tmm-location-select');
+                if (locationSel && item.facility_id) {
+                    locationSel.innerHTML = '<option value="">-- Unassign Location --</option>';
+                    const { data: locs } = await supabase
+                        .from('warehouse_locations')
+                        .select('*')
+                        .eq('facility_id', item.facility_id)
+                        .order('identifier', { ascending: true });
+
+                    if (locs && locs.length > 0) {
+                        locs.forEach(loc => {
+                            const isCurr = loc.id === item.location_id;
+                            const option = document.createElement('option');
+                            option.value = loc.id;
+                            option.selected = isCurr;
+                            option.className = isCurr ? 'bg-cyan-950 text-cyan-300 font-bold' : (loc.is_occupied ? 'bg-gray-950 text-gray-500' : 'bg-gray-950 text-white font-mono');
+                            option.textContent = `${loc.identifier} (${loc.zone_type}) ${loc.is_occupied ? '[FULL]' : '[AVAILABLE]'}`;
+                            locationSel.appendChild(option);
+                        });
+                    } else {
+                        locationSel.innerHTML = '<option value="">No Warehouse Locations Configured</option>';
+                    }
+                }
 
                 document.getElementById('tote-master-modal').classList.remove('hidden');
             } catch (err) {
                 console.error("Failed to open master tote modal:", err);
                 alert("Error loading tote telemetry: " + err.message);
+            }
+        }
+
+        async function executeSlotToteFromModal() {
+            if (!currentMasterTote) return;
+            const locationSel = document.getElementById('tmm-location-select');
+            if (!locationSel) return;
+
+            const newLocationId = locationSel.value || null;
+            const newLocationText = locationSel.options[locationSel.selectedIndex]?.text || 'Unassigned';
+
+            try {
+                const { data, error } = await supabase.rpc('move_tote_location', {
+                    p_tote_id: currentMasterTote.id,
+                    p_new_location_id: newLocationId
+                });
+
+                if (error) throw error;
+
+                if (typeof triggerScanFeedbackOverlay === 'function') {
+                    triggerScanFeedbackOverlay(true, `Slotted to ${newLocationText}`, currentMasterTote.tote_code);
+                }
+                alert(`🚀 Successfully slotted tote ${currentMasterTote.tote_code} to location: ${newLocationText}!`);
+                closeToteMasterModal();
+                refreshDashboard();
+            } catch (err) {
+                console.error("Failed to slot tote location:", err);
+                alert(`Slotting Failed: ${err.message || err}`);
             }
         }
 
@@ -5594,6 +5644,29 @@
                             </select>
                             <button onclick="executeForceStatusOverrideFromModal()"
                                 class="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-3 py-2 rounded-xl transition cursor-pointer flex-shrink-0">Override</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action 5: Dynamic Warehouse Physical Slotting Engine -->
+                <div class="bg-cyan-950/30 border border-cyan-500/30 rounded-2xl p-4 space-y-3">
+                    <div class="flex items-center justify-between border-b border-cyan-500/20 pb-2">
+                        <span class="text-xs font-extrabold text-cyan-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="grid" class="w-4 h-4 text-cyan-400"></i> Dynamic Physical Location Slotting Engine
+                        </span>
+                        <span class="text-[10px] font-mono text-cyan-400 font-bold bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20" id="tmm-current-location-badge">Current: Unassigned</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                        <div class="sm:col-span-8">
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Select Open Warehouse Location</label>
+                            <select id="tmm-location-select" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-cyan-300 outline-none focus:border-cyan-500">
+                                <option value="">-- Loading Warehouse Locations --</option>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-4 self-end">
+                            <button onclick="executeSlotToteFromModal()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs py-2 rounded-xl transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider">
+                                <i data-lucide="check-circle" class="w-4 h-4"></i> Slot Location
+                            </button>
                         </div>
                     </div>
                 </div>
