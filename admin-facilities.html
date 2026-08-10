@@ -638,71 +638,76 @@
         </div> <!-- Close grid-cols-12 container -->
 
         <!-- SECTION 5: UNLAUNCHED MARKET WAITLIST & EXPANSION DEMAND PORTAL -->
-        <div class="glass-panel p-6 rounded-3xl space-y-6 border border-emerald-500/20 w-full">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-5">
-                <div class="space-y-1">
-                    <h3 class="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
-                        <i data-lucide="sparkles" class="w-5 h-5 text-emerald-400"></i> Unlaunched Market Waitlists &amp; Expansion Demand
-                    </h3>
-                    <p class="text-xs text-gray-400">Prospect signups, priority capital deposits, and unserviced market demand heatmaps for unlaunched cities.</p>
-                </div>
+        <div class="glass-panel p-6 rounded-3xl space-y-6 border border-emerald-500/20 w-full block">
+            <!-- Full Width Title Header -->
+            <div class="border-b border-gray-800 pb-4 space-y-1 w-full">
+                <h3 class="text-base sm:text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
+                    <i data-lucide="sparkles" class="w-5 h-5 text-emerald-400"></i> Unlaunched Market Waitlists &amp; Expansion Demand
+                </h3>
+                <p class="text-xs text-gray-400 max-w-3xl">Prospect signups, priority capital deposits, and unserviced market demand heatmaps for unlaunched cities.</p>
+            </div>
+
+            <!-- Full Width Control Toolbar -->
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-gray-950/80 p-4 rounded-2xl border border-gray-850 w-full">
                 <div class="flex flex-wrap items-center gap-3">
                     <!-- Global Unlaunched Deposit Customization Controller -->
-                    <div class="flex items-center gap-2 bg-gray-950 border border-emerald-500/30 rounded-2xl px-3 py-1.5 font-mono text-xs shadow-inner">
+                    <div class="flex items-center gap-2 bg-gray-900 border border-emerald-500/30 rounded-xl px-3 py-1.5 font-mono text-xs shadow-inner">
                         <span class="text-gray-400 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1">
                             <i data-lucide="dollar-sign" class="w-3.5 h-3.5 text-emerald-400"></i> Deposit:
                         </span>
                         <span class="text-emerald-400 font-extrabold">$</span>
-                        <input type="number" id="global-unlaunched-deposit-input" step="5" min="0" value="25" class="w-16 bg-gray-900 text-white font-extrabold text-xs px-2 py-1 rounded-xl border border-gray-800 focus:outline-none focus:border-emerald-500 text-center">
-                        <button onclick="saveGlobalUnlaunchedDeposit()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] px-2.5 py-1 rounded-xl transition shadow cursor-pointer uppercase">
+                        <input type="number" id="global-unlaunched-deposit-input" step="5" min="0" value="25" class="w-16 bg-gray-950 text-white font-extrabold text-xs px-2 py-1 rounded-lg border border-gray-800 focus:outline-none focus:border-emerald-500 text-center">
+                        <button onclick="saveGlobalUnlaunchedDeposit()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] px-2.5 py-1 rounded-lg transition shadow cursor-pointer uppercase">
                             Save
                         </button>
                     </div>
 
-                    <button onclick="openAddLeadModal()" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs px-3.5 py-2 rounded-2xl border border-blue-400/30 shadow-lg flex items-center gap-1.5 transition transform active:scale-95 cursor-pointer whitespace-nowrap">
+                    <button onclick="openAddLeadModal()" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs px-4 py-2 rounded-xl border border-blue-400/30 shadow-lg flex items-center gap-1.5 transition transform active:scale-95 cursor-pointer whitespace-nowrap">
                         <i data-lucide="user-plus" class="w-4 h-4"></i>
                         <span>+ Add Market Lead</span>
                     </button>
+                </div>
 
-                    <span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl whitespace-nowrap" id="waitlist-total-badge">0 Market Signups</span>
+                <div>
+                    <span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-2 rounded-xl whitespace-nowrap inline-block" id="waitlist-total-badge">0 Market Signups</span>
                 </div>
             </div>
 
             <!-- Waitlist Financial & Demand Summary Bar -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4" id="waitlist-summary-bar">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full" id="waitlist-summary-bar">
                 <div class="bg-gray-950 border border-gray-850 p-4 rounded-2xl flex items-center justify-between font-mono">
                     <div>
-                        <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Total Prospect Signups</span>
+                        <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">Total Prospect Signups</span>
                         <p class="text-lg font-black text-white" id="wl-summary-prospects">0 Households</p>
                     </div>
-                    <div class="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                    <div class="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 flex-shrink-0">
                         <i data-lucide="users" class="w-4 h-4"></i>
                     </div>
                 </div>
 
                 <div class="bg-gray-950 border border-gray-850 p-4 rounded-2xl flex items-center justify-between font-mono">
                     <div>
-                        <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Priority Capital Deposits</span>
+                        <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">Priority Capital Deposits</span>
                         <p class="text-lg font-black text-emerald-400" id="wl-summary-capital">$0.00</p>
                     </div>
-                    <div class="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <div class="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0">
                         <i data-lucide="dollar-sign" class="w-4 h-4"></i>
                     </div>
                 </div>
 
                 <div class="bg-gray-950 border border-gray-850 p-4 rounded-2xl flex items-center justify-between font-mono">
                     <div>
-                        <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Totes Capacity Demanded</span>
+                        <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">Totes Capacity Demanded</span>
                         <p class="text-lg font-black text-amber-400" id="wl-summary-totes">0 Totes</p>
                     </div>
-                    <div class="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                    <div class="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 flex-shrink-0">
                         <i data-lucide="archive" class="w-4 h-4"></i>
                     </div>
                 </div>
             </div>
 
             <!-- Waitlisted Cities Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="unlaunched-waitlist-grid">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 w-full" id="unlaunched-waitlist-grid">
                 <!-- Dynamically populated waitlisted cities cards -->
             </div>
         </div>
