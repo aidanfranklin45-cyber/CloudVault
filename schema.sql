@@ -1275,11 +1275,11 @@ BEGIN
     RAISE EXCEPTION 'Fail-Fast Error: Tote code % not found in system', p_tote_code;
   END IF;
 
-  -- Check if target location is already full
-  IF p_location_code IS NOT NULL AND v_item.facility_id IS NOT NULL THEN
-    SELECT id, is_occupied, COALESCE(capacity, 1) as capacity INTO v_target_loc
+  -- Check if target location is already full (default max capacity = 5 totes per shelf)
+  IF p_location_code IS NOT NULL THEN
+    SELECT id, is_occupied, COALESCE(capacity, 5) as capacity INTO v_target_loc
     FROM public.warehouse_locations
-    WHERE facility_id = v_item.facility_id AND (identifier = p_location_code OR location_code = p_location_code)
+    WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL) AND (identifier = p_location_code OR location_code = p_location_code)
     LIMIT 1;
 
     IF v_target_loc IS NOT NULL THEN
@@ -1287,8 +1287,17 @@ BEGIN
       FROM public.inventory
       WHERE (location_id = v_target_loc.id OR location_code = p_location_code) AND id != v_item.id;
 
-      IF (v_item.location_id IS NULL OR v_item.location_id != v_target_loc.id) AND (v_target_loc.is_occupied OR v_current_count >= v_target_loc.capacity) THEN
-        RAISE EXCEPTION 'Location % is already full (%/% totes occupied)', p_location_code, GREATEST(v_current_count, 1), v_target_loc.capacity;
+      IF (v_item.location_id IS NULL OR v_item.location_id != v_target_loc.id) AND (v_current_count >= v_target_loc.capacity OR (v_target_loc.is_occupied AND v_current_count >= v_target_loc.capacity)) THEN
+        RAISE EXCEPTION 'Location % is already full (%/% totes occupied). Shelves hold maximum % totes.', p_location_code, v_current_count, v_target_loc.capacity, v_target_loc.capacity;
+      END IF;
+    ELSE
+      -- Fallback check for location_code string if warehouse_locations record is not yet created
+      SELECT COUNT(*) INTO v_current_count
+      FROM public.inventory
+      WHERE location_code = p_location_code AND id != v_item.id;
+
+      IF v_current_count >= 5 THEN
+        RAISE EXCEPTION 'Shelf % is already full (%/5 totes occupied). Shelves hold maximum 5 totes.', p_location_code, v_current_count;
       END IF;
     END IF;
   END IF;
@@ -2260,9 +2269,9 @@ BEGIN
     FROM public.inventory 
     WHERE (location_id = p_new_location_id OR location_code = v_new_identifier) AND id != p_tote_id;
 
-    -- Fail-Fast Logic: Check if at/above capacity limit or if location is marked full
-    IF (v_old_location_id IS NULL OR v_old_location_id != p_new_location_id) AND (v_is_occupied OR v_current_count >= v_capacity) THEN
-      RAISE EXCEPTION 'Location % is already full (%/% totes occupied)', v_new_identifier, GREATEST(v_current_count, 1), v_capacity;
+    -- Fail-Fast Logic: Check if at/above capacity limit or if location is marked full (default max 5 totes per shelf)
+    IF (v_old_location_id IS NULL OR v_old_location_id != p_new_location_id) AND (v_current_count >= COALESCE(v_capacity, 5)) THEN
+      RAISE EXCEPTION 'Location % is already full (%/% totes occupied). Shelves hold maximum % totes.', v_new_identifier, v_current_count, COALESCE(v_capacity, 5), COALESCE(v_capacity, 5);
     END IF;
   END IF;
 
@@ -2279,15 +2288,15 @@ BEGIN
   IF v_old_location_id IS NOT NULL AND (p_new_location_id IS NULL OR v_old_location_id != p_new_location_id) THEN
     SELECT COUNT(*) INTO v_old_count FROM public.inventory WHERE location_id = v_old_location_id;
     UPDATE public.warehouse_locations
-    SET is_occupied = (v_old_count >= COALESCE(capacity, 1))
+    SET is_occupied = (v_old_count >= COALESCE(capacity, 5))
     WHERE id = v_old_location_id;
   END IF;
 
   -- Recalculate occupation status for new location
   IF p_new_location_id IS NOT NULL THEN
-    SELECT COUNT(*) INTO v_current_count FROM public.inventory WHERE location_id = v_new_location_id;
+    SELECT COUNT(*) INTO v_current_count FROM public.inventory WHERE location_id = p_new_location_id;
     UPDATE public.warehouse_locations
-    SET is_occupied = (v_current_count >= COALESCE(capacity, 1))
+    SET is_occupied = (v_current_count >= COALESCE(capacity, 5))
     WHERE id = p_new_location_id;
   END IF;
 

@@ -5337,19 +5337,35 @@
                         .eq('facility_id', item.facility_id)
                         .order('identifier', { ascending: true });
 
+                    const { data: invCounts } = await supabase
+                        .from('inventory')
+                        .select('location_id, location_code')
+                        .eq('facility_id', item.facility_id);
+
+                    const countByLocId = {};
+                    const countByCode = {};
+                    (invCounts || []).forEach(i => {
+                        if (i.location_id) countByLocId[i.location_id] = (countByLocId[i.location_id] || 0) + 1;
+                        if (i.location_code) countByCode[i.location_code] = (countByCode[i.location_code] || 0) + 1;
+                    });
+
                     if (locs && locs.length > 0) {
                         locs.forEach(loc => {
                             const isCurr = loc.id === item.location_id;
+                            const currentCount = countByLocId[loc.id] || countByCode[loc.identifier] || 0;
+                            const maxCap = loc.capacity || 5;
+                            const isFull = (currentCount >= maxCap) || (loc.is_occupied && currentCount >= maxCap);
+
                             const option = document.createElement('option');
                             option.value = loc.id;
                             option.selected = isCurr;
-                            if (loc.is_occupied && !isCurr) {
+                            if (isFull && !isCurr) {
                                 option.disabled = true;
                                 option.className = 'bg-gray-950 text-red-500 font-mono italic opacity-50 cursor-not-allowed';
-                                option.textContent = `${loc.identifier} (${loc.zone_type}) [FULL - OCCUPIED]`;
+                                option.textContent = `${loc.identifier} (${loc.zone_type}) [FULL - ${currentCount}/${maxCap} TOTES]`;
                             } else {
                                 option.className = isCurr ? 'bg-cyan-950 text-cyan-300 font-bold' : 'bg-gray-950 text-white font-mono';
-                                option.textContent = `${loc.identifier} (${loc.zone_type}) ${loc.is_occupied ? '[FULL (CURRENT)]' : '[AVAILABLE]'}`;
+                                option.textContent = `${loc.identifier} (${loc.zone_type}) [${currentCount}/${maxCap} Totes${isCurr ? ' - CURRENT' : ''}]`;
                             }
                             locationSel.appendChild(option);
                         });
