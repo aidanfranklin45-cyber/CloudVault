@@ -1415,7 +1415,9 @@
             // OR if all totes have status pending-stage/staged and profile is not yet 'active' then it's activation.
             // Once onboarding is 'active' and a retrieval request exists, it's a retrieval flow.
 
-            const isActivationPhase = currentProfile && currentProfile.onboarding_status !== 'active';
+            const isActivationPhase = (currentProfile && currentProfile.onboarding_status !== 'active') ||
+                (currentInventory || []).some(i => i.activated === false || !i.label || i.label.toLowerCase().includes('empty')) ||
+                (currentRequests || []).some(r => r.request_type === 'intake' || r.request_type === 'activation' || r.request_type === 'new_tote_delivery' || r.request_type === 'new_totes');
 
             // Items in active statuses
             const stagingRoomItems = (currentInventory || []).filter(i => i.status === 'pending-stage' || i.status === 'staged');
@@ -1434,14 +1436,14 @@
                         title: 'New Tote Activation — Staging Room Pickup',
                         subtitle: isStagedReady
                             ? `Your ${stagingRoomItems.length} tote(s) are ready in Staging Room #${roomNum}`
-                            : `Your ${stagingRoomItems.length} tote(s) are being prepped in the Activation Room`,
-                        badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'ACTIVATION IN PROGRESS',
+                            : `Your ${stagingRoomItems.length} empty tote(s) are being prepped in the Intake & Activation Zone`,
+                        badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'INTAKE PREPARATION IN PROGRESS',
                         badgeColor: isStagedReady ? 'emerald' : 'blue',
                         steps: [
-                            { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
-                            { label: '2. Intake Pull', sub: isStagedReady ? '✓ Intake complete' : 'Pulling from activation bay...', done: isStagedReady, active: !isStagedReady },
-                            { label: '3. Staging Room', sub: isStagedReady ? `Room #${roomNum} • PIN: ${pin}` : 'Awaiting intake pull...', done: isStagedReady, active: false },
-                            { label: '4. With Customer', sub: isStagedReady ? 'Awaiting your pickup' : 'Not yet ready', done: false, active: isStagedReady },
+                            { label: '1. Intake & Activation', sub: 'Preparing empty totes...', done: true },
+                            { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} • PIN: ${pin}` : 'Awaiting intake prep...', done: isStagedReady, active: !isStagedReady },
+                            { label: '3. With Customer', sub: isStagedReady ? 'Awaiting your pickup' : 'Not yet ready', done: false, active: isStagedReady },
+                            { label: '4. Vault Storage', sub: 'After packing & return', done: false, active: false },
                         ],
                         totes: stagingRoomItems,
                         pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, null, null) : null,

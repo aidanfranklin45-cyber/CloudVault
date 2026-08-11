@@ -2756,17 +2756,32 @@
                     if (stageTabBtn) stageTabBtn.classList.remove('animate-pulse', 'border-2', 'border-red-500', 'bg-red-950/40', 'text-red-300');
                 }
 
-                // Fetch all inventory for this facility across all relevant statuses
+                // Fetch all inventory for this facility across all relevant statuses (including unassigned or new intake totes)
                 const { data: allItems } = await supabase.from('inventory')
                     .select('*, users!uid(name, onboarding_status)')
-                    .eq('facility_id', queryFacilityId)
-                    .in('status', ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer']);
+                    .or(`facility_id.eq.${queryFacilityId},facility_id.is.null`)
+                    .in('status', ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer', 'returned']);
 
                 // Fetch access requests for PIN + reservation + fulfillment type data
                 const { data: manifests } = await supabase.from('access_requests')
                     .select('uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type')
-                    .eq('facility_id', queryFacilityId)
+                    .or(`facility_id.eq.${queryFacilityId},facility_id.is.null`)
                     .eq('status', 'pending');
+
+                // Attach Supabase Realtime listeners for instant queue sync without manual refresh
+                if (!window.hasSetupAdminRealtime) {
+                    window.hasSetupAdminRealtime = true;
+                    supabase.channel('admin_live_worker_queues')
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, () => {
+                            console.log('[Realtime] Inventory change detected. Refreshing queues...');
+                            loadWorkerQueues();
+                        })
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'access_requests' }, () => {
+                            console.log('[Realtime] Access request change detected. Refreshing queues...');
+                            loadWorkerQueues();
+                        })
+                        .subscribe();
+                }
 
                 // Fetch subscriptions to map user logistics_type
                 const { data: subsData } = await supabase.from('subscriptions').select('uid, logistics_type');
@@ -2776,7 +2791,7 @@
                 }
 
                 // Render Incoming Scheduled Deliveries sub-table in Tab 1
-                const incomingReqs = (manifests || []).filter(m => m.request_type === 'new_tote_delivery');
+                const incomingReqs = (manifests || []).filter(m => m.request_type === 'new_tote_delivery' || m.request_type === 'intake');
                 const incomingTbody = document.getElementById('wbody-incoming-deliveries');
                 const incomingBadge = document.getElementById('w-incoming-count');
                 if (incomingBadge) incomingBadge.textContent = `${incomingReqs.length} Scheduled`;
@@ -2859,7 +2874,11 @@
                 }
 
                 // ── Tab 1: NEW INTAKE CARDS ──
-                const activateItems = (allItems || []).filter(i => i.status === 'stored' && i.activated === false);
+                const activateItems = (allItems || []).filter(i => 
+                    i.activated === false || 
+                    (i.status === 'pending-stage' && (!i.label || i.label.toLowerCase().includes('empty'))) ||
+                    (i.status === 'stored' && i.activated !== true)
+                );
                 document.getElementById('wtab-activate-count').textContent = activateItems.length;
                 const printIntakeBadge = document.getElementById('print-intake-count');
                 if (printIntakeBadge) printIntakeBadge.textContent = activateItems.length;
