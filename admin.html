@@ -3081,34 +3081,30 @@
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => {
-                            const isValetItem = t.status === 'pending-dispatch';
-                            const originPrefix = isActivationFlow ? 'Intake Flow' : 'Vault Storage';
-                            const sLabel = isValetItem ? `${originPrefix} &bull; Pending Driver Load` : `${originPrefix} &bull; Pending Staging`;
-                            const sColor = isValetItem ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
-                            const itemLabel = t.label ? ` &bull; ${escapeHtml(t.label)}` : '';
-                            const locTag = t.location_code ? ` 📍 ${t.location_code}` : ' 📍 INT-PROC';
-                            return `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
+                                        const isValetItem = t.status === 'pending-dispatch';
+                                        const originPrefix = isActivationFlow ? 'Intake Flow' : 'Vault Storage';
+                                        const sLabel = isValetItem ? `${originPrefix} &bull; Pending Driver Load` : `${originPrefix} &bull; Pending Staging`;
+                                        const sColor = isValetItem ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                                        const itemLabel = t.label ? ` &bull; ${escapeHtml(t.label)}` : '';
+                                        const locTag = t.location_code ? ` 📍 ${t.location_code}` : ' 📍 INT-PROC';
+                                        return `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                             <div>
                                                 <span class="text-white font-bold">${t.tote_code}</span>
                                                 <span class="text-cyan-400 text-[10px] bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20 ml-1 font-mono">${locTag}</span>
                                                 <span class="text-[11px] text-gray-400 font-sans font-medium">${itemLabel}</span>
                                             </div>
-                                            <span class="${sColor} text-[10px] px-2 py-0.5 rounded border font-sans font-semibold">${sLabel}</span>
+                                            <button onclick="document.getElementById('scan-barcode').value='${t.tote_code}';simulateScan('${expectedScanStatus}')" class="bg-gray-800 hover:bg-gray-700 text-amber-300 hover:text-white border border-amber-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
+                                                <i data-lucide="${actionIcon}" class="w-3 h-3"></i> Scan (${t.tote_code})
+                                            </button>
                                         </div>`;
-                        }).join('')}
+                                    }).join('')}
                                 </div>
 
-                                <!-- Batch Order Staging & Individual Scan Actions -->
-                                <div class="flex flex-col sm:flex-row gap-2">
-                                    <button onclick="batchStageCustomerOrder('${uid}', '${customerName.replace(/'/g, "\\'")}', '${defaultTargetLocation}')" class="flex-1 min-h-[50px] bg-gradient-to-r ${actionGradient} text-white font-black text-xs uppercase tracking-wider rounded-2xl border-2 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
-                                        <i data-lucide="layers" class="w-5 h-5"></i>
-                                        <span>⚡ BATCH STAGE ALL ${totes.length} TOTE(S) FOR ORDER →</span>
-                                    </button>
-                                    <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('${expectedScanStatus}')" class="min-h-[50px] px-4 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold text-xs rounded-2xl border border-gray-700 flex items-center justify-center gap-1.5 cursor-pointer transition">
-                                        <i data-lucide="${actionIcon}" class="w-4 h-4"></i>
-                                        <span>Single Scan (${firstCode})</span>
-                                    </button>
-                                </div>
+                                <!-- Individual Tote Scan & Vault Pull Action Button -->
+                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('${expectedScanStatus}')" class="w-full min-h-[60px] bg-gradient-to-r ${actionGradient} text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                    <i data-lucide="${actionIcon}" class="w-6 h-6"></i>
+                                    <span>SCAN &amp; PULL TOTE (${firstCode}) FROM VAULT SHELF →</span>
+                                </button>
                             </div>`;
                     }).join('');
                 }

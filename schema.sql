@@ -1361,7 +1361,7 @@ BEGIN
     RAISE EXCEPTION 'Access Denied: Staff clearance required';
   END IF;
 
-  -- Update all pending totes for this customer
+  -- Update ONLY explicitly pending totes for this customer (never touch unrequested stored totes)
   UPDATE public.inventory
   SET status = CASE WHEN status = 'pending-dispatch' THEN 'out-for-delivery'::public.inventory_status ELSE 'staged'::public.inventory_status END,
       location_code = v_effective_location,
@@ -1370,7 +1370,7 @@ BEGIN
       last_scanned_at = now(),
       last_scanned_by = v_uid
   WHERE uid = p_customer_uid
-    AND status IN ('pending-stage', 'pending-dispatch', 'stored');
+    AND status IN ('pending-stage', 'pending-dispatch');
 
   GET DIAGNOSTICS v_updated_count = ROW_COUNT;
 
