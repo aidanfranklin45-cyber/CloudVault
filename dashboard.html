@@ -1409,52 +1409,32 @@
             const pin = (currentProfile && currentProfile.onboarding_pin) || (currentUser && currentUser.onboarding_pin) || '—';
             const roomNum = getAssignedRoom(currentUser ? currentUser.id : null);
 
-            // ── Classify inventory items ──────────────────────────────────────
-            // "New tote" = never stored (status is activation-path: pending-stage when it has no history of being stored)
-            // We approximate: if a tote is in activation flow the profile onboarding_status != 'active' 
-            // OR if all totes have status pending-stage/staged and profile is not yet 'active' then it's activation.
-            // Once onboarding is 'active' and a retrieval request exists, it's a retrieval flow.
-
-            const isActivationPhase = (currentProfile && currentProfile.onboarding_status !== 'active') ||
-                (currentInventory || []).some(i => i.activated === false || !i.label || i.label.toLowerCase().includes('empty')) ||
-                (currentRequests || []).some(r => r.request_type === 'intake' || r.request_type === 'activation' || r.request_type === 'new_tote_delivery' || r.request_type === 'new_totes');
-
-            // Items in active statuses
             const stagingRoomItems = (currentInventory || []).filter(i => i.status === 'pending-stage' || i.status === 'staged');
             const valetItems = (currentInventory || []).filter(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery');
-            const retrievalRequests = (currentRequests || []).filter(r => r.request_type === 'retrieval' || r.fulfillment_type === 'valet_delivery' || r.fulfillment_type === 'staging');
+            
+            // Separate requests into Activation/Intake vs Stored Tote Retrieval
+            const activationReqs = (currentRequests || []).filter(r => 
+                r.request_type === 'intake' || r.request_type === 'activation' || r.request_type === 'new_tote_delivery' || r.request_type === 'new_totes'
+            );
+            const retrievalReqs = (currentRequests || []).filter(r => 
+                r.request_type === 'retrieval' || r.request_type === 'customer_retrieval' || r.fulfillment_type === 'staging' || r.fulfillment_type === 'valet_delivery'
+            );
 
             const cards = [];
 
-            // ── Flow A & B: New Tote Activation ──────────────────────────────
-            if (isActivationPhase && (stagingRoomItems.length > 0 || valetItems.length > 0)) {
-                if (stagingRoomItems.length > 0) {
-                    const isStagedReady = stagingRoomItems.some(i => i.status === 'staged');
-                    cards.push(buildFlowCard({
-                        flowType: 'activation-staging',
-                        icon: '📦',
-                        title: 'New Tote Activation — Staging Room Pickup',
-                        subtitle: isStagedReady
-                            ? `Your ${stagingRoomItems.length} tote(s) are ready in Staging Room #${roomNum}`
-                            : `Your ${stagingRoomItems.length} empty tote(s) are being prepped in the Intake & Activation Zone`,
-                        badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'INTAKE PREPARATION IN PROGRESS',
-                        badgeColor: isStagedReady ? 'emerald' : 'blue',
-                        steps: [
-                            { label: '1. Intake & Activation', sub: 'Preparing empty totes...', done: true },
-                            { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} • PIN: ${pin}` : 'Awaiting intake prep...', done: isStagedReady, active: !isStagedReady },
-                            { label: '3. With Customer', sub: isStagedReady ? 'Awaiting your pickup' : 'Not yet ready', done: false, active: isStagedReady },
-                            { label: '4. Vault Storage', sub: 'After packing & return', done: false, active: false },
-                        ],
-                        totes: stagingRoomItems,
-                        pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, null, null) : null,
-                    }));
-                }
+            // ── 1. Activation / Intake Flow Cards ──────────────────────────────
+            const isUnactivatedInventory = (currentInventory || []).some(i => i.activated === false || !i.label || i.label.toLowerCase().includes('empty'));
+            const isNewCustomerOnboarding = currentProfile && currentProfile.onboarding_status !== 'active';
 
-                if (valetItems.length > 0) {
+            if (activationReqs.length > 0 || isUnactivatedInventory || (isNewCustomerOnboarding && (stagingRoomItems.length > 0 || valetItems.length > 0))) {
+                const isValetActivation = activationReqs.some(r => r.fulfillment_type === 'valet_delivery');
+                const isStagedReady = stagingRoomItems.some(i => i.status === 'staged');
+
+                if (isValetActivation || valetItems.length > 0) {
                     const isOutForDelivery = valetItems.some(i => i.status === 'out-for-delivery');
-                    const valetReq = retrievalRequests.find(r => r.fulfillment_type === 'valet_delivery');
-                    const dateStr = valetReq && valetReq.target_date ? new Date(valetReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
-                    const timeStr = (valetReq && valetReq.time_slot) || '09:00 AM – 12:00 PM';
+                    const req = activationReqs.find(r => r.fulfillment_type === 'valet_delivery') || activationReqs[0];
+                    const dateStr = req && req.target_date ? new Date(req.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
+                    const timeStr = (req && req.time_slot) || '09:00 AM – 12:00 PM';
                     cards.push(buildFlowCard({
                         flowType: 'activation-valet',
                         icon: '🚚',
@@ -1464,37 +1444,49 @@
                         badgeColor: isOutForDelivery ? 'orange' : 'blue',
                         steps: [
                             { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
-                            { label: '2. Intake Pull', sub: '✓ Hub bay allocated', done: true },
+                            { label: '2. Intake Prep', sub: '✓ Empty totes prepped', done: true },
                             { label: '3. On Truck', sub: isOutForDelivery ? 'Driver en route to you' : 'Loading on van', done: false, active: true },
                             { label: '4. With Customer', sub: isOutForDelivery ? 'Arriving soon' : dateStr, done: false, active: false },
                         ],
-                        totes: valetItems,
+                        totes: valetItems.length > 0 ? valetItems : currentInventory,
                         pinBlock: buildValetBlock(timeStr, dateStr),
+                    }));
+                } else {
+                    const req = activationReqs[0];
+                    const dateStr = req && req.target_date ? new Date(req.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
+                    const timeStr = (req && req.time_slot) || '09:00 AM – 12:00 PM';
+                    cards.push(buildFlowCard({
+                        flowType: 'activation-staging',
+                        icon: '📦',
+                        title: `New Tote Activation — Staging Room #${roomNum} Pickup`,
+                        subtitle: isStagedReady
+                            ? `Your empty tote(s) are ready in Staging Room #${roomNum} • PIN: ${pin}`
+                            : `Intake preparation in progress • ${dateStr} • ${timeStr}`,
+                        badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'INTAKE PREPARATION IN PROGRESS',
+                        badgeColor: isStagedReady ? 'emerald' : 'blue',
+                        steps: [
+                            { label: '1. Intake & Activation', sub: isStagedReady ? '✓ Empty totes prepped' : 'Preparing empty totes...', done: isStagedReady, active: !isStagedReady },
+                            { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting intake prep...', done: isStagedReady, active: false },
+                            { label: '3. With Customer', sub: isStagedReady ? `PIN: ${pin} — Awaiting pickup` : 'Not yet ready', done: false, active: isStagedReady },
+                            { label: '4. Vault Storage', sub: 'After packing & return', done: false, active: false },
+                        ],
+                        totes: stagingRoomItems.length > 0 ? stagingRoomItems : currentInventory,
+                        pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : null,
                     }));
                 }
             }
 
-            // ── Flow C & D: Stored Tote Retrieval ────────────────────────────
-            if (!isActivationPhase) {
-                // Separate requests by fulfillment type
-                const stagingReqs = retrievalRequests.filter(r => !r.fulfillment_type || r.fulfillment_type === 'staging');
-                const valetReqs = retrievalRequests.filter(r => r.fulfillment_type === 'valet_delivery');
-
-                // Also pick up unlinked inventory items
-                const linkedIds = new Set(retrievalRequests.flatMap(r => [...(r.requested_items || []), ...(r.requested_tote_codes || [])]));
-                const unlinkedStaging = stagingRoomItems.filter(i => !linkedIds.has(i.id) && !linkedIds.has(i.tote_code));
-                const unlinkedValet = valetItems.filter(i => !linkedIds.has(i.id) && !linkedIds.has(i.tote_code));
+            // ── 2. Stored Tote Retrieval Flow Cards ────────────────────────────
+            if (retrievalReqs.length > 0) {
+                const stagingReqs = retrievalReqs.filter(r => !r.fulfillment_type || r.fulfillment_type === 'staging');
+                const valetReqs = retrievalReqs.filter(r => r.fulfillment_type === 'valet_delivery');
 
                 // Flow C: Staging Room Retrieval
-                if (stagingReqs.length > 0 || unlinkedStaging.length > 0) {
-                    const allStagingItems = [
-                        ...stagingRoomItems.filter(i => stagingReqs.some(r => (r.requested_items || []).includes(i.id) || (r.requested_tote_codes || []).includes(i.tote_code))),
-                        ...unlinkedStaging
-                    ];
-                    const isStagedReady = allStagingItems.some(i => i.status === 'staged');
+                if (stagingReqs.length > 0) {
                     const stagingReq = stagingReqs[0];
-                    const dateStr = stagingReq && stagingReq.target_date ? new Date(stagingReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
-                    const timeStr = (stagingReq && stagingReq.time_slot) || '09:00 AM – 12:00 PM';
+                    const isStagedReady = stagingRoomItems.some(i => i.status === 'staged');
+                    const dateStr = stagingReq.target_date ? new Date(stagingReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
+                    const timeStr = stagingReq.time_slot || '09:00 AM – 12:00 PM';
                     cards.push(buildFlowCard({
                         flowType: 'retrieval-staging',
                         icon: '🚪',
@@ -1510,21 +1502,17 @@
                             { label: '3. With Customer', sub: isStagedReady ? `PIN: ${pin} — Awaiting pickup` : dateStr, done: false, active: isStagedReady },
                             { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
                         ],
-                        totes: allStagingItems.length > 0 ? allStagingItems : stagingRoomItems,
+                        totes: stagingRoomItems.length > 0 ? stagingRoomItems : currentInventory,
                         pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : null,
                     }));
                 }
 
                 // Flow D: Valet Delivery Retrieval
-                if (valetReqs.length > 0 || unlinkedValet.length > 0) {
-                    const allValetItems = [
-                        ...valetItems.filter(i => valetReqs.some(r => (r.requested_items || []).includes(i.id) || (r.requested_tote_codes || []).includes(i.tote_code))),
-                        ...unlinkedValet
-                    ];
-                    const isOutForDelivery = allValetItems.some(i => i.status === 'out-for-delivery');
+                if (valetReqs.length > 0) {
                     const valetReq = valetReqs[0];
-                    const dateStr = valetReq && valetReq.target_date ? new Date(valetReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
-                    const timeStr = (valetReq && valetReq.time_slot) || '09:00 AM – 12:00 PM';
+                    const isOutForDelivery = valetItems.some(i => i.status === 'out-for-delivery');
+                    const dateStr = valetReq.target_date ? new Date(valetReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
+                    const timeStr = valetReq.time_slot || '09:00 AM – 12:00 PM';
                     cards.push(buildFlowCard({
                         flowType: 'retrieval-valet',
                         icon: '🚚',
@@ -1538,7 +1526,7 @@
                             { label: '3. With Customer', sub: isOutForDelivery ? 'Arriving soon' : dateStr, done: false, active: false },
                             { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
                         ],
-                        totes: allValetItems.length > 0 ? allValetItems : valetItems,
+                        totes: valetItems.length > 0 ? valetItems : currentInventory,
                         pinBlock: buildValetBlock(timeStr, dateStr),
                     }));
                 }
