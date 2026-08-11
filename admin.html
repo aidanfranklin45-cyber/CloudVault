@@ -2757,16 +2757,26 @@
                 }
 
                 // Fetch all inventory for this facility across all relevant statuses (including unassigned or new intake totes)
-                const { data: allItems } = await supabase.from('inventory')
+                let inventoryQuery = supabase.from('inventory')
                     .select('*, users!uid(name, onboarding_status)')
-                    .or(`facility_id.eq.${queryFacilityId},facility_id.is.null`)
                     .in('status', ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer', 'returned']);
 
+                if (queryFacilityId) {
+                    inventoryQuery = inventoryQuery.or(`facility_id.eq."${queryFacilityId}",facility_id.is.null`);
+                }
+
+                const { data: allItems } = await inventoryQuery;
+
                 // Fetch access requests for PIN + reservation + fulfillment type data
-                const { data: manifests } = await supabase.from('access_requests')
+                let manifestQuery = supabase.from('access_requests')
                     .select('uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type')
-                    .or(`facility_id.eq.${queryFacilityId},facility_id.is.null`)
                     .eq('status', 'pending');
+
+                if (queryFacilityId) {
+                    manifestQuery = manifestQuery.or(`facility_id.eq."${queryFacilityId}",facility_id.is.null`);
+                }
+
+                const { data: manifests } = await manifestQuery;
 
                 // Attach Supabase Realtime listeners for instant queue sync without manual refresh
                 if (!window.hasSetupAdminRealtime) {
