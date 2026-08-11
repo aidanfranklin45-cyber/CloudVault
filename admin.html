@@ -2757,26 +2757,24 @@
                 }
 
                 // Fetch all inventory for this facility across all relevant statuses (including unassigned or new intake totes)
-                let inventoryQuery = supabase.from('inventory')
-                    .select('*, users!uid(name, onboarding_status)')
-                    .in('status', ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer', 'returned']);
+                const statuses = ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer', 'returned'];
+                
+                const [facRes, nullRes] = await Promise.all([
+                    supabase.from('inventory').select('*, users!uid(name, onboarding_status)').eq('facility_id', queryFacilityId).in('status', statuses),
+                    supabase.from('inventory').select('*, users!uid(name, onboarding_status)').is('facility_id', null).in('status', statuses)
+                ]);
 
-                if (queryFacilityId) {
-                    inventoryQuery = inventoryQuery.or(`facility_id.eq."${queryFacilityId}",facility_id.is.null`);
-                }
-
-                const { data: allItems } = await inventoryQuery;
+                const combinedItems = [...(facRes.data || []), ...(nullRes.data || [])];
+                const allItems = Array.from(new Map(combinedItems.map(item => [item.id, item])).values());
 
                 // Fetch access requests for PIN + reservation + fulfillment type data
-                let manifestQuery = supabase.from('access_requests')
-                    .select('uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type')
-                    .eq('status', 'pending');
+                const [facManifestsRes, nullManifestsRes] = await Promise.all([
+                    supabase.from('access_requests').select('uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type').eq('facility_id', queryFacilityId).eq('status', 'pending'),
+                    supabase.from('access_requests').select('uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type').is('facility_id', null).eq('status', 'pending')
+                ]);
 
-                if (queryFacilityId) {
-                    manifestQuery = manifestQuery.or(`facility_id.eq."${queryFacilityId}",facility_id.is.null`);
-                }
-
-                const { data: manifests } = await manifestQuery;
+                const combinedManifests = [...(facManifestsRes.data || []), ...(nullManifestsRes.data || [])];
+                const manifests = Array.from(new Map(combinedManifests.map(m => [(m.uid || '') + '-' + (m.request_type || ''), m])).values());
 
                 // Attach Supabase Realtime listeners for instant queue sync without manual refresh
                 if (!window.hasSetupAdminRealtime) {
