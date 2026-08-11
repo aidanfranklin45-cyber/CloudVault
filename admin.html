@@ -4786,10 +4786,24 @@
             }
 
             try {
+                // Search location coordinates in warehouse_locations & inventory
+                let locationResults = [];
+                const { data: locs } = await supabase.from('warehouse_locations')
+                    .select('id, identifier, zone_type, is_occupied, facility_id')
+                    .or(`identifier.ilike.%${q}%,location_code.ilike.%${q}%`)
+                    .limit(5);
+
+                if (locs && locs.length > 0) {
+                    locationResults = locs;
+                } else if (/^[A-Z0-9]+-[A-Z0-9]+(-[A-Z0-9]+)?$/i.test(q)) {
+                    // Pattern fallback e.g. A2-B12-S1 or ROOM-1-BAY-01
+                    locationResults = [{ identifier: q.toUpperCase(), zone_type: q.toUpperCase().startsWith('ROOM') ? 'STAGING' : 'VAULT' }];
+                }
+
                 // Search inventory joined with users
                 const { data: items } = await supabase.from('inventory')
-                    .select('id, tote_code, label, status, facility_id, created_at, users!uid(name, email, active_totes_held)')
-                    .or(`tote_code.ilike.%${q}%,label.ilike.%${q}%`)
+                    .select('id, tote_code, label, status, facility_id, created_at, location_code, users!uid(name, email, active_totes_held)')
+                    .or(`tote_code.ilike.%${q}%,label.ilike.%${q}%,location_code.ilike.%${q}%`)
                     .limit(8);
 
                 let usersData = [];
@@ -4801,29 +4815,57 @@
                     if (matchingUsers && matchingUsers.length > 0) {
                         const uids = matchingUsers.map(u => u.id);
                         const { data: userItems } = await supabase.from('inventory')
-                            .select('id, tote_code, label, status, facility_id, created_at, users!uid(name, email, active_totes_held)')
+                            .select('id, tote_code, label, status, facility_id, created_at, location_code, users!uid(name, email, active_totes_held)')
                             .in('uid', uids)
                             .limit(8);
                         usersData = userItems || [];
                     }
                 }
 
-                const combined = [...(items || []), ...usersData];
-                const uniqueItems = Array.from(new Map(combined.map(item => [item.id, item])).values());
+                const combinedItems = [...(items || []), ...usersData];
+                const uniqueItems = Array.from(new Map(combinedItems.map(item => [item.id, item])).values());
 
-                if (uniqueItems.length === 0) {
-                    resultsBox.innerHTML = `<div class="p-4 text-center text-xs text-gray-500 font-mono">No matching totes or customer records found for "${q}".</div>`;
+                if (locationResults.length === 0 && uniqueItems.length === 0) {
+                    resultsBox.innerHTML = `<div class="p-4 text-center text-xs text-gray-500 font-mono">No matching totes, shelf locations, or customer records found for "${escapeHtml(q)}".</div>`;
                     resultsBox.classList.remove('hidden');
                     return;
                 }
 
-                resultsBox.innerHTML = uniqueItems.map(i => {
+                let html = '';
+
+                // Render location search result cards first if present
+                locationResults.forEach(l => {
+                    const identifier = l.identifier || q.toUpperCase();
+                    const zone = l.zone_type || (identifier.startsWith('ROOM') ? 'STAGING' : 'VAULT');
+                    html += `
+                        <div onclick="openShelfLocationMasterModal('${identifier}')" class="p-3 hover:bg-gray-900 flex items-center justify-between cursor-pointer transition border-b border-gray-850">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 font-mono font-bold flex items-center justify-center text-xs border border-cyan-500/30">
+                                    📍
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-bold text-white font-mono">${identifier}</span>
+                                        <span class="text-[9px] text-cyan-400 font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 font-mono uppercase">${zone} RACK</span>
+                                    </div>
+                                    <p class="text-[10px] text-gray-400">Shelf Coordinate &bull; <strong class="text-gray-200">Inspect Stored Products</strong></p>
+                                </div>
+                            </div>
+                            <span class="text-[9px] font-bold uppercase text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-xl border border-cyan-500/20 font-mono flex items-center gap-1">
+                                <i data-lucide="eye" class="w-3 h-3"></i> Inspect Shelf
+                            </span>
+                        </div>
+                    `;
+                });
+
+                // Render tote item result cards
+                uniqueItems.forEach(i => {
                     const statusColor = i.status === 'stored' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
                         : i.status === 'staged' ? 'text-green-400 bg-green-500/10 border-green-500/20'
                             : i.status === 'out-for-delivery' ? 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20'
                                 : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
                     const ownerName = i.users?.name || 'Customer';
-                    return `
+                    html += `
                         <div onclick="openToteMasterModal('${i.id}')" class="p-3 hover:bg-gray-900 flex items-center justify-between cursor-pointer transition">
                             <div class="flex items-center space-x-3">
                                 <div class="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 font-mono font-bold flex items-center justify-center text-xs border border-indigo-500/30">
@@ -4834,14 +4876,17 @@
                                         <span class="text-xs font-bold text-white font-mono">${i.tote_code}</span>
                                         ${i.label ? `<span class="text-[10px] text-gray-400 font-sans font-medium">&bull; ${escapeHtml(i.label)}</span>` : ''}
                                     </div>
-                                    <p class="text-[10px] text-gray-400">Owner: <strong class="text-gray-200">${escapeHtml(ownerName)}</strong> (${i.users?.email || 'N/A'})</p>
+                                    <p class="text-[10px] text-gray-400">Owner: <strong class="text-gray-200">${escapeHtml(ownerName)}</strong> &bull; Loc: <span class="text-cyan-300 font-mono font-bold">${i.location_code || 'Unassigned'}</span></p>
                                 </div>
                             </div>
                             <span class="text-[9px] font-bold uppercase ${statusColor} px-2 py-0.5 rounded border font-mono">${i.status}</span>
                         </div>
                     `;
-                }).join('');
+                });
+
+                resultsBox.innerHTML = html;
                 resultsBox.classList.remove('hidden');
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             } catch (err) {
                 console.error("Master tote search failed:", err);
             }
@@ -5217,6 +5262,19 @@
             const q = (query || '').trim();
             if (!q) return;
 
+            const uppercaseQ = q.toUpperCase();
+
+            // Check if query is a location code (e.g. A2-B12-S1, ROOM-1-BAY-01) or matches warehouse_locations
+            const { data: matchedLoc } = await supabase.from('warehouse_locations')
+                .select('identifier')
+                .or(`identifier.eq.${uppercaseQ},location_code.eq.${uppercaseQ}`)
+                .maybeSingle();
+
+            if (matchedLoc || /^[A-Z0-9]+-[A-Z0-9]+(-[A-Z0-9]+)?$/i.test(q)) {
+                openShelfLocationMasterModal(matchedLoc ? matchedLoc.identifier : uppercaseQ);
+                return;
+            }
+
             // Search matching customer user record by email or name
             const { data: users } = await supabase.from('users')
                 .select('*')
@@ -5231,7 +5289,7 @@
 
             const { data: items } = await supabase.from('inventory')
                 .select('id, uid, users!uid(*)')
-                .or(`tote_code.eq.${q.toUpperCase()},tote_code.ilike.%${q}%`)
+                .or(`tote_code.eq.${uppercaseQ},tote_code.ilike.%${q}%`)
                 .limit(1);
 
             if (items && items.length > 0) {
@@ -5244,6 +5302,221 @@
             }
         }
 
+        window.currentInspectedShelfCode = null;
+
+        async function openShelfLocationMasterModal(locationCode) {
+            const resultsBox = document.getElementById('master-tote-search-results');
+            if (resultsBox) resultsBox.classList.add('hidden');
+
+            const locCode = (locationCode || '').trim().toUpperCase();
+            if (!locCode) return;
+            window.currentInspectedShelfCode = locCode;
+
+            const modal = document.getElementById('shelf-location-master-modal');
+            if (!modal) return;
+
+            modal.classList.remove('hidden');
+
+            document.getElementById('slm-identifier-display').textContent = locCode;
+
+            const isStaging = locCode.startsWith('ROOM');
+            const zoneBadge = document.getElementById('slm-zone-badge');
+            if (zoneBadge) {
+                zoneBadge.textContent = isStaging ? 'STAGING LOCKER' : 'VAULT RACK';
+                zoneBadge.className = isStaging ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase font-mono'
+                    : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase font-mono';
+            }
+
+            const facName = (currentLoadedFac?.name || 'Yakima Fulfillment Center');
+            document.getElementById('slm-subtitle').textContent = `Facility: ${facName} • Shelf Location Coordinate`;
+
+            try {
+                // Query all inventory totes assigned to this location
+                const { data: totes, error: toteErr } = await supabase.from('inventory')
+                    .select('*, users!uid(name, email, active_totes_held)')
+                    .or(`location_code.eq.${locCode},location_identifier.eq.${locCode}`)
+                    .order('created_at', { ascending: false });
+
+                if (toteErr) console.warn('[Shelf Telemetry Warning]', toteErr);
+
+                const slottedTotes = totes || [];
+                const toteCount = slottedTotes.length;
+                const maxCapacity = isStaging ? 1 : 4; // Vault bay shelf holds 4 totes, Staging locker holds 1
+                const occupancyPct = Math.min(100, Math.round((toteCount / maxCapacity) * 100));
+
+                document.getElementById('slm-stat-totes').textContent = `${toteCount} / ${maxCapacity}`;
+                document.getElementById('slm-stat-occupancy').textContent = `${occupancyPct}%`;
+                document.getElementById('slm-stat-products').textContent = `${toteCount} Tote${toteCount !== 1 ? 's' : ''}`;
+                document.getElementById('slm-stat-status').textContent = toteCount > 0 ? (occupancyPct >= 100 ? 'FULL' : 'SLOTTED') : 'VACANT';
+
+                const listEl = document.getElementById('slm-totes-list');
+                if (!listEl) return;
+
+                if (slottedTotes.length === 0) {
+                    listEl.innerHTML = `
+                        <div class="p-8 text-center text-xs text-gray-500 font-mono bg-gray-900/50 rounded-2xl border border-gray-850 space-y-2">
+                            <i data-lucide="package-open" class="w-8 h-8 mx-auto text-gray-600"></i>
+                            <p class="font-bold text-gray-400">Shelf Currently Vacant</p>
+                            <p class="text-[11px] text-gray-500">No totes are currently slotted at location <span class="text-cyan-300 font-bold">${locCode}</span>.</p>
+                            <button onclick="openSlotToteToCurrentShelfModal()" class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Slot Tote to ${locCode}
+                            </button>
+                        </div>
+                    `;
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                    return;
+                }
+
+                listEl.innerHTML = slottedTotes.map(t => {
+                    const ownerName = t.users?.name || 'Customer';
+                    const ownerEmail = t.users?.email || 'N/A';
+                    const category = t.category || 'General Storage';
+                    const labelText = t.label || 'Standard Physical Storage Tote';
+                    const imgUrl = t.image_url || null;
+                    const status = t.status || 'stored';
+
+                    return `
+                        <div class="bg-gray-900/80 border border-gray-800 rounded-2xl p-4 space-y-3 hover:border-cyan-500/40 transition shadow-md">
+                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-gray-850 pb-2.5">
+                                <div class="flex items-center space-x-3">
+                                    ${imgUrl ? `<img src="${imgUrl}" class="w-10 h-10 rounded-xl object-cover border border-gray-700 shadow-sm" />` : `
+                                    <div class="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 font-mono font-bold flex items-center justify-center text-sm border border-indigo-500/30">
+                                        📦
+                                    </div>`}
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-sm font-black text-white font-mono">${t.tote_code}</span>
+                                            <span class="text-[10px] font-bold text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">${escapeHtml(category)}</span>
+                                        </div>
+                                        <p class="text-xs text-gray-300 font-semibold mt-0.5">${escapeHtml(labelText)}</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">${status}</span>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs">
+                                <div>
+                                    <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider block">Customer Owner</span>
+                                    <span class="font-bold text-gray-200">${escapeHtml(ownerName)}</span> <span class="text-gray-400 text-[11px]">(${escapeHtml(ownerEmail)})</span>
+                                </div>
+
+                                <div class="flex items-center gap-2 w-full sm:w-auto">
+                                    <button onclick="openToteMasterModal('${t.id}')" class="flex-1 sm:flex-none px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1 cursor-pointer">
+                                        <i data-lucide="scan" class="w-3.5 h-3.5"></i> Inspect Tote
+                                    </button>
+                                    <button onclick="unslotToteToReturnQueue('${t.id}', '${t.tote_code}', '${locCode}')" class="flex-1 sm:flex-none px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1 cursor-pointer" title="Unslot tote and repopulate into Step 5 Return to Vault queue">
+                                        <i data-lucide="package-minus" class="w-3.5 h-3.5 text-amber-400"></i> Unslot (Step 5 Queue)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            } catch (err) {
+                console.error("Open shelf location modal error:", err);
+            }
+        }
+
+        function closeShelfLocationMasterModal() {
+            const modal = document.getElementById('shelf-location-master-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        async function unslotToteToReturnQueue(toteId, toteCode, locationCode) {
+            if (!confirm(`Are you sure you want to unslot Tote ${toteCode} from shelf ${locationCode}?\n\nThis will remove it from this shelf and repopulate it into the Step 5 (Return to Vault) workflow queue.`)) {
+                return;
+            }
+
+            try {
+                // Clear location assignment and set status to 'returned' (Step 5 Return to Vault queue)
+                const { error: invErr } = await supabase.from('inventory')
+                    .update({
+                        location_code: 'UNSLOTTED-QUEUE',
+                        location_id: null,
+                        status: 'returned',
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', toteId);
+
+                if (invErr) throw invErr;
+
+                // Clear location occupation status in warehouse_locations
+                await supabase.from('warehouse_locations')
+                    .update({ is_occupied: false, assigned_tote_id: null })
+                    .eq('identifier', locationCode);
+
+                if (typeof triggerScanFeedbackOverlay === 'function') {
+                    triggerScanFeedbackOverlay(true, `Unslotted ${toteCode}`, `Queued in Step 5 (Return to Vault)`);
+                }
+
+                // Reload shelf telemetry
+                if (window.currentInspectedShelfCode) {
+                    await openShelfLocationMasterModal(window.currentInspectedShelfCode);
+                }
+            } catch (err) {
+                console.error("Unslot tote error:", err);
+                alert("Failed to unslot tote: " + (err.message || err));
+            }
+        }
+
+        async function openSlotToteToCurrentShelfModal() {
+            const targetLoc = window.currentInspectedShelfCode;
+            if (!targetLoc) return;
+
+            const toteCodeInput = prompt(`➕ SLOT TOTE TO LOCATION ${targetLoc}\n\nPlease enter or scan the tote code (e.g. CV-SEA-7DPK) to assign to shelf ${targetLoc}:`);
+            if (!toteCodeInput || !toteCodeInput.trim()) return;
+
+            const toteCode = toteCodeInput.trim().toUpperCase();
+
+            try {
+                const { data: tote, error: fetchErr } = await supabase.from('inventory')
+                    .select('id, tote_code')
+                    .eq('tote_code', toteCode)
+                    .maybeSingle();
+
+                if (fetchErr || !tote) {
+                    alert(`Tote ${toteCode} not found in facility inventory. Please verify the code.`);
+                    return;
+                }
+
+                // Slot tote to location and set status to 'stored'
+                const { error: slotErr } = await supabase.from('inventory')
+                    .update({
+                        location_code: targetLoc,
+                        status: 'stored',
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', tote.id);
+
+                if (slotErr) throw slotErr;
+
+                if (typeof triggerScanFeedbackOverlay === 'function') {
+                    triggerScanFeedbackOverlay(true, `Slotted ${toteCode}`, `Location: ${targetLoc}`);
+                }
+
+                if (window.currentInspectedShelfCode) {
+                    await openShelfLocationMasterModal(window.currentInspectedShelfCode);
+                }
+            } catch (err) {
+                console.error("Slot tote error:", err);
+                alert("Failed to slot tote: " + (err.message || err));
+            }
+        }
+
+        function triggerPrintCurrentShelfBarcode() {
+            const targetLoc = window.currentInspectedShelfCode || 'A1-B01-S1';
+            const zoneType = targetLoc.startsWith('ROOM') ? 'STAGING' : 'VAULT';
+            if (typeof window.openPrintLocationLabelModal === 'function') {
+                window.openPrintLocationLabelModal(zoneType);
+            } else {
+                alert(`Location code: ${targetLoc}`);
+            }
+        }
+
         window.openCustomerBillingDrawer = openCustomerBillingDrawer;
         window.closeCustomerBillingDrawer = closeCustomerBillingDrawer;
         window.switchCustomerDrawerTab = switchCustomerDrawerTab;
@@ -5252,6 +5525,11 @@
         window.executeMasterToteSearch = executeMasterToteSearch;
         window.openToteMasterModal = openToteMasterModal;
         window.closeToteMasterModal = closeToteMasterModal;
+        window.openShelfLocationMasterModal = openShelfLocationMasterModal;
+        window.closeShelfLocationMasterModal = closeShelfLocationMasterModal;
+        window.unslotToteToReturnQueue = unslotToteToReturnQueue;
+        window.openSlotToteToCurrentShelfModal = openSlotToteToCurrentShelfModal;
+        window.triggerPrintCurrentShelfBarcode = triggerPrintCurrentShelfBarcode;
         window.executeChargeMissingToteFromModal = executeChargeMissingToteFromModal;
         window.executeReprintToteTagFromModal = executeReprintToteTagFromModal;
         window.executeReassignFacilityFromModal = executeReassignFacilityFromModal;
@@ -6221,6 +6499,81 @@
                     </div>
                 </div>
 
+            </div>
+    <!-- Shelf & Location Master Telemetry Modal -->
+    <div id="shelf-location-master-modal"
+        class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div
+            class="glass-panel max-w-3xl w-full p-6 sm:p-8 rounded-3xl border border-cyan-500/40 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto relative">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                <div class="flex items-center space-x-3">
+                    <div
+                        class="w-12 h-12 rounded-2xl bg-cyan-500/20 text-cyan-400 font-black flex items-center justify-center text-lg border border-cyan-500/30 font-mono">
+                        <i data-lucide="map-pin" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 id="slm-identifier-display" class="font-black text-white text-xl font-mono">A2-B12-S1</h3>
+                            <span id="slm-zone-badge"
+                                class="bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase font-mono">VAULT RACK</span>
+                        </div>
+                        <p id="slm-subtitle" class="text-xs text-gray-400 mt-0.5 font-mono">Facility: Yakima Fulfillment Center</p>
+                    </div>
+                </div>
+                <button onclick="closeShelfLocationMasterModal()"
+                    class="text-gray-400 hover:text-white p-2 rounded-xl bg-gray-900 border border-gray-800 transition"><i
+                        data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <!-- Occupancy & Capacity Telemetry Bar -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-950/80 border border-gray-850 p-4 rounded-2xl shadow-inner font-mono">
+                <div>
+                    <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Slotted Totes</span>
+                    <span id="slm-stat-totes" class="text-base font-black text-cyan-300 font-mono">0 / 4</span>
+                </div>
+                <div>
+                    <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Occupancy Rate</span>
+                    <span id="slm-stat-occupancy" class="text-base font-black text-emerald-400 font-mono">0%</span>
+                </div>
+                <div>
+                    <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Stored Items</span>
+                    <span id="slm-stat-products" class="text-base font-black text-indigo-300 font-mono">0 Items</span>
+                </div>
+                <div>
+                    <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Shelf Status</span>
+                    <span id="slm-stat-status" class="text-base font-black text-emerald-400 font-mono">ACTIVE</span>
+                </div>
+            </div>
+
+            <!-- Slotted Totes & Stored Products Section -->
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-black uppercase text-gray-400 tracking-wider flex items-center gap-2">
+                        <i data-lucide="layers" class="w-4 h-4 text-cyan-400"></i> Slotted Totes &amp; Stored Products on Shelf
+                    </h4>
+                    <button onclick="openSlotToteToCurrentShelfModal()"
+                        class="bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
+                        <i data-lucide="plus" class="w-3.5 h-3.5 text-cyan-400"></i>
+                        <span>➕ Slot Tote Here</span>
+                    </button>
+                </div>
+
+                <div id="slm-totes-list" class="space-y-3">
+                    <!-- Populated dynamically with tote product cards -->
+                </div>
+            </div>
+
+            <!-- Action Bar Footer -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-800">
+                <button onclick="triggerPrintCurrentShelfBarcode()"
+                    class="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer">
+                    <i data-lucide="printer" class="w-4 h-4 text-blue-400"></i>
+                    <span>🖨️ Print Shelf Location Barcode Sheet</span>
+                </button>
+                <button onclick="closeShelfLocationMasterModal()"
+                    class="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-gray-400 font-bold text-xs rounded-xl border border-gray-800 transition">
+                    Close Telemetry
+                </button>
             </div>
         </div>
     </div>
