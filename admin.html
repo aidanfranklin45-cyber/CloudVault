@@ -5353,7 +5353,7 @@
                 // Query all inventory totes assigned to this location
                 const { data: totes, error: toteErr } = await supabase.from('inventory')
                     .select('*, users!uid(name, email, active_totes_held)')
-                    .or(`location_code.eq.${locCode},location_identifier.eq.${locCode}`)
+                    .eq('location_code', locCode)
                     .order('created_at', { ascending: false });
 
                 if (toteErr) console.warn('[Shelf Telemetry Warning]', toteErr);
