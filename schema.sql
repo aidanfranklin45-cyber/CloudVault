@@ -791,12 +791,12 @@ BEGIN
       last_updated = now()
   WHERE id = v_sub_id;
 
-  -- Create inventory items with sequence-based unique tote codes assigned to the user's home facility
+  -- Create inventory items with facility-tethered scrambled tote codes (e.g. CV-SEA-49AK)
   FOR i IN 0..(p_additional_totes - 1) LOOP
     INSERT INTO public.inventory (uid, tote_code, label, status, facility_id)
     VALUES (
       v_uid,
-      'CV-' || nextval('public.tote_code_seq'),
+      public.generate_tote_code(v_facility_id),
       'Additional Tote #' || (COALESCE(v_current_totes, 0) + i + 1),
       (CASE WHEN p_logistics_type = 'valet_pickup' THEN 'with-customer' ELSE 'stored' END)::inventory_status,
       v_facility_id
@@ -1152,12 +1152,12 @@ BEGIN
   -- Delete existing inventory for simulation refresh
   DELETE FROM public.inventory WHERE uid = v_uid;
 
-  -- Generate inventory items
+  -- Generate inventory items with facility-tethered scrambled tote codes
   FOR i IN 0..(v_total_totes - 1) LOOP
     INSERT INTO public.inventory (uid, tote_code, label, status, facility_id)
     VALUES (
       v_uid,
-      'CV-' || (1000 + i),
+      public.generate_tote_code(v_facility_id),
       'Empty Tote #' || (i + 1),
       'stored',
       v_facility_id

@@ -409,7 +409,7 @@
                             <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Staging
                                 Rooms</label>
                             <input type="number" id="conf-staging-rooms" oninput="onStagingRoomsInputChange()"
-                                class="fspec-input w-full" placeholder="2">
+                                class="fspec-input w-full" placeholder="—">
                         </div>
                     </div>
                 </div>
@@ -665,12 +665,12 @@
                             Lockers</label>
                         <input type="number" min="1" max="100" id="conf-staging-room-bays"
                             oninput="updateStagingPreviewText()" class="fspec-input w-full font-mono text-emerald-300"
-                            placeholder="3" value="3">
+                            placeholder="—" value="">
                     </div>
                 </div>
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                     <p class="text-[11px] text-gray-400 font-mono" id="conf-staging-preview-text">
-                        Preview: <strong class="text-white">3</strong> staging locations (Format: <span
+                        Preview: <strong class="text-white">—</strong> staging locations (Format: <span
                             class="text-emerald-400 font-bold">ROOM-1-BAY-01</span>)
                     </p>
                     <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -1286,12 +1286,39 @@
                     document.getElementById('conf-sqft').value = (fac.usable_warehouse_sqft !== null && fac.usable_warehouse_sqft !== undefined) ? fac.usable_warehouse_sqft : 20000;
                     document.getElementById('conf-sqft-per-tote').value = (fac.sqft_per_tote !== null && fac.sqft_per_tote !== undefined) ? fac.sqft_per_tote : 1.0;
                     document.getElementById('conf-tote-capacity').value = (fac.tote_capacity !== null && fac.tote_capacity !== undefined) ? fac.tote_capacity : 2000;
-                    const stgRooms = (fac.num_staging_rooms !== null && fac.num_staging_rooms !== undefined) ? fac.num_staging_rooms : 3;
-                    document.getElementById('conf-staging-rooms').value = stgRooms;
-                    if (document.getElementById('conf-staging-room-bays')) {
-                        document.getElementById('conf-staging-room-bays').value = stgRooms;
-                        updateStagingPreviewText();
+                    let actualStgRooms = (fac.num_staging_rooms !== null && fac.num_staging_rooms !== undefined) ? fac.num_staging_rooms : null;
+                    if (actualStgRooms === null) {
+                        actualStgRooms = (fac.staging_rooms !== null && fac.staging_rooms !== undefined) ? fac.staging_rooms : null;
                     }
+
+                    if (typeof supabase !== 'undefined' && fac.id) {
+                        try {
+                            const { data: dbStgLocs } = await supabase
+                                .from('warehouse_locations')
+                                .select('identifier')
+                                .eq('facility_id', fac.id)
+                                .eq('zone_type', 'STAGING');
+
+                            if (dbStgLocs && dbStgLocs.length > 0) {
+                                actualStgRooms = dbStgLocs.length;
+                            }
+                        } catch (err) {
+                            console.warn("Error fetching Supabase staging locations:", err);
+                        }
+                    }
+
+                    if (actualStgRooms !== null && actualStgRooms > 0) {
+                        document.getElementById('conf-staging-rooms').value = actualStgRooms;
+                        if (document.getElementById('conf-staging-room-bays')) {
+                            document.getElementById('conf-staging-room-bays').value = actualStgRooms;
+                        }
+                    } else {
+                        document.getElementById('conf-staging-rooms').value = '';
+                        if (document.getElementById('conf-staging-room-bays')) {
+                            document.getElementById('conf-staging-room-bays').value = '';
+                        }
+                    }
+                    updateStagingPreviewText();
 
                     // Populate Expenses
                     document.getElementById('conf-rent').value = (fac.monthly_rent_cost !== null && fac.monthly_rent_cost !== undefined) ? fac.monthly_rent_cost : 8500;
@@ -1352,11 +1379,16 @@
                 }
 
                 function updateStagingPreviewText() {
-                    const roomId = (document.getElementById('conf-staging-room-id').value || 'ROOM-1').trim().toUpperCase();
-                    const bays = parseInt(document.getElementById('conf-staging-room-bays').value) || 0;
+                    const roomId = (document.getElementById('conf-staging-room-id')?.value || 'ROOM-1').trim().toUpperCase();
+                    const baysVal = document.getElementById('conf-staging-room-bays')?.value;
+                    const bays = baysVal !== "" && baysVal !== null && baysVal !== undefined ? parseInt(baysVal, 10) : null;
                     const el = document.getElementById('conf-staging-preview-text');
                     if (el) {
-                        el.innerHTML = `Preview: <strong class="text-white">${bays}</strong> staging locations (Format: <span class="text-emerald-400 font-bold">${escapeHtml(roomId)}-BAY-01</span>)`;
+                        if (bays !== null && !isNaN(bays)) {
+                            el.innerHTML = `Preview: <strong class="text-white">${bays}</strong> staging location${bays === 1 ? '' : 's'} (Format: <span class="text-emerald-400 font-bold">${escapeHtml(roomId)}-BAY-01</span>)`;
+                        } else {
+                            el.innerHTML = `Preview: <strong class="text-white">—</strong> staging locations (Format: <span class="text-emerald-400 font-bold">${escapeHtml(roomId)}-BAY-01</span>)`;
+                        }
                     }
                 }
 
@@ -2593,8 +2625,9 @@
                             }
                         } else {
                             const roomId = document.getElementById('conf-staging-room-id')?.value.trim() || 'ROOM-1';
-                            const numStgRooms = currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || parseInt(document.getElementById('conf-staging-rooms')?.value || '3', 10);
-                            const bays = parseInt(document.getElementById('conf-staging-room-bays')?.value || numStgRooms || '3', 10);
+                            const numStgRooms = currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || parseInt(document.getElementById('conf-staging-rooms')?.value || '0', 10);
+                            const baysInput = document.getElementById('conf-staging-room-bays')?.value;
+                            const bays = baysInput ? parseInt(baysInput, 10) : (numStgRooms || 0);
                             const maxPrint = Math.min(bays, 100);
                             for (let b = 1; b <= maxPrint; b++) {
                                 const bayStr = b < 10 ? '0' + b : '' + b;
