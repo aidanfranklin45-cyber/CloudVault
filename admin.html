@@ -6112,6 +6112,7 @@
                     <style>
                         @page { size: auto; margin: 0.5cm; }
                         body { font-family: monospace; margin: 0; padding: 0; background: #ffffff; color: #000000; }
+                        .print-grid-barcode, .print-grid-barcode * { shape-rendering: crispEdges !important; }
                     </style>
                 </head>
                 <body>
@@ -6131,7 +6132,7 @@
                     win.document.querySelectorAll('.print-grid-barcode').forEach(svg => {
                         const c = svg.getAttribute('data-code');
                         try {
-                            win.JsBarcode(svg, c, { format: "CODE128", width: 1.6, height: 42, fontSize: 10, displayValue: false, margin: 1 });
+                            win.JsBarcode(svg, c, { format: "CODE128", width: 1.2, height: 42, fontSize: 10, displayValue: false, margin: 6 });
                         } catch (err) { }
                     });
 

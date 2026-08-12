@@ -2798,18 +2798,21 @@
 
                 window.triggerPrintLocationLabels = function () {
                     try {
+                        const printBtn = document.getElementById('btn-print-vault-barcodes') || document.getElementById('btn-print-staging-barcodes');
+                        const originalBtnHTML = printBtn ? printBtn.innerHTML : '';
+                        if (printBtn) {
+                            printBtn.disabled = true;
+                            printBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> <span>Preparing Location Sheet...</span>`;
+                            if (window.lucide) lucide.createIcons();
+                        }
+
                         const input = document.getElementById('print-loc-code-input');
                         const inputVal = (input ? input.value.trim() : '') || 'V-A01-S01';
                         let codesToPrint = inputVal.split(',').map(c => c.trim()).filter(Boolean);
 
                         if (codesToPrint.length === 0) {
                             alert("Please enter or select at least one location code to print.");
-                            return;
-                        }
-
-                        const printWin = window.open('', '_blank');
-                        if (!printWin) {
-                            alert("Please allow popups in your browser to print location barcode labels.");
+                            if (printBtn) { printBtn.disabled = false; printBtn.innerHTML = originalBtnHTML; }
                             return;
                         }
 
@@ -2848,7 +2851,23 @@
                     `;
                         }
 
-                        printWin.document.write(`
+                        let iframe = document.getElementById('print-location-iframe');
+                        if (!iframe) {
+                            iframe = document.createElement('iframe');
+                            iframe.id = 'print-location-iframe';
+                            iframe.style.position = 'fixed';
+                            iframe.style.right = '0';
+                            iframe.style.bottom = '0';
+                            iframe.style.width = '0';
+                            iframe.style.height = '0';
+                            iframe.style.border = '0';
+                            iframe.style.visibility = 'hidden';
+                            document.body.appendChild(iframe);
+                        }
+
+                        const doc = iframe.contentWindow.document;
+                        doc.open();
+                        doc.write(`
                     <!DOCTYPE html>
                     <html>
                     <head>
@@ -2866,7 +2885,8 @@
                             .badge { font-size: 9px; font-weight: bold; background: #000; color: #fff; padding: 2px 6px; border-radius: 3px; }
                             .body { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 1.2in; }
                             .barcode-box { flex: 1; text-align: center; overflow: hidden; }
-                            .barcode-svg { max-width: 100%; height: 42px; }
+                            .barcode-svg { max-width: 100%; height: 42px; shape-rendering: crispEdges !important; }
+                            .barcode-svg * { shape-rendering: crispEdges !important; }
                             .code-text { font-size: 15px; font-weight: 900; letter-spacing: 1.5px; margin-top: 2px; }
                             .qr-box { flex: 0 0 85px; width: 85px; text-align: center; border-left: 2px solid #000; padding-left: 6px; }
                             .qr-container { width: 68px; height: 68px; margin: 0 auto; }
@@ -2880,49 +2900,49 @@
                         <div class="grid-container">
                             ${labelsHtml}
                         </div>
-                        <script>
-                            function doPrint() {
-                                const codes = ${JSON.stringify(codesToPrint)};
-                                codes.forEach((c, idx) => {
-                                    try {
-                                        if (typeof JsBarcode === 'function') {
-                                            JsBarcode("#barcode-loc-" + idx, c, {
-                                                format: "CODE128",
-                                                width: 1.6,
-                                                height: 42,
-                                                displayValue: false,
-                                                margin: 2
-                                            });
-                                        }
-                                    } catch(e) { console.error('Barcode error:', e); }
-
-                                    try {
-                                        const qrEl = document.getElementById("qr-loc-" + idx);
-                                        if (qrEl && typeof QRCode === 'function') {
-                                            new QRCode(qrEl, {
-                                                text: c,
-                                                width: 68,
-                                                height: 68,
-                                                correctLevel: QRCode.CorrectLevel.M
-                                            });
-                                        }
-                                    } catch(e) { console.error('QR error:', e); }
-                                });
-                                setTimeout(function() {
-                                    window.focus();
-                                    window.print();
-                                }, 300);
-                            }
-                            if (document.readyState === 'complete') {
-                                doPrint();
-                            } else {
-                                window.onload = doPrint;
-                            }
-                        <\/script>
                     </body>
                     </html>
                 `);
-                        printWin.document.close();
+                        doc.close();
+
+                        const win = iframe.contentWindow;
+                        const renderInterval = setInterval(() => {
+                            if (typeof win.JsBarcode === 'function' && typeof win.QRCode === 'function') {
+                                clearInterval(renderInterval);
+                                const codes = codesToPrint;
+                                codes.forEach((c, idx) => {
+                                    try {
+                                        win.JsBarcode("#barcode-loc-" + idx, c, {
+                                            format: "CODE128",
+                                            width: 1.2,
+                                            height: 42,
+                                            displayValue: false,
+                                            margin: 6
+                                        });
+                                    } catch(e) { }
+
+                                    try {
+                                        const qrEl = win.document.getElementById("qr-loc-" + idx);
+                                        if (qrEl) {
+                                            new win.QRCode(qrEl, { text: c, width: 68, height: 68, correctLevel: 0 });
+                                        }
+                                    } catch(e) { }
+                                });
+
+                                if (printBtn) {
+                                    printBtn.disabled = false;
+                                    printBtn.innerHTML = originalBtnHTML;
+                                    if (window.lucide) lucide.createIcons();
+                                }
+
+                                win.focus();
+                                win.print();
+                            }
+                        }, 10);
+                    } catch (e) {
+                        console.error("[Print Barcodes Error] Failed inside triggerPrintLocationLabels:", e);
+                    }
+                };
                     } catch (e) {
                         console.error("[Print Barcodes Error] Failed inside triggerPrintLocationLabels:", e);
                         alert("Failed to trigger print: " + (e.message || e));
