@@ -203,6 +203,9 @@
     CloudVaultStripe.initStripe(global.STRIPE_PUBLISHABLE_KEY);
   }
 
-  // Export to global window object
+  // Export to global window object & CommonJS module if present
   global.CloudVaultStripe = CloudVaultStripe;
-})(typeof window !== 'undefined' ? window : this);
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = CloudVaultStripe;
+  }
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
