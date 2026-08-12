@@ -305,6 +305,16 @@
                             <p class="text-xl font-black text-indigo-400 font-mono" id="pnl-sqft-efficiency">$0.00 / sqft</p>
                             <span class="text-[9px] text-gray-500">Revenue per Usable SqFt</span>
                         </div>
+                        <div class="bg-gray-950 p-4 rounded-2xl border border-cyan-500/30 space-y-1">
+                            <span class="text-[10px] font-bold text-cyan-400 uppercase">Monthly Recurring Rev (MRR)</span>
+                            <p class="text-xl font-black text-cyan-400 font-mono" id="telemetry-mrr">$0.00 / mo</p>
+                            <span class="text-[9px] text-gray-400">Active Storage Subscriptions</span>
+                        </div>
+                        <div class="bg-gray-950 p-4 rounded-2xl border border-rose-500/30 space-y-1">
+                            <span class="text-[10px] font-bold text-rose-400 uppercase">Overdue Accounts &amp; Invoices</span>
+                            <p class="text-xl font-black text-rose-400 font-mono" id="telemetry-overdue">0 ($0.00)</p>
+                            <span class="text-[9px] text-rose-300 font-medium" id="telemetry-overdue-subtitle">0 Overdue Accounts</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -720,7 +730,7 @@
             </div>
 
             <!-- Waitlist Financial & Demand Summary Bar -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full" id="waitlist-summary-bar">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full" id="waitlist-summary-bar">
                 <div
                     class="bg-gray-950 border border-gray-850 p-4 rounded-2xl flex items-center justify-between font-mono">
                     <div>
@@ -750,6 +760,18 @@
                 <div
                     class="bg-gray-950 border border-gray-850 p-4 rounded-2xl flex items-center justify-between font-mono">
                     <div>
+                        <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">Waitlist MRR Pipeline</span>
+                        <p class="text-lg font-black text-cyan-400" id="wl-summary-mrr">$0.00 / mo</p>
+                    </div>
+                    <div
+                        class="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 flex-shrink-0">
+                        <i data-lucide="trending-up" class="w-4 h-4"></i>
+                    </div>
+                </div>
+
+                <div
+                    class="bg-gray-950 border border-gray-850 p-4 rounded-2xl flex items-center justify-between font-mono">
+                    <div>
                         <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">Totes Capacity
                             Demanded</span>
                         <p class="text-lg font-black text-amber-400" id="wl-summary-totes">0 Totes</p>
@@ -763,9 +785,9 @@
                 <div
                     class="bg-gray-950 border border-gray-850 p-4 rounded-2xl flex items-center justify-between font-mono">
                     <div>
-                        <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">Deposit Invoices &amp;
-                            Capital Telemetry</span>
+                        <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">Deposit Invoices &amp; Overdue</span>
                         <p class="text-lg font-black text-teal-400" id="wl-summary-invoices">0 Invoices ($0.00)</p>
+                        <span class="text-[10px] font-bold text-rose-400 block mt-0.5" id="wl-summary-overdue">0 Overdue Invoices</span>
                     </div>
                     <div
                         class="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 flex-shrink-0">
@@ -1124,6 +1146,7 @@
             <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
             <script src="supabase-config.js"></script>
             <script src="billing-engine.js"></script>
+            <script src="stripe-billing-integration.js"></script>
 
             <!-- Main Configuration Script -->
             <script>
@@ -1920,6 +1943,9 @@
                                 }).join('');
                             }
                         }
+                        if (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.updateTelemetryUI === 'function') {
+                            await window.StripeBillingIntegration.updateTelemetryUI(facilityId);
+                        }
                     } catch (e) {
                         console.error("Telemetry error:", e);
                     }
@@ -2115,6 +2141,29 @@
                             console.warn('[Admin Facilities Telemetry] Deposit invoices fetch notice:', depErr);
                         }
 
+                        // Calculate Waitlist MRR Pipeline based on requested totes ($5/tote average tier)
+                        const waitlistMRRPipeline = (grandTotes * 5.00);
+
+                        let overdueDepositCount = 0;
+                        let overdueDepositAmount = 0;
+                        try {
+                            const { data: overdueInvoices } = await supabase
+                                .from('invoices')
+                                .select('*')
+                                .or('payment_status.eq.overdue,payment_status.eq.pending');
+
+                            if (overdueInvoices) {
+                                overdueInvoices.forEach(inv => {
+                                    if (window.StripeBillingIntegration && window.StripeBillingIntegration.isOverdue(inv)) {
+                                        overdueDepositCount++;
+                                        overdueDepositAmount += Number(inv.total_amount || inv.subtotal || 0);
+                                    }
+                                });
+                            }
+                        } catch (ovrErr) {
+                            console.warn('[Admin Facilities Telemetry] Overdue fetch notice:', ovrErr);
+                        }
+
                         // Update summary metrics bar & telemetry
                         const badgeEl = document.getElementById('waitlist-total-badge');
                         if (badgeEl) badgeEl.textContent = `${totalSignups} Prospect Signups Across ${waitlistMarkets.length} Cities`;
@@ -2125,11 +2174,17 @@
                         if (document.getElementById('wl-summary-capital')) {
                             document.getElementById('wl-summary-capital').textContent = `$${(grandCapital + depositInvoiceCapital).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
                         }
+                        if (document.getElementById('wl-summary-mrr')) {
+                            document.getElementById('wl-summary-mrr').textContent = `$${waitlistMRRPipeline.toLocaleString(undefined, { minimumFractionDigits: 2 })} / mo`;
+                        }
                         if (document.getElementById('wl-summary-totes')) {
                             document.getElementById('wl-summary-totes').textContent = `${grandTotes.toLocaleString()} Totes`;
                         }
                         if (document.getElementById('wl-summary-invoices')) {
                             document.getElementById('wl-summary-invoices').textContent = `${depositInvoiceCount} Invoices ($${depositInvoiceCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })})`;
+                        }
+                        if (document.getElementById('wl-summary-overdue')) {
+                            document.getElementById('wl-summary-overdue').textContent = `${overdueDepositCount} Overdue ($${overdueDepositAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })})`;
                         }
 
                         if (waitlistMarkets.length === 0) {

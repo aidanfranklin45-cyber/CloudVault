@@ -62,6 +62,7 @@
         const paymentStatus = params.payment_status || params.paymentStatus || 'paid';
         const createdAt = params.created_at || params.createdAt || new Date().toISOString();
         const paidAt = params.paid_at || params.paidAt || (paymentStatus === 'paid' ? createdAt : null);
+        const dueDate = params.due_date || params.dueDate || new Date(new Date(createdAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
         const record = {
           invoice_number: invoiceNumber,
@@ -81,6 +82,7 @@
           transaction_reference: params.transaction_reference || params.transactionReference || null,
           notes: params.notes || null,
           line_items: lineItems,
+          due_date: dueDate,
           created_at: createdAt,
           paid_at: paidAt,
           refunded_at: params.refunded_at || params.refundedAt || null
@@ -146,6 +148,512 @@
     },
 
     /**
+     * Scans subscriptions, charges, access_requests, and waitlist for unbilled records,
+     * creating retroactive invoices in public.invoices without duplicates.
+     * @returns {Promise<{success: boolean, count: number, backfilled: Object, invoices: Array, error?: string}>}
+     */
+    backfillRetroactiveInvoices: async function () {
+      try {
+        const sb = global.supabase;
+        if (!sb) {
+          console.error('[CloudVaultBilling] Supabase client missing');
+          return { success: false, error: 'Supabase client missing', count: 0, invoices: [] };
+        }
+
+        // 1. Fetch existing invoices to prevent duplicates
+        const { data: existingInvoices, error: invErr } = await sb
+          .from('invoices')
+          .select('id, uid, customer_email, transaction_reference, notes, invoice_type');
+
+        if (invErr) {
+          console.error('[CloudVaultBilling] Error fetching existing invoices for backfill:', invErr);
+          return { success: false, error: invErr.message, count: 0, invoices: [] };
+        }
+
+        const existingTxnRefs = new Set(
+          (existingInvoices || []).map(i => i.transaction_reference).filter(Boolean)
+        );
+        const existingNotes = (existingInvoices || []).map(i => i.notes || '').join(' ');
+
+        // 2. Fetch users lookup map
+        const { data: usersData } = await sb.from('users').select('id, name, email, assigned_facility_id');
+        const usersMap = {};
+        if (usersData) {
+          usersData.forEach(u => { usersMap[u.id] = u; });
+        }
+
+        const createdInvoices = [];
+        const stats = { subscriptions: 0, charges: 0, accessRequests: 0, waitlist: 0 };
+
+        // -------------------------------------------------------------
+        // A. Backfill Subscriptions
+        // -------------------------------------------------------------
+        const { data: subscriptions } = await sb.from('subscriptions').select('*');
+        if (subscriptions && subscriptions.length > 0) {
+          for (const sub of subscriptions) {
+            const txnRef = `SUB-${sub.id}`;
+            const subRefTag = `sub_${sub.id}`;
+
+            const alreadyHasTxn = existingTxnRefs.has(txnRef);
+            const alreadyInNotes = existingNotes.includes(subRefTag) || existingNotes.includes(sub.id);
+            const hasSubInvoice = (existingInvoices || []).some(inv =>
+              inv.uid === sub.uid &&
+              ['subscription', 'initial_reservation'].includes(inv.invoice_type) &&
+              (inv.transaction_reference === txnRef || (inv.notes && inv.notes.includes(sub.id)))
+            );
+
+            if (!alreadyHasTxn && !alreadyInNotes && !hasSubInvoice) {
+              const userObj = usersMap[sub.uid] || {};
+              const toteCount = Number(sub.tote_count || sub.total_totes || 0);
+              const toteRate = Number(sub.tote_rate || 0);
+              const storageAmt = Number(sub.recurring_storage || (toteCount * toteRate) || 0);
+              const valetFee = Number(sub.valet_fee || 0);
+              const total = Number(sub.first_month_total || sub.monthly_total || (storageAmt + valetFee));
+              const createdAt = sub.created_at || new Date().toISOString();
+
+              const lineItems = [
+                {
+                  description: `CloudVault Storage Subscription (${toteCount} totes @ $${toteRate.toFixed(2)}/mo)`,
+                  qty: toteCount || 1,
+                  unit_price: toteRate || storageAmt,
+                  amount: storageAmt
+                }
+              ];
+              if (valetFee > 0) {
+                lineItems.push({
+                  description: 'Initial Valet Delivery & Setup Fee',
+                  qty: 1,
+                  unit_price: valetFee,
+                  amount: valetFee
+                });
+              }
+
+              const res = await this.createInvoiceRecord({
+                uid: sub.uid,
+                customer_name: userObj.name || 'Valued Customer',
+                customer_email: userObj.email || null,
+                facility_id: userObj.assigned_facility_id || sub.facility_id || null,
+                invoice_type: 'subscription',
+                payment_status: 'paid',
+                subtotal: storageAmt,
+                delivery_fee: valetFee,
+                total_amount: total,
+                payment_method: 'card',
+                transaction_reference: txnRef,
+                notes: `Retroactive initial subscription backfill [Ref: ${subRefTag}]`,
+                line_items: lineItems,
+                created_at: createdAt,
+                paid_at: createdAt,
+                due_date: new Date(new Date(createdAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
+              });
+
+              if (res.success && res.data) {
+                createdInvoices.push(res.data);
+                existingTxnRefs.add(txnRef);
+                stats.subscriptions++;
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // B. Backfill Charges
+        // -------------------------------------------------------------
+        const { data: charges } = await sb.from('charges').select('*');
+        if (charges && charges.length > 0) {
+          for (const chg of charges) {
+            const txnRef = `CHG-${chg.id}`;
+            const chgRefTag = `charge_${chg.id}`;
+
+            const alreadyHasTxn = existingTxnRefs.has(txnRef);
+            const alreadyInNotes = existingNotes.includes(chgRefTag) || existingNotes.includes(chg.id);
+
+            if (!alreadyHasTxn && !alreadyInNotes) {
+              const userObj = usersMap[chg.uid] || {};
+              const amt = Number(chg.amount || 0);
+              const status = (chg.status === 'success' || chg.status === 'paid') ? 'paid' : (chg.status || 'paid');
+              const createdAt = chg.charged_at || chg.created_at || new Date().toISOString();
+
+              const res = await this.createInvoiceRecord({
+                uid: chg.uid,
+                customer_name: userObj.name || 'Valued Customer',
+                customer_email: userObj.email || null,
+                facility_id: userObj.assigned_facility_id || null,
+                invoice_type: chg.charge_type || 'charge',
+                payment_status: status,
+                subtotal: amt,
+                total_amount: amt,
+                payment_method: 'card',
+                transaction_reference: txnRef,
+                notes: `Retroactive charge backfill for ${chg.charge_type || 'fee'} [Ref: ${chgRefTag}]`,
+                line_items: [
+                  {
+                    description: `CloudVault Fee / Charge: ${chg.charge_type || 'General Fee'}`,
+                    qty: Number(chg.totes_charged || 1),
+                    unit_price: amt,
+                    amount: amt
+                  }
+                ],
+                created_at: createdAt,
+                paid_at: status === 'paid' ? createdAt : null,
+                due_date: new Date(new Date(createdAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
+              });
+
+              if (res.success && res.data) {
+                createdInvoices.push(res.data);
+                existingTxnRefs.add(txnRef);
+                stats.charges++;
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // C. Backfill Access Requests
+        // -------------------------------------------------------------
+        const { data: accessRequests } = await sb.from('access_requests').select('*');
+        if (accessRequests && accessRequests.length > 0) {
+          for (const req of accessRequests) {
+            const txnRef = `AR-${req.id}`;
+            const reqRefTag = `ar_${req.id}`;
+
+            const alreadyHasTxn = existingTxnRefs.has(txnRef);
+            const alreadyInNotes = existingNotes.includes(reqRefTag) || existingNotes.includes(req.id);
+
+            if (!alreadyHasTxn && !alreadyInNotes) {
+              const userObj = usersMap[req.uid] || {};
+              const valetFee = Number(req.valet_fee || 0);
+              const surgeFee = Number(req.surge_fee || 0);
+              const total = valetFee + surgeFee;
+              const invType = req.fulfillment_type === 'valet_delivery' || req.request_type === 'valet' ? 'valet_delivery' : (req.request_type || 'access_request');
+              const createdAt = req.requested_at || new Date().toISOString();
+
+              const lineItems = [];
+              if (valetFee > 0) {
+                lineItems.push({ description: 'Valet Delivery Service Fee', qty: 1, unit_price: valetFee, amount: valetFee });
+              }
+              if (surgeFee > 0) {
+                lineItems.push({ description: `Priority / Surge Slot Fee (${req.surge_tier || 'surge'})`, qty: 1, unit_price: surgeFee, amount: surgeFee });
+              }
+              if (lineItems.length === 0) {
+                const toteCount = Array.isArray(req.requested_items) ? req.requested_items.length : 1;
+                lineItems.push({ description: `Staging Tote Access Request (${toteCount} totes)`, qty: toteCount, unit_price: 0, amount: 0 });
+              }
+
+              const res = await this.createInvoiceRecord({
+                uid: req.uid,
+                customer_name: userObj.name || 'Valued Customer',
+                customer_email: userObj.email || null,
+                facility_id: req.facility_id || userObj.assigned_facility_id || null,
+                invoice_type: invType,
+                payment_status: req.status === 'cancelled' ? 'refunded' : 'paid',
+                subtotal: 0,
+                delivery_fee: valetFee,
+                surge_fee: surgeFee,
+                total_amount: total,
+                payment_method: 'card',
+                transaction_reference: txnRef,
+                notes: `Retroactive access request backfill [Ref: ${reqRefTag}]`,
+                line_items: lineItems,
+                created_at: createdAt,
+                paid_at: createdAt,
+                due_date: new Date(new Date(createdAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
+              });
+
+              if (res.success && res.data) {
+                createdInvoices.push(res.data);
+                existingTxnRefs.add(txnRef);
+                stats.accessRequests++;
+              }
+            }
+          }
+        }
+
+        // -------------------------------------------------------------
+        // D. Backfill Waitlist
+        // -------------------------------------------------------------
+        const { data: waitlistEntries } = await sb.from('waitlist').select('*');
+        if (waitlistEntries && waitlistEntries.length > 0) {
+          for (const w of waitlistEntries) {
+            const txnRef = `WTL-${w.id}`;
+            const wRefTag = `waitlist_${w.id}`;
+
+            const alreadyHasTxn = existingTxnRefs.has(txnRef);
+            const alreadyInNotes = existingNotes.includes(wRefTag) || existingNotes.includes(w.id);
+            const hasWaitlistInvoice = (existingInvoices || []).some(inv =>
+              inv.customer_email === w.email && inv.invoice_type === 'unlaunched_deposit'
+            );
+
+            if (!alreadyHasTxn && !alreadyInNotes && !hasWaitlistInvoice) {
+              const userObj = (w.user_id ? usersMap[w.user_id] : null) || {};
+              const deposit = Number(w.deposit_amount || 20.00);
+              const pStatus = (w.payment_status === 'deposit_paid' || w.payment_status === 'paid' || w.status === 'deposit_paid') ? 'deposit_received' : (w.payment_status || 'deposit_received');
+              const createdAt = w.created_at || new Date().toISOString();
+
+              const res = await this.createInvoiceRecord({
+                uid: w.user_id || null,
+                customer_name: userObj.name || (w.email ? w.email.split('@')[0] : 'Waitlist Lead'),
+                customer_email: w.email,
+                facility_id: null,
+                invoice_type: 'unlaunched_deposit',
+                payment_status: pStatus,
+                subtotal: deposit,
+                total_amount: deposit,
+                payment_method: 'card',
+                transaction_reference: txnRef,
+                notes: `Retroactive waitlist priority deposit backfill [Ref: ${wRefTag}]`,
+                line_items: [
+                  {
+                    description: `Unlaunched Market Priority Queue Reservation (${w.requested_totes || 5} totes)`,
+                    qty: 1,
+                    unit_price: deposit,
+                    amount: deposit
+                  }
+                ],
+                created_at: createdAt,
+                paid_at: (pStatus === 'paid' || pStatus === 'deposit_received') ? createdAt : null,
+                due_date: new Date(new Date(createdAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
+              });
+
+              if (res.success && res.data) {
+                createdInvoices.push(res.data);
+                existingTxnRefs.add(txnRef);
+                stats.waitlist++;
+              }
+            }
+          }
+        }
+
+        return {
+          success: true,
+          count: createdInvoices.length,
+          backfilled: stats,
+          invoices: createdInvoices
+        };
+      } catch (err) {
+        console.error('[CloudVaultBilling] Exception in backfillRetroactiveInvoices:', err);
+        return { success: false, error: err.message, count: 0, invoices: [] };
+      }
+    },
+
+    /**
+     * Scans active subscriptions due for renewal (next_billing_date <= now() or null),
+     * generates monthly recurring subscription invoices, updates last_billed_at, and advances next_billing_date by 1 month.
+     * @returns {Promise<{success: boolean, processedCount: number, invoices: Array, error?: string}>}
+     */
+    processMonthlyAutopayBilling: async function () {
+      try {
+        const sb = global.supabase;
+        if (!sb) {
+          console.error('[CloudVaultBilling] Supabase client missing');
+          return { success: false, error: 'Supabase client missing', processedCount: 0, invoices: [] };
+        }
+
+        const now = new Date();
+        const nowIso = now.toISOString();
+
+        // 1. Fetch active subscriptions
+        const { data: activeSubs, error: subErr } = await sb
+          .from('subscriptions')
+          .select('*')
+          .eq('status', 'active');
+
+        if (subErr) {
+          console.error('[CloudVaultBilling] Error fetching active subscriptions:', subErr);
+          return { success: false, error: subErr.message, processedCount: 0, invoices: [] };
+        }
+
+        if (!activeSubs || activeSubs.length === 0) {
+          return { success: true, processedCount: 0, invoices: [] };
+        }
+
+        // Filter for subscriptions due for renewal (next_billing_date is null or <= now)
+        const dueSubs = activeSubs.filter(sub => {
+          if (!sub.next_billing_date) return true;
+          return new Date(sub.next_billing_date) <= now;
+        });
+
+        if (dueSubs.length === 0) {
+          return { success: true, processedCount: 0, invoices: [] };
+        }
+
+        // Fetch users lookup map
+        const userIds = dueSubs.map(s => s.uid).filter(Boolean);
+        const usersMap = {};
+        if (userIds.length > 0) {
+          const { data: usersData } = await sb.from('users').select('id, name, email, assigned_facility_id').in('id', userIds);
+          if (usersData) {
+            usersData.forEach(u => { usersMap[u.id] = u; });
+          }
+        }
+
+        const createdInvoices = [];
+
+        for (const sub of dueSubs) {
+          const userObj = usersMap[sub.uid] || {};
+
+          const toteCount = Number(sub.tote_count || sub.total_totes || 0);
+          const toteRate = Number(sub.tote_rate || 0);
+          const storageAmt = Number(sub.recurring_storage || (toteCount * toteRate) || 0);
+          const valetFee = Number(sub.valet_fee || 0);
+          let monthlyTotal = Number(sub.monthly_total || (storageAmt + valetFee));
+
+          if (monthlyTotal <= 0 && storageAmt > 0) {
+            monthlyTotal = storageAmt;
+          }
+
+          const txnRef = `AUTOPAY-${sub.id}-${nowIso.slice(0, 10)}`;
+
+          // Create invoice record
+          const invRes = await this.createInvoiceRecord({
+            uid: sub.uid,
+            customer_name: userObj.name || 'Valued Customer',
+            customer_email: userObj.email || null,
+            facility_id: userObj.assigned_facility_id || sub.facility_id || null,
+            invoice_type: 'subscription',
+            payment_status: 'paid',
+            subtotal: storageAmt,
+            delivery_fee: valetFee,
+            total_amount: monthlyTotal,
+            payment_method: 'autopay',
+            transaction_reference: txnRef,
+            notes: 'Automated monthly subscription autopay renewal',
+            line_items: [
+              {
+                description: `CloudVault Monthly Autopay Storage Subscription (${toteCount} totes @ $${toteRate.toFixed(2)}/mo)`,
+                qty: toteCount || 1,
+                unit_price: toteRate || storageAmt,
+                amount: storageAmt
+              }
+            ],
+            created_at: nowIso,
+            paid_at: nowIso,
+            due_date: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
+          });
+
+          if (invRes.success && invRes.data) {
+            createdInvoices.push(invRes.data);
+          }
+
+          // Advance next_billing_date by 1 month from current next_billing_date or now
+          let baseDate = sub.next_billing_date ? new Date(sub.next_billing_date) : new Date(now);
+          if (isNaN(baseDate.getTime())) {
+            baseDate = new Date(now);
+          }
+
+          const nextBilling = new Date(baseDate);
+          nextBilling.setMonth(nextBilling.getMonth() + 1);
+
+          // Ensure next_billing_date is strictly in the future relative to now
+          if (nextBilling <= now) {
+            nextBilling.setTime(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+          }
+
+          // Update subscription record with last_billed_at and new next_billing_date
+          await sb
+            .from('subscriptions')
+            .update({
+              last_billed_at: nowIso,
+              next_billing_date: nextBilling.toISOString(),
+              last_updated: nowIso
+            })
+            .eq('id', sub.id);
+        }
+
+        return {
+          success: true,
+          processedCount: createdInvoices.length,
+          invoices: createdInvoices
+        };
+      } catch (err) {
+        console.error('[CloudVaultBilling] Exception in processMonthlyAutopayBilling:', err);
+        return { success: false, error: err.message, processedCount: 0, invoices: [] };
+      }
+    },
+
+    /**
+     * Scans unpaid invoices (payment_status = 'pending') where due_date < now(),
+     * updates payment_status to 'overdue', and flags the customer account.
+     * @returns {Promise<{success: boolean, overdueCount: number, updatedInvoices: Array, error?: string}>}
+     */
+    evaluateOverdueInvoices: async function () {
+      try {
+        const sb = global.supabase;
+        if (!sb) {
+          console.error('[CloudVaultBilling] Supabase client missing');
+          return { success: false, error: 'Supabase client missing', overdueCount: 0, updatedInvoices: [] };
+        }
+
+        const nowIso = new Date().toISOString();
+
+        // 1. Fetch pending invoices where due_date < now
+        const { data: pendingInvoices, error: fetchErr } = await sb
+          .from('invoices')
+          .select('*')
+          .eq('payment_status', 'pending')
+          .lt('due_date', nowIso);
+
+        if (fetchErr) {
+          console.error('[CloudVaultBilling] Error fetching pending invoices:', fetchErr);
+          return { success: false, error: fetchErr.message, overdueCount: 0, updatedInvoices: [] };
+        }
+
+        if (!pendingInvoices || pendingInvoices.length === 0) {
+          return { success: true, overdueCount: 0, updatedInvoices: [] };
+        }
+
+        const updatedInvoices = [];
+        const flaggedUserIds = new Set();
+
+        for (const inv of pendingInvoices) {
+          // Update payment_status to 'overdue'
+          const { data: updated, error: updateErr } = await sb
+            .from('invoices')
+            .update({ payment_status: 'overdue' })
+            .eq('id', inv.id)
+            .select()
+            .single();
+
+          if (!updateErr && updated) {
+            updatedInvoices.push(updated);
+          } else {
+            updatedInvoices.push({ ...inv, payment_status: 'overdue' });
+          }
+
+          if (inv.uid) {
+            flaggedUserIds.add(inv.uid);
+          }
+        }
+
+        // Flag customer accounts in users & subscriptions tables
+        for (const uid of flaggedUserIds) {
+          // Flag public.users (set onboarding_status to 'overdue')
+          await sb
+            .from('users')
+            .update({ onboarding_status: 'overdue' })
+            .eq('id', uid);
+
+          // Flag public.subscriptions if active (set status to 'past_due')
+          await sb
+            .from('subscriptions')
+            .update({ status: 'past_due' })
+            .eq('uid', uid)
+            .eq('status', 'active');
+        }
+
+        return {
+          success: true,
+          overdueCount: updatedInvoices.length,
+          updatedInvoices: updatedInvoices,
+          flaggedUserCount: flaggedUserIds.size
+        };
+      } catch (err) {
+        console.error('[CloudVaultBilling] Exception in evaluateOverdueInvoices:', err);
+        return { success: false, error: err.message, overdueCount: 0, updatedInvoices: [] };
+      }
+    },
+
+    /**
      * Renders and displays the executive printable invoice modal (#printable-invoice-modal).
      * @param {Object} invoiceObj - Invoice record object
      */
@@ -197,6 +705,7 @@
 
       let statusBadgeClasses = 'bg-emerald-100 text-emerald-800 border-emerald-300';
       if (status === 'PENDING') statusBadgeClasses = 'bg-amber-100 text-amber-800 border-amber-300';
+      else if (status === 'OVERDUE' || status === 'FAILED') statusBadgeClasses = 'bg-red-100 text-red-800 border-red-300';
       else if (status === 'REFUNDED') statusBadgeClasses = 'bg-rose-100 text-rose-800 border-rose-300';
 
       const formatMoney = (val) => {

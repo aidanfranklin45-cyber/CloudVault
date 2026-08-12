@@ -180,6 +180,7 @@ CREATE TABLE public.subscriptions (
     has_price_lock BOOLEAN DEFAULT false,
     price_lock_rates JSONB DEFAULT NULL,
     current_period_end TIMESTAMPTZ,
+    last_billed_at TIMESTAMPTZ,
     next_billing_date TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
     last_updated TIMESTAMPTZ DEFAULT now()
@@ -188,6 +189,8 @@ CREATE TABLE public.subscriptions (
 -- Migration fallbacks for subscriptions
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS has_price_lock BOOLEAN DEFAULT false;
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS price_lock_rates JSONB DEFAULT NULL;
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS last_billed_at TIMESTAMPTZ;
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS next_billing_date TIMESTAMPTZ;
 
 -- Operational Zones / Service Markets
 CREATE TABLE IF NOT EXISTS public.operational_zones (
@@ -320,7 +323,7 @@ CREATE TABLE IF NOT EXISTS public.invoices (
     customer_email TEXT,
     facility_id TEXT REFERENCES public.facilities(id) ON DELETE SET NULL,
     invoice_type TEXT DEFAULT 'subscription',
-    payment_status TEXT DEFAULT 'paid',
+    payment_status TEXT DEFAULT 'paid' CHECK (payment_status IN ('paid', 'pending', 'overdue', 'failed', 'refunded', 'deposit_received')),
     subtotal NUMERIC(10,2) DEFAULT 0.00,
     delivery_fee NUMERIC(10,2) DEFAULT 0.00,
     surge_fee NUMERIC(10,2) DEFAULT 0.00,
@@ -331,6 +334,7 @@ CREATE TABLE IF NOT EXISTS public.invoices (
     transaction_reference TEXT,
     notes TEXT,
     line_items JSONB DEFAULT '[]'::jsonb,
+    due_date TIMESTAMPTZ DEFAULT (now() + interval '3 days'),
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
     paid_at TIMESTAMPTZ DEFAULT now(),
     refunded_at TIMESTAMPTZ
@@ -354,9 +358,12 @@ ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS transaction_reference TEXT;
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS line_items JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS due_date TIMESTAMPTZ DEFAULT (now() + interval '3 days');
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ;
+ALTER TABLE public.invoices DROP CONSTRAINT IF EXISTS invoices_payment_status_check;
+ALTER TABLE public.invoices ADD CONSTRAINT invoices_payment_status_check CHECK (payment_status IN ('paid', 'pending', 'overdue', 'failed', 'refunded', 'deposit_received'));
 
 -- Indexes for invoices
 CREATE INDEX IF NOT EXISTS idx_invoices_uid ON public.invoices(uid);
