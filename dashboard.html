@@ -1677,8 +1677,13 @@
             renderFulfillmentFlows();
             const panel = document.getElementById('active-requests-panel');
             const list = document.getElementById('active-requests-list');
+            const flowsSection = document.getElementById('fulfillment-flows-section');
 
             if (!panel || !list) return;
+
+            // If active fulfillment flows section is currently displaying active flow card(s),
+            // suppress synthetic duplicate legacy cards and hide panel to prevent duplicate UI cards.
+            const isFlowsActive = flowsSection && !flowsSection.classList.contains('hidden');
 
             // Combine active requests from DB + any inventory items currently in delivery/staging flow
             let allActiveRequests = [...currentRequests];
@@ -1695,7 +1700,8 @@
                 );
             });
 
-            if (unlinkedActiveItems.length > 0) {
+            // Only synthesize fallback cards if fulfillment flows section is NOT handling the items
+            if (!isFlowsActive && unlinkedActiveItems.length > 0) {
                 const valetUnlinked = unlinkedActiveItems.filter(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery');
                 const selfServeUnlinked = unlinkedActiveItems.filter(i => i.status === 'pending-stage' || i.status === 'staged');
 
@@ -1709,7 +1715,7 @@
                         requested_tote_codes: valetUnlinked.map(i => i.tote_code),
                         status: valetUnlinked.some(i => i.status === 'out-for-delivery') ? 'out-for-delivery' : 'pending-dispatch',
                         target_date: new Date().toISOString().split('T')[0],
-                        time_slot: '09:00 AM - 12:00 PM',
+                        time_slot: '12:00 PM - 03:00 PM',
                         requested_at: new Date().toISOString()
                     });
                 }
@@ -1724,7 +1730,7 @@
                         requested_tote_codes: selfServeUnlinked.map(i => i.tote_code),
                         status: selfServeUnlinked.some(i => i.status === 'staged') ? 'staged' : 'pending',
                         target_date: new Date().toISOString().split('T')[0],
-                        time_slot: '09:00 AM - 12:00 PM',
+                        time_slot: '12:00 PM - 03:00 PM',
                         requested_at: new Date().toISOString()
                     });
                 }
@@ -1735,7 +1741,7 @@
                 (req.requested_tote_codes && req.requested_tote_codes.length > 0)
             );
 
-            if (allActiveRequests.length === 0 && activeInventoryItems.length === 0) {
+            if (isFlowsActive || (allActiveRequests.length === 0 && activeInventoryItems.length === 0)) {
                 panel.classList.add('hidden');
                 list.innerHTML = '';
                 return;
