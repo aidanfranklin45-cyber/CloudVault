@@ -354,7 +354,7 @@
                     <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping mr-2"></span>
                     LOGISTICS TELEMETRY
                 </span>
-                <div class="flex items-center space-x-2">
+                <div class="flex items-center space-x-2" id="admin-billing-audit-actions">
                     <button onclick="runInvoiceBackfillAndSync()"
                         class="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer min-h-[32px]">
                         <span>🔄 System Billing Audit &amp; Sync</span>
@@ -924,9 +924,10 @@
                 </div>
             </div>
 
-            <!-- VIEW 3: WAREHOUSE WORKER ROLE (HARDWARE-OPTIMIZED INDUSTRIAL TERMINAL) -->
+        </div>
 
-            <div id="view-worker" class="space-y-6 hidden animate-fade-in">
+        <!-- VIEW 3: WAREHOUSE WORKER ROLE (HARDWARE-OPTIMIZED INDUSTRIAL TERMINAL) -->
+        <div id="view-worker" class="space-y-6 hidden animate-fade-in">
 
                 <!-- SLA-Driven Cutoff Banner (Past 18:00 Cutoff Alert) -->
                 <div id="sla-cutoff-banner"
@@ -1486,24 +1487,29 @@
             const navBiAnalytics = document.getElementById('nav-bi-analytics');
             const seedBtn = document.getElementById('seed-btn');
 
+            const billingAuditActions = document.getElementById('admin-billing-audit-actions');
+
             if (activeRole === 'executive') {
                 if (mgrSel) mgrSel.classList.add('hidden');
                 if (activeIndicator) activeIndicator.classList.remove('hidden');
                 if (navFacilityConfig) navFacilityConfig.classList.remove('hidden');
                 if (navBiAnalytics) navBiAnalytics.classList.remove('hidden');
                 if (seedBtn) seedBtn.classList.remove('hidden');
+                if (billingAuditActions) billingAuditActions.classList.remove('hidden');
             } else if (activeRole === 'manager') {
                 if (mgrSel) mgrSel.classList.add('hidden');
                 if (activeIndicator) activeIndicator.classList.add('hidden');
                 if (navFacilityConfig) navFacilityConfig.classList.add('hidden');
                 if (navBiAnalytics) navBiAnalytics.classList.remove('hidden');
                 if (seedBtn) seedBtn.classList.add('hidden');
+                if (billingAuditActions) billingAuditActions.classList.remove('hidden');
             } else {
                 if (mgrSel) mgrSel.classList.add('hidden');
                 if (activeIndicator) activeIndicator.classList.add('hidden');
                 if (navFacilityConfig) navFacilityConfig.classList.add('hidden');
-                if (navBiAnalytics) navBiAnalytics.classList.add('hidden');
+                if (navBiAnalytics) navBiAnalytics.classList.remove('hidden');
                 if (seedBtn) seedBtn.classList.add('hidden');
+                if (billingAuditActions) billingAuditActions.classList.add('hidden');
             }
 
             // Show selected (cumulatively based on role hierarchy)
