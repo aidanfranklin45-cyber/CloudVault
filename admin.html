@@ -38,20 +38,22 @@
                 overflow: visible !important;
             }
 
-            body>*:not(#print-container) {
+            body > *:not(#print-container) {
                 display: none !important;
             }
 
             #print-container {
                 display: block !important;
-                position: relative !important;
-                left: auto !important;
-                top: auto !important;
+                visibility: visible !important;
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
                 width: 100% !important;
                 background: #ffffff !important;
                 color: #000000 !important;
                 padding: 0 !important;
                 margin: 0 !important;
+                z-index: 999999 !important;
             }
 
             #print-container * {
@@ -2757,7 +2759,7 @@
                 }
 
                 // Fetch all inventory for this facility across all relevant statuses (including unassigned or new intake totes)
-                const statuses = ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer', 'returned'];
+                const statuses = ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer'];
                 
                 const [facRes, nullRes] = await Promise.all([
                     supabase.from('inventory').select('*, users!uid(name, onboarding_status)').eq('facility_id', queryFacilityId).in('status', statuses),
@@ -2915,6 +2917,7 @@
                     bodyActivate.innerHTML = Object.entries(activateGrouped).map(([uid, totes]) => {
                         const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0, 8)}`;
                         const firstCode = totes[0].tote_code;
+                        const allCodesStr = totes.map(t => t.tote_code).join(', ');
                         return `
                             <div class="bg-gray-950 border-2 border-emerald-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-emerald-500/60 transition">
                                 <div class="flex items-center justify-between border-b border-gray-850 pb-3">
@@ -2927,8 +2930,8 @@
                                             <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0, 8)} &bull; ${totes.length} Tote(s) to Activate</p>
                                         </div>
                                     </div>
-                                    <button onclick="openPrintLabelModal('${firstCode}')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
-                                        <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print Labels
+                                    <button onclick="openPrintLabelModal('${allCodesStr}')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
+                                        <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print All (${totes.length}) Labels
                                     </button>
                                 </div>
 
@@ -2936,16 +2939,16 @@
                                     ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                         <div class="flex items-center space-x-2">
                                             <span class="text-white font-bold">${t.tote_code}</span>
-                                            <span class="text-cyan-400 text-[10px] bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 font-mono">📍 ${t.location_code || 'INTAKE-BAY-1'}</span>
+                                            <span class="text-cyan-400 text-[10px] bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 font-mono">📍 INTAKE-PREP</span>
                                         </div>
-                                        <button onclick="slotToteToVault('${t.tote_code}')" class="text-cyan-300 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 text-[10px] font-bold px-2 py-1 rounded border border-cyan-500/30 transition">Slot to Vault</button>
+                                        <button onclick="document.getElementById('scan-barcode').value='${t.tote_code}';simulateScan('pending-stage')" class="text-emerald-300 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 text-[10px] font-bold px-2 py-1 rounded-xl border border-emerald-500/30 transition flex items-center gap-1 cursor-pointer">⚡ Activate (${t.tote_code})</button>
                                     </div>`).join('')}
                                 </div>
 
                                 <!-- Full-Width 60px Ergonomic Industrial Action Button -->
                                 <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('pending-stage')" class="w-full min-h-[60px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                     <i data-lucide="qr-code" class="w-6 h-6"></i>
-                                    <span>ACTIVATE TOTE (${firstCode}) → MOVE TO INTAKE PROCESSING ZONE</span>
+                                    <span>ACTIVATE TOTE (${firstCode}) &amp; STAGE FOR CUSTOMER/DISPATCH →</span>
                                 </button>
                             </div>`;
                     }).join('');
@@ -5459,12 +5462,12 @@
             }
 
             try {
-                // Clear location assignment and set status to 'returned' (Step 5 Return to Vault queue)
+                // Clear location assignment and set status to 'with-customer' (Step 5 Return to Vault queue)
                 const { error: invErr } = await supabase.from('inventory')
                     .update({
                         location_code: 'UNSLOTTED-QUEUE',
                         location_id: null,
-                        status: 'returned',
+                        status: 'with-customer',
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', toteId);
@@ -5864,16 +5867,21 @@
 
             try {
                 if (presetKey === 'all') {
-                    const { data: totes } = await supabase.from('inventory').select('tote_code').eq('facility_id', facId);
-                    if (totes) codes = totes.map(t => t.tote_code);
+                    const { data: totes1 } = await supabase.from('inventory').select('tote_code').eq('facility_id', facId);
+                    const { data: totes2 } = await supabase.from('inventory').select('tote_code').is('facility_id', null);
+                    codes = [...(totes1 || []), ...(totes2 || [])].map(t => t.tote_code);
                 } else if (presetKey === 'activate') {
-                    const { data: totes } = await supabase.from('inventory').select('tote_code').eq('facility_id', facId).eq('status', 'stored').eq('activated', false);
-                    if (totes) codes = totes.map(t => t.tote_code);
+                    const { data: totes1 } = await supabase.from('inventory').select('tote_code').eq('facility_id', facId).eq('activated', false);
+                    const { data: totes2 } = await supabase.from('inventory').select('tote_code').is('facility_id', null).eq('activated', false);
+                    const { data: reqs } = await supabase.from('access_requests').select('requested_tote_codes').eq('status', 'pending');
+                    const reqCodes = (reqs || []).flatMap(r => r.requested_tote_codes || []);
+                    const combined = [...(totes1 || []), ...(totes2 || [])].map(t => t.tote_code).concat(reqCodes);
+                    codes = Array.from(new Set(combined.filter(Boolean)));
                 } else if (presetKey === 'stage') {
-                    const { data: totes } = await supabase.from('inventory').select('tote_code').eq('facility_id', facId).eq('status', 'pending-stage');
+                    const { data: totes } = await supabase.from('inventory').select('tote_code').eq('status', 'pending-stage');
                     if (totes) codes = totes.map(t => t.tote_code);
                 } else if (presetKey === 'customer') {
-                    const { data: totes } = await supabase.from('inventory').select('tote_code').eq('facility_id', facId).eq('status', 'staged');
+                    const { data: totes } = await supabase.from('inventory').select('tote_code').eq('status', 'staged');
                     if (totes) codes = totes.map(t => t.tote_code);
                 }
             } catch (e) {
@@ -6075,6 +6083,8 @@
                 </div>
             `).join('');
 
+            printContainer.style.display = 'block';
+
             setTimeout(() => {
                 // Render Barcodes
                 const barcodeEls = printContainer.querySelectorAll('.print-grid-barcode');
@@ -6098,9 +6108,12 @@
 
                 window.print();
                 setTimeout(() => {
-                    if (printContainer) printContainer.innerHTML = '';
-                }, 1000);
-            }, 200);
+                    if (printContainer) {
+                        printContainer.style.display = 'none';
+                        printContainer.innerHTML = '';
+                    }
+                }, 1500);
+            }, 300);
         }
     </script>
 
