@@ -1194,7 +1194,7 @@
                             <div class="bg-amber-950/30 border border-amber-500/20 p-4 rounded-2xl space-y-3 text-xs">
                                 <div class="flex items-center justify-between flex-wrap gap-2">
                                     <span class="text-gray-300"><strong class="text-amber-400">Worker Action:</strong>
-                                        Dispatch activated intake totes or pull totes from vault shelves</span>
+                                        Transfer active intake totes or pull stored totes from vault shelves</span>
                                     <span class="text-amber-300 font-mono text-[11px] font-bold">Retrieval &amp;
                                         Dispatch Queue</span>
                                 </div>
@@ -3041,19 +3041,11 @@
                         const numRooms = currentLoadedFac?.num_staging_rooms || 2;
                         const assignedRoomNum = getAssignedRoom(uid, numRooms);
 
-                        const isPortalRetrieval = reqManifest && (
-                            reqManifest.request_type === 'valet_delivery' ||
-                            reqManifest.request_type === 'self_serve_pickup' ||
-                            reqManifest.request_type === 'staging' ||
-                            reqManifest.request_type === 'retrieval' ||
-                            reqManifest.request_type === 'customer_retrieval'
-                        );
+                        const isIntakeProcessingTote = totes.some(t => !t.activated || (t.location_code && t.location_code.startsWith('INTAKE')) || (t.status === 'pending-stage' && !t.activated));
 
-                        const isActivationFlow = !isPortalRetrieval && totes.every(t => !t.label || t.label.toLowerCase().includes('empty'));
-
-                        const originBadge = isActivationFlow
-                            ? `<span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="zap" class="w-3.5 h-3.5 text-emerald-400"></i> Intake Activation Flow</span>`
-                            : `<span class="text-xs font-bold font-mono text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="archive" class="w-3.5 h-3.5 text-amber-400"></i> Deep Vault Storage</span>`;
+                        const originBadge = isIntakeProcessingTote
+                            ? `<span class="text-xs font-bold font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="zap" class="w-3.5 h-3.5 text-cyan-400"></i> Intake Processing Flow</span>`
+                            : `<span class="text-xs font-bold font-mono text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="archive" class="w-3.5 h-3.5 text-amber-400"></i> Deep Vault Storage Pull</span>`;
 
                         const targetLocationBadge = isValet
                             ? `<span class="text-xs font-bold font-mono text-orange-400 bg-orange-500/10 border border-orange-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5"></i> Driver Loading Bay A</span>`
@@ -3071,14 +3063,14 @@
                                 : 'border-amber-500/30 bg-gray-950';
 
                         const actionLabel = isValet
-                            ? (isActivationFlow ? `LOAD ON DRIVER (${firstCode})` : `PULL FROM VAULT & LOAD ON DRIVER (${firstCode})`)
-                            : (isActivationFlow ? `MOVE TO STAGING ROOM #${assignedRoomNum} (${firstCode})` : `PULL FROM VAULT & MOVE TO STAGING ROOM #${assignedRoomNum} (${firstCode})`);
+                            ? (isIntakeProcessingTote ? `SCAN &amp; DISPATCH INTAKE TOTE (${firstCode}) → DRIVER LOADING BAY` : `SCAN &amp; PULL TOTE (${firstCode}) FROM VAULT SHELF → DRIVER LOADING BAY`)
+                            : (isIntakeProcessingTote ? `SCAN &amp; STAGE INTAKE TOTE (${firstCode}) → STAGING ROOM #${assignedRoomNum}` : `SCAN &amp; PULL TOTE (${firstCode}) FROM VAULT SHELF → STAGING ROOM #${assignedRoomNum}`);
 
                         const actionGradient = isValet
                             ? 'from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 border-orange-400/40'
                             : 'from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 border-amber-400/40';
 
-                        const actionIcon = isValet ? 'truck' : 'archive-restore';
+                        const actionIcon = isValet ? 'truck' : (isIntakeProcessingTote ? 'zap' : 'archive-restore');
                         const expectedScanStatus = isValet ? 'pending-dispatch' : 'pending-stage';
                         const defaultTargetLocation = isValet ? 'DISPATCH-BAY-1' : `STAGE-BAY-A${assignedRoomNum}`;
 
@@ -3112,11 +3104,11 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => {
                                         const isValetItem = t.status === 'pending-dispatch';
-                                        const originPrefix = isActivationFlow ? 'Intake Flow' : 'Vault Storage';
+                                        const originPrefix = isIntakeProcessingTote ? 'Intake Processing' : 'Vault Storage';
                                         const sLabel = isValetItem ? `${originPrefix} &bull; Pending Driver Load` : `${originPrefix} &bull; Pending Staging`;
                                         const sColor = isValetItem ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
                                         const itemLabel = t.label ? ` &bull; ${escapeHtml(t.label)}` : '';
-                                        const locTag = t.location_code ? ` 📍 ${t.location_code}` : ' 📍 INT-PROC';
+                                        const locTag = t.location_code ? ` 📍 ${t.location_code}` : ' 📍 INTAKE-PROCESSING';
                                         return `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                             <div>
                                                 <span class="text-white font-bold">${t.tote_code}</span>
@@ -3130,10 +3122,10 @@
                                     }).join('')}
                                 </div>
 
-                                <!-- Individual Tote Scan & Vault Pull Action Button -->
+                                <!-- Individual Tote Scan & Dynamic Action Button -->
                                 <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('${expectedScanStatus}')" class="w-full min-h-[60px] bg-gradient-to-r ${actionGradient} text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                     <i data-lucide="${actionIcon}" class="w-6 h-6"></i>
-                                    <span>SCAN &amp; PULL TOTE (${firstCode}) FROM VAULT SHELF →</span>
+                                    <span>${actionLabel}</span>
                                 </button>
                             </div>`;
                     }).join('');
