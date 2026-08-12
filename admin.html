@@ -5844,15 +5844,14 @@
                 alert("Status override failed: " + err.message);
             }
         }
+
         function openPrintLabelModal(toteCode) {
             const input = document.getElementById('print-tote-code');
             if (input && toteCode) {
                 input.value = toteCode;
             }
             document.getElementById('print-labels-modal').classList.remove('hidden');
-            setTimeout(() => {
-                renderLabelPreview();
-            }, 100);
+            renderLabelPreview();
         }
 
         function closePrintLabelModal() {
@@ -5943,7 +5942,7 @@
                             }
                             if (tempDiv.parentNode) document.body.removeChild(tempDiv);
                             resolve(url);
-                        }, 40);
+                        }, 20);
                     } else {
                         const url = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(text)}&ecc=M&margin=1`;
                         if (tempDiv.parentNode) document.body.removeChild(tempDiv);
@@ -5956,7 +5955,7 @@
             });
         }
 
-        async function renderLabelPreview() {
+        function renderLabelPreview() {
             const codeInput = document.getElementById('print-tote-code');
             const previewBox = document.getElementById('label-preview-box');
             const chipsBox = document.getElementById('print-chips-box');
@@ -5984,8 +5983,8 @@
 
             const todayStr = new Date().toLocaleDateString();
             const firstCode = codes[0] || 'CV-SEA-1001';
-            const qrDataUrl = await generateQRDataURL(firstCode);
 
+            // Render preview UI immediately in 0ms without waiting for async QR generation
             previewBox.innerHTML = `
                 <div style="border: 2px dashed #000; padding: 12px; width: 100%; max-width: 420px; background: #ffffff; color: #000000; border-radius: 10px; font-family: monospace; box-sizing: border-box;">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px;">
@@ -6001,7 +6000,7 @@
                             <div style="font-size: 16px; font-weight: 900; letter-spacing: 2px; margin-top: 2px; font-family: monospace;">${firstCode}</div>
                         </div>
                         <div style="flex: 0 0 100px; width: 100px; max-width: 100px; min-width: 100px; text-align: center; border-left: 2px solid #000; padding-left: 10px; box-sizing: border-box;">
-                            <img id="preview-qr-img" src="${qrDataUrl}" style="width: 75px; height: 75px; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto; object-fit: contain; image-rendering: pixelated;" alt="QR Code" />
+                            <img id="preview-qr-img" src="" style="width: 75px; height: 75px; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto; object-fit: contain; image-rendering: pixelated;" alt="QR Code" />
                             <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 2px; font-family: sans-serif;">FAST-SCAN QR</span>
                         </div>
                     </div>
@@ -6013,20 +6012,25 @@
                 </div>
             `;
 
-            setTimeout(() => {
-                const barcodeEl = document.getElementById('preview-barcode-svg');
-                if (barcodeEl && typeof JsBarcode === 'function') {
-                    try {
-                        JsBarcode("#preview-barcode-svg", firstCode, {
-                            format: "CODE128",
-                            width: 1.6,
-                            height: 38,
-                            displayValue: false,
-                            margin: 2
-                        });
-                    } catch (e) { }
-                }
-            }, 50);
+            // Update QR code data URL asynchronously
+            generateQRDataURL(firstCode).then(qrUrl => {
+                const qrImg = document.getElementById('preview-qr-img');
+                if (qrImg) qrImg.src = qrUrl;
+            });
+
+            // Render barcode SVG immediately
+            const barcodeEl = document.getElementById('preview-barcode-svg');
+            if (barcodeEl && typeof JsBarcode === 'function') {
+                try {
+                    JsBarcode("#preview-barcode-svg", firstCode, {
+                        format: "CODE128",
+                        width: 1.6,
+                        height: 38,
+                        displayValue: false,
+                        margin: 2
+                    });
+                } catch (e) { }
+            }
         }
 
         async function triggerPrintLabels() {
@@ -6037,11 +6041,11 @@
 
             const todayStr = new Date().toLocaleDateString();
 
-            // Pre-generate QR Data URLs for all codes asynchronously
+            // Pre-generate QR Data URLs for all codes in parallel for ultra-low latency
             const qrMap = {};
-            for (const code of codesToPrint) {
+            await Promise.all(codesToPrint.map(async code => {
                 qrMap[code] = await generateQRDataURL(code);
-            }
+            }));
 
             // Chunk into sheets of 4 tags (2 columns x 2 rows per sheet)
             const pages = [];
