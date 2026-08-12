@@ -2047,6 +2047,29 @@
                     await supabase.from('waitlist').update(updatePayload).eq('email', activeWaitlistEmail);
                 }
 
+                // Automatic Invoice Record Creation for unlaunched_deposit ($25.00 deposit, status deposit_received)
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
+                    try {
+                        const depositAmt = 25.00;
+                        await window.CloudVaultBilling.createInvoiceRecord({
+                            uid: createdUserId || null,
+                            customer_name: cardName || (activeWaitlistEmail ? activeWaitlistEmail.split('@')[0] : 'Waitlist Lead'),
+                            customer_email: activeWaitlistEmail || null,
+                            invoice_type: 'unlaunched_deposit',
+                            payment_status: 'deposit_received',
+                            subtotal: depositAmt,
+                            total_amount: depositAmt,
+                            payment_method: 'card',
+                            line_items: [
+                                { description: 'Unlaunched Market Priority Queue Reservation & 5-Year Rate Lock Deposit', qty: 1, unit_price: depositAmt, amount: depositAmt }
+                            ],
+                            notes: `Unlaunched market priority deposit ($25.00) for email ${activeWaitlistEmail}.`
+                        });
+                    } catch (invErr) {
+                        console.warn('[CloudVault Billing] Waitlist deposit invoice creation notice:', invErr);
+                    }
+                }
+
                 document.getElementById('waitlist-step-payment').classList.add('hidden-section');
                 document.getElementById('waitlist-success').classList.remove('hidden-section');
                 logMilestone('waitlist_deposit_paid', { email: activeWaitlistEmail, deposit: depositAmt });
@@ -2307,6 +2330,7 @@
     <!-- Supabase JS SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
+    <script src="billing-engine.js"></script>
 </body>
 
 </html>

@@ -79,6 +79,17 @@
             color: #ffffff !important;
         }
 
+        /* Disable Webkit Autofill Yellow/Blue Background */
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover, 
+        input:-webkit-autofill:focus,
+        input:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 1000px #030712 inset !important;
+            -webkit-text-fill-color: #ffffff !important;
+            caret-color: #ffffff !important;
+            transition: background-color 5000s ease-in-out 0s;
+        }
+
         body {
             font-family: 'Outfit', sans-serif;
             background-color: #060913;
@@ -970,22 +981,29 @@
                                             <i data-lucide="map-pin" class="w-3 h-3 text-indigo-400"></i> Set Target Shelf/Bay
                                         </button>
                                     </div>
-                                    <div class="relative">
-                                        <input type="text" id="scan-barcode" name="barcode_scan_input_no_autofill"
-                                            placeholder="Click & Scan Tote or Location (e.g. V-A01-S01)..."
-                                            autocomplete="off"
-                                            aria-autocomplete="none"
-                                            autocorrect="off"
-                                            autocapitalize="off"
-                                            spellcheck="false"
-                                            data-lpignore="true"
-                                            data-1p-ignore="true"
-                                            data-form-type="other"
-                                            onkeydown="handleScanKey(event)"
-                                            oninput="sanitizeBarcodeAutofill(this)"
-                                            onfocus="sanitizeBarcodeAutofill(this)"
-                                            onchange="sanitizeBarcodeAutofill(this)"
-                                            class="w-full bg-gray-950 border-2 border-gray-850 focus:border-blue-500 rounded-xl py-3.5 px-4 pl-10 text-sm text-white font-mono outline-none transition">
+                                     <!-- Decoy Form Trap to absorb Google Password Manager autofill -->
+                                     <div class="hidden" style="display:none !important; visibility:hidden !important; position:absolute !important; left:-9999px !important;" aria-hidden="true">
+                                         <input type="text" name="username" tabindex="-1" autocomplete="username">
+                                         <input type="email" name="email" tabindex="-1" autocomplete="email">
+                                         <input type="password" name="password" tabindex="-1" autocomplete="current-password">
+                                     </div>
+
+                                     <div class="relative">
+                                         <input type="search" id="scan-barcode" name="barcode_scan_input_no_autofill"
+                                             placeholder="Click & Scan Tote or Location (e.g. V-A01-S01)..."
+                                             autocomplete="off"
+                                             aria-autocomplete="none"
+                                             autocorrect="off"
+                                             autocapitalize="off"
+                                             spellcheck="false"
+                                             readonly
+                                             onfocus="this.removeAttribute('readonly'); sanitizeBarcodeAutofill(this);"
+                                             onblur="this.setAttribute('readonly', 'readonly'); sanitizeBarcodeAutofill(this);"
+                                             onkeydown="handleScanKey(event)"
+                                             oninput="sanitizeBarcodeAutofill(this)"
+                                             onfocusin="sanitizeBarcodeAutofill(this)"
+                                             onchange="sanitizeBarcodeAutofill(this)"
+                                             class="w-full bg-gray-950 border-2 border-gray-850 focus:border-blue-500 rounded-xl py-3.5 px-4 pl-10 text-sm text-white font-mono outline-none transition">
                                         <div class="absolute left-3.5 top-4 text-gray-500">
                                             <i data-lucide="scan-line" class="w-4 h-4 animate-pulse"></i>
                                         </div>
@@ -1348,6 +1366,7 @@
     <!-- Supabase JS SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
+    <script src="billing-engine.js"></script>
 
     <!-- Main Logic Script -->
     <script>
@@ -2614,7 +2633,10 @@
                 if (scannerBuffer.length > 3) {
                     e.preventDefault();
                     const input = document.getElementById('scan-barcode');
-                    if (input) input.value = scannerBuffer.trim();
+                    if (input) {
+                        input.removeAttribute('readonly');
+                        input.value = scannerBuffer.trim();
+                    }
                     simulateScan();
                     scannerBuffer = "";
                 }
@@ -3503,7 +3525,7 @@
             const scanInput = document.getElementById('scan-barcode');
             if (scanInput) {
                 sanitizeBarcodeAutofill(scanInput);
-                [100, 300, 600, 1200].forEach(ms => setTimeout(() => sanitizeBarcodeAutofill(scanInput), ms));
+                [100, 300, 600, 1200, 2500].forEach(ms => setTimeout(() => sanitizeBarcodeAutofill(scanInput), ms));
             }
         });
 
@@ -5155,102 +5177,176 @@
             if (!listEl) return;
 
             try {
-                let charges = [];
+                let userEmail = (window.currentSelectedCustomer && window.currentSelectedCustomer.id === userId) ? window.currentSelectedCustomer.email : null;
+                if (!userEmail && userId) {
+                    const { data: u } = await supabase.from('users').select('email').eq('id', userId).maybeSingle();
+                    if (u && u.email) userEmail = u.email;
+                }
 
-                // Query public.charges table in Supabase
-                const { data: chargeData, error: chargeErr } = await supabase
-                    .from('charges')
-                    .select('*')
-                    .eq('uid', userId)
-                    .order('charged_at', { ascending: false });
-
-                if (!chargeErr && chargeData && chargeData.length > 0) {
-                    charges = chargeData;
-                } else {
-                    // Fetch subscription record if not passed in
-                    let sub = subscriptionRecord;
-                    if (!sub) {
-                        const { data: fetchedSub } = await supabase.from('subscriptions').select('*').eq('uid', userId).maybeSingle();
-                        sub = fetchedSub;
+                let invoices = [];
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.fetchInvoicesForUser === 'function') {
+                    const res = await window.CloudVaultBilling.fetchInvoicesForUser(userId, userEmail);
+                    if (res && res.success && Array.isArray(res.invoices)) {
+                        invoices = res.invoices;
                     }
+                } else {
+                    const { data: invData } = await supabase.from('invoices').select('*').or(`uid.eq.${userId},customer_email.eq.${userEmail}`).order('created_at', { ascending: false });
+                    if (invData) invoices = invData;
+                }
 
-                    // If user has subscription or active totes, auto-generate initial signup charge receipt into charges table
-                    if (sub || window.currentSelectedCustomer) {
-                        const amountVal = Number(sub?.first_month_total || sub?.recurring_storage || 38.50);
-                        const initialCharge = {
+                // Fallback: If no records in public.invoices, check public.charges or create initial reservation invoice
+                if (!invoices || invoices.length === 0) {
+                    const { data: chargeData } = await supabase.from('charges').select('*').eq('uid', userId).order('charged_at', { ascending: false });
+                    if (chargeData && chargeData.length > 0) {
+                        invoices = chargeData.map(ch => ({
+                            id: ch.id,
+                            invoice_number: ch.id ? (typeof ch.id === 'string' && ch.id.startsWith('INV-') ? ch.id : `INV-CHG-${String(ch.id).substring(0, 8)}`) : 'INV-2026-00001',
                             uid: userId,
-                            charge_type: 'Initial Storage Subscription & Space Rental',
-                            amount: amountVal,
-                            totes_charged: sub?.total_totes || 11,
-                            status: 'success',
-                            charged_at: sub?.created_at || new Date().toISOString()
-                        };
+                            customer_name: window.currentSelectedCustomer?.name || 'Valued Customer',
+                            customer_email: userEmail,
+                            invoice_type: ch.charge_type || 'initial_reservation',
+                            payment_status: (ch.status === 'success' || ch.status === 'paid' || ch.status === 'succeeded') ? 'paid' : (ch.status || 'paid'),
+                            subtotal: Number(ch.amount || 0),
+                            delivery_fee: 0,
+                            surge_fee: 0,
+                            tax: 0,
+                            discount: 0,
+                            total_amount: Number(ch.amount || 0),
+                            notes: ch.charge_type || 'Monthly Storage Charge',
+                            created_at: ch.charged_at || ch.created_at || new Date().toISOString()
+                        }));
+                    } else {
+                        let sub = subscriptionRecord;
+                        if (!sub && userId) {
+                            const { data: fetchedSub } = await supabase.from('subscriptions').select('*').eq('uid', userId).maybeSingle();
+                            sub = fetchedSub;
+                        }
 
-                        const { data: inserted, error: insErr } = await supabase.from('charges').insert([initialCharge]).select();
-                        if (!insErr && inserted && inserted.length > 0) {
-                            charges = inserted;
-                        } else {
-                            charges = [{ ...initialCharge, id: `inv_synth_${userId.substring(0, 8)}` }];
+                        if (sub || window.currentSelectedCustomer) {
+                            const amountVal = Number(sub?.first_month_total || sub?.recurring_storage || 38.50);
+                            if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
+                                const created = await window.CloudVaultBilling.createInvoiceRecord({
+                                    uid: userId,
+                                    customer_name: window.currentSelectedCustomer?.name || 'Valued Customer',
+                                    customer_email: userEmail,
+                                    invoice_type: 'initial_reservation',
+                                    payment_status: 'paid',
+                                    subtotal: amountVal,
+                                    total_amount: amountVal,
+                                    notes: 'Initial Storage Reservation & Deposit'
+                                });
+                                if (created && created.success && created.data) {
+                                    invoices = [created.data];
+                                }
+                            }
                         }
                     }
                 }
 
-                if (!charges || charges.length === 0) {
+                if (!invoices || invoices.length === 0) {
                     listEl.innerHTML = `
                         <div class="p-8 text-center text-xs text-gray-500 font-mono bg-gray-900/50 rounded-2xl border border-gray-850 space-y-1">
                             <p class="font-bold text-gray-400">No Billing History Found</p>
-                            <p>No Stripe invoices or charges recorded for this customer account.</p>
+                            <p>No Stripe invoices or receipts recorded for this customer account.</p>
                         </div>
                     `;
                     return;
                 }
 
+                window.currentCustomerInvoices = invoices;
+
+                const getTypeBadge = (typeStr) => {
+                    const t = (typeStr || 'subscription').toLowerCase().replace(/[\s-]/g, '_');
+                    if (t.includes('initial') || t.includes('reservation')) {
+                        return `<span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">Initial Reservation</span>`;
+                    } else if (t.includes('valet') || t.includes('delivery')) {
+                        return `<span class="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">Valet Delivery</span>`;
+                    } else if (t.includes('unlaunched') || t.includes('deposit')) {
+                        return `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">Unlaunched Deposit</span>`;
+                    } else if (t.includes('refund')) {
+                        return `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">Refund</span>`;
+                    } else {
+                        return `<span class="bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">Recurring Subscription</span>`;
+                    }
+                };
+
+                const getStatusBadge = (statusStr) => {
+                    const s = (statusStr || 'paid').toLowerCase();
+                    if (s === 'refunded') {
+                        return `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">Refunded</span>`;
+                    } else if (s.includes('deposit') || s === 'pending') {
+                        return `<span class="bg-teal-500/10 text-teal-300 border border-teal-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Deposit Received</span>`;
+                    } else {
+                        return `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">Paid</span>`;
+                    }
+                };
+
                 listEl.innerHTML = `
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-850 bg-gray-900/60 font-mono">
-                                <th class="py-3 px-4">Invoice / Stripe ID</th>
-                                <th class="py-3 px-4">Charge Description</th>
-                                <th class="py-3 px-4">Amount</th>
-                                <th class="py-3 px-4">Status</th>
+                                <th class="py-3 px-4">Invoice #</th>
+                                <th class="py-3 px-4">Date</th>
+                                <th class="py-3 px-4">Type</th>
+                                <th class="py-3 px-4">Delivery &amp; Surge</th>
+                                <th class="py-3 px-4">Payment Status</th>
+                                <th class="py-3 px-4 text-right">Total Amount</th>
                                 <th class="py-3 px-4 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-850 text-xs">
-                            ${charges.map(ch => {
-                                const rawId = ch.id || 'INV-UNKNOWN';
-                                const invId = typeof rawId === 'string' ? rawId : String(rawId);
-                                const dateVal = ch.charged_at || ch.created_at;
+                            ${invoices.map((inv, idx) => {
+                                const invNum = inv.invoice_number || inv.invoiceNumber || (inv.id ? String(inv.id).substring(0, 12) : 'INV-2026-0000');
+                                const invId = inv.id || invNum;
+                                const dateVal = inv.created_at || inv.createdAt || inv.paid_at;
                                 const dateStr = dateVal ? new Date(dateVal).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
-                                const amount = Number(ch.amount || 0).toFixed(2);
-                                const desc = ch.charge_type || 'Monthly Storage Subscription';
-                                const status = (ch.status || 'success').toLowerCase();
-                                
-                                const isPaid = (status === 'success' || status === 'paid' || status === 'succeeded');
-                                const isRefunded = (status === 'refunded');
 
-                                const statusBadge = isPaid
-                                    ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Paid</span>`
-                                    : isRefunded
-                                    ? `<span class="bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Refunded</span>`
-                                    : `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">${status}</span>`;
+                                const delFee = Number(inv.delivery_fee || inv.deliveryFee || 0);
+                                const surgeFee = Number(inv.surge_fee || inv.surgeFee || 0);
+                                let feesBreakdown = '—';
+                                if (delFee > 0 && surgeFee > 0) {
+                                    feesBreakdown = `<span class="text-cyan-300 font-mono">Del: $${delFee.toFixed(2)}</span> <span class="text-gray-500">+</span> <span class="text-amber-300 font-mono">Surge: $${surgeFee.toFixed(2)}</span>`;
+                                } else if (delFee > 0) {
+                                    feesBreakdown = `<span class="text-cyan-300 font-mono">Delivery: $${delFee.toFixed(2)}</span>`;
+                                } else if (surgeFee > 0) {
+                                    feesBreakdown = `<span class="text-amber-300 font-mono">Surge: $${surgeFee.toFixed(2)}</span>`;
+                                } else {
+                                    feesBreakdown = `<span class="text-gray-500 font-mono text-[10px]">None ($0.00)</span>`;
+                                }
+
+                                const rawStatus = (inv.payment_status || inv.paymentStatus || inv.status || 'paid').toLowerCase();
+                                const invTypeRaw = (inv.invoice_type || inv.invoiceType || 'subscription').toLowerCase();
+                                const isPaid = (rawStatus === 'paid' || rawStatus === 'success' || rawStatus === 'succeeded') && invTypeRaw !== 'refund';
+
+                                const totalVal = Number(inv.total_amount !== undefined ? inv.total_amount : (inv.totalAmount !== undefined ? inv.totalAmount : inv.subtotal || 0));
+                                const isNegative = totalVal < 0 || invTypeRaw === 'refund';
+                                const totalFormatted = isNegative
+                                    ? `<span class="text-rose-400 font-mono font-bold">-$${Math.abs(totalVal).toFixed(2)}</span>`
+                                    : `<span class="text-emerald-400 font-mono font-bold">$${totalVal.toFixed(2)}</span>`;
 
                                 return `
                                     <tr class="hover:bg-gray-900/50 transition">
                                         <td class="py-3.5 px-4 font-mono font-bold text-white">
-                                            <div>#${escapeHtml(invId.substring(0, 8))}</div>
-                                            <div class="text-[10px] text-gray-500 font-normal">${dateStr}</div>
+                                            <div>#${escapeHtml(invNum)}</div>
                                         </td>
-                                        <td class="py-3.5 px-4 text-gray-300 font-medium">${escapeHtml(desc)}</td>
-                                        <td class="py-3.5 px-4 font-mono font-bold text-emerald-400">$${amount}</td>
-                                        <td class="py-3.5 px-4">${statusBadge}</td>
-                                        <td class="py-3.5 px-4 text-right">
-                                            ${isPaid ? `
-                                                <button onclick="triggerOneClickRefund('${invId}', ${ch.amount})"
-                                                    class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-xs px-3 py-2 rounded-xl transition inline-flex items-center gap-1 cursor-pointer min-h-[44px]">
-                                                    💸 Refund
+                                        <td class="py-3.5 px-4 text-gray-400 font-mono text-[11px]">${dateStr}</td>
+                                        <td class="py-3.5 px-4">${getTypeBadge(invTypeRaw)}</td>
+                                        <td class="py-3.5 px-4">${feesBreakdown}</td>
+                                        <td class="py-3.5 px-4">${getStatusBadge(rawStatus)}</td>
+                                        <td class="py-3.5 px-4 text-right">${totalFormatted}</td>
+                                        <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                                            <div class="flex items-center justify-end gap-2">
+                                                <button onclick="window.CloudVaultBilling.renderPrintableInvoiceModal(window.currentCustomerInvoices[${idx}])"
+                                                    class="bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition inline-flex items-center gap-1 cursor-pointer min-h-[36px]">
+                                                    📄 Inspect &amp; Print
                                                 </button>
-                                            ` : `<span class="text-[10px] text-gray-600 font-mono">—</span>`}
+                                                ${isPaid ? `
+                                                    <button onclick="triggerOneClickRefund('${invId}', ${totalVal})"
+                                                        class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition inline-flex items-center gap-1 cursor-pointer min-h-[36px]">
+                                                        💸 Refund
+                                                    </button>
+                                                ` : ''}
+                                            </div>
                                         </td>
                                     </tr>
                                 `;
@@ -5281,6 +5377,8 @@
                 return;
             }
 
+            let refundSuccess = false;
+
             try {
                 const supabaseUrl = window.SUPABASE_URL || 'https://xpxvebncrjvyksvtufgj.supabase.co';
                 const { data: sessionData } = await supabase.auth.getSession();
@@ -5308,26 +5406,55 @@
                     throw new Error(result.message || result.error || `Server responded with status ${response.status}`);
                 }
 
+                refundSuccess = true;
+            } catch (err) {
+                console.error("One-click refund processing note:", err);
+                if (confirm(`Refund action notice: "${err.message}". Mark charge status as 'refunded' in system database ledger?`)) {
+                    refundSuccess = true;
+                }
+            }
+
+            if (refundSuccess) {
+                // Update original invoice record in database
+                await supabase.from('invoices').update({ payment_status: 'refunded', refunded_at: new Date().toISOString() }).eq('id', invoiceId);
+                await supabase.from('charges').update({ status: 'refunded' }).eq('id', invoiceId);
+
+                // Call window.CloudVaultBilling.createInvoiceRecord to create an itemized refund invoice record
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
+                    const cust = window.currentSelectedCustomer || {};
+                    await window.CloudVaultBilling.createInvoiceRecord({
+                        uid: cust.id || null,
+                        customer_name: cust.name || 'Valued Customer',
+                        customer_email: cust.email || null,
+                        facility_id: cust.assigned_facility_id || 'facility_seattle_north',
+                        invoice_type: 'refund',
+                        payment_status: 'refunded',
+                        subtotal: -Math.abs(refundAmount),
+                        delivery_fee: 0,
+                        surge_fee: 0,
+                        tax: 0,
+                        discount: 0,
+                        total_amount: -Math.abs(refundAmount),
+                        notes: `Refund Reason: ${reason} (Original Invoice: #${invoiceId.substring(0, 8)})`,
+                        transaction_reference: `REFUND-${invoiceId.substring(0, 8)}`,
+                        line_items: [
+                            {
+                                description: `Customer Service Refund: ${reason}`,
+                                qty: 1,
+                                unit_price: -Math.abs(refundAmount),
+                                amount: -Math.abs(refundAmount)
+                            }
+                        ]
+                    });
+                }
+
                 if (typeof triggerScanFeedbackOverlay === 'function') {
                     triggerScanFeedbackOverlay(true, `Refund of $${refundAmount.toFixed(2)} issued successfully!`, invoiceId);
                 }
                 alert(`💸 Refund Success: $${refundAmount.toFixed(2)} refunded for Invoice #${invoiceId.substring(0, 8)}!`);
 
-                await supabase.from('charges').update({ status: 'refunded' }).eq('id', invoiceId);
-
                 if (window.currentSelectedCustomer) {
                     loadCustomerBillingHistory(window.currentSelectedCustomer.id);
-                }
-            } catch (err) {
-                console.error("One-click refund processing note:", err);
-                if (confirm(`Refund action notice: "${err.message}". Mark charge status as 'refunded' in system database ledger?`)) {
-                    await supabase.from('charges').update({ status: 'refunded' }).eq('id', invoiceId);
-                    if (typeof triggerScanFeedbackOverlay === 'function') {
-                        triggerScanFeedbackOverlay(true, `Refund $${refundAmount.toFixed(2)} logged in ledger`, invoiceId);
-                    }
-                    if (window.currentSelectedCustomer) {
-                        loadCustomerBillingHistory(window.currentSelectedCustomer.id);
-                    }
                 }
             }
         }
@@ -6840,6 +6967,8 @@
 
     <!-- Hidden Printable Container (Shown during window.print()) -->
     <div id="print-container" style="display: none;"></div>
+    <!-- Printable Invoice Modal Container -->
+    <div id="printable-invoice-modal" class="hidden"></div>
 </body>
 
 </html>
