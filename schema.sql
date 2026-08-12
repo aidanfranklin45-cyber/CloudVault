@@ -2012,7 +2012,11 @@ CREATE OR REPLACE FUNCTION public.submit_customer_retrieval(
   p_fulfillment_type TEXT DEFAULT 'self_serve_pickup',
   p_target_date DATE DEFAULT CURRENT_DATE,
   p_time_slot TEXT DEFAULT '09:00 AM - 12:00 PM',
-  p_delivery_notes TEXT DEFAULT NULL
+  p_delivery_notes TEXT DEFAULT NULL,
+  p_start_time TIMESTAMPTZ DEFAULT NULL,
+  p_end_time TIMESTAMPTZ DEFAULT NULL,
+  p_surge_fee NUMERIC DEFAULT 0.00,
+  p_surge_tier TEXT DEFAULT 'standard'
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_user_facility TEXT;
