@@ -4881,8 +4881,17 @@
                 return;
             }
 
-            try {
-                // Search location coordinates in warehouse_locations & inventory
+                // 1. Search matching customer users in public.users
+                let matchingUserList = [];
+                const { data: matchingUsers } = await supabase.from('users')
+                    .select('*')
+                    .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
+                    .limit(3);
+                if (matchingUsers && matchingUsers.length > 0) {
+                    matchingUserList = matchingUsers;
+                }
+
+                // 2. Search location coordinates in warehouse_locations & inventory
                 let locationResults = [];
                 const { data: locs } = await supabase.from('warehouse_locations')
                     .select('id, identifier, zone_type, is_occupied, facility_id')
@@ -4892,42 +4901,68 @@
                 if (locs && locs.length > 0) {
                     locationResults = locs;
                 } else if (/^[A-Z0-9]+-[A-Z0-9]+(-[A-Z0-9]+)?$/i.test(q)) {
-                    // Pattern fallback e.g. A2-B12-S1 or ROOM-1-BAY-01
                     locationResults = [{ identifier: q.toUpperCase(), zone_type: q.toUpperCase().startsWith('ROOM') ? 'STAGING' : 'VAULT' }];
                 }
 
-                // Search inventory joined with users
-                const { data: items } = await supabase.from('inventory')
+                // 3. Search inventory joined with users
+                let items = [];
+                const { data: toteItems } = await supabase.from('inventory')
                     .select('id, tote_code, label, status, facility_id, created_at, location_code, users!uid(name, email, active_totes_held)')
                     .or(`tote_code.ilike.%${q}%,label.ilike.%${q}%,location_code.ilike.%${q}%`)
                     .limit(8);
 
-                let usersData = [];
-                if ((items || []).length < 5) {
-                    const { data: matchingUsers } = await supabase.from('users')
-                        .select('id, name, email')
-                        .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
-                        .limit(5);
-                    if (matchingUsers && matchingUsers.length > 0) {
-                        const uids = matchingUsers.map(u => u.id);
-                        const { data: userItems } = await supabase.from('inventory')
-                            .select('id, tote_code, label, status, facility_id, created_at, location_code, users!uid(name, email, active_totes_held)')
-                            .in('uid', uids)
-                            .limit(8);
-                        usersData = userItems || [];
-                    }
+                if (toteItems) items = toteItems;
+
+                if (matchingUserList.length > 0) {
+                    const uids = matchingUserList.map(u => u.id);
+                    const { data: userTotes } = await supabase.from('inventory')
+                        .select('id, tote_code, label, status, facility_id, created_at, location_code, users!uid(name, email, active_totes_held)')
+                        .in('uid', uids)
+                        .limit(8);
+                    if (userTotes) items = [...items, ...userTotes];
                 }
 
-                const combinedItems = [...(items || []), ...usersData];
-                const uniqueItems = Array.from(new Map(combinedItems.map(item => [item.id, item])).values());
+                const uniqueItems = Array.from(new Map(items.map(item => [item.id, item])).values());
 
-                if (locationResults.length === 0 && uniqueItems.length === 0) {
-                    resultsBox.innerHTML = `<div class="p-4 text-center text-xs text-gray-500 font-mono">No matching totes, shelf locations, or customer records found for "${escapeHtml(q)}".</div>`;
+                if (matchingUserList.length === 0 && locationResults.length === 0 && uniqueItems.length === 0) {
+                    resultsBox.innerHTML = `<div class="p-4 text-center text-xs text-gray-500 font-mono">No matching customer profile, totes, or shelf locations found for "${escapeHtml(q)}".</div>`;
                     resultsBox.classList.remove('hidden');
                     return;
                 }
 
                 let html = '';
+
+                // CHOICE #1: Render Customer Profile Card at top of search results if user match found
+                if (matchingUserList.length > 0) {
+                    matchingUserList.forEach(u => {
+                        const name = u.name || 'Customer';
+                        const email = u.email || '';
+                        const status = u.onboarding_status || 'active';
+                        const totesCount = u.active_totes_held !== undefined ? u.active_totes_held : 0;
+                        
+                        html += `
+                            <div onclick="openCustomerBillingDrawer('${u.id}')" class="p-3.5 bg-gradient-to-r from-purple-950/80 to-indigo-950/80 hover:from-purple-900/90 hover:to-indigo-900/90 border-b-2 border-purple-500/50 flex items-center justify-between cursor-pointer transition shadow-lg">
+                                <div class="flex items-center space-x-3.5">
+                                    <div class="w-9 h-9 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-md border border-purple-400/40">
+                                        👤
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs font-black text-white">${escapeHtml(name)}</span>
+                                            <span class="text-[9px] font-extrabold uppercase font-mono px-2 py-0.5 rounded-full ${status === 'waitlisted' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'}">
+                                                ${status === 'waitlisted' ? '🚀 Waitlist Market' : 'Active Customer'}
+                                            </span>
+                                        </div>
+                                        <p class="text-[11px] text-gray-300 font-mono mt-0.5">${escapeHtml(email)} &bull; <span class="text-purple-300 font-bold">${totesCount} Totes</span></p>
+                                    </div>
+                                </div>
+                                <span class="text-xs font-bold text-purple-200 bg-purple-600/40 hover:bg-purple-600/60 px-3 py-1.5 rounded-xl border border-purple-400/40 shadow-sm flex items-center gap-1.5 font-sans cursor-pointer">
+                                    <i data-lucide="user-check" class="w-3.5 h-3.5 text-purple-300"></i> CHOICE #1: Open Customer Profile &amp; Billing
+                                </span>
+                            </div>
+                        `;
+                    });
+                }
 
                 // Render location search result cards first if present
                 locationResults.forEach(l => {
@@ -5465,7 +5500,18 @@
 
             const uppercaseQ = q.toUpperCase();
 
-            // Check if query is a location code (e.g. A2-B12-S1, ROOM-1-BAY-01) or matches warehouse_locations
+            // 1. Exact Tote Code match -> open Tote Master Telemetry Modal
+            const { data: exactTote } = await supabase.from('inventory')
+                .select('id')
+                .eq('tote_code', uppercaseQ)
+                .maybeSingle();
+
+            if (exactTote) {
+                openToteMasterModal(exactTote.id);
+                return;
+            }
+
+            // 2. Location Code match -> open Shelf Location Modal
             const { data: matchedLoc } = await supabase.from('warehouse_locations')
                 .select('identifier')
                 .or(`identifier.eq.${uppercaseQ},location_code.eq.${uppercaseQ}`)
@@ -5476,31 +5522,8 @@
                 return;
             }
 
-            // Search matching customer user record by email or name
-            const { data: users } = await supabase.from('users')
-                .select('*')
-                .or(`email.ilike.%${q}%,name.ilike.%${q}%`)
-                .limit(1);
-
-            if (users && users.length > 0) {
-                window.currentSelectedCustomer = users[0];
-                openCustomerBillingDrawer(users[0]);
-                return;
-            }
-
-            const { data: items } = await supabase.from('inventory')
-                .select('id, uid, users!uid(*)')
-                .or(`tote_code.eq.${uppercaseQ},tote_code.ilike.%${q}%`)
-                .limit(1);
-
-            if (items && items.length > 0) {
-                if (items[0].users) {
-                    window.currentSelectedCustomer = items[0].users;
-                }
-                openToteMasterModal(items[0].id);
-            } else {
-                onMasterToteSearchInput(q);
-            }
+            // 3. Render Choice #1 Customer Profile and associated totes
+            onMasterToteSearchInput(q);
         }
 
         window.currentInspectedShelfCode = null;
