@@ -572,6 +572,30 @@
                         </div>
                     </div>
 
+                    <!-- Card 5: Tax Configuration Card (ZIP-level) -->
+                    <div class="glass-panel p-6 rounded-3xl space-y-5">
+                        <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                            <div>
+                                <h3 class="text-sm font-extrabold uppercase text-emerald-400 tracking-wider flex items-center gap-2">
+                                    <i data-lucide="receipt" class="w-4 h-4 text-emerald-400"></i> Tax Configuration
+                                </h3>
+                                <p class="text-[10px] text-gray-400 mt-0.5">Per-ZIP sales tax rates for this facility. Unconfigured ZIPs = $0.00 tax.</p>
+                            </div>
+                            <button onclick="addTaxZipRow()" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1">
+                                <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Add ZIP
+                            </button>
+                        </div>
+                        <div id="tax-zip-headers" class="hidden grid grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">
+                            <span class="col-span-3">ZIP Code</span>
+                            <span class="col-span-4">Tax Rate (%)</span>
+                            <span class="col-span-4">Jurisdiction Label</span>
+                            <span class="col-span-1 text-center">Save</span>
+                        </div>
+                        <div id="tax-zip-rows" class="space-y-2 text-xs">
+                            <div class="text-xs text-gray-500 text-center py-3" id="tax-zip-empty">No ZIP tax rates configured. Click "+ Add ZIP" to add one.</div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -1379,12 +1403,13 @@
                     document.getElementById('conf-valet-base').value = Number(fac.valet_base) || 15.00;
                     document.getElementById('conf-valet-adder').value = Number(fac.valet_tote_adder) || 1.00;
 
-                    // Fetch operational zone, telemetry, schedule, and location counts in parallel
+                    // Fetch operational zone, telemetry, schedule, location counts, and tax config in parallel
                     await Promise.all([
                         loadMarketZoneData(fac.id),
                         loadFacilityTelemetry(fac.id),
                         loadStagingRoomSchedule(fac.id, selectedStagingDate),
-                        loadWarehouseLocationCount(fac.id)
+                        loadWarehouseLocationCount(fac.id),
+                        loadTaxZipConfig(fac.id)
                     ]);
                     calculatePnL();
                 }
@@ -2504,6 +2529,135 @@
                     }, 600);
                 }
                 window.triggerAutoSaveFacilityConfig = triggerAutoSaveFacilityConfig;
+
+                // ============================================================
+                // Tax Rate Configuration (ZIP-level)
+                // ============================================================
+                let loadedTaxZips = [];
+
+                async function loadTaxZipConfig(facilityId) {
+                    const facId = facilityId || currentLoadedFac?.id || localStorage.getItem('cloudvault_selected_facility');
+                    if (!facId) return;
+                    try {
+                        const { data: zips, error } = await supabase
+                            .from('service_areas')
+                            .select('zip_code, city, state, tax_rate, tax_label')
+                            .eq('facility_id', facId)
+                            .eq('active', true);
+                        if (error) throw error;
+                        loadedTaxZips = zips || [];
+                        renderTaxZipRows();
+                    } catch (err) {
+                        console.error('[Tax] Failed to load ZIP tax config:', err.message);
+                    }
+                }
+
+                function renderTaxZipRows() {
+                    const container = document.getElementById('tax-zip-rows');
+                    const emptyMsg = document.getElementById('tax-zip-empty');
+                    const headers = document.getElementById('tax-zip-headers');
+                    if (!container) return;
+
+                    if (!loadedTaxZips || loadedTaxZips.length === 0) {
+                        if (emptyMsg) emptyMsg.classList.remove('hidden');
+                        if (headers) headers.classList.add('hidden');
+                        container.innerHTML = '<div class="text-xs text-gray-500 text-center py-3">No ZIP tax rates configured. Click "+ Add ZIP" to add one.</div>';
+                        return;
+                    }
+
+                    if (emptyMsg) emptyMsg.classList.add('hidden');
+                    if (headers) headers.classList.remove('hidden');
+
+                    container.innerHTML = loadedTaxZips.map((z, idx) => `
+                        <div class="grid grid-cols-12 gap-2 items-center" data-zip-idx="${idx}">
+                            <input type="text"
+                                value="${z.zip_code || ''}"
+                                placeholder="ZIP"
+                                readonly
+                                class="col-span-3 fspec-input py-1 text-xs font-mono bg-gray-900/50 text-gray-400 cursor-not-allowed"
+                            />
+                            <input type="number"
+                                step="0.01" min="0" max="30"
+                                value="${z.tax_rate != null ? (z.tax_rate * 100).toFixed(2) : ''}"
+                                placeholder="e.g. 10.25"
+                                class="col-span-4 fspec-input py-1 text-xs font-mono text-emerald-400"
+                                oninput="onTaxRateInput(${idx}, this.value)"
+                            />
+                            <input type="text"
+                                value="${z.tax_label || ''}"
+                                placeholder="e.g. WA + King County"
+                                class="col-span-4 fspec-input py-1 text-xs text-gray-300"
+                                oninput="onTaxLabelInput(${idx}, this.value)"
+                            />
+                            <button onclick="saveTaxZipRow(${idx})" title="Save" class="col-span-1 text-emerald-400 hover:text-emerald-300 font-bold text-center cursor-pointer transition text-base font-mono">💾</button>
+                        </div>
+                    `).join('');
+                }
+
+                function onTaxRateInput(idx, val) {
+                    if (loadedTaxZips[idx] !== undefined) {
+                        loadedTaxZips[idx]._pendingRate = val;
+                    }
+                }
+
+                function onTaxLabelInput(idx, val) {
+                    if (loadedTaxZips[idx] !== undefined) {
+                        loadedTaxZips[idx]._pendingLabel = val;
+                    }
+                }
+
+                async function saveTaxZipRow(idx) {
+                    const z = loadedTaxZips[idx];
+                    if (!z) return;
+
+                    const rateStr = z._pendingRate !== undefined
+                        ? z._pendingRate
+                        : (z.tax_rate != null ? (z.tax_rate * 100).toFixed(2) : '');
+                    const label = z._pendingLabel !== undefined ? z._pendingLabel : (z.tax_label || null);
+
+                    const rateDecimal = rateStr !== '' && rateStr !== null ? parseFloat(rateStr) / 100 : null;
+
+                    try {
+                        const { error } = await supabase
+                            .from('service_areas')
+                            .update({ tax_rate: rateDecimal, tax_label: label || null })
+                            .eq('zip_code', z.zip_code);
+                        if (error) throw error;
+
+                        loadedTaxZips[idx].tax_rate = rateDecimal;
+                        loadedTaxZips[idx].tax_label = label;
+                        delete loadedTaxZips[idx]._pendingRate;
+                        delete loadedTaxZips[idx]._pendingLabel;
+
+                        const row = document.querySelector(`[data-zip-idx="${idx}"]`);
+                        if (row) {
+                            row.style.transition = 'background 0.3s';
+                            row.style.background = 'rgba(16,185,129,0.15)';
+                            setTimeout(() => { row.style.background = ''; }, 1200);
+                        }
+                    } catch (err) {
+                        alert(`⚠️ Failed to save tax rate for ZIP ${z.zip_code}: ${err.message}`);
+                    }
+                }
+
+                function addTaxZipRow() {
+                    const zip = prompt('Enter ZIP code to configure tax rate:');
+                    if (!zip || !zip.trim()) return;
+                    const zipTrimmed = zip.trim();
+                    if (loadedTaxZips.some(z => z.zip_code === zipTrimmed)) {
+                        alert(`ZIP ${zipTrimmed} is already in the list.`);
+                        return;
+                    }
+                    loadedTaxZips.push({ zip_code: zipTrimmed, tax_rate: null, tax_label: null });
+                    renderTaxZipRows();
+                }
+
+                window.loadTaxZipConfig = loadTaxZipConfig;
+                window.saveTaxZipRow = saveTaxZipRow;
+                window.addTaxZipRow = addTaxZipRow;
+                window.onTaxRateInput = onTaxRateInput;
+                window.onTaxLabelInput = onTaxLabelInput;
+
 
                 function initAutoSaveFacilityConfigListeners() {
                     const autoSaveFieldIds = [

@@ -318,13 +318,50 @@
       };
     },
 
-    processStripeRefund: async function (chargeId, amount) {
-      const numericAmount = Math.max(0, Number(amount) || 0);
+    processStripeRefund: async function (chargeId, amount, originalInvoice) {
+      let refundSubtotal = Math.max(0, Number(amount) || 0);
+      let refundTax = 0;
+      let totalRefund = refundSubtotal;
+
+      if (originalInvoice) {
+        const originalSub = Number(originalInvoice.subtotal || 0) + Number(originalInvoice.delivery_fee || 0) + Number(originalInvoice.surge_fee || 0);
+        if (!amount || refundSubtotal >= originalSub) {
+          totalRefund = Number(originalInvoice.total_amount || 0);
+          refundTax = Number(originalInvoice.tax || 0);
+        } else {
+          const originalTaxRate = originalInvoice.line_items?.find(li => li.tax_rate != null)?.tax_rate || 0;
+          refundTax = Math.round(refundSubtotal * originalTaxRate * 100) / 100;
+          totalRefund = refundSubtotal + refundTax;
+        }
+
+        if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
+          try {
+            await window.CloudVaultBilling.createInvoiceRecord({
+              uid: originalInvoice.uid,
+              customer_name: originalInvoice.customer_name,
+              customer_email: originalInvoice.customer_email,
+              invoice_type: 'refund',
+              payment_status: 'refunded',
+              subtotal: -refundSubtotal,
+              tax: -Math.abs(refundTax),
+              total_amount: -totalRefund,
+              payment_method: originalInvoice.payment_method || 'card',
+              transaction_reference: chargeId || originalInvoice.transaction_reference,
+              notes: `Refund for invoice ${originalInvoice.invoice_number}`,
+              line_items: [{ description: 'Refund', qty: 1, unit_price: -refundSubtotal, amount: -refundSubtotal }],
+              created_at: new Date().toISOString()
+            });
+          } catch (e) {
+            console.warn('[StripeBillingIntegration] Failed to create refund invoice record', e);
+          }
+        }
+      }
+
       return {
         success: true,
         refundId: generateStripeId('re_3M'),
         chargeId: chargeId || generateStripeId('ch_3M'),
-        amount: numericAmount,
+        amount: totalRefund,
         status: 'succeeded',
         timestamp: new Date().toISOString()
       };

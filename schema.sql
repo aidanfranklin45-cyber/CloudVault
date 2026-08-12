@@ -194,6 +194,27 @@ ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS has_price_lock BOOLEAN
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS price_lock_rates JSONB DEFAULT NULL;
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS last_billed_at TIMESTAMPTZ;
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS next_billing_date TIMESTAMPTZ;
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS cancel_at TIMESTAMPTZ DEFAULT NULL;
+
+-- Migration fallbacks for tax & interest
+ALTER TABLE public.service_areas ADD COLUMN IF NOT EXISTS tax_rate NUMERIC(5,4) DEFAULT NULL;
+ALTER TABLE public.service_areas ADD COLUMN IF NOT EXISTS tax_label TEXT DEFAULT NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS unpaid_interest_rate NUMERIC(5,4) DEFAULT NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS interest_starts_at TIMESTAMPTZ DEFAULT NULL;
+
+-- Helper function to lookup tax rate for ZIP
+CREATE OR REPLACE FUNCTION public.get_tax_rate_for_zip(p_zip TEXT)
+RETURNS NUMERIC AS $$
+DECLARE
+  v_rate NUMERIC;
+BEGIN
+  SELECT tax_rate INTO v_rate
+  FROM public.service_areas
+  WHERE zip_code = p_zip
+  LIMIT 1;
+  RETURN v_rate;
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
 
 -- Operational Zones / Service Markets
 CREATE TABLE IF NOT EXISTS public.operational_zones (
@@ -778,7 +799,10 @@ BEGIN
     now() + interval '30 days'
   );
 
-  -- Set initial tote status based on logistics_type
+  -- Set last_billed_at to NOW() at signup so autopay cron skips this user for 30 days
+  UPDATE public.subscriptions
+  SET last_billed_at = now()
+  WHERE uid = v_uid;
   IF p_logistics_type IN ('valet_pickup', 'valet_delivery') THEN
     v_initial_status := 'pending-dispatch';
   ELSE

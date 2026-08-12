@@ -165,7 +165,7 @@
         </div>
 
         <!-- Overdue Invoice Alert Banner (Visible when user has unpaid/overdue invoices) -->
-        <div id="overdue-alert-banner" class="hidden mb-8 bg-red-950/90 border-2 border-red-500 rounded-3xl p-6 text-white shadow-xl backdrop-blur-md fade-in">
+        <div id="overdue-alert-banner" class="hidden mb-4 bg-red-950/90 border-2 border-red-500 rounded-3xl p-6 text-white shadow-xl backdrop-blur-md fade-in">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div class="flex items-start space-x-4">
                     <div class="w-12 h-12 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center flex-shrink-0 text-xl font-bold">
@@ -829,23 +829,74 @@
     </div>
 
     <!-- Cancellation Confirmation Modal -->
-    <div id="cancel-modal" class="fixed inset-0 bg-gray-900 bg-opacity-40 z-50 flex items-center justify-center hidden">
-        <div class="bg-white rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl space-y-6">
-            <h2 class="text-2xl font-bold text-gray-900">Cancel Subscription?</h2>
-            <p class="text-sm text-gray-600 leading-relaxed">
-                You are canceling your monthly subscription. You currently physically hold <span id="cancel-totes-count-modal" class="font-bold text-gray-900">0</span> totes.
-            </p>
-            <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-800 leading-relaxed">
-                <strong>⚠️ Asset Return Requirement:</strong> You must return all physical totes to our staging room within <strong>14 days</strong> of cancellation. After 14 days, your card-on-file will be automatically billed <strong>$15.00 per unreturned tote</strong>.
+    <div id="cancel-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-3xl p-8 max-w-lg w-full mx-4 shadow-2xl space-y-5">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center flex-shrink-0">
+                    <span class="text-2xl">⚠️</span>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900">Cancel Subscription?</h2>
+                    <p class="text-sm text-gray-500 mt-1">Your plan stays active through the end of your current billing period — no pro-rated refunds.</p>
+                </div>
             </div>
-            <div class="flex items-center space-x-2 cursor-pointer select-none">
-                <input type="checkbox" id="user-cancel-simulate-expiry" class="rounded text-blue-600 border-gray-300">
-                <label for="user-cancel-simulate-expiry" class="text-xs text-gray-600 font-semibold">Simulate immediate deadline expiry (sets deadline in past)</label>
+
+            <!-- Service End Date -->
+            <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-1">
+                <p class="text-xs font-bold uppercase tracking-wider text-blue-600">✅ Service Active Through</p>
+                <p class="text-lg font-bold text-blue-900" id="cancel-end-date">Calculating...</p>
+                <p class="text-xs text-blue-600">You have full access to all your totes until this date.</p>
             </div>
-            <div class="flex space-x-4">
-                <button onclick="closeCancelModal()" class="flex-1 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-200 transition">Keep Subscription</button>
-                <button onclick="confirmCancelSubscriptionFlow()" id="confirm-cancel-btn" class="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 transition">Confirm Cancel</button>
+
+            <!-- Tote Pickup Notice -->
+            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-1">
+                <p class="text-xs font-bold uppercase tracking-wider text-amber-700">📦 Tote Return &amp; Pickup</p>
+                <p class="text-sm font-semibold text-amber-900">You currently hold <span id="cancel-totes-count-modal" class="font-black">0</span> totes.</p>
+                <p class="text-xs text-amber-700">A final retrieval request will be automatically scheduled for your last service day. All totes must be returned by then.</p>
             </div>
+
+            <!-- Policy Notices -->
+            <div class="space-y-2">
+                <div class="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800">
+                    <strong>💳 Unreturned Tote Charge:</strong> Any tote not returned by the pickup date will be billed at <strong>$15.00 per tote</strong> to your card on file.
+                </div>
+                <div class="bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-800">
+                    <strong>📈 Interest on Unpaid Balances:</strong> Any outstanding balance after your service end date will accrue interest at <strong>10% per annum</strong> from that date.
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-1">
+                <button onclick="closeCancelModal()" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-200 transition text-sm">Keep My Plan</button>
+                <button onclick="confirmCancelSubscriptionFlow()" id="confirm-cancel-btn" class="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 transition text-sm">Confirm Cancellation</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Post-Cancellation Confirmed Modal -->
+    <div id="cancel-confirmed-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl space-y-5 text-center">
+            <div class="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
+                <span class="text-3xl">✅</span>
+            </div>
+            <div>
+                <h2 class="text-xl font-bold text-gray-900">Cancellation Confirmed</h2>
+                <p class="text-sm text-gray-500 mt-1">Your subscription has been scheduled for cancellation.</p>
+            </div>
+            <div class="bg-gray-50 rounded-2xl p-4 space-y-3 text-left">
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500 font-medium">Service ends:</span>
+                    <span class="font-bold text-gray-900" id="confirmed-end-date">—</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500 font-medium">Tote pickup scheduled:</span>
+                    <span class="font-bold text-gray-900" id="confirmed-pickup-date">—</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500 font-medium">Interest rate (if unpaid):</span>
+                    <span class="font-bold text-orange-600">10% per annum</span>
+                </div>
+            </div>
+            <button onclick="document.getElementById('cancel-confirmed-modal').classList.add('hidden')" class="w-full bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-gray-800 transition text-sm">Got it</button>
         </div>
     </div>
 
@@ -3873,15 +3924,30 @@
         // ============================================================
         function triggerCancelFlowUser() {
             if (!currentUser) return;
-            
+            document.getElementById('user-dropdown')?.classList.add('hidden');
+
+            // Count totes
             let totesHeld = 0;
             const cachedProfile = sessionStorage.getItem(`cv_user_${currentUser.id}`);
             if (cachedProfile) {
                 const profile = JSON.parse(cachedProfile);
                 totesHeld = profile.active_totes_held || 0;
             }
-            
             document.getElementById('cancel-totes-count-modal').textContent = totesHeld;
+
+            // Compute service end date from subscription
+            const sub = currentSubscription;
+            let cancelAt = null;
+            if (sub) {
+                const base = sub.last_billed_at || sub.created_at;
+                if (base) cancelAt = new Date(new Date(base).getTime() + 30 * 24 * 60 * 60 * 1000);
+                else if (sub.current_period_end) cancelAt = new Date(sub.current_period_end);
+                else if (sub.next_billing_date) cancelAt = new Date(sub.next_billing_date);
+            }
+            const cancelAtStr = cancelAt
+                ? cancelAt.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+                : 'End of billing period';
+            document.getElementById('cancel-end-date').textContent = cancelAtStr;
             document.getElementById('cancel-modal').classList.remove('hidden');
         }
 
@@ -3893,18 +3959,90 @@
             const btn = document.getElementById('confirm-cancel-btn');
             btn.disabled = true;
             btn.textContent = 'Processing...';
-            const simulateExpiry = document.getElementById('user-cancel-simulate-expiry').checked;
+
             try {
-                const { error } = await supabase.rpc('cancel_subscription', { p_simulate_expiry: simulateExpiry });
-                if (error) throw error;
+                const sub = currentSubscription;
+                if (!sub) throw new Error('No active subscription found');
+
+                // 1. Compute cancel_at = last_billed_at+30d OR created_at+30d
+                const base = sub.last_billed_at || sub.created_at;
+                const cancelAt = base
+                    ? new Date(new Date(base).getTime() + 30 * 24 * 60 * 60 * 1000)
+                    : (sub.current_period_end
+                        ? new Date(sub.current_period_end)
+                        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+                const cancelAtISO = cancelAt.toISOString();
+                const cancelAtDisplay = cancelAt.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+
+                // 2. Mark subscription as canceling
+                await supabase
+                    .from('subscriptions')
+                    .update({ status: 'canceling', cancel_at: cancelAtISO })
+                    .eq('uid', currentUser.id);
+
+                // 3. Mark user record with cancellation & interest flag
+                await supabase
+                    .from('users')
+                    .update({
+                        subscription_status: 'canceling',
+                        unpaid_interest_rate: 0.10,
+                        interest_starts_at: cancelAtISO
+                    })
+                    .eq('id', currentUser.id);
+
+                // 4. Auto-create final retrieval access request on the last day
+                await supabase.from('access_requests').insert({
+                    uid: currentUser.id,
+                    facility_id: currentUserProfile?.assigned_facility_id || null,
+                    fulfillment_type: 'self_serve_pickup',
+                    request_type: 'retrieval',
+                    status: 'scheduled',
+                    target_date: cancelAt.toISOString().split('T')[0],
+                    time_slot: '09:00 AM - 12:00 PM',
+                    delivery_notes: 'FINAL PICKUP — Subscription ended. Customer must return all totes. Unreturned totes billed at $15/tote.'
+                });
+
+                // 5. Create cancellation_notice invoice ($0, informational)
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
+                    await window.CloudVaultBilling.createInvoiceRecord({
+                        uid: currentUser.id,
+                        customer_name: currentUserProfile?.name || currentUser.email,
+                        customer_email: currentUser.email,
+                        invoice_type: 'cancellation_notice',
+                        payment_status: 'paid',
+                        subtotal: 0,
+                        total_amount: 0,
+                        notes: `Service active through ${cancelAtDisplay}. Final tote pickup scheduled. 10% p.a. interest applies to any unpaid balance after cancellation date.`,
+                        line_items: [{ description: `Subscription active through ${cancelAtDisplay} (no additional charge)`, qty: 1, unit_price: 0, amount: 0 }]
+                    });
+                }
+
+                // 6. Update local state
+                if (currentSubscription) currentSubscription.status = 'canceling';
+
+                // 7. Show canceling banner
+                const cancelingBanner = document.getElementById('canceling-banner');
+                if (cancelingBanner) {
+                    cancelingBanner.classList.remove('hidden');
+                    const el = document.getElementById('canceling-end-date');
+                    if (el) el.textContent = cancelAtDisplay;
+                }
+
+                // 8. Close cancel modal, show confirmed modal
                 closeCancelModal();
-                showToast("Your subscription has been cancelled.");
+                const confirmedModal = document.getElementById('cancel-confirmed-modal');
+                if (confirmedModal) {
+                    document.getElementById('confirmed-end-date').textContent = cancelAtDisplay;
+                    document.getElementById('confirmed-pickup-date').textContent = cancelAtDisplay;
+                    confirmedModal.classList.remove('hidden');
+                }
+
             } catch (err) {
-                console.error("Cancellation failed:", err);
-                alert("Failed to cancel subscription: " + err.message);
+                console.error('[confirmCancelSubscriptionFlow] Error:', err);
+                alert(`⚠️ Cancellation failed: ${err.message}`);
             } finally {
                 btn.disabled = false;
-                btn.textContent = 'Confirm Cancel';
+                btn.textContent = 'Confirm Cancellation';
             }
         }
         // ============================================================
@@ -4028,12 +4166,21 @@
                 if (tierLabelEl) tierLabelEl.textContent = `Tier @ $${toteRate.toFixed(2)}/tote`;
 
                 if (nextDateEl) {
-                    if (currentSubscription.current_period_end) {
-                        const d = new Date(currentSubscription.current_period_end);
-                        nextDateEl.textContent = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-                    } else {
-                        nextDateEl.textContent = 'Auto-Renews Monthly';
+                    // Priority: next_billing_date → last_billed_at+30d → created_at+30d → current_period_end
+                    const sub = currentSubscription;
+                    let nextDate = null;
+                    if (sub.next_billing_date) {
+                        nextDate = new Date(sub.next_billing_date);
+                    } else if (sub.last_billed_at) {
+                        nextDate = new Date(new Date(sub.last_billed_at).getTime() + 30 * 24 * 60 * 60 * 1000);
+                    } else if (sub.created_at) {
+                        nextDate = new Date(new Date(sub.created_at).getTime() + 30 * 24 * 60 * 60 * 1000);
+                    } else if (sub.current_period_end) {
+                        nextDate = new Date(sub.current_period_end);
                     }
+                    nextDateEl.textContent = nextDate
+                        ? nextDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+                        : 'Auto-Renews Monthly';
                 }
             } else {
                 if (planNameEl) planNameEl.textContent = 'No Active Plan';

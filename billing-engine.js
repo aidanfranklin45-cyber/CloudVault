@@ -34,18 +34,7 @@
         const subtotal = Number(params.subtotal) || 0.00;
         const deliveryFee = Number(params.delivery_fee || params.deliveryFee) || 0.00;
         const surgeFee = Number(params.surge_fee || params.surgeFee) || 0.00;
-        const tax = Number(params.tax) || 0.00;
         const discount = Number(params.discount) || 0.00;
-
-        let totalAmount = params.total_amount !== undefined ? params.total_amount : (params.totalAmount !== undefined ? params.totalAmount : params.total);
-        if (totalAmount === undefined || totalAmount === null) {
-          totalAmount = subtotal + deliveryFee + surgeFee + tax - discount;
-        }
-        totalAmount = Number(totalAmount) || 0;
-        const invType = (params.invoice_type || params.invoiceType || '').toLowerCase();
-        if (invType !== 'refund' && totalAmount < 0) {
-          totalAmount = 0;
-        }
 
         let lineItems = params.line_items || params.lineItems || [];
         if (typeof lineItems === 'string') {
@@ -57,6 +46,50 @@
         }
         if (!Array.isArray(lineItems)) {
           lineItems = [];
+        }
+
+        // --- Tax Resolution ---
+        // Look up tax rate from service_areas by customer ZIP. Never assume a rate.
+        // If admin hasn't configured a ZIP rate, tax = $0.
+        let resolvedTaxRate = params.tax_rate != null ? Number(params.tax_rate) : null;
+        let resolvedTaxLabel = params.tax_label || null;
+        if (resolvedTaxRate == null && params.zip_code) {
+          try {
+            const { data: saRow } = await sb.from('service_areas')
+              .select('tax_rate, tax_label')
+              .eq('zip_code', params.zip_code)
+              .maybeSingle();
+            if (saRow && saRow.tax_rate != null) {
+              resolvedTaxRate = Number(saRow.tax_rate);
+              resolvedTaxLabel = saRow.tax_label || null;
+            }
+          } catch (e) {
+            console.warn('[CloudVaultBilling] Tax rate lookup failed, defaulting to $0:', e.message);
+          }
+        }
+        const taxableBase = Number(params.subtotal || 0);
+        const taxAmount = resolvedTaxRate != null ? Math.round(taxableBase * resolvedTaxRate * 100) / 100 : (Number(params.tax) || 0.00);
+        // Recompute total with tax
+        const computedTotal = taxableBase
+          + Number(params.delivery_fee || 0)
+          + Number(params.surge_fee || 0)
+          + taxAmount
+          - Number(params.discount || 0);
+
+        if (resolvedTaxRate != null) {
+          lineItems.push({
+            description: resolvedTaxLabel || 'Sales Tax',
+            qty: 1,
+            unit_price: taxAmount,
+            amount: taxAmount,
+            tax_rate: resolvedTaxRate
+          });
+        }
+
+        let totalAmount = params.total_amount != null ? Number(params.total_amount) : computedTotal;
+        const invType = (params.invoice_type || params.invoiceType || '').toLowerCase();
+        if (invType !== 'refund' && totalAmount < 0) {
+          totalAmount = 0;
         }
 
         const paymentStatus = params.payment_status || params.paymentStatus || 'paid';
@@ -75,7 +108,7 @@
           subtotal: subtotal,
           delivery_fee: deliveryFee,
           surge_fee: surgeFee,
-          tax: tax,
+          tax: taxAmount,
           discount: discount,
           total_amount: totalAmount,
           payment_method: params.payment_method || params.paymentMethod || 'card',
@@ -104,6 +137,42 @@
         console.error('[CloudVaultBilling] Exception in createInvoiceRecord:', err);
         return { success: false, error: err.message };
       }
+    },
+
+    /**
+     * Creates the Day-0 first-month invoice charged at signup.
+     * Called immediately after create_subscription RPC succeeds.
+     */
+    createSignupInvoice: async function(userId, subscriptionData, userZip) {
+      if (!userId || !subscriptionData) return { success: false, error: 'Missing params' };
+      const toteCount = Number(subscriptionData.total_totes || subscriptionData.tote_count || 0);
+      const toteRate = Number(subscriptionData.tote_rate || 0);
+      const storageAmt = Number(subscriptionData.recurring_storage || (toteCount * toteRate) || 0);
+      const valetFee = Number(subscriptionData.valet_fee || 0);
+      const now = new Date().toISOString();
+      return this.createInvoiceRecord({
+        uid: userId,
+        customer_name: subscriptionData.customer_name || 'CloudVault Customer',
+        customer_email: subscriptionData.customer_email || null,
+        invoice_type: 'initial_reservation',
+        payment_status: 'paid',
+        subtotal: storageAmt,
+        delivery_fee: valetFee,
+        total_amount: storageAmt + valetFee, // tax will be added by createInvoiceRecord
+        payment_method: 'card',
+        zip_code: userZip || null,
+        transaction_reference: window.CloudVaultStripe
+          ? window.CloudVaultStripe.generateChargeId()
+          : 'ch_signup_' + Date.now(),
+        notes: 'First month — charged at signup',
+        line_items: [
+          { description: `CloudVault Storage (${toteCount} totes @ $${toteRate.toFixed(2)}/mo)`, qty: toteCount || 1, unit_price: toteRate, amount: storageAmt },
+          ...(valetFee > 0 ? [{ description: 'Valet Delivery Service Fee', qty: 1, unit_price: valetFee, amount: valetFee }] : [])
+        ],
+        created_at: now,
+        paid_at: now,
+        due_date: new Date(new Date(now).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
+      });
     },
 
     /**
