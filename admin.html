@@ -971,8 +971,20 @@
                                         </button>
                                     </div>
                                     <div class="relative">
-                                        <input type="text" id="scan-barcode" placeholder="Click & Scan Tote or Location (e.g. V-A01-S01)..."
+                                        <input type="text" id="scan-barcode" name="barcode_scan_input_no_autofill"
+                                            placeholder="Click & Scan Tote or Location (e.g. V-A01-S01)..."
+                                            autocomplete="off"
+                                            aria-autocomplete="none"
+                                            autocorrect="off"
+                                            autocapitalize="off"
+                                            spellcheck="false"
+                                            data-lpignore="true"
+                                            data-1p-ignore="true"
+                                            data-form-type="other"
                                             onkeydown="handleScanKey(event)"
+                                            oninput="sanitizeBarcodeAutofill(this)"
+                                            onfocus="sanitizeBarcodeAutofill(this)"
+                                            onchange="sanitizeBarcodeAutofill(this)"
                                             class="w-full bg-gray-950 border-2 border-gray-850 focus:border-blue-500 rounded-xl py-3.5 px-4 pl-10 text-sm text-white font-mono outline-none transition">
                                         <div class="absolute left-3.5 top-4 text-gray-500">
                                             <i data-lucide="scan-line" class="w-4 h-4 animate-pulse"></i>
@@ -1498,7 +1510,11 @@
                 loadWorkerQueues();
                 setTimeout(() => {
                     const input = document.getElementById('scan-barcode');
-                    if (input) input.focus();
+                    if (input) {
+                        sanitizeBarcodeAutofill(input);
+                        input.focus();
+                        sanitizeBarcodeAutofill(input);
+                    }
                 }, 100);
             }
 
@@ -3472,6 +3488,25 @@
             }
         }
 
+        function sanitizeBarcodeAutofill(input) {
+            if (!input) input = document.getElementById('scan-barcode');
+            if (!input) return;
+            const val = input.value ? input.value.trim() : '';
+            if (val.includes('@') || val.includes('.com') || val.includes('.net') || val.includes('.org') || val.includes('.edu')) {
+                console.warn('[Autofill Sanitizer] Purged autofilled credential from barcode scanner input:', val);
+                input.value = '';
+            }
+        }
+
+        // Periodically purge browser password manager autofill from barcode scanner
+        document.addEventListener('DOMContentLoaded', () => {
+            const scanInput = document.getElementById('scan-barcode');
+            if (scanInput) {
+                sanitizeBarcodeAutofill(scanInput);
+                [100, 300, 600, 1200].forEach(ms => setTimeout(() => sanitizeBarcodeAutofill(scanInput), ms));
+            }
+        });
+
         function handleScanKey(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -3482,10 +3517,12 @@
         // Simulate Barcode Scan in Worker Dashboard (with Target Location Lock + Offline Queue)
         async function simulateScan(expectedStatus = null) {
             const barcodeInput = document.getElementById('scan-barcode');
+            if (barcodeInput) sanitizeBarcodeAutofill(barcodeInput);
             const barcode = barcodeInput ? barcodeInput.value.trim() : '';
             const terminalOutput = document.getElementById('terminal-output');
 
-            if (!barcode) {
+            if (!barcode || barcode.includes('@')) {
+                if (barcodeInput && barcode.includes('@')) barcodeInput.value = '';
                 triggerScanFeedbackOverlay(false, "Please scan or enter a valid tote barcode.");
                 if (terminalOutput) {
                     terminalOutput.innerHTML = `
