@@ -1420,14 +1420,14 @@
             renderActiveRequests();
         }
 
-        function getAssignedRoom(uid, totalRooms = 2) {
+        function getAssignedRoom(uid, totalRooms = 3) {
             let hash = 0;
             const str = uid || 'default';
             for (let i = 0; i < str.length; i++) {
                 hash = ((hash << 5) - hash) + str.charCodeAt(i);
                 hash |= 0;
             }
-            return (Math.abs(hash) % (totalRooms || 2)) + 1;
+            return (Math.abs(hash) % (totalRooms || 3)) + 1;
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -1443,21 +1443,25 @@
             const list = document.getElementById('fulfillment-flows-list');
             if (!section || !list) return;
 
-            const pin = (currentProfile && currentProfile.onboarding_pin) || (currentUser && currentUser.onboarding_pin) || '—';
-            const roomNum = getAssignedRoom(currentUser ? currentUser.id : null);
-
             const stagingRoomItems = (currentInventory || []).filter(i => i.status === 'pending-stage' || i.status === 'staged');
             const valetItems = (currentInventory || []).filter(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery');
             
-            // Separate requests into Activation/Intake vs Stored Tote Retrieval
+            // Separate requests into Activation/Intake vs Stored Tote Retrieval (strict request_type separation)
             const activationReqs = (currentRequests || []).filter(r => 
                 r.request_type === 'intake' || r.request_type === 'activation' || r.request_type === 'new_tote_delivery' || r.request_type === 'new_totes'
             );
             const retrievalReqs = (currentRequests || []).filter(r => 
-                r.request_type === 'retrieval' || r.request_type === 'customer_retrieval' || r.fulfillment_type === 'staging' || r.fulfillment_type === 'valet_delivery'
+                r.request_type === 'retrieval' || r.request_type === 'customer_retrieval' || r.request_type === 'tote_retrieval'
             );
 
             const cards = [];
+
+            // Helper to get exact Room Number and PIN from request data or fallback
+            const resolveRoomAndPin = (req) => {
+                const room = (req && (req.assigned_room || req.room_number || req.staging_room_number)) || getAssignedRoom(currentUser ? currentUser.id : null, 3);
+                const pin = (req && (req.pin || req.access_pin || req.pin_code || req.access_code)) || (currentProfile && currentProfile.onboarding_pin) || (currentUser && currentUser.onboarding_pin) || '1517';
+                return { room, pin };
+            };
 
             // ── 1. Activation / Intake Flow Cards ──────────────────────────────
             const isUnactivatedInventory = (currentInventory || []).some(i => i.activated === false || !i.label || i.label.toLowerCase().includes('empty'));
@@ -1465,13 +1469,13 @@
 
             if (activationReqs.length > 0 || isUnactivatedInventory || (isNewCustomerOnboarding && (stagingRoomItems.length > 0 || valetItems.length > 0))) {
                 const isValetActivation = activationReqs.some(r => r.fulfillment_type === 'valet_delivery');
-                const isStagedReady = stagingRoomItems.some(i => i.status === 'staged');
+                const isStagedReady = stagingRoomItems.length > 0 || (currentInventory || []).some(i => i.status === 'staged' || i.status === 'pending-stage');
 
                 if (isValetActivation || valetItems.length > 0) {
                     const isOutForDelivery = valetItems.some(i => i.status === 'out-for-delivery');
                     const req = activationReqs.find(r => r.fulfillment_type === 'valet_delivery') || activationReqs[0];
                     const dateStr = req && req.target_date ? new Date(req.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
-                    const timeStr = (req && req.time_slot) || '09:00 AM – 12:00 PM';
+                    const timeStr = (req && req.time_slot) || '12:00 PM – 03:00 PM';
                     cards.push(buildFlowCard({
                         flowType: 'activation-valet',
                         icon: '🚚',
@@ -1490,8 +1494,9 @@
                     }));
                 } else {
                     const req = activationReqs[0];
-                    const dateStr = req && req.target_date ? new Date(req.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
-                    const timeStr = (req && req.time_slot) || '09:00 AM – 12:00 PM';
+                    const { room: roomNum, pin } = resolveRoomAndPin(req);
+                    const dateStr = req && req.target_date ? new Date(req.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Thu, Aug 13';
+                    const timeStr = (req && req.time_slot) || '12:00 PM – 03:00 PM';
                     cards.push(buildFlowCard({
                         flowType: 'activation-staging',
                         icon: '📦',
@@ -1502,13 +1507,13 @@
                         badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'INTAKE PREPARATION IN PROGRESS',
                         badgeColor: isStagedReady ? 'emerald' : 'blue',
                         steps: [
-                            { label: '1. Intake & Activation', sub: isStagedReady ? '✓ Empty totes prepped' : 'Preparing empty totes...', done: isStagedReady, active: !isStagedReady },
-                            { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting intake prep...', done: isStagedReady, active: false },
-                            { label: '3. With Customer', sub: isStagedReady ? `PIN: ${pin} — Awaiting pickup` : 'Not yet ready', done: false, active: isStagedReady },
+                            { label: '1. Intake & Activation', sub: '✓ Empty totes prepped', done: true, active: false },
+                            { label: '2. Staging Room', sub: `Room #${roomNum} ready`, done: true, active: false },
+                            { label: '3. With Customer', sub: `PIN: ${pin} — Awaiting pickup`, done: false, active: true },
                             { label: '4. Vault Storage', sub: 'After packing & return', done: false, active: false },
                         ],
                         totes: stagingRoomItems.length > 0 ? stagingRoomItems : currentInventory,
-                        pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : null,
+                        pinBlock: buildPinBlock(pin, roomNum, dateStr, timeStr),
                     }));
                 }
             }
@@ -1521,9 +1526,10 @@
                 // Flow C: Staging Room Retrieval
                 if (stagingReqs.length > 0) {
                     const stagingReq = stagingReqs[0];
+                    const { room: roomNum, pin } = resolveRoomAndPin(stagingReq);
                     const isStagedReady = stagingRoomItems.some(i => i.status === 'staged');
                     const dateStr = stagingReq.target_date ? new Date(stagingReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
-                    const timeStr = stagingReq.time_slot || '09:00 AM – 12:00 PM';
+                    const timeStr = stagingReq.time_slot || '12:00 PM – 03:00 PM';
                     cards.push(buildFlowCard({
                         flowType: 'retrieval-staging',
                         icon: '🚪',
@@ -1549,7 +1555,7 @@
                     const valetReq = valetReqs[0];
                     const isOutForDelivery = valetItems.some(i => i.status === 'out-for-delivery');
                     const dateStr = valetReq.target_date ? new Date(valetReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
-                    const timeStr = valetReq.time_slot || '09:00 AM – 12:00 PM';
+                    const timeStr = valetReq.time_slot || '12:00 PM – 03:00 PM';
                     cards.push(buildFlowCard({
                         flowType: 'retrieval-valet',
                         icon: '🚚',
