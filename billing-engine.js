@@ -175,11 +175,16 @@
         );
         const existingNotes = (existingInvoices || []).map(i => i.notes || '').join(' ');
 
-        // 2. Fetch users lookup map
+        // 2. Fetch users lookup map — indexed by both id AND email to catch
+        //    waitlist prospects who never completed account signup
         const { data: usersData } = await sb.from('users').select('id, name, email, assigned_facility_id');
         const usersMap = {};
+        const usersByEmail = {};
         if (usersData) {
-          usersData.forEach(u => { usersMap[u.id] = u; });
+          usersData.forEach(u => {
+            usersMap[u.id] = u;
+            if (u.email) usersByEmail[u.email.toLowerCase().trim()] = u;
+          });
         }
 
         const createdInvoices = [];
@@ -377,22 +382,45 @@
           for (const w of waitlistEntries) {
             const txnRef = `WTL-${w.id}`;
             const wRefTag = `waitlist_${w.id}`;
+            const wEmail = (w.email || '').toLowerCase().trim();
 
             const alreadyHasTxn = existingTxnRefs.has(txnRef);
             const alreadyInNotes = existingNotes.includes(wRefTag) || existingNotes.includes(w.id);
+            // Check by email too — catches unlinked prospects who never completed signup
             const hasWaitlistInvoice = (existingInvoices || []).some(inv =>
-              inv.customer_email === w.email && inv.invoice_type === 'unlaunched_deposit'
+              (inv.customer_email || '').toLowerCase().trim() === wEmail &&
+              inv.invoice_type === 'unlaunched_deposit'
             );
 
             if (!alreadyHasTxn && !alreadyInNotes && !hasWaitlistInvoice) {
-              const userObj = (w.user_id ? usersMap[w.user_id] : null) || {};
-              const deposit = Number(w.deposit_amount || 20.00);
-              const pStatus = (w.payment_status === 'deposit_paid' || w.payment_status === 'paid' || w.status === 'deposit_paid') ? 'deposit_received' : (w.payment_status || 'deposit_received');
+              // Resolve user object: try uid first, then fall back to email lookup
+              //   This handles prospects who submitted a deposit but never finished signup
+              const userObj =
+                (w.user_id ? usersMap[w.user_id] : null) ||
+                (wEmail ? usersByEmail[wEmail] : null) ||
+                {};
+
+              // Resolve resolved uid (may be null for true unlinked prospects)
+              const resolvedUid = w.user_id || userObj.id || null;
+
+              // Default deposit: $25 if unlaunched market, $20 general waitlist
+              const deposit = Number(w.deposit_amount || w.amount_paid || 25.00);
+              const pStatus = (
+                w.payment_status === 'deposit_paid' ||
+                w.payment_status === 'paid' ||
+                w.status === 'deposit_paid'
+              ) ? 'deposit_received' : (w.payment_status || 'deposit_received');
               const createdAt = w.created_at || new Date().toISOString();
+              // Build a human-readable name — fall back to email prefix or 'Waitlist Lead'
+              const displayName =
+                w.name ||
+                userObj.name ||
+                w.full_name ||
+                (wEmail ? wEmail.split('@')[0] : 'Waitlist Lead');
 
               const res = await this.createInvoiceRecord({
-                uid: w.user_id || null,
-                customer_name: userObj.name || (w.email ? w.email.split('@')[0] : 'Waitlist Lead'),
+                uid: resolvedUid,
+                customer_name: displayName,
                 customer_email: w.email,
                 facility_id: null,
                 invoice_type: 'unlaunched_deposit',
@@ -401,10 +429,10 @@
                 total_amount: deposit,
                 payment_method: 'card',
                 transaction_reference: txnRef,
-                notes: `Retroactive waitlist priority deposit backfill [Ref: ${wRefTag}]`,
+                notes: `Retroactive waitlist priority deposit backfill [Ref: ${wRefTag}]${resolvedUid ? '' : ' [UNLINKED PROSPECT — no user account]'}`,
                 line_items: [
                   {
-                    description: `Unlaunched Market Priority Queue Reservation (${w.requested_totes || 5} totes)`,
+                    description: `Unlaunched Market Priority Queue Reservation (${w.requested_totes || w.tote_count || 5} totes)`,
                     qty: 1,
                     unit_price: deposit,
                     amount: deposit

@@ -5767,80 +5767,138 @@
         }
 
         async function runInvoiceBackfillAndSync() {
-            console.log("[CloudVaultBilling] Running Invoice Backfill & Sync...");
-            let backfilledCount = 0;
-            let flaggedOverdueCount = 0;
+            console.log("[CloudVaultBilling] Running System Billing Audit & Sync...");
+
+            // Delegate entirely to the universal backfill engine which covers:
+            //  A. Active subscriptions  B. Charges  C. Access requests
+            //  D. Waitlist leads — including unlinked prospects who never finished signup
+            if (!window.CloudVaultBilling || typeof window.CloudVaultBilling.backfillRetroactiveInvoices !== 'function') {
+                alert("⚠️ Billing engine not loaded. Please refresh and try again.");
+                return;
+            }
 
             try {
-                const { data: users } = await supabase.from('users').select('*');
-                const { data: totes } = await supabase.from('inventory').select('*');
-                const { data: existingInvoices } = await supabase.from('invoices').select('*');
+                const result = await window.CloudVaultBilling.backfillRetroactiveInvoices();
 
-                const existingUserInvoicesMap = {};
-                (existingInvoices || []).forEach(inv => {
-                    const key = inv.uid || inv.customer_email;
-                    if (key) {
-                        if (!existingUserInvoicesMap[key]) existingUserInvoicesMap[key] = [];
-                        existingUserInvoicesMap[key].push(inv);
-                    }
-                });
-
-                const totesByUser = {};
-                (totes || []).forEach(t => {
-                    if (t.uid) {
-                        if (!totesByUser[t.uid]) totesByUser[t.uid] = [];
-                        totesByUser[t.uid].push(t);
-                    }
-                });
-
-                for (const u of (users || [])) {
-                    const userTotes = totesByUser[u.id] || [];
-                    const userInvs = existingUserInvoicesMap[u.id] || existingUserInvoicesMap[u.email] || [];
-
-                    if (userTotes.length > 0 && userInvs.length === 0) {
-                        const amount = userTotes.length * 5.00;
-                        if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
-                            await window.CloudVaultBilling.createInvoiceRecord({
-                                uid: u.id,
-                                customer_name: u.name || 'CloudVault Customer',
-                                customer_email: u.email,
-                                invoice_type: 'subscription',
-                                payment_status: 'paid',
-                                subtotal: amount,
-                                total_amount: amount,
-                                transaction_reference: window.CloudVaultStripe ? window.CloudVaultStripe.generateChargeId() : 'ch_3M_backfill',
-                                notes: 'Backfilled Monthly Recurring Storage Deposit'
-                            });
-                            backfilledCount++;
-                        }
-                    }
+                if (!result.success) {
+                    throw new Error(result.error || 'Backfill failed');
                 }
 
-                const now = Date.now();
-                const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
-
-                for (const inv of (existingInvoices || [])) {
-                    const status = (inv.payment_status || inv.status || '').toLowerCase();
-                    if (status === 'unpaid' || status === 'pending') {
-                        const createdMs = inv.created_at ? new Date(inv.created_at).getTime() : 0;
-                        if (createdMs && (now - createdMs > THREE_DAYS_MS)) {
-                            await supabase.from('invoices').update({ payment_status: 'overdue' }).eq('id', inv.id);
-                            if (inv.uid) {
-                                await supabase.from('users').update({ is_overdue: true, overdue: true }).eq('id', inv.uid);
-                            }
-                            flaggedOverdueCount++;
-                        }
-                    }
-                }
-
-                alert(`🔄 Invoice Backfill & Sync Complete!\n\n• Invoices Backfilled: ${backfilledCount}\n• Overdue Accounts Flagged (>3 days grace period): ${flaggedOverdueCount}\n• System Billing Ledger Fully Synchronized.`);
+                const stats = result.stats || {};
+                alert(
+                    `✅ System Billing Audit & Sync Complete!\n\n` +
+                    `• Subscription Invoices Backfilled: ${stats.subscriptions || 0}\n` +
+                    `• Valet / Access Request Invoices Backfilled: ${(stats.accessRequests || 0) + (stats.charges || 0)}\n` +
+                    `• Waitlist Deposit Invoices Backfilled: ${stats.waitlist || 0}\n` +
+                    `  (includes unlinked prospects missing user accounts)\n` +
+                    `• Total Invoices Created: ${result.count || 0}\n\n` +
+                    `Billing ledger fully synchronized.`
+                );
 
                 if (window.currentSelectedCustomer) {
                     openCustomerBillingDrawer(window.currentSelectedCustomer);
                 }
             } catch (err) {
-                console.error("Backfill error:", err);
-                alert(`⚠️ Invoice Backfill failed: ${err.message}`);
+                console.error("[runInvoiceBackfillAndSync] Error:", err);
+                alert(`⚠️ System Billing Audit & Sync failed: ${err.message}`);
+            }
+        }
+
+        /**
+         * 1-Click: Convert a waitlist lead (who never fully created an account due to
+         * a previous signup bug) into a full user account, then link all unattached
+         * unlaunched_deposit invoices to their new uid.
+         */
+        async function convertWaitlistLeadToUserAccount(waitlistId) {
+            if (!waitlistId) {
+                alert("⚠️ No waitlist record ID provided.");
+                return;
+            }
+
+            try {
+                // 1. Fetch the waitlist record
+                const { data: lead, error: leadErr } = await supabase
+                    .from('waitlist')
+                    .select('*')
+                    .eq('id', waitlistId)
+                    .maybeSingle();
+
+                if (leadErr || !lead) {
+                    throw new Error(leadErr?.message || 'Waitlist record not found');
+                }
+
+                // 2. Check if a user account already exists for this email
+                const { data: existingUser } = await supabase
+                    .from('users')
+                    .select('id, email, name')
+                    .eq('email', lead.email)
+                    .maybeSingle();
+
+                let userId;
+                if (existingUser) {
+                    userId = existingUser.id;
+                    console.log(`[convertWaitlistLead] Found existing user ${userId} for email ${lead.email}`);
+                } else {
+                    // 3. Create a stub user account with waitlist data
+                    const { data: newUser, error: createErr } = await supabase
+                        .from('users')
+                        .insert({
+                            email: lead.email,
+                            name: lead.name || lead.full_name || (lead.email ? lead.email.split('@')[0] : 'CloudVault Customer'),
+                            subscription_status: 'waitlisted',
+                            is_active: false,
+                            created_at: lead.created_at || new Date().toISOString()
+                        })
+                        .select('id')
+                        .maybeSingle();
+
+                    if (createErr || !newUser) {
+                        throw new Error(createErr?.message || 'Failed to create user account');
+                    }
+                    userId = newUser.id;
+                    console.log(`[convertWaitlistLead] Created new user ${userId} for ${lead.email}`);
+                }
+
+                // 4. Link the waitlist record to the new/found user
+                await supabase
+                    .from('waitlist')
+                    .update({ user_id: userId })
+                    .eq('id', waitlistId);
+
+                // 5. Link unattached unlaunched_deposit invoices by email to the new uid
+                const { data: unlinkedInvoices } = await supabase
+                    .from('invoices')
+                    .select('id')
+                    .eq('customer_email', lead.email)
+                    .eq('invoice_type', 'unlaunched_deposit')
+                    .is('uid', null);
+
+                let linkedCount = 0;
+                if (unlinkedInvoices && unlinkedInvoices.length > 0) {
+                    const ids = unlinkedInvoices.map(i => i.id);
+                    await supabase
+                        .from('invoices')
+                        .update({ uid: userId })
+                        .in('id', ids);
+                    linkedCount = ids.length;
+                }
+
+                alert(
+                    `⚡ Waitlist Lead Successfully Converted!\n\n` +
+                    `Email: ${lead.email}\n` +
+                    `User ID: ${userId}\n` +
+                    `Deposit Invoices Linked: ${linkedCount}\n\n` +
+                    `Account status set to "waitlisted". Customer can now log in and complete onboarding.`
+                );
+
+                // Refresh the admin view if drawer is open
+                if (window.currentSelectedCustomer) {
+                    openCustomerBillingDrawer(window.currentSelectedCustomer);
+                }
+
+            } catch (err) {
+                console.error("[convertWaitlistLeadToUserAccount] Error:", err);
+                alert(`⚠️ Account conversion failed: ${err.message}`);
             }
         }
 
@@ -6158,6 +6216,7 @@
         window.sendInvoiceReminderForCustomer = sendInvoiceReminderForCustomer;
         window.backfillCustomerInvoices = backfillCustomerInvoices;
         window.runInvoiceBackfillAndSync = runInvoiceBackfillAndSync;
+        window.convertWaitlistLeadToUserAccount = convertWaitlistLeadToUserAccount;
         window.triggerMonthlyAutopayBilling = triggerMonthlyAutopayBilling;
         window.triggerOneClickRefund = triggerOneClickRefund;
         window.onMasterToteSearchInput = onMasterToteSearchInput;
