@@ -6034,18 +6034,20 @@
         }
 
         async function triggerPrintLabels() {
+            const printBtn = document.querySelector("button[onclick='triggerPrintLabels()']");
+            const originalBtnHTML = printBtn ? printBtn.innerHTML : '';
+            if (printBtn) {
+                printBtn.disabled = true;
+                printBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> <span>Preparing Printable Sheets...</span>`;
+                if (window.lucide) lucide.createIcons();
+            }
+
             const codeInput = document.getElementById('print-tote-code');
-            const inputVal = (codeInput ? codeInput.value.trim() : '') || 'CV-SEA-1001';
+            const inputVal = (codeInput ? codeInput.value.trim() : '') || 'CV-SEA-49AK';
             let codesToPrint = inputVal.split(',').map(c => c.trim()).filter(Boolean);
-            if (codesToPrint.length === 0) codesToPrint = ['CV-SEA-1001'];
+            if (codesToPrint.length === 0) codesToPrint = ['CV-SEA-49AK'];
 
             const todayStr = new Date().toLocaleDateString();
-
-            // Pre-generate QR Data URLs for all codes in parallel for ultra-low latency
-            const qrMap = {};
-            await Promise.all(codesToPrint.map(async code => {
-                qrMap[code] = await generateQRDataURL(code);
-            }));
 
             // Chunk into sheets of 4 tags (2 columns x 2 rows per sheet)
             const pages = [];
@@ -6070,7 +6072,7 @@
                                     <div style="font-size: 18px; font-weight: 900; letter-spacing: 2px; margin-top: 4px; font-family: monospace;">${code}</div>
                                 </div>
                                 <div style="flex: 0 0 100px; width: 100px; max-width: 100px; min-width: 100px; text-align: center; border-left: 2px solid #000; padding-left: 10px; box-sizing: border-box;">
-                                    <img src="${qrMap[code] || ''}" style="width: 80px; height: 80px; border: 1px solid #000; padding: 2px; border-radius: 4px; display: block; margin: 0 auto; object-fit: contain; image-rendering: pixelated;" alt="QR Code" />
+                                    <div class="print-grid-qr" data-code="${code}" style="width: 80px; height: 80px; margin: 0 auto;"></div>
                                     <span style="display: block; font-size: 8px; font-weight: bold; margin-top: 3px; font-family: sans-serif;">FAST-SCAN QR</span>
                                 </div>
                             </div>
@@ -6106,6 +6108,7 @@
                 <head>
                     <title>Print Labels - CloudVault Logistics</title>
                     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
                     <style>
                         @page { size: auto; margin: 0.5cm; }
                         body { font-family: monospace; margin: 0; padding: 0; background: #ffffff; color: #000000; }
@@ -6118,32 +6121,39 @@
             `);
             doc.close();
 
-            setTimeout(() => {
-                const win = iframe.contentWindow;
-                const barcodeEls = win.document.querySelectorAll('.print-grid-barcode');
-                barcodeEls.forEach(svg => {
-                    const c = svg.getAttribute('data-code');
-                    if (typeof win.JsBarcode === 'function') {
+            // Native zero-delay rendering inside iframe
+            const win = iframe.contentWindow;
+            const renderInterval = setInterval(() => {
+                if (typeof win.JsBarcode === 'function' && typeof win.QRCode === 'function') {
+                    clearInterval(renderInterval);
+                    
+                    // Render Barcodes
+                    win.document.querySelectorAll('.print-grid-barcode').forEach(svg => {
+                        const c = svg.getAttribute('data-code');
                         try {
-                            win.JsBarcode(svg, c, {
-                                format: "CODE128",
-                                width: 1.6,
-                                height: 42,
-                                fontSize: 10,
-                                displayValue: false,
-                                margin: 1
-                            });
-                        } catch (err) {
-                            console.warn("JsBarcode print error:", err);
-                        }
-                    }
-                });
+                            win.JsBarcode(svg, c, { format: "CODE128", width: 1.6, height: 42, fontSize: 10, displayValue: false, margin: 1 });
+                        } catch (err) { }
+                    });
 
-                setTimeout(() => {
+                    // Render QR Codes
+                    win.document.querySelectorAll('.print-grid-qr').forEach(div => {
+                        const c = div.getAttribute('data-code');
+                        try {
+                            new win.QRCode(div, { text: c, width: 80, height: 80, correctLevel: 0 });
+                        } catch (err) { }
+                    });
+
+                    // Restore button and trigger print immediately
+                    if (printBtn) {
+                        printBtn.disabled = false;
+                        printBtn.innerHTML = originalBtnHTML;
+                        if (window.lucide) lucide.createIcons();
+                    }
+
                     win.focus();
                     win.print();
-                }, 250);
-            }, 350);
+                }
+            }, 10);
         }
     </script>
 
