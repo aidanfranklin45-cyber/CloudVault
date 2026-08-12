@@ -697,7 +697,7 @@
                             <i data-lucide="dollar-sign" class="w-3.5 h-3.5 text-emerald-400"></i> Deposit:
                         </span>
                         <span class="text-emerald-400 font-extrabold">$</span>
-                        <input type="number" id="global-unlaunched-deposit-input" step="5" min="0" value="25"
+                        <input type="number" id="global-unlaunched-deposit-input" step="5" min="0" value="20"
                             class="w-16 bg-gray-950 text-white font-extrabold text-xs px-2 py-1 rounded-lg border border-gray-800 focus:outline-none focus:border-emerald-500 text-center">
                         <button onclick="saveGlobalUnlaunchedDeposit()"
                             class="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] px-2.5 py-1 rounded-lg transition shadow cursor-pointer uppercase">
@@ -1944,13 +1944,14 @@
                 }
 
                 // ===== SECTION 5: UNLAUNCHED MARKET WAITLIST & EXPANSION PORTAL =====
-                let currentGlobalDeposit = 25.00;
+                let currentGlobalDeposit = 20.00;
 
                 async function loadGlobalUnlaunchedDepositSetting() {
                     try {
                         const { data } = await supabase.from('metadata').select('value').eq('id', 'unlaunched_deposit').single();
-                        if (data && data.value && data.value.amount !== undefined) {
-                            currentGlobalDeposit = Number(data.value.amount) || 25.00;
+                        if (data && data.value) {
+                            const val = typeof data.value === 'object' ? (data.value.amount || data.value) : data.value;
+                            currentGlobalDeposit = Number(val) || 20.00;
                             const inputEl = document.getElementById('global-unlaunched-deposit-input');
                             if (inputEl) inputEl.value = currentGlobalDeposit;
                         }

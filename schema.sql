@@ -13,6 +13,7 @@ DROP FUNCTION IF EXISTS public.return_all_totes_sim() CASCADE;
 DROP FUNCTION IF EXISTS public.trigger_tote_audit_test() CASCADE;
 DROP FUNCTION IF EXISTS public.scan_tote(TEXT) CASCADE;
 
+DROP TABLE IF EXISTS public.invoices CASCADE;
 DROP TABLE IF EXISTS public.charges CASCADE;
 DROP TABLE IF EXISTS public.cancellations CASCADE;
 DROP TABLE IF EXISTS public.access_requests CASCADE;
@@ -81,9 +82,17 @@ CREATE TABLE public.users (
     logistics_preference TEXT DEFAULT 'self_service',
     onboarding_status TEXT DEFAULT 'pending',
     active_totes_held INTEGER DEFAULT 0,
+    has_price_lock BOOLEAN DEFAULT false,
+    price_lock_rates JSONB DEFAULT NULL,
+    deposit_paid_amount NUMERIC(10,2) DEFAULT 0.00,
     avatar_color TEXT DEFAULT 'blue',
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
+
+-- Migration fallbacks for users
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS has_price_lock BOOLEAN DEFAULT false;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS price_lock_rates JSONB DEFAULT NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS deposit_paid_amount NUMERIC(10,2) DEFAULT 0.00;
 
 -- Inventory (Totes)
 CREATE TABLE public.inventory (
@@ -168,11 +177,17 @@ CREATE TABLE public.subscriptions (
     monthly_total NUMERIC(10,2) DEFAULT 0.00,
     plan_tier TEXT DEFAULT 'valet_flex',
     status TEXT DEFAULT 'active',
+    has_price_lock BOOLEAN DEFAULT false,
+    price_lock_rates JSONB DEFAULT NULL,
     current_period_end TIMESTAMPTZ,
     next_billing_date TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
     last_updated TIMESTAMPTZ DEFAULT now()
 );
+
+-- Migration fallbacks for subscriptions
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS has_price_lock BOOLEAN DEFAULT false;
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS price_lock_rates JSONB DEFAULT NULL;
 
 -- Operational Zones / Service Markets
 CREATE TABLE IF NOT EXISTS public.operational_zones (
@@ -200,22 +215,30 @@ CREATE TABLE public.service_areas (
 -- Waitlist
 CREATE TABLE public.waitlist (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
     email TEXT NOT NULL,
     zip_code TEXT NOT NULL,
     city TEXT,
     requested_totes INTEGER DEFAULT 5,
-    deposit_amount NUMERIC(10,2) DEFAULT 25.00,
+    deposit_amount NUMERIC(10,2) DEFAULT 20.00,
     price_lock_years INTEGER DEFAULT 5,
     refund_guarantee_days INTEGER DEFAULT 365,
     payment_status TEXT DEFAULT 'deposit_paid',
+    status TEXT DEFAULT 'deposit_paid',
+    price_lock_rates JSONB DEFAULT NULL,
+    terms_accepted_at TIMESTAMPTZ DEFAULT now(),
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Safe migration fallback for pre-existing waitlist tables in Supabase
-ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(10,2) DEFAULT 25.00;
+ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.users(id) ON DELETE SET NULL;
+ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(10,2) DEFAULT 20.00;
 ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS price_lock_years INTEGER DEFAULT 5;
 ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS refund_guarantee_days INTEGER DEFAULT 365;
 ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'deposit_paid';
+ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'deposit_paid';
+ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS price_lock_rates JSONB DEFAULT NULL;
+ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ DEFAULT now();
 
 -- Access Requests (for Staging / Delivery & Slot Reservation)
 CREATE TABLE public.access_requests (
@@ -288,6 +311,60 @@ CREATE TABLE public.charges (
     charged_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
+-- Invoices Table
+CREATE TABLE IF NOT EXISTS public.invoices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    invoice_number TEXT UNIQUE NOT NULL,
+    uid UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    customer_name TEXT,
+    customer_email TEXT,
+    facility_id TEXT REFERENCES public.facilities(id) ON DELETE SET NULL,
+    invoice_type TEXT DEFAULT 'subscription',
+    payment_status TEXT DEFAULT 'paid',
+    subtotal NUMERIC(10,2) DEFAULT 0.00,
+    delivery_fee NUMERIC(10,2) DEFAULT 0.00,
+    surge_fee NUMERIC(10,2) DEFAULT 0.00,
+    tax NUMERIC(10,2) DEFAULT 0.00,
+    discount NUMERIC(10,2) DEFAULT 0.00,
+    total_amount NUMERIC(10,2) DEFAULT 0.00,
+    payment_method TEXT DEFAULT 'card',
+    transaction_reference TEXT,
+    notes TEXT,
+    line_items JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    paid_at TIMESTAMPTZ DEFAULT now(),
+    refunded_at TIMESTAMPTZ
+);
+
+-- Safe migration fallbacks for pre-existing invoices tables in Supabase
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS invoice_number TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS uid UUID REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS customer_name TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS customer_email TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS facility_id TEXT REFERENCES public.facilities(id) ON DELETE SET NULL;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS invoice_type TEXT DEFAULT 'subscription';
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'paid';
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS subtotal NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS delivery_fee NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS surge_fee NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS tax NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS discount NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS total_amount NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'card';
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS transaction_reference TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS line_items JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ;
+
+-- Indexes for invoices
+CREATE INDEX IF NOT EXISTS idx_invoices_uid ON public.invoices(uid);
+CREATE INDEX IF NOT EXISTS idx_invoices_customer_email ON public.invoices(customer_email);
+CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON public.invoices(invoice_number);
+CREATE INDEX IF NOT EXISTS idx_invoices_payment_status ON public.invoices(payment_status);
+CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON public.invoices(created_at);
+
 -- System Metadata / Financials (Singleton row)
 CREATE TABLE public.metadata (
     id TEXT PRIMARY KEY,
@@ -332,6 +409,7 @@ ALTER TABLE public.access_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.staging_reservations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cancellations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.charges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.metadata ENABLE ROW LEVEL SECURITY;
 
 -- Helper functions for RLS
@@ -379,6 +457,10 @@ CREATE POLICY "Staff view all cancellations" ON public.cancellations FOR SELECT 
 
 CREATE POLICY "Users view own charges" ON public.charges FOR SELECT USING (uid = auth.uid());
 CREATE POLICY "Staff view all charges" ON public.charges FOR SELECT USING (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive'));
+
+CREATE POLICY "Users view own invoices" ON public.invoices FOR SELECT USING (uid = auth.uid() OR customer_email = auth.email());
+CREATE POLICY "Users insert own invoices" ON public.invoices FOR INSERT WITH CHECK (uid = auth.uid() OR auth.uid() IS NOT NULL);
+CREATE POLICY "Staff manage all invoices" ON public.invoices FOR ALL USING (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive')) WITH CHECK (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive'));
 
 CREATE POLICY "Users view own access requests" ON public.access_requests FOR SELECT USING (uid = auth.uid());
 CREATE POLICY "Staff view all access requests" ON public.access_requests FOR SELECT USING (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive'));
@@ -590,10 +672,12 @@ BEGIN
     v_facility_id := 'facility_seattle_north';
   END IF;
 
-  -- Dynamic regional rate & fee calculation from facilities table
+  -- Dynamic regional rate & fee calculation from facilities table (or user's locked rates)
   DECLARE
     v_t1 NUMERIC; v_t2 NUMERIC; v_t3 NUMERIC; v_t4 NUMERIC;
     v_vbase NUMERIC; v_vadder NUMERIC;
+    v_has_lock BOOLEAN := false;
+    v_lock_rates JSONB := NULL;
   BEGIN
     SELECT 
       COALESCE(tier1_rate, 5.00), 
@@ -605,6 +689,18 @@ BEGIN
     INTO v_t1, v_t2, v_t3, v_t4, v_vbase, v_vadder
     FROM public.facilities
     WHERE id = v_facility_id;
+
+    -- Override with Legacy Price Lock if user has active price lock
+    SELECT COALESCE(has_price_lock, false), price_lock_rates 
+    INTO v_has_lock, v_lock_rates 
+    FROM public.users WHERE id = v_uid;
+
+    IF v_has_lock IS TRUE AND v_lock_rates IS NOT NULL THEN
+      v_t1 := COALESCE((v_lock_rates->>'tier1_rate')::NUMERIC, v_t1);
+      v_t2 := COALESCE((v_lock_rates->>'tier2_rate')::NUMERIC, v_t2);
+      v_t3 := COALESCE((v_lock_rates->>'tier3_rate')::NUMERIC, v_t3);
+      v_t4 := COALESCE((v_lock_rates->>'tier4_rate')::NUMERIC, v_t4);
+    END IF;
 
     IF p_tote_count >= 50 THEN v_tote_rate := v_t4;
     ELSIF p_tote_count >= 25 THEN v_tote_rate := v_t3;

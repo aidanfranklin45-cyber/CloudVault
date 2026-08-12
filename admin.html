@@ -4137,7 +4137,7 @@
 
                 if (countBadge) {
                     const totalDeposits = unlaunchedRes.length;
-                    const totalCapital = unlaunchedRes.reduce((sum, r) => sum + (Number(r.deposit_amount) || 25.00), 0);
+                    const totalCapital = unlaunchedRes.reduce((sum, r) => sum + (Number(r.deposit_amount) || 20.00), 0);
                     countBadge.textContent = `${totalDeposits} Priority Deposit${totalDeposits !== 1 ? 's' : ''} ($${totalCapital.toLocaleString()})`;
                 }
 
@@ -4150,7 +4150,7 @@
                     }
                     if (row.zip_code) cityMap[city].zipCodes.add(row.zip_code);
                     cityMap[city].count++;
-                    cityMap[city].capital += (Number(row.deposit_amount) || 25.00);
+                    cityMap[city].capital += (Number(row.deposit_amount) || 20.00);
                     const date = new Date(row.created_at);
                     if (!cityMap[city].latest || date > cityMap[city].latest) {
                         cityMap[city].latest = date;

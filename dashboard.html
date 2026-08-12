@@ -372,6 +372,9 @@
                 <div id="fulfillment-flows-list" class="space-y-4"></div>
             </div>
 
+            <!-- Unlaunched Market Waitlist Customer Portal -->
+            <div id="unlaunched-market-portal" class="hidden max-w-4xl mx-auto space-y-6"></div>
+
             <!-- Setup Progress Timeline Stepper -->
             <div id="onboarding-tracker" class="bg-white p-8 sm:p-10 rounded-3xl border border-gray-150 shadow-sm max-w-4xl mx-auto">
                 <h3 class="text-lg font-extrabold text-gray-950 mb-6 text-center">Your CloudVault Setup Progress</h3>
@@ -2640,6 +2643,14 @@
             
             const status = profile.onboarding_status || 'pending';
             
+            if (status === 'waitlisted') {
+                renderUnlaunchedMarketPortal(profile);
+                return;
+            } else {
+                const unlaunchedPortal = document.getElementById('unlaunched-market-portal');
+                if (unlaunchedPortal) unlaunchedPortal.classList.add('hidden');
+            }
+
             if (status === 'active') {
                 tracker.classList.add('hidden');
                 grid.classList.remove('hidden');
@@ -2678,6 +2689,131 @@
                     pinContainer.classList.remove('hidden');
                     pinDisplay.textContent = profile.onboarding_pin || '----';
                 }
+            }
+        }
+
+        // ============================================================
+        // Unlaunched Market Waitlist Portal Renderer
+        // ============================================================
+        async function renderUnlaunchedMarketPortal(profile) {
+            const portal = document.getElementById('unlaunched-market-portal');
+            const tracker = document.getElementById('onboarding-tracker');
+            const grid = document.getElementById('tote-grid');
+            const empty = document.getElementById('empty-state');
+            const cutoffBanner = document.getElementById('cutoff-banner');
+            const actionBar = document.getElementById('action-bar');
+
+            if (tracker) tracker.classList.add('hidden');
+            if (grid) grid.classList.add('hidden');
+            if (empty) empty.classList.add('hidden');
+            if (cutoffBanner) cutoffBanner.classList.add('hidden');
+            if (actionBar) actionBar.className = "fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 transition-transform duration-300 bar-hidden z-40";
+
+            if (!portal) return;
+            portal.classList.remove('hidden');
+
+            let waitlistRecord = null;
+            try {
+                const { data } = await supabase.from('waitlist').select('*').eq('email', profile.email).maybeSingle();
+                waitlistRecord = data;
+            } catch (e) { console.warn('Fetch waitlist record error:', e); }
+
+            const zipCode = waitlistRecord?.zip_code || profile.active_zone || 'Local Market';
+            const depositAmt = waitlistRecord?.deposit_amount || profile.deposit_paid_amount || 20.00;
+            const depositStatus = waitlistRecord?.status || waitlistRecord?.payment_status || 'deposit_paid';
+            const createdDate = waitlistRecord?.created_at ? new Date(waitlistRecord.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent';
+            const isRefundRequested = depositStatus === 'refund_requested';
+
+            portal.innerHTML = `
+                <div class="bg-gray-950 text-white rounded-3xl p-6 sm:p-8 border-2 border-emerald-500/30 shadow-2xl space-y-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-850 pb-6">
+                        <div>
+                            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold uppercase mb-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                🚀 Emerging Market Priority Queue
+                            </div>
+                            <h2 class="text-2xl font-black text-white tracking-tight">Market Waitlist: <span class="text-emerald-400">ZIP ${zipCode}</span></h2>
+                            <p class="text-xs text-gray-400 mt-1">Priority queue slot reserved for ${profile.name || profile.email}.</p>
+                        </div>
+                        <div class="text-left sm:text-right">
+                            <div class="text-xs text-gray-400 font-mono">Priority Lock Deposit</div>
+                            <div class="text-3xl font-black text-emerald-400 font-mono">$${Number(depositAmt).toFixed(2)}</div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-gray-900/80 p-4 rounded-2xl border border-gray-800 space-y-1">
+                            <div class="text-[10px] font-bold uppercase text-gray-500 font-mono">Deposit Status</div>
+                            <div class="text-sm font-extrabold ${isRefundRequested ? 'text-amber-400' : 'text-emerald-400'} flex items-center gap-1.5">
+                                ${isRefundRequested ? '⏳ Refund Requested' : '✓ Priority Lock Active'}
+                            </div>
+                            <div class="text-[11px] text-gray-400">Verified &amp; Held in Escrow</div>
+                        </div>
+                        <div class="bg-gray-900/80 p-4 rounded-2xl border border-gray-800 space-y-1">
+                            <div class="text-[10px] font-bold uppercase text-gray-500 font-mono">Guaranteed Rates</div>
+                            <div class="text-sm font-extrabold text-blue-400">🔒 5-Year Rate Lock</div>
+                            <div class="text-[11px] text-gray-400">Immune to regional price hikes</div>
+                        </div>
+                        <div class="bg-gray-900/80 p-4 rounded-2xl border border-gray-800 space-y-1">
+                            <div class="text-[10px] font-bold uppercase text-gray-500 font-mono">Transaction Date</div>
+                            <div class="text-sm font-extrabold text-white font-mono">${createdDate}</div>
+                            <div class="text-[11px] text-gray-400">Receipt Ref: WL-${(waitlistRecord?.id || 'LOCAL').substring(0, 8).toUpperCase()}</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-900/90 border border-gray-800 rounded-2xl p-5 space-y-3">
+                        <h4 class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                            <span>📜 Legal Terms &amp; Deposit Refund Disclosures</span>
+                        </h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                            <div class="bg-emerald-950/40 border border-emerald-500/20 p-3.5 rounded-xl space-y-1">
+                                <span class="font-bold text-emerald-400 block text-xs">✓ 100% Full Refund Guarantee</span>
+                                <p class="text-[11px] text-gray-300 leading-relaxed">
+                                    Your deposit hinges on your ZIP code/city being launched into an active service zone within a reasonable timeframe (365 days). If CloudVault does not launch a facility in your market within this period, your deposit is 100% fully refundable.
+                                </p>
+                            </div>
+                            <div class="bg-amber-950/40 border border-amber-500/20 p-3.5 rounded-xl space-y-1">
+                                <span class="font-bold text-amber-400 block text-xs">⚠️ Deposit Forfeiture Notice</span>
+                                <p class="text-[11px] text-gray-300 leading-relaxed">
+                                    If CloudVault opens a regional facility in your city within a reasonable timeframe and notifies you of service availability, but you elect not to activate your service or decline onboarding, your deposit will be forfeited.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-gray-850">
+                        <div class="text-xs text-gray-400">
+                            Need help or have questions about your deposit? Contact <a href="mailto:support@cloudvault.storage" class="text-emerald-400 underline">support@cloudvault.storage</a>
+                        </div>
+                        ${isRefundRequested ? `
+                            <button disabled class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-5 py-2.5 rounded-xl font-bold text-xs cursor-not-allowed">
+                                ⏳ Refund Request Under Review
+                            </button>
+                        ` : `
+                            <button onclick="requestWaitlistRefund('${waitlistRecord?.id || ''}')" class="bg-gray-900 hover:bg-red-950/60 text-gray-300 hover:text-red-300 border border-gray-800 hover:border-red-500/40 px-5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer flex items-center gap-1.5">
+                                <span>Request Deposit Refund</span>
+                            </button>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        async function requestWaitlistRefund(waitlistId) {
+            if (!confirm("Are you sure you want to request a 100% refund of your priority deposit? If a facility launches in your city, you may lose your priority queue position.")) return;
+            try {
+                if (waitlistId) {
+                    await supabase.from('waitlist').update({ status: 'refund_requested', payment_status: 'refund_requested' }).eq('id', waitlistId);
+                } else if (currentUser) {
+                    await supabase.from('waitlist').update({ status: 'refund_requested', payment_status: 'refund_requested' }).eq('email', currentUser.email);
+                }
+                showToast("Refund request submitted! Our team will process your deposit refund.");
+                if (currentUser) {
+                    const profile = await getCachedUserProfile(currentUser.id);
+                    renderUnlaunchedMarketPortal(profile);
+                }
+            } catch (e) {
+                alert("Could not process refund request: " + (e.message || e));
             }
         }
 

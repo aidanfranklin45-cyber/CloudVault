@@ -1168,18 +1168,23 @@
 
                     <!-- Step 2: Priority Deposit Payment Form -->
                     <div id="waitlist-step-payment" class="hidden-section space-y-4 pt-2 border-t border-gray-200">
-                        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs space-y-2">
+                        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs space-y-2.5">
                             <div class="flex items-center justify-between font-extrabold text-amber-900">
                                 <span>🔒 5-Year Legacy Price Lock Deposit</span>
                                 <span class="text-base font-black text-amber-700"
-                                    id="waitlist-deposit-display">$25.00</span>
+                                    id="waitlist-deposit-display">$20.00</span>
                             </div>
                             <p class="text-amber-800 leading-relaxed text-[11px]">
-                                Your deposit secures priority facility capacity and locks in current rates for up to 5
-                                years.
-                                <strong class="text-amber-950">100% Fully Refundable</strong> if a regional facility
-                                isn't opened in your city within 1 year!
+                                Your deposit secures priority facility capacity and locks in current rates for 5 years against future regional price increases.
                             </p>
+                            <div class="pt-2 border-t border-amber-200/60 space-y-1.5 text-[10.5px]">
+                                <p class="text-emerald-900 font-medium">
+                                    <strong class="font-bold text-emerald-950">✓ 100% Fully Refundable:</strong> If CloudVault does not turn your ZIP code into an active service zone within a reasonable timeframe (365 days), your priority deposit is 100% fully refundable.
+                                </p>
+                                <p class="text-amber-950 font-medium">
+                                    <strong class="font-bold text-amber-950">⚠️ Forfeiture Notice:</strong> If CloudVault launches an active facility in your city within a reasonable timeframe and notifies you of service availability, but you elect not to activate your service, your priority deposit will be forfeited.
+                                </p>
+                            </div>
                         </div>
 
                         <div>
@@ -1912,12 +1917,15 @@
             btn.disabled = true;
 
             try {
-                // Fetch dynamic required deposit for zone if available
-                let reqDeposit = 25.00;
+                // Fetch dynamic required deposit for zone or global metadata
+                let reqDeposit = 20.00;
                 try {
+                    const { data: meta } = await supabase.from('metadata').select('value').eq('id', 'unlaunched_deposit').maybeSingle();
+                    if (meta && meta.value) reqDeposit = Number(meta.value);
+
                     const { data: zone } = await supabase.from('operational_zones').select('required_deposit').contains('zip_codes', [zip]).maybeSingle();
                     if (zone && zone.required_deposit) reqDeposit = Number(zone.required_deposit);
-                } catch (e) { console.warn('Zone deposit fetch fallback:', e); }
+                } catch (e) { console.warn('Dynamic deposit fetch error:', e); }
 
                 activeWaitlistDeposit = reqDeposit;
                 const depositDisplay = document.getElementById('waitlist-deposit-display');
@@ -1930,7 +1938,8 @@
                     deposit_amount: reqDeposit,
                     price_lock_years: 5,
                     refund_guarantee_days: 365,
-                    payment_status: 'pending_deposit'
+                    payment_status: 'pending_deposit',
+                    status: 'pending_deposit'
                 }).select();
 
                 if (error) {
@@ -1942,7 +1951,8 @@
                         deposit_amount: reqDeposit,
                         price_lock_years: 5,
                         refund_guarantee_days: 365,
-                        payment_status: 'pending_deposit'
+                        payment_status: 'pending_deposit',
+                        status: 'pending_deposit'
                     });
                 } else if (data && data.length > 0) {
                     activeWaitlistId = data[0].id;
@@ -1980,11 +1990,57 @@
             btn.textContent = 'Securing Deposit & Price Lock...';
 
             try {
-                const updatePayload = {
-                    deposit_amount: activeWaitlistDeposit || 25.00,
-                    deposit_status: 'paid',
-                    payment_status: 'deposit_paid'
+                const depositAmt = Number(activeWaitlistDeposit) || 20.00;
+                const priceLockRates = {
+                    tier1_rate: 5.00,
+                    tier2_rate: 3.50,
+                    tier3_rate: 2.00,
+                    tier4_rate: 1.00,
+                    valet_base: 15.00,
+                    valet_tote_adder: 1.00,
+                    locked_at: new Date().toISOString()
                 };
+
+                // Provision customer account for waitlisted lead in public.users
+                let createdUserId = null;
+                try {
+                    const { data: existingUser } = await supabase.from('users').select('id').eq('email', activeWaitlistEmail).maybeSingle();
+                    if (existingUser) {
+                        createdUserId = existingUser.id;
+                        await supabase.from('users').update({
+                            onboarding_status: 'waitlisted',
+                            has_price_lock: true,
+                            price_lock_rates: priceLockRates,
+                            deposit_paid_amount: depositAmt
+                        }).eq('id', existingUser.id);
+                    } else {
+                        const newUid = crypto.randomUUID ? crypto.randomUUID() : ('wuser-' + Date.now());
+                        const { data: newUser } = await supabase.from('users').insert({
+                            id: newUid,
+                            email: activeWaitlistEmail,
+                            name: cardName || activeWaitlistEmail.split('@')[0],
+                            role: 'customer',
+                            onboarding_status: 'waitlisted',
+                            has_price_lock: true,
+                            price_lock_rates: priceLockRates,
+                            deposit_paid_amount: depositAmt
+                        }).select().maybeSingle();
+                        if (newUser) createdUserId = newUser.id;
+                    }
+                } catch (uErr) {
+                    console.warn('[Waitlist Account Provisioning]', uErr);
+                }
+
+                const updatePayload = {
+                    user_id: createdUserId,
+                    deposit_amount: depositAmt,
+                    deposit_status: 'paid',
+                    payment_status: 'deposit_paid',
+                    status: 'deposit_paid',
+                    price_lock_rates: priceLockRates,
+                    terms_accepted_at: new Date().toISOString()
+                };
+
                 if (activeWaitlistId) {
                     await supabase.from('waitlist').update(updatePayload).eq('id', activeWaitlistId);
                 } else if (activeWaitlistEmail) {
@@ -1993,7 +2049,7 @@
 
                 document.getElementById('waitlist-step-payment').classList.add('hidden-section');
                 document.getElementById('waitlist-success').classList.remove('hidden-section');
-                logMilestone('waitlist_deposit_paid', { email: activeWaitlistEmail, deposit: activeWaitlistDeposit });
+                logMilestone('waitlist_deposit_paid', { email: activeWaitlistEmail, deposit: depositAmt });
             } catch (err) {
                 console.error('Deposit submission error:', err);
                 errEl.textContent = err.message || 'Payment processing failed. Please try again.';
