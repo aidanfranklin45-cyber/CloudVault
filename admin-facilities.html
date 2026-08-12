@@ -2550,10 +2550,33 @@
                         const { data: zips, error } = await supabase
                             .from('service_areas')
                             .select('zip_code, city, state, tax_rate, tax_label')
-                            .eq('facility_id', facId)
-                            .eq('active', true);
+                            .eq('facility_id', facId);
                         if (error) throw error;
-                        loadedTaxZips = zips || [];
+
+                        let zoneZips = [];
+                        try {
+                            const { data: zones } = await supabase
+                                .from('operational_zones')
+                                .select('zip_codes')
+                                .eq('facility_id', facId);
+                            if (zones) {
+                                zones.forEach(z => {
+                                    if (z.zip_codes && Array.isArray(z.zip_codes)) {
+                                        zoneZips.push(...z.zip_codes);
+                                    }
+                                });
+                            }
+                        } catch (e) {}
+
+                        const existingMap = new Map();
+                        (zips || []).forEach(z => existingMap.set(z.zip_code, z));
+                        zoneZips.forEach(zCode => {
+                            if (!existingMap.has(zCode)) {
+                                existingMap.set(zCode, { zip_code: zCode, tax_rate: null, tax_label: null });
+                            }
+                        });
+
+                        loadedTaxZips = Array.from(existingMap.values());
                         renderTaxZipRows();
                     } catch (err) {
                         console.error('[Tax] Failed to load ZIP tax config:', err.message);
@@ -2641,13 +2664,24 @@
                         : (z.tax_rate != null ? (z.tax_rate * 100).toFixed(2) : '');
                     const label = z._pendingLabel !== undefined ? z._pendingLabel : (z.tax_label || null);
 
-                    const rateDecimal = rateStr !== '' && rateStr !== null ? parseFloat(rateStr) / 100 : null;
+                    let rateDecimal = null;
+                    if (rateStr !== '' && rateStr !== null && !isNaN(parseFloat(rateStr))) {
+                        rateDecimal = parseFloat(rateStr) / 100;
+                    }
+
+                    const facId = currentLoadedFac ? currentLoadedFac.id : (localStorage.getItem('cloudvault_selected_facility') || 'facility_seattle_north');
 
                     try {
                         const { error } = await supabase
                             .from('service_areas')
-                            .update({ tax_rate: rateDecimal, tax_label: label || null })
-                            .eq('zip_code', z.zip_code);
+                            .upsert({
+                                zip_code: z.zip_code,
+                                facility_id: facId,
+                                tax_rate: rateDecimal,
+                                tax_label: label || null,
+                                active: true
+                            }, { onConflict: 'zip_code' });
+
                         if (error) throw error;
 
                         loadedTaxZips[idx].tax_rate = rateDecimal;
@@ -2670,7 +2704,7 @@
                     }
                 }
 
-                function addTaxZipRow() {
+                async function addTaxZipRow() {
                     const zip = prompt('Enter ZIP code to configure tax rate:');
                     if (!zip || !zip.trim()) return;
                     const zipTrimmed = zip.trim();
@@ -2678,8 +2712,10 @@
                         alert(`ZIP ${zipTrimmed} is already in the list.`);
                         return;
                     }
+                    const newIdx = loadedTaxZips.length;
                     loadedTaxZips.push({ zip_code: zipTrimmed, tax_rate: null, tax_label: null });
                     renderTaxZipRows();
+                    await saveTaxZipRow(newIdx);
                 }
 
                 window.loadTaxZipConfig = loadTaxZipConfig;
