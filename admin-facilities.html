@@ -123,15 +123,11 @@
             <div class="flex items-center space-x-6">
                 <a href="admin.html" class="flex items-center space-x-3 group">
                     <img src="logo.png" alt="CloudVault Logo"
-                        class="w-10 h-10 object-contain rounded-2xl group-hover:scale-105 transition shadow-lg shadow-blue-500/20">
+                        class="w-9 h-9 object-contain rounded-xl group-hover:scale-105 transition shadow-md shadow-blue-500/20">
                     <div>
-                        <h1 class="text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
-                            CloudVault <span
-                                class="bg-blue-500/10 text-blue-400 text-[10px] px-2 py-0.5 rounded-full font-bold border border-blue-500/20 uppercase">Executive
-                                Hub</span>
+                        <h1 class="text-base font-extrabold text-white tracking-tight">
+                            CloudVault Hub
                         </h1>
-                        <p class="text-[11px] text-gray-400 font-medium">Facility &amp; Economic Configuration Portal
-                        </p>
                     </div>
                 </a>
 
@@ -732,11 +728,8 @@
                         </span>
                         <span class="text-emerald-400 font-extrabold">$</span>
                         <input type="number" id="global-unlaunched-deposit-input" step="5" min="0" value="20"
-                            class="w-16 bg-gray-950 text-white font-extrabold text-xs px-2 py-1 rounded-lg border border-gray-800 focus:outline-none focus:border-emerald-500 text-center">
-                        <button onclick="saveGlobalUnlaunchedDeposit()"
-                            class="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] px-2.5 py-1 rounded-lg transition shadow cursor-pointer uppercase">
-                            Save
-                        </button>
+                            class="w-16 bg-gray-950 text-white font-extrabold text-xs px-2 py-1 rounded-lg border border-gray-800 focus:outline-none focus:border-emerald-500 text-center"
+                            onchange="saveGlobalUnlaunchedDeposit()" oninput="saveGlobalUnlaunchedDeposit()">
                     </div>
 
                     <button onclick="openAddLeadModal()"
@@ -2033,6 +2026,13 @@
                         return;
                     }
 
+                    const indicator = document.getElementById('auto-save-indicator');
+                    if (indicator) {
+                        indicator.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-xl font-mono text-xs text-amber-400 font-bold";
+                        indicator.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Saving...';
+                        if (window.lucide) lucide.createIcons();
+                    }
+
                     try {
                         currentGlobalDeposit = newAmt;
                         await supabase.from('metadata').upsert({
@@ -2040,11 +2040,19 @@
                             value: { amount: newAmt, updated_at: new Date().toISOString() }
                         }, { onConflict: 'id' });
 
-                        alert(`Global priority deposit for unlaunched cities updated to $${newAmt.toFixed(2)}.`);
+                        if (indicator) {
+                            indicator.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl font-mono text-xs text-emerald-400 font-bold";
+                            indicator.innerHTML = '<i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Auto-saved';
+                            if (window.lucide) lucide.createIcons();
+                        }
                         await loadUnlaunchedMarketWaitlists();
                     } catch (err) {
                         console.error("Save deposit failed:", err);
-                        alert("Failed to save global deposit: " + (err.message || err));
+                        if (indicator) {
+                            indicator.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded-xl font-mono text-xs text-red-400 font-bold";
+                            indicator.innerHTML = '<i data-lucide="alert-circle" class="w-3.5 h-3.5"></i> Save failed';
+                            if (window.lucide) lucide.createIcons();
+                        }
                     }
                 }
 
@@ -2574,7 +2582,7 @@
                                 value="${z.zip_code || ''}"
                                 placeholder="ZIP"
                                 readonly
-                                class="col-span-3 fspec-input py-1 text-xs font-mono bg-gray-900/50 text-gray-400 cursor-not-allowed"
+                                class="col-span-4 fspec-input py-1 text-xs font-mono bg-gray-900/50 text-gray-400 cursor-not-allowed"
                             />
                             <input type="number"
                                 step="0.01" min="0" max="30"
@@ -2582,33 +2590,51 @@
                                 placeholder="e.g. 10.25"
                                 class="col-span-4 fspec-input py-1 text-xs font-mono text-emerald-400"
                                 oninput="onTaxRateInput(${idx}, this.value)"
+                                onchange="saveTaxZipRow(${idx})"
                             />
                             <input type="text"
                                 value="${z.tax_label || ''}"
                                 placeholder="e.g. WA + King County"
                                 class="col-span-4 fspec-input py-1 text-xs text-gray-300"
                                 oninput="onTaxLabelInput(${idx}, this.value)"
+                                onchange="saveTaxZipRow(${idx})"
                             />
-                            <button onclick="saveTaxZipRow(${idx})" title="Save" class="col-span-1 text-emerald-400 hover:text-emerald-300 font-bold text-center cursor-pointer transition text-base font-mono">💾</button>
                         </div>
                     `).join('');
                 }
+
+                let taxAutoSaveDebounceMap = {};
 
                 function onTaxRateInput(idx, val) {
                     if (loadedTaxZips[idx] !== undefined) {
                         loadedTaxZips[idx]._pendingRate = val;
                     }
+                    if (taxAutoSaveDebounceMap[idx]) clearTimeout(taxAutoSaveDebounceMap[idx]);
+                    taxAutoSaveDebounceMap[idx] = setTimeout(() => saveTaxZipRow(idx), 700);
                 }
 
                 function onTaxLabelInput(idx, val) {
                     if (loadedTaxZips[idx] !== undefined) {
                         loadedTaxZips[idx]._pendingLabel = val;
                     }
+                    if (taxAutoSaveDebounceMap[idx]) clearTimeout(taxAutoSaveDebounceMap[idx]);
+                    taxAutoSaveDebounceMap[idx] = setTimeout(() => saveTaxZipRow(idx), 700);
                 }
 
                 async function saveTaxZipRow(idx) {
                     const z = loadedTaxZips[idx];
                     if (!z) return;
+                    if (taxAutoSaveDebounceMap[idx]) {
+                        clearTimeout(taxAutoSaveDebounceMap[idx]);
+                        delete taxAutoSaveDebounceMap[idx];
+                    }
+
+                    const indicator = document.getElementById('auto-save-indicator');
+                    if (indicator) {
+                        indicator.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-xl font-mono text-xs text-amber-400 font-bold";
+                        indicator.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Saving...';
+                        if (window.lucide) lucide.createIcons();
+                    }
 
                     const rateStr = z._pendingRate !== undefined
                         ? z._pendingRate
@@ -2629,14 +2655,18 @@
                         delete loadedTaxZips[idx]._pendingRate;
                         delete loadedTaxZips[idx]._pendingLabel;
 
-                        const row = document.querySelector(`[data-zip-idx="${idx}"]`);
-                        if (row) {
-                            row.style.transition = 'background 0.3s';
-                            row.style.background = 'rgba(16,185,129,0.15)';
-                            setTimeout(() => { row.style.background = ''; }, 1200);
+                        if (indicator) {
+                            indicator.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl font-mono text-xs text-emerald-400 font-bold";
+                            indicator.innerHTML = '<i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Auto-saved';
+                            if (window.lucide) lucide.createIcons();
                         }
                     } catch (err) {
-                        alert(`⚠️ Failed to save tax rate for ZIP ${z.zip_code}: ${err.message}`);
+                        console.error(`[saveTaxZipRow] Failed to save tax rate for ZIP ${z.zip_code}:`, err);
+                        if (indicator) {
+                            indicator.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded-xl font-mono text-xs text-red-400 font-bold";
+                            indicator.innerHTML = '<i data-lucide="alert-circle" class="w-3.5 h-3.5"></i> Save failed';
+                            if (window.lucide) lucide.createIcons();
+                        }
                     }
                 }
 
