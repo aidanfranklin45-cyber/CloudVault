@@ -12,6 +12,7 @@ DROP FUNCTION IF EXISTS public.update_totes_held_sim(INT) CASCADE;
 DROP FUNCTION IF EXISTS public.return_all_totes_sim() CASCADE;
 DROP FUNCTION IF EXISTS public.trigger_tote_audit_test() CASCADE;
 DROP FUNCTION IF EXISTS public.scan_tote(TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.run_daily_autopay_billing() CASCADE;
 
 DROP TABLE IF EXISTS public.invoices CASCADE;
 DROP TABLE IF EXISTS public.charges CASCADE;
@@ -86,6 +87,7 @@ CREATE TABLE public.users (
     price_lock_rates JSONB DEFAULT NULL,
     deposit_paid_amount NUMERIC(10,2) DEFAULT 0.00,
     avatar_color TEXT DEFAULT 'blue',
+    is_overdue BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
@@ -93,6 +95,7 @@ CREATE TABLE public.users (
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS has_price_lock BOOLEAN DEFAULT false;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS price_lock_rates JSONB DEFAULT NULL;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS deposit_paid_amount NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_overdue BOOLEAN DEFAULT false;
 
 -- Inventory (Totes)
 CREATE TABLE public.inventory (
@@ -2576,3 +2579,118 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql;
+
+
+-- ─────────────────────────────────────────────────────────────────────
+-- run_daily_autopay_billing RPC & pg_cron Schedule
+-- ─────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.run_daily_autopay_billing()
+RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_sub RECORD;
+  v_inv_count INT := 0;
+  v_overdue_count INT := 0;
+  v_inv_number TEXT;
+  v_subtotal NUMERIC;
+  v_valet_fee NUMERIC;
+  v_total NUMERIC;
+BEGIN
+  -- 1. Process active subscriptions due for billing (next_billing_date <= CURRENT_DATE or NULL)
+  FOR v_sub IN 
+    SELECT s.*, u.name AS user_name, u.email AS user_email, u.assigned_facility_id
+    FROM public.subscriptions s
+    LEFT JOIN public.users u ON s.uid = u.id
+    WHERE s.status = 'active' 
+      AND (s.next_billing_date IS NULL OR s.next_billing_date <= CURRENT_DATE)
+  LOOP
+    v_subtotal := COALESCE(v_sub.recurring_storage, v_sub.tote_count * v_sub.tote_rate, 0.00);
+    v_valet_fee := COALESCE(v_sub.valet_fee, 0.00);
+    v_total := COALESCE(v_sub.monthly_total, v_subtotal + v_valet_fee);
+    IF v_total <= 0 AND v_subtotal > 0 THEN
+      v_total := v_subtotal;
+    END IF;
+
+    -- Generate unique invoice number
+    v_inv_number := 'INV-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0');
+
+    -- Insert recurring subscription invoice into public.invoices
+    INSERT INTO public.invoices (
+      invoice_number,
+      uid,
+      customer_name,
+      customer_email,
+      facility_id,
+      invoice_type,
+      payment_status,
+      subtotal,
+      delivery_fee,
+      total_amount,
+      payment_method,
+      transaction_reference,
+      notes,
+      line_items,
+      due_date,
+      created_at,
+      paid_at
+    ) VALUES (
+      v_inv_number,
+      v_sub.uid,
+      COALESCE(v_sub.user_name, 'Valued Customer'),
+      v_sub.user_email,
+      COALESCE(v_sub.assigned_facility_id, 'facility_seattle_north'),
+      'subscription',
+      'paid',
+      v_subtotal,
+      v_valet_fee,
+      v_total,
+      'autopay',
+      'AUTOPAY-' || v_sub.id || '-' || TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD'),
+      'Automated daily recurring subscription autopay renewal',
+      jsonb_build_array(
+        jsonb_build_object(
+          'description', 'CloudVault Monthly Autopay Storage Subscription (' || COALESCE(v_sub.tote_count, 0) || ' totes @ $' || COALESCE(v_sub.tote_rate, 0) || '/mo)',
+          'qty', COALESCE(v_sub.tote_count, 1),
+          'unit_price', COALESCE(v_sub.tote_rate, v_subtotal),
+          'amount', v_subtotal
+        )
+      ),
+      NOW() + INTERVAL '3 days',
+      NOW(),
+      NOW()
+    );
+
+    -- Update last_billed_at = NOW(), advance next_billing_date = CURRENT_DATE + INTERVAL '1 month'
+    UPDATE public.subscriptions
+    SET last_billed_at = NOW(),
+        next_billing_date = CURRENT_DATE + INTERVAL '1 month',
+        last_updated = NOW()
+    WHERE id = v_sub.id;
+
+    v_inv_count := v_inv_count + 1;
+  END LOOP;
+
+  -- 2. Evaluate unpaid invoices past due_date setting payment_status = 'overdue' and users.is_overdue = true
+  WITH overdue_invs AS (
+    UPDATE public.invoices
+    SET payment_status = 'overdue'
+    WHERE payment_status IN ('pending', 'unpaid')
+      AND due_date < NOW()
+    RETURNING uid
+  )
+  UPDATE public.users
+  SET is_overdue = true,
+      onboarding_status = 'overdue'
+  WHERE id IN (SELECT uid FROM overdue_invs WHERE uid IS NOT NULL);
+
+  GET DIAGNOSTICS v_overdue_count = ROW_COUNT;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'invoices_generated', v_inv_count,
+    'overdue_users_flagged', v_overdue_count
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- pg_cron schedule statement
+SELECT cron.schedule('daily-autopay-job', '0 0 * * *', $$SELECT public.run_daily_autopay_billing();$$);

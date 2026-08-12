@@ -162,7 +162,33 @@
                     Schedule Tote Return
                 </button>
             </div>
-        </div>        <!-- ============================================================ -->
+        </div>
+
+        <!-- Overdue Invoice Alert Banner (Visible when user has unpaid/overdue invoices) -->
+        <div id="overdue-alert-banner" class="hidden mb-8 bg-red-950/90 border-2 border-red-500 rounded-3xl p-6 text-white shadow-xl backdrop-blur-md fade-in">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div class="flex items-start space-x-4">
+                    <div class="w-12 h-12 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center flex-shrink-0 text-xl font-bold">
+                        🚨
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-mono font-extrabold uppercase tracking-widest text-red-400 bg-red-500/20 border border-red-500/30 px-2.5 py-0.5 rounded-full">PAYMENT OVERDUE</span>
+                            <span class="text-xs font-bold text-gray-300 font-mono" id="overdue-count-badge">0 Overdue Invoices</span>
+                        </div>
+                        <h3 class="text-lg font-bold text-white mt-1">Outstanding Invoice Requires Immediate Attention</h3>
+                        <p class="text-xs text-red-200 mt-0.5 leading-relaxed" id="overdue-banner-desc">
+                            Your account has overdue storage or service invoices. Please pay using 1-click Stripe billing to keep your vault service active.
+                        </p>
+                    </div>
+                </div>
+                <button onclick="openBillingModal()" class="w-full sm:w-auto bg-red-600 hover:bg-red-500 text-white font-bold text-sm px-5 py-3 rounded-2xl transition shadow-lg flex-shrink-0 flex items-center justify-center gap-2">
+                    💳 Pay Overdue Invoice Now
+                </button>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
         <!-- FLOW 1: NEW / LAPSED ONBOARDING WIZARD -->
         <!-- ============================================================ -->
         <div id="flow-onboarding-wizard" class="hidden max-w-2xl mx-auto bg-white border border-gray-200 rounded-3xl p-8 sm:p-10 shadow-lg space-y-8 fade-in">
@@ -2623,6 +2649,7 @@
                         headerPlan.textContent = `${sub.total_totes} Totes Plan ($${Number(sub.tote_rate).toFixed(2)}/tote — $${Number(sub.recurring_storage).toFixed(2)}/mo)`;
                     }
                     updateAddTotesPreview();
+                    checkOverdueStatus();
                 }
             };
 
@@ -4003,13 +4030,14 @@
                         if (isOverdue || rawStatus === 'overdue') {
                             badgeClass = 'bg-red-600 text-white border-red-700 font-black animate-pulse';
                             statusText = 'OVERDUE';
-                        } else if (rawStatus === 'pending') {
+                        } else if (rawStatus === 'pending' || rawStatus === 'unpaid') {
                             badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
+                            statusText = 'UNPAID';
                         } else if (rawStatus === 'refunded') {
                             badgeClass = 'bg-rose-100 text-rose-800 border-rose-200';
                         }
 
-                        const payButtonHtml = (isOverdue || rawStatus === 'overdue')
+                        const payButtonHtml = (isOverdue || rawStatus === 'overdue' || rawStatus === 'pending' || rawStatus === 'unpaid')
                             ? `<button onclick="window.StripeBillingIntegration.triggerStripePayment('${invNum}')" class="text-[10px] bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded-lg border border-red-700 shadow-md transition flex items-center gap-1 cursor-pointer">💳 Pay Invoice Now</button>`
                             : '';
 
@@ -4039,6 +4067,7 @@
                                 </div>
                             </div>`;
                     }).join('');
+                    checkOverdueStatus();
                     return;
                 }
 
@@ -4058,6 +4087,7 @@
                             <p class="font-bold text-gray-500">No Billing Receipts Yet</p>
                             <p>Monthly subscription invoices will appear here after billing run.</p>
                         </div>`;
+                    checkOverdueStatus();
                     return;
                 }
 
@@ -4086,6 +4116,40 @@
             } catch (err) {
                 console.error("Failed to load invoice history:", err);
                 listEl.innerHTML = `<div class="p-4 text-center text-xs text-red-500">Failed to load invoices.</div>`;
+            }
+        }
+
+        async function checkOverdueStatus() {
+            if (!currentUser || !currentUser.id) return;
+            const overdueBanner = document.getElementById('overdue-alert-banner');
+            const countBadge = document.getElementById('overdue-count-badge');
+            const descEl = document.getElementById('overdue-banner-desc');
+            if (!overdueBanner) return;
+
+            try {
+                let overdueInvoices = [];
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.fetchInvoicesForUser === 'function') {
+                    const res = await window.CloudVaultBilling.fetchInvoicesForUser(currentUser.id, currentUser.email);
+                    if (res.success && res.invoices) {
+                        overdueInvoices = res.invoices.filter(inv => {
+                            if (window.StripeBillingIntegration) {
+                                return window.StripeBillingIntegration.isOverdue(inv);
+                            }
+                            return (inv.payment_status || '').toLowerCase() === 'overdue';
+                        });
+                    }
+                }
+
+                if (overdueInvoices.length > 0) {
+                    const totalOverdueAmt = overdueInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || inv.subtotal || 0), 0);
+                    if (countBadge) countBadge.textContent = `${overdueInvoices.length} Overdue Invoice${overdueInvoices.length !== 1 ? 's' : ''}`;
+                    if (descEl) descEl.textContent = `Your account has ${overdueInvoices.length} overdue invoice(s) totaling $${totalOverdueAmt.toFixed(2)}. Please pay using 1-click Stripe billing to avoid service disruption.`;
+                    overdueBanner.classList.remove('hidden');
+                } else {
+                    overdueBanner.classList.add('hidden');
+                }
+            } catch (err) {
+                console.warn('[Dashboard Overdue Check] Notice checking overdue status:', err);
             }
         }
 

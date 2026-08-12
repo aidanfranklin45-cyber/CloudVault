@@ -362,7 +362,7 @@
                 <div class="flex items-center space-x-2">
                     <button onclick="runInvoiceBackfillAndSync()"
                         class="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer min-h-[32px]">
-                        <span>🔄 Run Invoice Backfill &amp; Sync</span>
+                        <span>🔄 System Billing Audit &amp; Sync</span>
                     </button>
                     <button onclick="triggerMonthlyAutopayBilling()"
                         class="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer min-h-[32px]">
@@ -5525,13 +5525,17 @@
         }
 
         async function attemptAutopayChargeForCustomer(userId) {
-            const user = window.currentSelectedCustomer;
-            if (!user) {
+            const targetId = userId || (window.currentSelectedCustomer ? window.currentSelectedCustomer.id : null);
+            if (!targetId) {
                 alert("⚠️ No active customer selected.");
                 return;
             }
+            let user = (window.currentSelectedCustomer && window.currentSelectedCustomer.id === targetId) ? window.currentSelectedCustomer : null;
+            if (!user) {
+                const { data } = await supabase.from('users').select('*').eq('id', targetId).maybeSingle();
+                user = data || { id: targetId };
+            }
 
-            const targetId = userId || user.id;
             const userEmail = user.email || 'customer';
 
             let chargeAmount = 0;
@@ -5558,7 +5562,10 @@
             }
 
             try {
-                const stripeRes = await window.CloudVaultStripe.processAutopayCharge(targetId, chargeAmount);
+                const stripeRes = (window.CloudVaultStripe && typeof window.CloudVaultStripe.processCustomerStripeCharge === 'function')
+                    ? await window.CloudVaultStripe.processCustomerStripeCharge(targetId, chargeAmount)
+                    : await window.CloudVaultStripe.processAutopayCharge(targetId, chargeAmount);
+
                 if (!stripeRes || !stripeRes.success) {
                     throw new Error(stripeRes?.error || 'Stripe processing failed');
                 }
@@ -5593,14 +5600,17 @@
                     overdue_flag: false
                 }).eq('id', targetId);
 
-                if (window.currentSelectedCustomer) {
+                if (window.currentSelectedCustomer && window.currentSelectedCustomer.id === targetId) {
                     window.currentSelectedCustomer.is_overdue = false;
                     window.currentSelectedCustomer.overdue = false;
+                    window.currentSelectedCustomer.overdue_flag = false;
                 }
 
-                alert(`⚡ Autopay Charge Successful!\n\nProcessed Amount: $${chargeAmount.toFixed(2)}\nStripe Charge ID: ${stripeRes.chargeId}\nStatus: Paid & Overdue Flag Cleared.`);
+                alert(`⚡ Autopay Charge Successful!\n\nCustomer: ${user.name || userEmail}\nProcessed Amount: $${chargeAmount.toFixed(2)}\nStripe Charge ID: ${stripeRes.chargeId}\nStatus: Paid & Overdue Flag Cleared.`);
 
-                openCustomerBillingDrawer(window.currentSelectedCustomer);
+                if (window.currentSelectedCustomer) {
+                    openCustomerBillingDrawer(window.currentSelectedCustomer);
+                }
             } catch (err) {
                 console.error("Autopay charge error:", err);
                 alert(`⚠️ Autopay charge failed: ${err.message}`);
@@ -5608,13 +5618,17 @@
         }
 
         async function markPaidAndClearFlagForCustomer(userId) {
-            const user = window.currentSelectedCustomer;
-            if (!user) {
+            const targetId = userId || (window.currentSelectedCustomer ? window.currentSelectedCustomer.id : null);
+            if (!targetId) {
                 alert("⚠️ No active customer selected.");
                 return;
             }
+            let user = (window.currentSelectedCustomer && window.currentSelectedCustomer.id === targetId) ? window.currentSelectedCustomer : null;
+            if (!user) {
+                const { data } = await supabase.from('users').select('*').eq('id', targetId).maybeSingle();
+                user = data || { id: targetId };
+            }
 
-            const targetId = userId || user.id;
             const userEmail = user.email || 'customer';
 
             if (!confirm(`Mark customer account ${user.name || userEmail} as PAID and clear overdue flag?`)) {
@@ -5643,14 +5657,17 @@
                     overdue_flag: false
                 }).eq('id', targetId);
 
-                if (window.currentSelectedCustomer) {
+                if (window.currentSelectedCustomer && window.currentSelectedCustomer.id === targetId) {
                     window.currentSelectedCustomer.is_overdue = false;
                     window.currentSelectedCustomer.overdue = false;
+                    window.currentSelectedCustomer.overdue_flag = false;
                 }
 
-                alert(`✅ Customer account marked as PAID and overdue flag cleared successfully.`);
+                alert(`✅ Customer account ${user.name || userEmail} marked as PAID and overdue flag cleared successfully.`);
 
-                openCustomerBillingDrawer(window.currentSelectedCustomer);
+                if (window.currentSelectedCustomer) {
+                    openCustomerBillingDrawer(window.currentSelectedCustomer);
+                }
             } catch (err) {
                 console.error("Mark paid error:", err);
                 alert(`⚠️ Action failed: ${err.message}`);
@@ -5658,14 +5675,19 @@
         }
 
         async function sendInvoiceReminderForCustomer(userId) {
-            const user = window.currentSelectedCustomer;
-            if (!user) {
+            const targetId = userId || (window.currentSelectedCustomer ? window.currentSelectedCustomer.id : null);
+            if (!targetId) {
                 alert("⚠️ No active customer selected.");
                 return;
             }
+            let user = (window.currentSelectedCustomer && window.currentSelectedCustomer.id === targetId) ? window.currentSelectedCustomer : null;
+            if (!user) {
+                const { data } = await supabase.from('users').select('*').eq('id', targetId).maybeSingle();
+                user = data || { id: targetId };
+            }
 
             const userEmail = user.email || 'customer@cloudvault.com';
-            const { data: invList } = await supabase.from('invoices').select('*').or(`uid.eq.${user.id},customer_email.eq.${userEmail}`);
+            const { data: invList } = await supabase.from('invoices').select('*').or(`uid.eq.${targetId},customer_email.eq.${userEmail}`);
             const overdueInvoices = (invList || []).filter(inv => {
                 const st = (inv.payment_status || inv.status || '').toLowerCase();
                 return st === 'overdue' || st === 'unpaid' || st === 'pending';
@@ -5674,7 +5696,74 @@
             const overdueAmount = overdueInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || inv.subtotal || 0), 0);
             const displayAmount = overdueAmount > 0 ? `$${overdueAmount.toFixed(2)}` : '$38.50';
 
-            alert(`📩 Invoice Reminder & Grace Period Warning Sent!\n\nRecipient: ${userEmail}\nOutstanding Balance: ${displayAmount}\nNotice: Customer notified to pay within grace period.`);
+            alert(`📩 Invoice Reminder & Grace Period Warning Sent!\n\nRecipient: ${user.name || 'Customer'} (${userEmail})\nOutstanding Balance: ${displayAmount}\nNotice: Customer notified to pay within grace period.`);
+        }
+
+        async function backfillCustomerInvoices(userId) {
+            const targetId = userId || (window.currentSelectedCustomer ? window.currentSelectedCustomer.id : null);
+            if (!targetId) {
+                alert("⚠️ No active customer selected.");
+                return;
+            }
+            let user = (window.currentSelectedCustomer && window.currentSelectedCustomer.id === targetId) ? window.currentSelectedCustomer : null;
+            if (!user) {
+                const { data } = await supabase.from('users').select('*').eq('id', targetId).maybeSingle();
+                user = data || { id: targetId };
+            }
+
+            console.log(`[CloudVaultBilling] Running Invoice Backfill & Sync for Customer #${targetId}...`);
+            let backfilledCount = 0;
+            let flaggedOverdueCount = 0;
+
+            try {
+                const { data: totes } = await supabase.from('inventory').select('*').eq('uid', targetId);
+                const { data: existingInvoices } = await supabase.from('invoices').select('*').or(`uid.eq.${targetId},customer_email.eq.${user.email || ''}`);
+
+                const userTotes = totes || [];
+                const userInvs = existingInvoices || [];
+
+                if (userTotes.length > 0 && userInvs.length === 0) {
+                    const amount = userTotes.length * 5.00;
+                    if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
+                        await window.CloudVaultBilling.createInvoiceRecord({
+                            uid: targetId,
+                            customer_name: user.name || 'CloudVault Customer',
+                            customer_email: user.email,
+                            invoice_type: 'subscription',
+                            payment_status: 'paid',
+                            subtotal: amount,
+                            total_amount: amount,
+                            transaction_reference: window.CloudVaultStripe ? window.CloudVaultStripe.generateChargeId() : 'ch_3M_backfill',
+                            notes: 'Backfilled Monthly Recurring Storage Deposit'
+                        });
+                        backfilledCount++;
+                    }
+                }
+
+                const now = Date.now();
+                const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
+                for (const inv of userInvs) {
+                    const status = (inv.payment_status || inv.status || '').toLowerCase();
+                    if (status === 'unpaid' || status === 'pending') {
+                        const createdMs = inv.created_at ? new Date(inv.created_at).getTime() : 0;
+                        if (createdMs && (now - createdMs > THREE_DAYS_MS)) {
+                            await supabase.from('invoices').update({ payment_status: 'overdue' }).eq('id', inv.id);
+                            await supabase.from('users').update({ is_overdue: true, overdue: true, overdue_flag: true }).eq('id', targetId);
+                            flaggedOverdueCount++;
+                        }
+                    }
+                }
+
+                alert(`🔄 Customer Invoice Sync & Backfill Complete!\n\nCustomer: ${user.name || user.email || targetId}\n• Invoices Backfilled: ${backfilledCount}\n• Overdue Invoices Flagged: ${flaggedOverdueCount}`);
+
+                if (window.currentSelectedCustomer) {
+                    openCustomerBillingDrawer(window.currentSelectedCustomer);
+                }
+            } catch (err) {
+                console.error("Customer backfill error:", err);
+                alert(`⚠️ Customer Invoice Backfill failed: ${err.message}`);
+            }
         }
 
         async function runInvoiceBackfillAndSync() {
@@ -6064,6 +6153,12 @@
         window.openCustomerBillingDrawer = openCustomerBillingDrawer;
         window.closeCustomerBillingDrawer = closeCustomerBillingDrawer;
         window.switchCustomerDrawerTab = switchCustomerDrawerTab;
+        window.attemptAutopayChargeForCustomer = attemptAutopayChargeForCustomer;
+        window.markPaidAndClearFlagForCustomer = markPaidAndClearFlagForCustomer;
+        window.sendInvoiceReminderForCustomer = sendInvoiceReminderForCustomer;
+        window.backfillCustomerInvoices = backfillCustomerInvoices;
+        window.runInvoiceBackfillAndSync = runInvoiceBackfillAndSync;
+        window.triggerMonthlyAutopayBilling = triggerMonthlyAutopayBilling;
         window.triggerOneClickRefund = triggerOneClickRefund;
         window.onMasterToteSearchInput = onMasterToteSearchInput;
         window.executeMasterToteSearch = executeMasterToteSearch;
@@ -7275,13 +7370,13 @@
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-2 pt-1 border-t border-red-500/30">
-                    <button onclick="attemptAutopayChargeForCustomer()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 shadow cursor-pointer min-h-[38px]">
-                        <span>⚡ Attempt Autopay Charge</span>
+                    <button onclick="attemptAutopayChargeForCustomer(window.currentSelectedCustomer?.id)" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 shadow cursor-pointer min-h-[38px]">
+                        <span>⚡ Charge Autopay Now (This Customer)</span>
                     </button>
-                    <button onclick="markPaidAndClearFlagForCustomer()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 shadow cursor-pointer min-h-[38px]">
+                    <button onclick="markPaidAndClearFlagForCustomer(window.currentSelectedCustomer?.id)" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 shadow cursor-pointer min-h-[38px]">
                         <span>✅ Mark Paid &amp; Clear Flag</span>
                     </button>
-                    <button onclick="sendInvoiceReminderForCustomer()" class="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 shadow cursor-pointer min-h-[38px]">
+                    <button onclick="sendInvoiceReminderForCustomer(window.currentSelectedCustomer?.id)" class="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 shadow cursor-pointer min-h-[38px]">
                         <span>📩 Send Invoice Reminder</span>
                     </button>
                 </div>
@@ -7289,8 +7384,8 @@
 
             <!-- Drawer Quick Action Bar (Backfill & Autopay) -->
             <div class="flex items-center gap-2 pt-1">
-                <button onclick="runInvoiceBackfillAndSync()" class="flex-1 py-2 px-3 font-bold text-[11px] rounded-xl border border-indigo-500/30 bg-indigo-950/40 text-indigo-300 hover:bg-indigo-900/60 transition flex items-center justify-center gap-1.5 min-h-[36px] cursor-pointer font-mono">
-                    <span>🔄 Run Invoice Backfill &amp; Sync</span>
+                <button onclick="backfillCustomerInvoices(window.currentSelectedCustomer?.id)" class="flex-1 py-2 px-3 font-bold text-[11px] rounded-xl border border-indigo-500/30 bg-indigo-950/40 text-indigo-300 hover:bg-indigo-900/60 transition flex items-center justify-center gap-1.5 min-h-[36px] cursor-pointer font-mono">
+                    <span>🔄 Sync &amp; Backfill Invoices (This Customer)</span>
                 </button>
                 <button onclick="triggerMonthlyAutopayBilling()" class="flex-1 py-2 px-3 font-bold text-[11px] rounded-xl border border-emerald-500/30 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/60 transition flex items-center justify-center gap-1.5 min-h-[36px] cursor-pointer font-mono">
                     <span>⚡ Trigger Monthly Autopay Billing</span>

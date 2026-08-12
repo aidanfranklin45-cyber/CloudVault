@@ -2150,7 +2150,7 @@
                             const { data: overdueInvoices } = await supabase
                                 .from('invoices')
                                 .select('*')
-                                .or('payment_status.eq.overdue,payment_status.eq.pending');
+                                .or('payment_status.eq.overdue,payment_status.eq.pending,payment_status.eq.unpaid');
 
                             if (overdueInvoices) {
                                 overdueInvoices.forEach(inv => {
