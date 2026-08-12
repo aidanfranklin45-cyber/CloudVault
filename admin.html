@@ -5070,6 +5070,9 @@
                 document.getElementById('cbd-customer-rate').textContent = '$5.00/tote/mo';
                 document.getElementById('cbd-customer-payment-card').textContent = '💳 Card on File';
 
+                const overdueBanner = document.getElementById('cbd-overdue-alert-banner');
+                if (overdueBanner) overdueBanner.classList.add('hidden');
+
                 document.getElementById('cbd-totes-list').innerHTML = `
                     <div class="p-8 text-center text-xs text-gray-500 font-mono bg-gray-900/50 rounded-2xl border border-gray-850">
                         <i data-lucide="search" class="w-8 h-8 mx-auto text-gray-600 mb-2"></i>
@@ -5129,6 +5132,47 @@
             const cardBrand = user.card_brand || user.payment_method_brand || 'Visa';
             const cardLast4 = user.card_last4 || user.payment_method_last4 || '4242';
             document.getElementById('cbd-customer-payment-card').textContent = `💳 ${cardBrand} •••• ${cardLast4}`;
+
+            // Evaluate Overdue Account Banner (Exceeding 3-Day Grace Period)
+            const overdueBanner = document.getElementById('cbd-overdue-alert-banner');
+            const overdueBannerText = document.getElementById('cbd-overdue-banner-text');
+
+            let isOverdue = !!(user.is_overdue || user.overdue || user.overdue_flag || user.status === 'overdue');
+            let overdueInvoices = [];
+
+            const { data: invList } = await supabase.from('invoices').select('*').or(`uid.eq.${user.id},customer_email.eq.${user.email}`);
+            if (invList && invList.length > 0) {
+                const now = Date.now();
+                const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
+                overdueInvoices = invList.filter(inv => {
+                    const st = (inv.payment_status || inv.status || '').toLowerCase();
+                    if (st === 'overdue') return true;
+                    if (st === 'unpaid' || st === 'pending') {
+                        const createdMs = inv.created_at ? new Date(inv.created_at).getTime() : 0;
+                        if (createdMs && (now - createdMs > THREE_DAYS_MS)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                });
+
+                if (overdueInvoices.length > 0) {
+                    isOverdue = true;
+                }
+            }
+
+            if (isOverdue && overdueBanner) {
+                overdueBanner.classList.remove('hidden');
+                const overdueTotal = overdueInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || inv.subtotal || 0), 0);
+                if (overdueBannerText) {
+                    overdueBannerText.textContent = overdueTotal > 0
+                        ? `This customer has $${overdueTotal.toFixed(2)} in overdue storage fees exceeding the 3-day grace period.`
+                        : `This account is flagged for overdue billing (Pay Within 3 Days Grace Period Exceeded).`;
+                }
+            } else if (overdueBanner) {
+                overdueBanner.classList.add('hidden');
+            }
 
             loadCustomerTotesList(user.id, userTotes);
             loadCustomerBillingHistory(user.id, sub);
@@ -5321,6 +5365,8 @@
                     const s = (statusStr || 'paid').toLowerCase();
                     if (s === 'refunded') {
                         return `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">Refunded</span>`;
+                    } else if (s === 'overdue') {
+                        return `<span class="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase animate-pulse">Overdue</span>`;
                     } else if (s.includes('deposit') || s === 'pending') {
                         return `<span class="bg-teal-500/10 text-teal-300 border border-teal-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Deposit Received</span>`;
                     } else {
