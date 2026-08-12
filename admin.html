@@ -3022,7 +3022,22 @@
                         <p class="text-xs text-gray-500 font-mono">Vault storage is operating normally.</p>
                     </div>`;
                 } else {
-                    bodyStage.innerHTML = Object.values(pullGrouped).map(group => {
+                    const sortedPullGroups = Object.values(pullGrouped).sort((a, b) => {
+                        const getSortKey = (group) => {
+                            const manifestKey = `${group.uid}_${group.destType}`;
+                            const reqManifest = manifestByUidAndType[manifestKey] || manifestByUid[group.uid];
+                            const tDate = reqManifest?.target_date || '9999-12-31';
+                            let slotScore = '4';
+                            const slotStr = reqManifest?.time_slot || '';
+                            if (slotStr.includes('09:00')) slotScore = '1';
+                            else if (slotStr.includes('12:00')) slotScore = '2';
+                            else if (slotStr.includes('03:00') || slotStr.includes('15:00')) slotScore = '3';
+                            return `${tDate}_${slotScore}`;
+                        };
+                        return getSortKey(a).localeCompare(getSortKey(b));
+                    });
+
+                    bodyStage.innerHTML = sortedPullGroups.map(group => {
                         const uid = group.uid;
                         const totes = group.totes;
                         const isValet = group.destType === 'valet_delivery';

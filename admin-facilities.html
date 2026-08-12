@@ -208,11 +208,7 @@
                     <i data-lucide="rocket" class="w-4.5 h-4.5"></i>
                     <span>Launch New Market</span>
                 </button>
-                <button onclick="saveAllFacilityConfig()"
-                    class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs px-6 py-3 rounded-2xl shadow-xl shadow-blue-600/30 flex items-center gap-2 cursor-pointer transition transform active:scale-95 border border-blue-400/40">
-                    <i data-lucide="save" class="w-4.5 h-4.5"></i>
-                    <span>Save All Specifications &amp; Pricing</span>
-                </button>
+                <span id="auto-save-indicator" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl font-mono text-xs text-emerald-400 font-bold"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Auto-saved</span>
                 <button onclick="decommissionCurrentFacility()"
                     class="bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-extrabold text-xs px-4 py-3 rounded-2xl shadow-xl shadow-red-600/20 flex items-center gap-2 cursor-pointer transition transform active:scale-95 border border-red-400/30">
                     <i data-lucide="trash-2" class="w-4.5 h-4.5"></i>
@@ -221,468 +217,457 @@
             </div>
         </div>
 
-        <!-- SECTION 1: PHYSICAL STAGING ROOM RESERVATION & SCHEDULE CALENDAR -->
-        <div class="glass-panel p-6 rounded-3xl space-y-6 border border-indigo-500/20">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-4">
-                <div>
-                    <h3 class="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
-                        <i data-lucide="calendar" class="w-5 h-5 text-indigo-400"></i> Staging Room Reservation &amp;
-                        Pickup Schedule
-                    </h3>
-                    <p class="text-xs text-gray-400">Ultra-specific reservation grid showing which staging rooms are
-                        reserved by customer, time slot, and PIN state.</p>
-                </div>
-
-                <!-- Schedule Date Picker & Filter Controls -->
-                <div class="flex flex-wrap items-center gap-2">
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2">
-                        <i data-lucide="calendar-days" class="w-3.5 h-3.5 text-indigo-400"></i>
-                        <input type="date" id="staging-date-select" onchange="onStagingDateChange(this.value)"
-                            class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
-                    </div>
-                    <button onclick="setStagingDate('today')"
-                        class="bg-gray-900 hover:bg-gray-800 text-xs font-bold text-gray-300 hover:text-white px-3 py-1.5 rounded-xl border border-gray-800 transition">Today</button>
-                    <button onclick="setStagingDate('tomorrow')"
-                        class="bg-gray-900 hover:bg-gray-800 text-xs font-bold text-gray-300 hover:text-white px-3 py-1.5 rounded-xl border border-gray-800 transition">Tomorrow</button>
-                </div>
-            </div>
-
-            <!-- Staging Rooms Interactive Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="staging-rooms-schedule-grid">
-                <!-- Dynamically populated staging room reservation cards -->
-            </div>
+        <!-- Tab Navigation Bar -->
+        <div class="flex flex-wrap items-center gap-2 border-b border-gray-800 pb-3">
+            <button id="tab-btn-telemetry" onclick="switchFacilityTab('telemetry')"
+                class="px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-sm cursor-pointer">
+                <span>📊</span> Telemetry &amp; Schedule
+            </button>
+            <button id="tab-btn-specs" onclick="switchFacilityTab('specs')"
+                class="px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition text-gray-400 hover:text-white hover:bg-gray-900 border border-transparent cursor-pointer">
+                <span>⚙️</span> Specs &amp; Pricing Engine
+            </button>
+            <button id="tab-btn-location" onclick="switchFacilityTab('location')"
+                class="px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition text-gray-400 hover:text-white hover:bg-gray-900 border border-transparent cursor-pointer">
+                <span>🏗️</span> Location Engine
+            </button>
         </div>
 
-        <!-- SECTION 2: PHYSICAL FACILITY LAYOUT & VAULT RACKS TELEMETRY -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div class="lg:col-span-7 glass-panel p-6 rounded-3xl space-y-5 border border-cyan-500/20">
-                <div class="flex items-center justify-between border-b border-gray-800 pb-3">
-                    <h3 class="text-sm font-extrabold uppercase text-cyan-400 tracking-wider flex items-center gap-2">
-                        <i data-lucide="grid" class="w-4 h-4 text-cyan-400"></i> Physical Layout &amp; Vault Telemetry
-                        Grid
-                    </h3>
-                    <span
-                        class="text-[10px] font-mono text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-0.5 rounded"
-                        id="telemetry-capacity-badge">0 / 0 Totes (0%)</span>
-                </div>
-
-                <!-- Telemetry Progress Bar -->
-                <div class="space-y-2">
-                    <div class="flex justify-between text-xs font-mono font-bold">
-                        <span class="text-gray-400">Facility Storage Occupancy</span>
-                        <span class="text-cyan-400" id="telemetry-occupancy-percent">0% Occupied</span>
-                    </div>
-                    <div class="w-full h-3 bg-gray-900 rounded-full overflow-hidden border border-gray-800 p-0.5">
-                        <div id="telemetry-occupancy-bar"
-                            class="h-full bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full transition-all duration-500"
-                            style="width: 0%;"></div>
-                    </div>
-                </div>
-
-                <!-- Vault Racks Grid -->
-                <div class="space-y-3 pt-2">
-                    <p
-                        class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider flex items-center gap-1.5">
-                        <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i> Vault Storage Aisles &amp;
-                        Shelves Matrix
-                    </p>
-                    <div class="grid grid-cols-4 gap-3 text-center" id="vault-racks-matrix">
-                        <!-- Populated dynamically -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- SECTION 3: EXECUTIVE UNIT MARGIN & P&L TELEMETRY -->
-            <div class="lg:col-span-5 glass-panel p-6 rounded-3xl space-y-5 border border-emerald-500/20">
-                <div class="flex items-center justify-between border-b border-gray-800 pb-3">
-                    <h3
-                        class="text-sm font-extrabold uppercase text-emerald-400 tracking-wider flex items-center gap-2">
-                        <i data-lucide="trending-up" class="w-4 h-4 text-emerald-400"></i> Facility Unit Economics &amp;
-                        Margin at Full Capacity
-                    </h3>
-                    <span
-                        class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">P&amp;L
-                        Analysis</span>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4 text-xs">
-                    <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-1">
-                        <span class="text-[10px] font-bold text-gray-400 uppercase">Monthly Gross Revenue</span>
-                        <p class="text-xl font-black text-emerald-400 font-mono" id="pnl-gross-revenue">$0.00</p>
-                        <span class="text-[9px] text-gray-500">Storage Tiers + Valet Fees</span>
-                    </div>
-                    <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-1">
-                        <span class="text-[10px] font-bold text-gray-400 uppercase">Monthly OpEx Costs</span>
-                        <p class="text-xl font-black text-rose-400 font-mono" id="pnl-total-opex">$0.00</p>
-                        <span class="text-[9px] text-gray-500">Rent, Labor, Utilities, Ins.</span>
-                    </div>
-                    <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-1">
-                        <span class="text-[10px] font-bold text-gray-400 uppercase">Net Operating Income</span>
-                        <p class="text-xl font-black text-blue-400 font-mono" id="pnl-noi">$0.00</p>
-                        <span class="text-[9px] text-gray-500" id="pnl-margin-percent">Margin: 0%</span>
-                    </div>
-                    <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-1">
-                        <span class="text-[10px] font-bold text-gray-400 uppercase">SqFt Efficiency</span>
-                        <p class="text-xl font-black text-indigo-400 font-mono" id="pnl-sqft-efficiency">$0.00 / sqft
-                        </p>
-                        <span class="text-[9px] text-gray-500">Revenue per Usable SqFt</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
-            <!-- Left Column: Facility Location, Physical Specs & Lease Expenses (7 cols) -->
-            <div class="lg:col-span-7 space-y-8">
-
-                <!-- Card 1: Facility Specifications & Contact -->
-                <div class="glass-panel p-6 rounded-3xl space-y-5">
+        <!-- Tab 1 Panel: Telemetry & Schedule -->
+        <div id="tab-panel-telemetry" class="space-y-8">
+            <!-- Physical Layout & Vault Telemetry Grid + Unit Economics P&L -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <!-- Physical Layout & Vault Telemetry Grid -->
+                <div class="lg:col-span-7 glass-panel p-6 rounded-3xl space-y-5 border border-cyan-500/20">
                     <div class="flex items-center justify-between border-b border-gray-800 pb-3">
-                        <h3
-                            class="text-sm font-extrabold uppercase text-blue-400 tracking-wider flex items-center gap-2">
-                            <i data-lucide="building" class="w-4 h-4 text-blue-400"></i> Facility Specifications &amp;
-                            Location
+                        <h3 class="text-sm font-extrabold uppercase text-cyan-400 tracking-wider flex items-center gap-2">
+                            <i data-lucide="grid" class="w-4 h-4 text-cyan-400"></i> Physical Layout &amp; Vault Telemetry Grid
                         </h3>
-                        <span class="text-[10px] font-mono text-gray-500">ID: <span
-                                id="conf-fac-id">facility_seattle_north</span></span>
+                        <span
+                            class="text-[10px] font-mono text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-0.5 rounded"
+                            id="telemetry-capacity-badge">0 / 0 Totes (0%)</span>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Facility
-                                Name</label>
-                            <input type="text" id="conf-name" class="fspec-input w-full"
-                                placeholder="Seattle North Fulfillment Center">
+                    <!-- Telemetry Progress Bar -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-xs font-mono font-bold">
+                            <span class="text-gray-400">Facility Storage Occupancy</span>
+                            <span class="text-cyan-400" id="telemetry-occupancy-percent">0% Occupied</span>
                         </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Manager Name</label>
-                            <input type="text" id="conf-manager-name" class="fspec-input w-full"
-                                placeholder="Alex Rivera">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Manager
-                                Email</label>
-                            <input type="email" id="conf-manager-email" class="fspec-input w-full"
-                                placeholder="alex.rivera@cloudvault.io">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Street
-                                Address</label>
-                            <input type="text" id="conf-address" class="fspec-input w-full"
-                                placeholder="4821 Aurora Ave N">
+                        <div class="w-full h-3 bg-gray-900 rounded-full overflow-hidden border border-gray-800 p-0.5">
+                            <div id="telemetry-occupancy-bar"
+                                class="h-full bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full transition-all duration-500"
+                                style="width: 0%;"></div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-3 gap-3 text-xs">
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">City</label>
-                            <input type="text" id="conf-city" class="fspec-input w-full" placeholder="Seattle">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">State</label>
-                            <input type="text" id="conf-state" class="fspec-input w-full" placeholder="WA">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">ZIP</label>
-                            <input type="text" id="conf-zip" class="fspec-input w-full" placeholder="98103">
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-4 gap-3 text-xs pt-2 border-t border-gray-850">
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Usable SQFT</label>
-                            <input type="number" id="conf-sqft" oninput="calculatePnL()" class="fspec-input w-full"
-                                placeholder="20000">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">SQFT / Tote</label>
-                            <input type="number" step="0.1" id="conf-sqft-per-tote" oninput="calculatePnL()"
-                                class="fspec-input w-full" placeholder="1.0">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Max Capacity</label>
-                            <input type="number" id="conf-tote-capacity" oninput="calculatePnL()"
-                                class="fspec-input w-full" placeholder="2000">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Staging
-                                Rooms</label>
-                            <input type="number" id="conf-staging-rooms" oninput="onStagingRoomsInputChange()"
-                                class="fspec-input w-full" placeholder="—">
+                    <!-- Vault Racks Grid -->
+                    <div class="space-y-3 pt-2">
+                        <p
+                            class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i> Vault Storage Aisles &amp; Shelves Matrix
+                        </p>
+                        <div class="grid grid-cols-4 gap-3 text-center" id="vault-racks-matrix">
+                            <!-- Populated dynamically -->
                         </div>
                     </div>
                 </div>
 
-                <!-- Card 2: Lease & Operating Expenses -->
-                <div class="glass-panel p-6 rounded-3xl space-y-5">
-                    <div class="flex items-center justify-between border-b border-gray-850 pb-3">
-                        <h3
-                            class="text-sm font-extrabold uppercase text-amber-400 tracking-wider flex items-center gap-2">
-                            <i data-lucide="dollar-sign" class="w-4 h-4 text-amber-400"></i> Monthly Lease &amp;
-                            Operating Expenses
-                        </h3>
-                        <span class="text-[10px] font-mono text-gray-500">Executive Financial Spec</span>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4 text-xs">
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Rent / Lease
-                                ($)</label>
-                            <input type="number" id="conf-rent" oninput="calculatePnL()" class="fspec-input w-full"
-                                placeholder="8500">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Labor Cost
-                                ($)</label>
-                            <input type="number" id="conf-labor" oninput="calculatePnL()" class="fspec-input w-full"
-                                placeholder="14000">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Utilities
-                                ($)</label>
-                            <input type="number" id="conf-utilities" oninput="calculatePnL()" class="fspec-input w-full"
-                                placeholder="1200">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Insurance
-                                ($)</label>
-                            <input type="number" id="conf-insurance" oninput="calculatePnL()" class="fspec-input w-full"
-                                placeholder="650">
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- Right Column: Pricing Engine, Security Deposits & Market Control (5 cols) -->
-            <div class="lg:col-span-5 space-y-8">
-
-                <!-- Card 3: Economic Pricing Engine -->
-                <div class="glass-panel p-6 rounded-3xl space-y-5">
+                <!-- Executive Unit Margin & P&L Telemetry -->
+                <div class="lg:col-span-5 glass-panel p-6 rounded-3xl space-y-5 border border-emerald-500/20">
                     <div class="flex items-center justify-between border-b border-gray-800 pb-3">
                         <h3
                             class="text-sm font-extrabold uppercase text-emerald-400 tracking-wider flex items-center gap-2">
-                            <i data-lucide="calculator" class="w-4 h-4 text-emerald-400"></i> Regional Storage &amp;
-                            Valet Pricing Engine
+                            <i data-lucide="trending-up" class="w-4 h-4 text-emerald-400"></i> Facility Unit Economics &amp; Margin at Full Capacity
                         </h3>
                         <span
-                            class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">Dynamic
-                            Rates</span>
+                            class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">P&amp;L Analysis</span>
                     </div>
 
-                    <div class="space-y-3 text-xs">
-                        <p class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Volume Storage
-                            Tiers ($/Tote/Month)</p>
-
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
-                                <label class="block text-[10px] font-bold text-gray-400">Tier 1 (1-9 Totes)</label>
-                                <div class="flex items-center gap-1">
-                                    <span class="text-gray-500 font-bold">$</span>
-                                    <input type="number" step="0.50" id="conf-tier1" oninput="calculatePnL()"
-                                        class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="5.00">
-                                </div>
-                            </div>
-
-                            <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
-                                <label class="block text-[10px] font-bold text-gray-400">Tier 2 (10-24 Totes)</label>
-                                <div class="flex items-center gap-1">
-                                    <span class="text-gray-500 font-bold">$</span>
-                                    <input type="number" step="0.50" id="conf-tier2" oninput="calculatePnL()"
-                                        class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="3.50">
-                                </div>
-                            </div>
-
-                            <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
-                                <label class="block text-[10px] font-bold text-gray-400">Tier 3 (25-49 Totes)</label>
-                                <div class="flex items-center gap-1">
-                                    <span class="text-gray-500 font-bold">$</span>
-                                    <input type="number" step="0.50" id="conf-tier3" oninput="calculatePnL()"
-                                        class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="2.00">
-                                </div>
-                            </div>
-
-                            <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
-                                <label class="block text-[10px] font-bold text-gray-400">Tier 4 (50+ Totes)</label>
-                                <div class="flex items-center gap-1">
-                                    <span class="text-gray-500 font-bold">$</span>
-                                    <input type="number" step="0.50" id="conf-tier4" oninput="calculatePnL()"
-                                        class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="1.00">
-                                </div>
-                            </div>
+                    <div class="grid grid-cols-2 gap-4 text-xs">
+                        <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-1">
+                            <span class="text-[10px] font-bold text-gray-400 uppercase">Monthly Gross Revenue</span>
+                            <p class="text-xl font-black text-emerald-400 font-mono" id="pnl-gross-revenue">$0.00</p>
+                            <span class="text-[9px] text-gray-500">Storage Tiers + Valet Fees</span>
                         </div>
-
-                        <div class="pt-3 border-t border-gray-850 space-y-3">
-                            <p class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Logistics
-                                Convenience Fee Formulas</p>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
-                                    <label class="block text-[10px] font-bold text-gray-400">Valet Base Fee ($)</label>
-                                    <input type="number" id="conf-valet-base" oninput="calculatePnL()"
-                                        class="fspec-input w-full py-1 text-sm text-amber-400" placeholder="15.00">
-                                </div>
-                                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
-                                    <label class="block text-[10px] font-bold text-gray-400">Valet Tote Adder
-                                        ($)</label>
-                                    <input type="number" id="conf-valet-adder" oninput="calculatePnL()"
-                                        class="fspec-input w-full py-1 text-sm text-amber-400" placeholder="1.00">
-                                </div>
-                            </div>
+                        <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-1">
+                            <span class="text-[10px] font-bold text-gray-400 uppercase">Monthly OpEx Costs</span>
+                            <p class="text-xl font-black text-rose-400 font-mono" id="pnl-total-opex">$0.00</p>
+                            <span class="text-[9px] text-gray-500">Rent, Labor, Utilities, Ins.</span>
+                        </div>
+                        <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-1">
+                            <span class="text-[10px] font-bold text-gray-400 uppercase">Net Operating Income</span>
+                            <p class="text-xl font-black text-blue-400 font-mono" id="pnl-noi">$0.00</p>
+                            <span class="text-[9px] text-gray-500" id="pnl-margin-percent">Margin: 0%</span>
+                        </div>
+                        <div class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-1">
+                            <span class="text-[10px] font-bold text-gray-400 uppercase">SqFt Efficiency</span>
+                            <p class="text-xl font-black text-indigo-400 font-mono" id="pnl-sqft-efficiency">$0.00 / sqft</p>
+                            <span class="text-[9px] text-gray-500">Revenue per Usable SqFt</span>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Card 4: Security Deposit Rules & Active Market Control -->
-                <div class="glass-panel p-6 rounded-3xl space-y-5">
-                    <div class="flex items-center justify-between border-b border-gray-800 pb-3">
-                        <h3
-                            class="text-sm font-extrabold uppercase text-indigo-400 tracking-wider flex items-center gap-2">
-                            <i data-lucide="globe" class="w-4 h-4 text-indigo-400"></i> Market Security Deposits &amp;
-                            ZIP Coverage
+            <!-- Physical Staging Room Reservation & Schedule Calendar -->
+            <div class="glass-panel p-6 rounded-3xl space-y-6 border border-indigo-500/20">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-4">
+                    <div>
+                        <h3 class="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
+                            <i data-lucide="calendar" class="w-5 h-5 text-indigo-400"></i> Staging Room Reservation &amp; Pickup Schedule
                         </h3>
-                        <span class="text-[10px] font-mono text-gray-500" id="conf-market-zone-id">zone_sea</span>
+                        <p class="text-xs text-gray-400">Ultra-specific reservation grid showing which staging rooms are reserved by customer, time slot, and PIN state.</p>
                     </div>
 
-                    <div class="space-y-4 text-xs">
-                        <div class="grid grid-cols-2 gap-3">
+                    <!-- Schedule Date Picker & Filter Controls -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2">
+                            <i data-lucide="calendar-days" class="w-3.5 h-3.5 text-indigo-400"></i>
+                            <input type="date" id="staging-date-select" onchange="onStagingDateChange(this.value)"
+                                class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
+                        </div>
+                        <button onclick="setStagingDate('today')"
+                            class="bg-gray-900 hover:bg-gray-800 text-xs font-bold text-gray-300 hover:text-white px-3 py-1.5 rounded-xl border border-gray-800 transition">Today</button>
+                        <button onclick="setStagingDate('tomorrow')"
+                            class="bg-gray-900 hover:bg-gray-800 text-xs font-bold text-gray-300 hover:text-white px-3 py-1.5 rounded-xl border border-gray-800 transition">Tomorrow</button>
+                    </div>
+                </div>
+
+                <!-- Staging Rooms Interactive Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="staging-rooms-schedule-grid">
+                    <!-- Dynamically populated staging room reservation cards -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 2 Panel: Specs & Pricing Engine -->
+        <div id="tab-panel-specs" class="hidden space-y-8">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+                <!-- Left Column: Facility Specs & Operating Expenses (7 cols) -->
+                <div class="lg:col-span-7 space-y-8">
+
+                    <!-- Card 1: Facility Specifications & Contact -->
+                    <div class="glass-panel p-6 rounded-3xl space-y-5">
+                        <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                            <h3
+                                class="text-sm font-extrabold uppercase text-blue-400 tracking-wider flex items-center gap-2">
+                                <i data-lucide="building" class="w-4 h-4 text-blue-400"></i> Facility Specifications &amp; Location
+                            </h3>
+                            <span class="text-[10px] font-mono text-gray-500">ID: <span
+                                    id="conf-fac-id">facility_seattle_north</span></span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                             <div>
-                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Required
-                                    Security Deposit ($)</label>
-                                <input type="number" id="conf-deposit-amount"
-                                    class="fspec-input w-full text-indigo-300 font-mono" placeholder="25.00">
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Facility Name</label>
+                                <input type="text" id="conf-name" class="fspec-input w-full"
+                                    placeholder="Seattle North Fulfillment Center">
                             </div>
                             <div>
-                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Market Active
-                                    Status</label>
-                                <select id="conf-market-active-select" class="fspec-input w-full cursor-pointer">
-                                    <option value="true" class="bg-gray-950 text-emerald-400 font-bold">Active Service
-                                        Zone</option>
-                                    <option value="false" class="bg-gray-950 text-red-400 font-bold">Deactivated /
-                                        Paused</option>
-                                </select>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Manager Name</label>
+                                <input type="text" id="conf-manager-name" class="fspec-input w-full"
+                                    placeholder="Alex Rivera">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Manager Email</label>
+                                <input type="email" id="conf-manager-email" class="fspec-input w-full"
+                                    placeholder="alex.rivera@cloudvault.io">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Street Address</label>
+                                <input type="text" id="conf-address" class="fspec-input w-full"
+                                    placeholder="4821 Aurora Ave N">
                             </div>
                         </div>
 
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Active ZIP Code
-                                Coverage</label>
-                            <div class="flex flex-wrap gap-2 p-3 bg-gray-950 border border-gray-800 rounded-2xl min-h-[60px]"
-                                id="conf-zip-container">
-                                <!-- Populated dynamically -->
+                        <div class="grid grid-cols-3 gap-3 text-xs">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">City</label>
+                                <input type="text" id="conf-city" class="fspec-input w-full" placeholder="Seattle">
                             </div>
-                            <button onclick="addZipToActiveMarket()"
-                                class="mt-2 text-xs font-bold text-blue-400 hover:text-blue-300 transition flex items-center gap-1">
-                                <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Add New ZIP Code Coverage
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">State</label>
+                                <input type="text" id="conf-state" class="fspec-input w-full" placeholder="WA">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">ZIP</label>
+                                <input type="text" id="conf-zip" class="fspec-input w-full" placeholder="98103">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-4 gap-3 text-xs pt-2 border-t border-gray-850">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Usable SQFT</label>
+                                <input type="number" id="conf-sqft" oninput="calculatePnL()" class="fspec-input w-full"
+                                    placeholder="20000">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">SQFT / Tote</label>
+                                <input type="number" step="0.1" id="conf-sqft-per-tote" oninput="calculatePnL()"
+                                    class="fspec-input w-full" placeholder="1.0">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Max Capacity</label>
+                                <input type="number" id="conf-tote-capacity" oninput="calculatePnL()"
+                                    class="fspec-input w-full" placeholder="2000">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Staging Rooms</label>
+                                <input type="number" id="conf-staging-rooms" oninput="onStagingRoomsInputChange()"
+                                    class="fspec-input w-full" placeholder="—">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Lease & Operating Expenses -->
+                    <div class="glass-panel p-6 rounded-3xl space-y-5">
+                        <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                            <h3
+                                class="text-sm font-extrabold uppercase text-amber-400 tracking-wider flex items-center gap-2">
+                                <i data-lucide="dollar-sign" class="w-4 h-4 text-amber-400"></i> Monthly Lease &amp; Operating Expenses
+                            </h3>
+                            <span class="text-[10px] font-mono text-gray-500">Executive Financial Spec</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 text-xs">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Rent / Lease ($)</label>
+                                <input type="number" id="conf-rent" oninput="calculatePnL()" class="fspec-input w-full"
+                                    placeholder="8500">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Labor Cost ($)</label>
+                                <input type="number" id="conf-labor" oninput="calculatePnL()" class="fspec-input w-full"
+                                    placeholder="14000">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Utilities ($)</label>
+                                <input type="number" id="conf-utilities" oninput="calculatePnL()" class="fspec-input w-full"
+                                    placeholder="1200">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Monthly Insurance ($)</label>
+                                <input type="number" id="conf-insurance" oninput="calculatePnL()" class="fspec-input w-full"
+                                    placeholder="650">
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Right Column: Pricing Engine & Serviced ZIP Coverage (5 cols) -->
+                <div class="lg:col-span-5 space-y-8">
+
+                    <!-- Card 3: Economic Pricing Engine -->
+                    <div class="glass-panel p-6 rounded-3xl space-y-5">
+                        <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                            <h3
+                                class="text-sm font-extrabold uppercase text-emerald-400 tracking-wider flex items-center gap-2">
+                                <i data-lucide="calculator" class="w-4 h-4 text-emerald-400"></i> Regional Storage &amp; Valet Pricing Engine
+                            </h3>
+                            <span
+                                class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">Dynamic Rates</span>
+                        </div>
+
+                        <div class="space-y-3 text-xs">
+                            <p class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Volume Storage Tiers ($/Tote/Month)</p>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
+                                    <label class="block text-[10px] font-bold text-gray-400">Tier 1 (1-9 Totes)</label>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-gray-500 font-bold">$</span>
+                                        <input type="number" step="0.50" id="conf-tier1" oninput="calculatePnL()"
+                                            class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="5.00">
+                                    </div>
+                                </div>
+
+                                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
+                                    <label class="block text-[10px] font-bold text-gray-400">Tier 2 (10-24 Totes)</label>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-gray-500 font-bold">$</span>
+                                        <input type="number" step="0.50" id="conf-tier2" oninput="calculatePnL()"
+                                            class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="3.50">
+                                    </div>
+                                </div>
+
+                                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
+                                    <label class="block text-[10px] font-bold text-gray-400">Tier 3 (25-49 Totes)</label>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-gray-500 font-bold">$</span>
+                                        <input type="number" step="0.50" id="conf-tier3" oninput="calculatePnL()"
+                                            class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="2.00">
+                                    </div>
+                                </div>
+
+                                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
+                                    <label class="block text-[10px] font-bold text-gray-400">Tier 4 (50+ Totes)</label>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-gray-500 font-bold">$</span>
+                                        <input type="number" step="0.50" id="conf-tier4" oninput="calculatePnL()"
+                                            class="fspec-input w-full py-1 text-sm text-emerald-400" placeholder="1.00">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="pt-3 border-t border-gray-850 space-y-3">
+                                <p class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Logistics Convenience Fee Formulas</p>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
+                                        <label class="block text-[10px] font-bold text-gray-400">Valet Base Fee ($)</label>
+                                        <input type="number" id="conf-valet-base" oninput="calculatePnL()"
+                                            class="fspec-input w-full py-1 text-sm text-amber-400" placeholder="15.00">
+                                    </div>
+                                    <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
+                                        <label class="block text-[10px] font-bold text-gray-400">Valet Tote Adder ($)</label>
+                                        <input type="number" id="conf-valet-adder" oninput="calculatePnL()"
+                                            class="fspec-input w-full py-1 text-sm text-amber-400" placeholder="1.00">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 4: Active Market Control & Serviced ZIP Coverage -->
+                    <div class="glass-panel p-6 rounded-3xl space-y-5">
+                        <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                            <h3
+                                class="text-sm font-extrabold uppercase text-indigo-400 tracking-wider flex items-center gap-2">
+                                <i data-lucide="globe" class="w-4 h-4 text-indigo-400"></i> Market Control &amp; ZIP Coverage
+                            </h3>
+                            <span class="text-[10px] font-mono text-gray-500" id="conf-market-zone-id">zone_sea</span>
+                        </div>
+
+                        <div class="space-y-4 text-xs">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Market Active Status</label>
+                                <select id="conf-market-active-select" class="fspec-input w-full cursor-pointer">
+                                    <option value="true" class="bg-gray-950 text-emerald-400 font-bold">Active Service Zone</option>
+                                    <option value="false" class="bg-gray-950 text-red-400 font-bold">Deactivated / Paused</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Active ZIP Code Coverage</label>
+                                <div class="flex flex-wrap gap-2 p-3 bg-gray-950 border border-gray-800 rounded-2xl min-h-[60px]"
+                                    id="conf-zip-container">
+                                    <!-- Populated dynamically -->
+                                </div>
+                                <button onclick="addZipToActiveMarket()"
+                                    class="mt-2 text-xs font-bold text-blue-400 hover:text-blue-300 transition flex items-center gap-1">
+                                    <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Add New ZIP Code Coverage
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 3 Panel: Location Engine -->
+        <div id="tab-panel-location" class="hidden space-y-8">
+            <!-- Card 5: Warehouse Layout Configurator (Digital Mapping Engine) -->
+            <div class="glass-panel p-6 rounded-3xl space-y-6 border border-cyan-500/20 w-full block">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800 pb-4">
+                    <div>
+                        <h3 class="text-sm font-extrabold uppercase text-cyan-400 tracking-wider flex items-center gap-2">
+                            <i data-lucide="grid" class="w-4 h-4 text-cyan-400"></i> Warehouse Layout Configurator — Digital Location Engine
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-0.5">Generate deterministic physical location coordinates for vault shelves and staging room lockers.</p>
+                    </div>
+                    <div
+                        class="flex items-center gap-2 bg-gray-950 px-3.5 py-1.5 rounded-xl border border-gray-800 font-mono text-xs shadow-inner">
+                        <span class="text-gray-400 font-bold">Location Inventory:</span>
+                        <span class="text-cyan-400 font-extrabold" id="conf-total-locations-badge">0 Locations</span>
+                    </div>
+                </div>
+
+                <!-- Generator Sub-Panel 1: Vault Grid Generator -->
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-extrabold uppercase text-white tracking-wider flex items-center gap-2">
+                            <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i> Generate Vault Grid
+                        </h4>
+                        <span class="text-[10px] text-gray-500 font-mono">Format: Aisle-Bay-Shelf</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Total Aisles</label>
+                            <input type="number" min="1" max="100" id="conf-vault-aisles" oninput="updateVaultPreviewText()"
+                                class="fspec-input w-full font-mono text-cyan-300" placeholder="5" value="5">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Bays per Aisle</label>
+                            <input type="number" min="1" max="100" id="conf-vault-bays" oninput="updateVaultPreviewText()"
+                                class="fspec-input w-full font-mono text-cyan-300" placeholder="10" value="10">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Shelves per Bay</label>
+                            <input type="number" min="1" max="50" id="conf-vault-shelves" oninput="updateVaultPreviewText()"
+                                class="fspec-input w-full font-mono text-cyan-300" placeholder="4" value="4">
+                        </div>
+                    </div>
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                        <p class="text-[11px] text-gray-400 font-mono" id="conf-vault-preview-text">
+                            Preview: <strong class="text-white">200</strong> vault locations (Format: <span
+                                class="text-cyan-400 font-bold">A1-B01-S1</span>)
+                        </p>
+                        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                            <button type="button" id="btn-print-vault-barcodes" onclick="window.openPrintLocationLabelModal('VAULT')"
+                                class="w-full sm:w-auto bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md">
+                                <i data-lucide="printer" class="w-4 h-4 text-blue-400"></i>
+                                <span>🖨️ Print Vault Barcodes</span>
+                            </button>
+                            <button onclick="generateVaultLocationsUI()" id="btn-generate-vault-locations"
+                                class="w-full sm:w-auto bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-cyan-600/20 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider">
+                                <i data-lucide="database" class="w-4 h-4"></i> Generate &amp; Sync Vault Locations
                             </button>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div> <!-- Close grid-cols-12 container -->
 
-        <!-- Card 5: Warehouse Layout Configurator (Digital Mapping Engine) -->
-        <div class="glass-panel p-6 rounded-3xl space-y-6 border border-cyan-500/20 w-full block">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800 pb-4">
-                <div>
-                    <h3 class="text-sm font-extrabold uppercase text-cyan-400 tracking-wider flex items-center gap-2">
-                        <i data-lucide="grid" class="w-4 h-4 text-cyan-400"></i> Warehouse Layout Configurator — Digital
-                        Location Engine
-                    </h3>
-                    <p class="text-xs text-gray-400 mt-0.5">Generate deterministic physical location coordinates for
-                        vault shelves and staging room lockers.</p>
-                </div>
-                <div
-                    class="flex items-center gap-2 bg-gray-950 px-3.5 py-1.5 rounded-xl border border-gray-800 font-mono text-xs shadow-inner">
-                    <span class="text-gray-400 font-bold">Location Inventory:</span>
-                    <span class="text-cyan-400 font-extrabold" id="conf-total-locations-badge">0 Locations</span>
-                </div>
-            </div>
+                <!-- Divider -->
+                <div class="border-t border-gray-800/80 my-2"></div>
 
-            <!-- Generator Sub-Panel 1: Vault Grid Generator -->
-            <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <h4 class="text-xs font-extrabold uppercase text-white tracking-wider flex items-center gap-2">
-                        <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i> Generate Vault Grid
-                    </h4>
-                    <span class="text-[10px] text-gray-500 font-mono">Format: Aisle-Bay-Shelf</span>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Total Aisles</label>
-                        <input type="number" min="1" max="100" id="conf-vault-aisles" oninput="updateVaultPreviewText()"
-                            class="fspec-input w-full font-mono text-cyan-300" placeholder="5" value="5">
+                <!-- Generator Sub-Panel 2: Staging Room Builder (Secondary UI) -->
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-extrabold uppercase text-white tracking-wider flex items-center gap-2">
+                            <i data-lucide="door-open" class="w-3.5 h-3.5 text-emerald-400"></i> Staging Room Builder
+                        </h4>
+                        <span class="text-[10px] text-gray-500 font-mono">Format: Room-Bay</span>
                     </div>
-                    <div>
-                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Bays per Aisle</label>
-                        <input type="number" min="1" max="100" id="conf-vault-bays" oninput="updateVaultPreviewText()"
-                            class="fspec-input w-full font-mono text-cyan-300" placeholder="10" value="10">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Room Identifier</label>
+                            <input type="text" id="conf-staging-room-id" oninput="updateStagingPreviewText()"
+                                class="fspec-input w-full font-mono text-emerald-300" placeholder="ROOM-1" value="ROOM-1">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Total Bays / Lockers</label>
+                            <input type="number" min="1" max="100" id="conf-staging-room-bays"
+                                oninput="updateStagingPreviewText()" class="fspec-input w-full font-mono text-emerald-300"
+                                placeholder="—" value="">
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Shelves per Bay</label>
-                        <input type="number" min="1" max="50" id="conf-vault-shelves" oninput="updateVaultPreviewText()"
-                            class="fspec-input w-full font-mono text-cyan-300" placeholder="4" value="4">
-                    </div>
-                </div>
-                <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                    <p class="text-[11px] text-gray-400 font-mono" id="conf-vault-preview-text">
-                        Preview: <strong class="text-white">200</strong> vault locations (Format: <span
-                            class="text-cyan-400 font-bold">A1-B01-S1</span>)
-                    </p>
-                    <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                        <button type="button" id="btn-print-vault-barcodes" onclick="window.openPrintLocationLabelModal('VAULT')"
-                            class="w-full sm:w-auto bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md">
-                            <i data-lucide="printer" class="w-4 h-4 text-blue-400"></i>
-                            <span>🖨️ Print Vault Barcodes</span>
-                        </button>
-                        <button onclick="generateVaultLocationsUI()" id="btn-generate-vault-locations"
-                            class="w-full sm:w-auto bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-cyan-600/20 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider">
-                            <i data-lucide="database" class="w-4 h-4"></i> Generate &amp; Sync Vault Locations
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Divider -->
-            <div class="border-t border-gray-800/80 my-2"></div>
-
-            <!-- Generator Sub-Panel 2: Staging Room Builder (Secondary UI) -->
-            <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <h4 class="text-xs font-extrabold uppercase text-white tracking-wider flex items-center gap-2">
-                        <i data-lucide="door-open" class="w-3.5 h-3.5 text-emerald-400"></i> Staging Room Builder
-                    </h4>
-                    <span class="text-[10px] text-gray-500 font-mono">Format: Room-Bay</span>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Room Identifier</label>
-                        <input type="text" id="conf-staging-room-id" oninput="updateStagingPreviewText()"
-                            class="fspec-input w-full font-mono text-emerald-300" placeholder="ROOM-1" value="ROOM-1">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Total Bays /
-                            Lockers</label>
-                        <input type="number" min="1" max="100" id="conf-staging-room-bays"
-                            oninput="updateStagingPreviewText()" class="fspec-input w-full font-mono text-emerald-300"
-                            placeholder="—" value="">
-                    </div>
-                </div>
-                <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                    <p class="text-[11px] text-gray-400 font-mono" id="conf-staging-preview-text">
-                        Preview: <strong class="text-white">—</strong> staging locations (Format: <span
-                            class="text-emerald-400 font-bold">ROOM-1-BAY-01</span>)
-                    </p>
-                    <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                        <button type="button" id="btn-print-staging-barcodes" onclick="window.openPrintLocationLabelModal('STAGING')"
-                            class="w-full sm:w-auto bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md">
-                            <i data-lucide="printer" class="w-4 h-4 text-emerald-400"></i>
-                            <span>🖨️ Print Staging Barcodes</span>
-                        </button>
-                        <button onclick="generateStagingLocationsUI()" id="btn-generate-staging-locations"
-                            class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider">
-                            <i data-lucide="plus-circle" class="w-4 h-4"></i> Generate &amp; Sync Staging Locations
-                        </button>
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                        <p class="text-[11px] text-gray-400 font-mono" id="conf-staging-preview-text">
+                            Preview: <strong class="text-white">—</strong> staging locations (Format: <span
+                                class="text-emerald-400 font-bold">ROOM-1-BAY-01</span>)
+                        </p>
+                        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                            <button type="button" id="btn-print-staging-barcodes" onclick="window.openPrintLocationLabelModal('STAGING')"
+                                class="w-full sm:w-auto bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md">
+                                <i data-lucide="printer" class="w-4 h-4 text-emerald-400"></i>
+                                <span>🖨️ Print Staging Barcodes</span>
+                            </button>
+                            <button onclick="generateStagingLocationsUI()" id="btn-generate-staging-locations"
+                                class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider">
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i> Generate &amp; Sync Staging Locations
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1172,8 +1157,31 @@
                     }, 4000);
                 }
 
+                function switchFacilityTab(tabId) {
+                    const tabs = ['telemetry', 'specs', 'location'];
+                    tabs.forEach(t => {
+                        const panel = document.getElementById(`tab-panel-${t}`);
+                        const btn = document.getElementById(`tab-btn-${t}`);
+                        if (panel) {
+                            if (t === tabId) {
+                                panel.classList.remove('hidden');
+                            } else {
+                                panel.classList.add('hidden');
+                            }
+                        }
+                        if (btn) {
+                            if (t === tabId) {
+                                btn.className = "px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-sm cursor-pointer";
+                            } else {
+                                btn.className = "px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition text-gray-400 hover:text-white hover:bg-gray-900 border border-transparent cursor-pointer";
+                            }
+                        }
+                    });
+                }
+
                 window.addEventListener('DOMContentLoaded', async () => {
                     lucide.createIcons();
+                    initAutoSaveFacilityConfigListeners();
                     const dateInput = document.getElementById('staging-date-select');
                     if (dateInput) dateInput.value = selectedStagingDate;
 
@@ -1571,7 +1579,8 @@
 
                         currentLoadedZone = zone;
                         document.getElementById('conf-market-zone-id').textContent = zone.id;
-                        document.getElementById('conf-deposit-amount').value = (zone.required_deposit !== null && zone.required_deposit !== undefined) ? zone.required_deposit : 25.00;
+                        const depEl = document.getElementById('conf-deposit-amount');
+                        if (depEl) depEl.value = (zone.required_deposit !== null && zone.required_deposit !== undefined) ? zone.required_deposit : 25.00;
                         document.getElementById('conf-market-active-select').value = zone.active !== false ? "true" : "false";
 
                         renderZipCodes(zone.zip_codes || []);
@@ -2293,9 +2302,15 @@
                     openLaunchModal();
                 }
 
-                async function saveAllFacilityConfig() {
+                let autoSaveTimeout = null;
+
+                async function saveFacilityConfig(options = {}) {
+                    const silent = (typeof options === 'object' && options !== null && 'silent' in options) 
+                        ? Boolean(options.silent) 
+                        : (typeof options === 'boolean' ? options : false);
+
                     if (!currentLoadedFac) {
-                        alert("Cannot save: No facility currently loaded.");
+                        if (!silent) alert("Cannot save: No facility currently loaded.");
                         return;
                     }
 
@@ -2325,7 +2340,8 @@
                         valet_tote_adder: Number(document.getElementById('conf-valet-adder').value) || 1.00
                     };
 
-                    const depositVal = Number(document.getElementById('conf-deposit-amount').value) || 25.00;
+                    const depEl = document.getElementById('conf-deposit-amount');
+                    const depositVal = depEl ? (Number(depEl.value) || 25.00) : 25.00;
                     const activeVal = document.getElementById('conf-market-active-select').value === "true";
 
                     try {
@@ -2349,11 +2365,73 @@
                         if (zoneErr) throw zoneErr;
 
                         await loadFacilitiesDropdown();
-                        alert(`Successfully saved specifications, regional pricing rates, and deposit rules for ${updatedFac.name}!`);
+                        if (!silent) {
+                            alert(`Successfully saved specifications, regional pricing rates, and deposit rules for ${updatedFac.name}!`);
+                        }
                     } catch (err) {
                         console.error("Save config failed:", err);
-                        alert("Failed to save facility configuration: " + err.message);
+                        if (!silent) {
+                            alert("Failed to save facility configuration: " + err.message);
+                        }
+                        throw err;
                     }
+                }
+
+                // Fallback alias for legacy callers
+                async function saveAllFacilityConfig(options) {
+                    return await saveFacilityConfig(options);
+                }
+                window.saveFacilityConfig = saveFacilityConfig;
+                window.saveAllFacilityConfig = saveFacilityConfig;
+
+                function triggerAutoSaveFacilityConfig() {
+                    const indicator = document.getElementById('auto-save-indicator');
+                    if (indicator) {
+                        indicator.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-xl font-mono text-xs text-amber-400 font-bold";
+                        indicator.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Saving...';
+                        if (window.lucide) lucide.createIcons();
+                    }
+
+                    if (autoSaveTimeout) {
+                        clearTimeout(autoSaveTimeout);
+                    }
+
+                    autoSaveTimeout = setTimeout(async () => {
+                        try {
+                            await saveFacilityConfig({ silent: true });
+                            if (indicator) {
+                                indicator.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl font-mono text-xs text-emerald-400 font-bold";
+                                indicator.innerHTML = '<i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Auto-saved';
+                                if (window.lucide) lucide.createIcons();
+                            }
+                        } catch (err) {
+                            console.error("Auto-save facility config failed:", err);
+                            if (indicator) {
+                                indicator.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded-xl font-mono text-xs text-red-400 font-bold";
+                                indicator.innerHTML = '<i data-lucide="alert-circle" class="w-3.5 h-3.5"></i> Save failed';
+                                if (window.lucide) lucide.createIcons();
+                            }
+                        }
+                    }, 600);
+                }
+                window.triggerAutoSaveFacilityConfig = triggerAutoSaveFacilityConfig;
+
+                function initAutoSaveFacilityConfigListeners() {
+                    const autoSaveFieldIds = [
+                        'conf-name', 'conf-manager-name', 'conf-manager-email', 'conf-address', 'conf-city', 'conf-state', 'conf-zip',
+                        'conf-sqft', 'conf-sqft-per-tote', 'conf-tote-capacity', 'conf-staging-rooms',
+                        'conf-rent', 'conf-labor', 'conf-utilities', 'conf-insurance',
+                        'conf-tier1', 'conf-tier2', 'conf-tier3', 'conf-tier4', 'conf-valet-base', 'conf-valet-adder',
+                        'conf-market-active-select'
+                    ];
+
+                    autoSaveFieldIds.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.addEventListener('input', triggerAutoSaveFacilityConfig);
+                            el.addEventListener('change', triggerAutoSaveFacilityConfig);
+                        }
+                    });
                 }
 
                 async function triggerSeedDb() {
@@ -2939,10 +3017,6 @@
                                 win.print();
                             }
                         }, 10);
-                    } catch (e) {
-                        console.error("[Print Barcodes Error] Failed inside triggerPrintLocationLabels:", e);
-                    }
-                };
                     } catch (e) {
                         console.error("[Print Barcodes Error] Failed inside triggerPrintLocationLabels:", e);
                         alert("Failed to trigger print: " + (e.message || e));

@@ -53,8 +53,9 @@ CREATE TABLE public.facilities (
     tier3_rate NUMERIC(10,2) DEFAULT 2.00,
     tier4_rate NUMERIC(10,2) DEFAULT 1.00,
     valet_base NUMERIC(10,2) DEFAULT 15.00,
-    valet_tote_adder NUMERIC(10,2) DEFAULT 1.00
-    staging_rooms INTEGER DEFAULT 2
+    valet_tote_adder NUMERIC(10,2) DEFAULT 1.00,
+    staging_rooms INTEGER DEFAULT 2,
+    staging_config JSONB DEFAULT '{"allowed_days": [1,2,3,4,5,6,0], "allowed_slots": ["09:00 AM - 12:00 PM", "12:00 PM - 03:00 PM", "03:00 PM - 06:00 PM"]}'::jsonb
 );
 
 -- Safe migration fallback for pre-existing tables in Supabase
@@ -65,6 +66,7 @@ ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS tier3_rate NUMERIC(10,2) 
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS tier4_rate NUMERIC(10,2) DEFAULT 1.00;
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS valet_base NUMERIC(10,2) DEFAULT 15.00;
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS valet_tote_adder NUMERIC(10,2) DEFAULT 1.00;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS staging_config JSONB DEFAULT '{"allowed_days": [1,2,3,4,5,6,0], "allowed_slots": ["09:00 AM - 12:00 PM", "12:00 PM - 03:00 PM", "03:00 PM - 06:00 PM"]}'::jsonb;
 
 -- Users table (extends auth.users)
 CREATE TABLE public.users (
@@ -243,6 +245,25 @@ ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS surge_fee NUMERIC(10
 ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS surge_tier TEXT DEFAULT 'standard';
 ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS time_slot TEXT DEFAULT '09:00 AM - 12:00 PM';
 
+-- Staging Reservations
+CREATE TABLE public.staging_reservations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    facility_id TEXT REFERENCES public.facilities(id) ON DELETE CASCADE NOT NULL,
+    uid UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+    access_request_id UUID REFERENCES public.access_requests(id) ON DELETE CASCADE,
+    tote_ids UUID[] NOT NULL,
+    start_time TIMESTAMPTZ NOT NULL,
+    end_time TIMESTAMPTZ NOT NULL,
+    status TEXT DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'active', 'completed', 'cancelled', 'no_show')) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    CONSTRAINT valid_duration CHECK (
+        EXTRACT(EPOCH FROM (end_time - start_time))/3600 >= 1.0 AND 
+        EXTRACT(EPOCH FROM (end_time - start_time))/3600 <= 3.0
+    )
+);
+
+CREATE INDEX idx_staging_reservations_time_range ON public.staging_reservations (facility_id, start_time, end_time) WHERE status IN ('scheduled', 'active');
+
 -- Cancellations
 CREATE TABLE public.cancellations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -308,6 +329,7 @@ ALTER TABLE public.service_areas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.waitlist ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.facilities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.access_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.staging_reservations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cancellations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.charges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.metadata ENABLE ROW LEVEL SECURITY;
@@ -360,6 +382,9 @@ CREATE POLICY "Staff view all charges" ON public.charges FOR SELECT USING (publi
 
 CREATE POLICY "Users view own access requests" ON public.access_requests FOR SELECT USING (uid = auth.uid());
 CREATE POLICY "Staff view all access requests" ON public.access_requests FOR SELECT USING (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive'));
+
+CREATE POLICY "Users view own reservations" ON public.staging_reservations FOR SELECT USING (uid = auth.uid());
+CREATE POLICY "Staff view all reservations" ON public.staging_reservations FOR SELECT USING (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive'));
 
 CREATE POLICY "Managers update access requests" ON public.access_requests
     FOR UPDATE USING (
@@ -847,6 +872,120 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Check Staging Capacity Engine
+CREATE OR REPLACE FUNCTION public.check_staging_capacity(
+    p_facility_id TEXT,
+    p_start_time TIMESTAMPTZ,
+    p_end_time TIMESTAMPTZ,
+    p_tote_count INT
+) RETURNS BOOLEAN AS $$
+DECLARE
+    v_total_capacity INT;
+    v_overlapping_reserved_totes INT;
+    v_available_capacity INT;
+BEGIN
+    -- 1. Get total physical staging capacity from facilities spec (assume 20 totes per staging room)
+    SELECT COALESCE(staging_rooms * 20, 0) INTO v_total_capacity
+    FROM public.facilities
+    WHERE id = p_facility_id;
+
+    IF v_total_capacity = 0 THEN
+        RAISE EXCEPTION 'Facility % has no configured STAGING capacity.', p_facility_id;
+    END IF;
+
+    -- 2. Calculate how many totes are already scheduled in overlapping time windows
+    SELECT COALESCE(SUM(array_length(tote_ids, 1)), 0) INTO v_overlapping_reserved_totes
+    FROM public.staging_reservations
+    WHERE facility_id = p_facility_id
+      AND status IN ('scheduled', 'active')
+      AND start_time < p_end_time
+      AND end_time > p_start_time;
+
+    -- 3. Check if available capacity can accommodate the requested totes
+    v_available_capacity := v_total_capacity - v_overlapping_reserved_totes;
+
+    IF v_available_capacity >= p_tote_count THEN
+        RETURN TRUE;
+    ELSE
+        RAISE EXCEPTION 'Staging capacity exceeded. Available: %, Requested: %', v_available_capacity, p_tote_count;
+    END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Get Staging Availability for UI Calendar
+CREATE OR REPLACE FUNCTION public.get_staging_availability(
+    p_facility_id TEXT,
+    p_target_date DATE
+) RETURNS JSONB AS $$
+DECLARE
+    v_total_capacity INT;
+    v_config JSONB;
+    v_day_of_week INT;
+    v_result JSONB := '[]'::jsonb;
+    v_slot TEXT;
+    v_start_time TIMESTAMPTZ;
+    v_end_time TIMESTAMPTZ;
+    v_overlapping_totes INT;
+    v_available INT;
+BEGIN
+    -- Get facility capacity and config
+    SELECT COALESCE(staging_rooms * 20, 0), COALESCE(staging_config, '{"allowed_days": [1,2,3,4,5], "allowed_slots": ["09:00 AM - 12:00 PM", "12:00 PM - 03:00 PM", "03:00 PM - 06:00 PM"]}'::jsonb)
+    INTO v_total_capacity, v_config
+    FROM public.facilities
+    WHERE id = p_facility_id;
+
+    IF v_total_capacity = 0 THEN
+        RETURN '[]'::jsonb;
+    END IF;
+
+    -- Check if day is allowed
+    v_day_of_week := EXTRACT(DOW FROM p_target_date);
+    
+    -- Extract allowed days as json array, then check if v_day_of_week is in it
+    IF NOT (v_config->'allowed_days') @> to_jsonb(v_day_of_week) THEN
+        RETURN '[]'::jsonb;
+    END IF;
+
+    -- Loop over slots in config
+    FOR v_slot IN SELECT jsonb_array_elements_text(v_config->'allowed_slots')
+    LOOP
+        -- Parse start and end time from slot (e.g., "09:00 AM - 12:00 PM")
+        IF v_slot = '09:00 AM - 12:00 PM' THEN
+            v_start_time := p_target_date + time '09:00:00';
+            v_end_time := p_target_date + time '12:00:00';
+        ELSIF v_slot = '12:00 PM - 03:00 PM' THEN
+            v_start_time := p_target_date + time '12:00:00';
+            v_end_time := p_target_date + time '15:00:00';
+        ELSIF v_slot = '03:00 PM - 06:00 PM' THEN
+            v_start_time := p_target_date + time '15:00:00';
+            v_end_time := p_target_date + time '18:00:00';
+        ELSE
+            CONTINUE;
+        END IF;
+
+        -- Count overlapping
+        SELECT COALESCE(SUM(array_length(tote_ids, 1)), 0) INTO v_overlapping_totes
+        FROM public.staging_reservations
+        WHERE facility_id = p_facility_id
+          AND status IN ('scheduled', 'active')
+          AND start_time < v_end_time
+          AND end_time > v_start_time;
+
+        v_available := v_total_capacity - v_overlapping_totes;
+        IF v_available < 0 THEN v_available := 0; END IF;
+
+        v_result := v_result || jsonb_build_object(
+            'slot', v_slot,
+            'start_time', v_start_time,
+            'end_time', v_end_time,
+            'available_capacity', v_available
+        );
+    END LOOP;
+
+    RETURN v_result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Secure Staging Request with Calendar Date Reservation & Surge Pricing
 CREATE OR REPLACE FUNCTION public.request_staging(
   p_tote_ids UUID[],
@@ -855,7 +994,9 @@ CREATE OR REPLACE FUNCTION public.request_staging(
   p_target_date DATE DEFAULT NULL,
   p_time_slot TEXT DEFAULT '09:00 AM - 12:00 PM',
   p_surge_fee NUMERIC DEFAULT 0.00,
-  p_surge_tier TEXT DEFAULT 'standard'
+  p_surge_tier TEXT DEFAULT 'standard',
+  p_start_time TIMESTAMPTZ DEFAULT NULL,
+  p_end_time TIMESTAMPTZ DEFAULT NULL
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_uid UUID;
@@ -869,6 +1010,7 @@ DECLARE
   v_adder_fee NUMERIC(10,2);
   v_tote_count INT;
   v_user_facility TEXT;
+  v_access_request_id UUID;
 BEGIN
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
@@ -927,6 +1069,16 @@ BEGIN
     WHERE id = ANY(p_tote_ids);
   END IF;
 
+  -- Check capacity if explicit timeblock provided
+  IF p_start_time IS NOT NULL AND p_end_time IS NOT NULL THEN
+      -- Verify duration constraints (1 to 3 hours)
+      IF EXTRACT(EPOCH FROM (p_end_time - p_start_time))/3600 < 1.0 OR EXTRACT(EPOCH FROM (p_end_time - p_start_time))/3600 > 3.0 THEN
+          RAISE EXCEPTION 'Reservation duration must be between 1 and 3 hours.';
+      END IF;
+      -- Fail-fast capacity check
+      PERFORM public.check_staging_capacity(v_user_facility, p_start_time, p_end_time, v_tote_count);
+  END IF;
+
   -- Create access request with reservation slot and surge pricing
   INSERT INTO public.access_requests (
     uid, request_type, fulfillment_type, requested_items, facility_id, pin, pin_expires_at, valet_fee, surge_fee, surge_tier, status, target_date, time_slot, delivery_notes
@@ -945,7 +1097,16 @@ BEGIN
     v_target_date,
     p_time_slot,
     p_delivery_notes
-  );
+  ) RETURNING id INTO v_access_request_id;
+
+  -- Persist to calendar table
+  IF p_start_time IS NOT NULL AND p_end_time IS NOT NULL THEN
+      INSERT INTO public.staging_reservations (
+          facility_id, uid, access_request_id, tote_ids, start_time, end_time, status
+      ) VALUES (
+          v_user_facility, v_uid, v_access_request_id, p_tote_ids, p_start_time, p_end_time, 'scheduled'
+      );
+  END IF;
 
   RETURN jsonb_build_object(
     'pin', v_pin,

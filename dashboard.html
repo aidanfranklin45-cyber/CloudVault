@@ -3078,46 +3078,34 @@
             if (!selectEl || !dateStr) return;
 
             const targetFacId = facilityId || 'facility_seattle_north';
-            let stagingCap = 0;
 
             try {
-                const { data: fac } = await supabase.from('facilities').select('num_staging_rooms, staging_rooms').eq('id', targetFacId).maybeSingle();
-                if (fac) stagingCap = fac.num_staging_rooms || fac.staging_rooms || 0;
-
-                const { data: stgLocs } = await supabase.from('warehouse_locations')
-                    .select('identifier')
-                    .eq('facility_id', targetFacId)
-                    .eq('zone_type', 'STAGING');
-
-                if (stgLocs && stgLocs.length > 0) {
-                    const roomNums = stgLocs.map(l => {
-                        const match = (l.identifier || '').match(/ROOM-(\d+)/i);
-                        return match ? parseInt(match[1], 10) : 1;
-                    });
-                    const maxRoom = Math.max(...roomNums, 0);
-                    if (maxRoom > stagingCap) stagingCap = maxRoom;
-                }
-            } catch (e) {
-                console.warn('Could not fetch staging rooms capacity:', e);
-            }
-
-            try {
-                const { data: reqs } = await supabase.from('access_requests')
-                    .select('time_slot')
-                    .eq('facility_id', targetFacId)
-                    .eq('target_date', dateStr)
-                    .eq('status', 'pending');
-
-                const counts = {};
-                (reqs || []).forEach(r => {
-                    const slot = r.time_slot || '09:00 AM - 12:00 PM';
-                    counts[slot] = (counts[slot] || 0) + 1;
+                // Call the new RPC
+                const { data: availability, error } = await supabase.rpc('get_staging_availability', {
+                    p_facility_id: targetFacId,
+                    p_target_date: dateStr
                 });
+
+                if (error) throw error;
 
                 const todayObj = new Date();
                 const todayStr = todayObj.toISOString().split('T')[0];
                 const currentHour = todayObj.getHours();
                 const isSelectedToday = dateStr === todayStr;
+
+                // If no availability returned for this date, the date might be blocked
+                if (!availability || availability.length === 0) {
+                    Array.from(selectEl.options).forEach(opt => {
+                        opt.disabled = true;
+                        opt.textContent = `🚫 Closed on this date`;
+                    });
+                    return;
+                }
+
+                const availMap = {};
+                availability.forEach(a => {
+                    availMap[a.slot] = a.available_capacity;
+                });
 
                 Array.from(selectEl.options).forEach(opt => {
                     const cleanVal = opt.value;
@@ -3125,7 +3113,6 @@
                                       cleanVal.includes('12:00') ? 'Afternoon (12 PM - 3 PM)' :
                                       'Evening Peak (3 PM - 6 PM)';
                     
-                    const booked = counts[cleanVal] || 0;
                     let isElapsedToday = false;
                     let elapsedReason = "";
 
@@ -3145,12 +3132,16 @@
                     if (isElapsedToday) {
                         opt.disabled = true;
                         opt.textContent = `${baseLabel} — ⏳ ${elapsedReason}`;
-                    } else if (booked >= stagingCap) {
+                    } else if (availMap[cleanVal] === undefined) {
+                        // Slot not available in config
                         opt.disabled = true;
-                        opt.textContent = `${baseLabel} — 🔴 FULL (${booked}/${stagingCap})`;
+                        opt.textContent = `${baseLabel} — 🚫 Closed`;
+                    } else if (availMap[cleanVal] === 0) {
+                        opt.disabled = true;
+                        opt.textContent = `${baseLabel} — 🔴 FULL`;
                     } else {
                         opt.disabled = false;
-                        opt.textContent = `${baseLabel} (${booked}/${stagingCap} booked)`;
+                        opt.textContent = `${baseLabel} (${availMap[cleanVal]} slots left)`;
                     }
                 });
 
@@ -3316,6 +3307,21 @@
             const targetDate = dateInput ? dateInput.value : null;
             const timeSlot = slotInput ? slotInput.value : '09:00 AM - 12:00 PM';
 
+            let startTime = null;
+            let endTime = null;
+            if (targetDate && timeSlot) {
+                if (timeSlot.includes('09:00')) {
+                    startTime = `${targetDate}T09:00:00`;
+                    endTime = `${targetDate}T12:00:00`;
+                } else if (timeSlot.includes('12:00')) {
+                    startTime = `${targetDate}T12:00:00`;
+                    endTime = `${targetDate}T15:00:00`;
+                } else if (timeSlot.includes('03:00')) {
+                    startTime = `${targetDate}T15:00:00`;
+                    endTime = `${targetDate}T18:00:00`;
+                }
+            }
+
             try {
                 let { data, error } = await supabase.rpc('submit_customer_retrieval', {
                     p_uid: currentUser.id,
@@ -3323,7 +3329,9 @@
                     p_fulfillment_type: retrievalLogisticsType,
                     p_target_date: targetDate,
                     p_time_slot: timeSlot,
-                    p_delivery_notes: deliveryNotes
+                    p_delivery_notes: deliveryNotes,
+                    p_start_time: startTime,
+                    p_end_time: endTime
                 });
 
                 if (error) {
@@ -3335,13 +3343,24 @@
                         p_target_date: targetDate,
                         p_time_slot: timeSlot,
                         p_surge_fee: selectedReservationSurge.fee,
-                        p_surge_tier: selectedReservationSurge.tier
+                        p_surge_tier: selectedReservationSurge.tier,
+                        p_start_time: startTime,
+                        p_end_time: endTime
                     });
                     data = fallbackRes.data;
                     error = fallbackRes.error;
                 }
 
-                if (error) throw error;
+                if (error) {
+                    if (error.message && error.message.includes('Staging capacity exceeded')) {
+                        alert('We are sorry, but the selected time slot just reached maximum capacity. Please select another slot.');
+                    } else {
+                        throw error;
+                    }
+                    btn.disabled = false;
+                    btn.textContent = 'Confirm Retrieval Request';
+                    return;
+                }
 
                 closeRetrievalModal();
                 const notesInput = document.getElementById('valet-delivery-notes');
