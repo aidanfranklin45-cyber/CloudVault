@@ -6031,9 +6031,6 @@
 
         async function triggerPrintLabels() {
             const codeInput = document.getElementById('print-tote-code');
-            const printContainer = document.getElementById('print-container');
-            if (!printContainer) return;
-
             const inputVal = (codeInput ? codeInput.value.trim() : '') || 'CV-SEA-1001';
             let codesToPrint = inputVal.split(',').map(c => c.trim()).filter(Boolean);
             if (codesToPrint.length === 0) codesToPrint = ['CV-SEA-1001'];
@@ -6052,7 +6049,7 @@
                 pages.push(codesToPrint.slice(i, i + 4));
             }
 
-            printContainer.innerHTML = pages.map((pageCodes, pageIdx) => `
+            const printHTMLBody = pages.map((pageCodes, pageIdx) => `
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); gap: 14px; padding: 10px; font-family: monospace; color: #000; box-sizing: border-box; width: 100%; height: 9.6in; max-height: 9.6in; page-break-after: ${pageIdx < pages.length - 1 ? 'always' : 'avoid'};">
                     ${pageCodes.map((code, idx) => `
                         <div style="border: 2px dashed #000; padding: 14px; background: #ffffff; color: #000000; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; height: 100%; page-break-inside: avoid;">
@@ -6083,16 +6080,48 @@
                 </div>
             `).join('');
 
-            printContainer.style.display = 'block';
+            let iframe = document.getElementById('print-label-iframe');
+            if (!iframe) {
+                iframe = document.createElement('iframe');
+                iframe.id = 'print-label-iframe';
+                iframe.style.position = 'fixed';
+                iframe.style.right = '0';
+                iframe.style.bottom = '0';
+                iframe.style.width = '0';
+                iframe.style.height = '0';
+                iframe.style.border = '0';
+                iframe.style.visibility = 'hidden';
+                document.body.appendChild(iframe);
+            }
+
+            const doc = iframe.contentWindow.document;
+            doc.open();
+            doc.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Print Labels - CloudVault Logistics</title>
+                    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+                    <style>
+                        @page { size: auto; margin: 0.5cm; }
+                        body { font-family: monospace; margin: 0; padding: 0; background: #ffffff; color: #000000; }
+                    </style>
+                </head>
+                <body>
+                    ${printHTMLBody}
+                </body>
+                </html>
+            `);
+            doc.close();
 
             setTimeout(() => {
-                // Render Barcodes
-                const barcodeEls = printContainer.querySelectorAll('.print-grid-barcode');
+                const win = iframe.contentWindow;
+                const barcodeEls = win.document.querySelectorAll('.print-grid-barcode');
                 barcodeEls.forEach(svg => {
                     const c = svg.getAttribute('data-code');
-                    if (typeof JsBarcode === 'function') {
+                    if (typeof win.JsBarcode === 'function') {
                         try {
-                            JsBarcode(svg, c, {
+                            win.JsBarcode(svg, c, {
                                 format: "CODE128",
                                 width: 1.6,
                                 height: 42,
@@ -6106,14 +6135,11 @@
                     }
                 });
 
-                window.print();
                 setTimeout(() => {
-                    if (printContainer) {
-                        printContainer.style.display = 'none';
-                        printContainer.innerHTML = '';
-                    }
-                }, 1500);
-            }, 300);
+                    win.focus();
+                    win.print();
+                }, 250);
+            }, 350);
         }
     </script>
 

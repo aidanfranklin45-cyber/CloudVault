@@ -665,12 +665,12 @@
                             Lockers</label>
                         <input type="number" min="1" max="100" id="conf-staging-room-bays"
                             oninput="updateStagingPreviewText()" class="fspec-input w-full font-mono text-emerald-300"
-                            placeholder="10" value="10">
+                            placeholder="3" value="3">
                     </div>
                 </div>
                 <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                     <p class="text-[11px] text-gray-400 font-mono" id="conf-staging-preview-text">
-                        Preview: <strong class="text-white">10</strong> staging locations (Format: <span
+                        Preview: <strong class="text-white">3</strong> staging locations (Format: <span
                             class="text-emerald-400 font-bold">ROOM-1-BAY-01</span>)
                     </p>
                     <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -1286,7 +1286,12 @@
                     document.getElementById('conf-sqft').value = (fac.usable_warehouse_sqft !== null && fac.usable_warehouse_sqft !== undefined) ? fac.usable_warehouse_sqft : 20000;
                     document.getElementById('conf-sqft-per-tote').value = (fac.sqft_per_tote !== null && fac.sqft_per_tote !== undefined) ? fac.sqft_per_tote : 1.0;
                     document.getElementById('conf-tote-capacity').value = (fac.tote_capacity !== null && fac.tote_capacity !== undefined) ? fac.tote_capacity : 2000;
-                    document.getElementById('conf-staging-rooms').value = (fac.num_staging_rooms !== null && fac.num_staging_rooms !== undefined) ? fac.num_staging_rooms : 2;
+                    const stgRooms = (fac.num_staging_rooms !== null && fac.num_staging_rooms !== undefined) ? fac.num_staging_rooms : 3;
+                    document.getElementById('conf-staging-rooms').value = stgRooms;
+                    if (document.getElementById('conf-staging-room-bays')) {
+                        document.getElementById('conf-staging-room-bays').value = stgRooms;
+                        updateStagingPreviewText();
+                    }
 
                     // Populate Expenses
                     document.getElementById('conf-rent').value = (fac.monthly_rent_cost !== null && fac.monthly_rent_cost !== undefined) ? fac.monthly_rent_cost : 8500;
@@ -1500,6 +1505,11 @@
                         if (currentLoadedFac) {
                             currentLoadedFac.num_staging_rooms = val;
                             currentLoadedFac.staging_rooms = val;
+                        }
+                        const stgBaysInput = document.getElementById('conf-staging-room-bays');
+                        if (stgBaysInput) {
+                            stgBaysInput.value = val;
+                            updateStagingPreviewText();
                         }
                         loadStagingRoomSchedule(activeFacilityId, selectedStagingDate);
                     }
@@ -2499,7 +2509,8 @@
                     } else {
                         const roomId = document.getElementById('conf-staging-room-id')?.value.trim() || 'ROOM-1';
                         const count = window.currentLoadedLocations.filter(loc => loc.startsWith(roomId)).length;
-                        optionsHtml += `<option value="${roomId}">${roomId} Lockers — ${count || 10} Tags</option>`;
+                        const totalCount = count || window.currentLoadedLocations.length || parseInt(document.getElementById('conf-staging-room-bays')?.value || '3', 10);
+                        optionsHtml += `<option value="${roomId}">${roomId} Lockers — ${totalCount} Tags</option>`;
                     }
 
                     sel.innerHTML = optionsHtml;
@@ -2582,7 +2593,8 @@
                             }
                         } else {
                             const roomId = document.getElementById('conf-staging-room-id')?.value.trim() || 'ROOM-1';
-                            const bays = parseInt(document.getElementById('conf-staging-room-bays')?.value || '10', 10);
+                            const numStgRooms = currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || parseInt(document.getElementById('conf-staging-rooms')?.value || '3', 10);
+                            const bays = parseInt(document.getElementById('conf-staging-room-bays')?.value || numStgRooms || '3', 10);
                             const maxPrint = Math.min(bays, 100);
                             for (let b = 1; b <= maxPrint; b++) {
                                 const bayStr = b < 10 ? '0' + b : '' + b;
