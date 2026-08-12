@@ -720,7 +720,7 @@
             </div>
 
             <!-- Waitlist Financial & Demand Summary Bar -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full" id="waitlist-summary-bar">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full" id="waitlist-summary-bar">
                 <div
                     class="bg-gray-950 border border-gray-850 p-4 rounded-2xl flex items-center justify-between font-mono">
                     <div>
@@ -757,6 +757,19 @@
                     <div
                         class="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 flex-shrink-0">
                         <i data-lucide="archive" class="w-4 h-4"></i>
+                    </div>
+                </div>
+
+                <div
+                    class="bg-gray-950 border border-gray-850 p-4 rounded-2xl flex items-center justify-between font-mono">
+                    <div>
+                        <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">Deposit Invoices &amp;
+                            Capital Telemetry</span>
+                        <p class="text-lg font-black text-teal-400" id="wl-summary-invoices">0 Invoices ($0.00)</p>
+                    </div>
+                    <div
+                        class="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 flex-shrink-0">
+                        <i data-lucide="file-text" class="w-4 h-4"></i>
                     </div>
                 </div>
             </div>
@@ -1110,6 +1123,7 @@
             <!-- Supabase JS SDK -->
             <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
             <script src="supabase-config.js"></script>
+            <script src="billing-engine.js"></script>
 
             <!-- Main Configuration Script -->
             <script>
@@ -2085,7 +2099,23 @@
                         const grandCapital = waitlistMarkets.reduce((acc, m) => acc + m.totalCapital, 0);
                         const grandTotes = waitlistMarkets.reduce((acc, m) => acc + m.totesDemanded, 0);
 
-                        // Update summary metrics bar
+                        // Query deposit invoices from Supabase invoices table for telemetry
+                        let depositInvoiceCount = 0;
+                        let depositInvoiceCapital = 0;
+                        try {
+                            const { data: depInvoices } = await supabase
+                                .from('invoices')
+                                .select('*')
+                                .or('invoice_type.eq.unlaunched_deposit,payment_status.eq.deposit_received');
+                            if (depInvoices && depInvoices.length > 0) {
+                                depositInvoiceCount = depInvoices.length;
+                                depositInvoiceCapital = depInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || inv.subtotal || 0), 0);
+                            }
+                        } catch (depErr) {
+                            console.warn('[Admin Facilities Telemetry] Deposit invoices fetch notice:', depErr);
+                        }
+
+                        // Update summary metrics bar & telemetry
                         const badgeEl = document.getElementById('waitlist-total-badge');
                         if (badgeEl) badgeEl.textContent = `${totalSignups} Prospect Signups Across ${waitlistMarkets.length} Cities`;
 
@@ -2093,10 +2123,13 @@
                             document.getElementById('wl-summary-prospects').textContent = `${totalSignups} Household Leads`;
                         }
                         if (document.getElementById('wl-summary-capital')) {
-                            document.getElementById('wl-summary-capital').textContent = `$${grandCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+                            document.getElementById('wl-summary-capital').textContent = `$${(grandCapital + depositInvoiceCapital).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
                         }
                         if (document.getElementById('wl-summary-totes')) {
                             document.getElementById('wl-summary-totes').textContent = `${grandTotes.toLocaleString()} Totes`;
+                        }
+                        if (document.getElementById('wl-summary-invoices')) {
+                            document.getElementById('wl-summary-invoices').textContent = `${depositInvoiceCount} Invoices ($${depositInvoiceCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })})`;
                         }
 
                         if (waitlistMarkets.length === 0) {
