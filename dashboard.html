@@ -3289,80 +3289,73 @@
             if (!selectEl || !dateStr) return;
 
             const targetFacId = facilityId || 'facility_seattle_north';
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const currentHour = now.getHours();
+            const isSelectedToday = dateStr === todayStr;
+
+            // 1. Always evaluate local elapsed time FIRST so past time slots are disabled immediately
+            Array.from(selectEl.options).forEach(opt => {
+                const cleanVal = opt.value;
+                const baseLabel = cleanVal.includes('09:00') ? 'Morning (9 AM - 12 PM)' :
+                                  cleanVal.includes('12:00') ? 'Afternoon (12 PM - 3 PM)' :
+                                  'Evening Peak (3 PM - 6 PM)';
+                
+                let isElapsedToday = false;
+                if (isSelectedToday) {
+                    if (cleanVal.includes('09:00') && currentHour >= 12) isElapsedToday = true;
+                    else if (cleanVal.includes('12:00') && currentHour >= 15) isElapsedToday = true;
+                    else if (cleanVal.includes('03:00') && currentHour >= 18) isElapsedToday = true;
+                }
+
+                if (isElapsedToday) {
+                    opt.disabled = true;
+                    opt.textContent = `${baseLabel} — ⏳ Elapsed`;
+                } else {
+                    opt.disabled = false;
+                    opt.textContent = baseLabel;
+                }
+            });
+
+            // Auto-switch selected option if currently selected slot is disabled
+            if (selectEl.selectedOptions[0] && selectEl.selectedOptions[0].disabled) {
+                const availableOpt = Array.from(selectEl.options).find(o => !o.disabled);
+                if (availableOpt) selectEl.value = availableOpt.value;
+            }
 
             try {
-                // Call the new RPC
-                const { data: availability, error } = await supabase.rpc('get_staging_availability', {
+                // 2. Fetch RPC capacity data if available to overlay capacity badges
+                const { data: availability } = await supabase.rpc('get_staging_availability', {
                     p_facility_id: targetFacId,
                     p_target_date: dateStr
                 });
 
-                if (error) throw error;
+                if (availability && availability.length > 0) {
+                    const availMap = {};
+                    availability.forEach(a => { availMap[a.slot] = a.available_capacity; });
 
-                const todayObj = new Date();
-                const todayStr = todayObj.toISOString().split('T')[0];
-                const currentHour = todayObj.getHours();
-                const isSelectedToday = dateStr === todayStr;
-
-                // If no availability returned for this date, the date might be blocked
-                if (!availability || availability.length === 0) {
                     Array.from(selectEl.options).forEach(opt => {
-                        opt.disabled = true;
-                        opt.textContent = `🚫 Closed on this date`;
-                    });
-                    return;
-                }
+                        if (opt.disabled) return; // Respect local elapsed disable
+                        const cleanVal = opt.value;
+                        const baseLabel = cleanVal.includes('09:00') ? 'Morning (9 AM - 12 PM)' :
+                                          cleanVal.includes('12:00') ? 'Afternoon (12 PM - 3 PM)' :
+                                          'Evening Peak (3 PM - 6 PM)';
 
-                const availMap = {};
-                availability.forEach(a => {
-                    availMap[a.slot] = a.available_capacity;
-                });
-
-                Array.from(selectEl.options).forEach(opt => {
-                    const cleanVal = opt.value;
-                    const baseLabel = cleanVal.includes('09:00') ? 'Morning (9 AM - 12 PM)' :
-                                      cleanVal.includes('12:00') ? 'Afternoon (12 PM - 3 PM)' :
-                                      'Evening Peak (3 PM - 6 PM)';
-                    
-                    let isElapsedToday = false;
-                    let elapsedReason = "";
-
-                    if (isSelectedToday) {
-                        if (cleanVal.includes('09:00') && currentHour >= 9) {
-                            isElapsedToday = true;
-                            elapsedReason = "Active / Elapsed Block";
-                        } else if (cleanVal.includes('12:00') && currentHour >= 12) {
-                            isElapsedToday = true;
-                            elapsedReason = "Active / Elapsed Block";
-                        } else if (cleanVal.includes('03:00') && currentHour >= 15) {
-                            isElapsedToday = true;
-                            elapsedReason = "Active / Elapsed Block";
+                        if (availMap[cleanVal] === 0) {
+                            opt.disabled = true;
+                            opt.textContent = `${baseLabel} — 🔴 FULL`;
+                        } else if (availMap[cleanVal] !== undefined) {
+                            opt.textContent = `${baseLabel} (${availMap[cleanVal]} slots left)`;
                         }
-                    }
+                    });
 
-                    if (isElapsedToday) {
-                        opt.disabled = true;
-                        opt.textContent = `${baseLabel} — ⏳ ${elapsedReason}`;
-                    } else if (availMap[cleanVal] === undefined) {
-                        // Slot not available in config
-                        opt.disabled = true;
-                        opt.textContent = `${baseLabel} — 🚫 Closed`;
-                    } else if (availMap[cleanVal] === 0) {
-                        opt.disabled = true;
-                        opt.textContent = `${baseLabel} — 🔴 FULL`;
-                    } else {
-                        opt.disabled = false;
-                        opt.textContent = `${baseLabel} (${availMap[cleanVal]} slots left)`;
+                    if (selectEl.selectedOptions[0] && selectEl.selectedOptions[0].disabled) {
+                        const availableOpt = Array.from(selectEl.options).find(o => !o.disabled);
+                        if (availableOpt) selectEl.value = availableOpt.value;
                     }
-                });
-
-                // Auto-switch selected value if currently disabled
-                if (selectEl.selectedOptions[0] && selectEl.selectedOptions[0].disabled) {
-                    const availableOpt = Array.from(selectEl.options).find(o => !o.disabled);
-                    if (availableOpt) selectEl.value = availableOpt.value;
                 }
             } catch (err) {
-                console.warn('Error checking slot capacity:', err);
+                console.warn('Capacity RPC check notice:', err);
             }
         }
 
@@ -3441,19 +3434,19 @@
             const valetFee = systemPricing.valet_base + (count * systemPricing.valet_tote_adder);
             document.getElementById('retrieval-valet-fee-label').textContent = `$${valetFee.toFixed(2)}`;
             
-            // Set default date to 2 days out
-            const defaultDate = new Date();
-            defaultDate.setDate(defaultDate.getDate() + 2);
-            const dateStr = defaultDate.toISOString().split('T')[0];
+            // Set default date to today (or tomorrow if past 6 PM)
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            
             const dateInput = document.getElementById('retrieval-target-date');
             if (dateInput) {
-                dateInput.value = dateStr;
-                dateInput.min = new Date().toISOString().split('T')[0];
+                dateInput.min = todayStr;
+                dateInput.value = todayStr;
             }
 
-            // Reset to default logistics & refresh surge pricing UI
+            // Reset to default logistics & trigger availability + surge check immediately
             selectRetrievalLogistics('staging');
-            updateReservationSurgeUI();
+            handleReservationDateChange();
             document.getElementById('retrieval-modal').classList.remove('hidden');
         }
 
@@ -3518,6 +3511,30 @@
             const targetDate = dateInput ? dateInput.value : null;
             const timeSlot = slotInput ? slotInput.value : '09:00 AM - 12:00 PM';
 
+            // Client-side guard against submitting past dates or elapsed time slots
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            if (targetDate && targetDate < todayStr) {
+                alert("⚠️ Target retrieval date cannot be in the past. Please select today or a future date.");
+                btn.disabled = false;
+                btn.textContent = 'Confirm Retrieval Request';
+                return;
+            }
+            if (targetDate && targetDate === todayStr) {
+                const curHour = now.getHours();
+                let isSlotPast = false;
+                if (timeSlot.includes('09:00') && curHour >= 12) isSlotPast = true;
+                else if (timeSlot.includes('12:00') && curHour >= 15) isSlotPast = true;
+                else if (timeSlot.includes('03:00') && curHour >= 18) isSlotPast = true;
+
+                if (isSlotPast) {
+                    alert("⚠️ The selected time slot has already passed today. Please select an upcoming time slot or a future date.");
+                    btn.disabled = false;
+                    btn.textContent = 'Confirm Retrieval Request';
+                    return;
+                }
+            }
+
             let startTime = null;
             let endTime = null;
             if (targetDate && timeSlot) {
@@ -3560,6 +3577,32 @@
                     });
                     data = fallbackRes.data;
                     error = fallbackRes.error;
+                }
+
+                if (error) {
+                    // Direct table fallback into public.access_requests if RPC schema cache functions fail
+                    const genPin = Math.floor(1000 + Math.random() * 9000).toString();
+                    const { data: directData, error: directErr } = await supabase.from('access_requests').insert({
+                        uid: currentUser.id,
+                        request_type: 'retrieval',
+                        fulfillment_type: retrievalLogisticsType,
+                        requested_items: Array.from(selectedItems),
+                        requested_tote_codes: Array.from(selectedItems).map(id => {
+                            const item = (currentInventory || []).find(i => i.id === id);
+                            return item ? item.tote_code : id;
+                        }),
+                        target_date: targetDate,
+                        time_slot: timeSlot,
+                        delivery_notes: deliveryNotes,
+                        pin: genPin,
+                        status: 'pending',
+                        created_at: new Date().toISOString()
+                    }).select('*').maybeSingle();
+
+                    if (!directErr) {
+                        error = null;
+                        data = directData || { success: true, pin: genPin };
+                    }
                 }
 
                 if (error) {
