@@ -5553,34 +5553,51 @@
             const toteCount = (userTotes || []).length;
             document.getElementById('cbd-customer-totes-count').textContent = `${toteCount} Tote${toteCount !== 1 ? 's' : ''}`;
 
-            // Fetch user's subscription record for exact rate & recurring amount
+            // Fetch user's subscription record & resolve dynamic volume rates and price lock immunity
             const { data: sub } = await supabase.from('subscriptions').select('*').eq('uid', user.id).maybeSingle();
             
-            let toteRate = 5.00;
-            let recurringTotal = toteCount * toteRate;
+            let t1 = 5.00, t2 = 3.50, t3 = 2.00, t4 = 1.00;
+            let isPriceLock = false;
 
-            if (sub && Number(sub.tote_rate) > 0) {
-                toteRate = Number(sub.tote_rate);
-                recurringTotal = Number(sub.recurring_storage) || (toteCount * toteRate);
+            if (user.has_price_lock && user.price_lock_rates) {
+                const plr = user.price_lock_rates;
+                t1 = Number(plr.tier1_rate || plr.tier1 || t1);
+                t2 = Number(plr.tier2_rate || plr.tier2 || t2);
+                t3 = Number(plr.tier3_rate || plr.tier3 || t3);
+                t4 = Number(plr.tier4_rate || plr.tier4 || t4);
+                isPriceLock = true;
             } else {
-                // Fetch dynamic regional market pricing rates from assigned facility
                 const facId = user.assigned_facility_id || 'facility_seattle_north';
                 const { data: fac } = await supabase.from('facilities').select('tier1_rate, tier2_rate, tier3_rate, tier4_rate').eq('id', facId).maybeSingle();
-                
-                const t1 = fac && fac.tier1_rate ? Number(fac.tier1_rate) : 5.00;
-                const t2 = fac && fac.tier2_rate ? Number(fac.tier2_rate) : 3.50;
-                const t3 = fac && fac.tier3_rate ? Number(fac.tier3_rate) : 2.00;
-                const t4 = fac && fac.tier4_rate ? Number(fac.tier4_rate) : 1.00;
-
-                if (toteCount >= 50) toteRate = t4;
-                else if (toteCount >= 25) toteRate = t3;
-                else if (toteCount >= 10) toteRate = t2; // e.g. $3.50/tote for 11 totes
-                else toteRate = t1;
-
-                recurringTotal = toteCount * toteRate;
+                if (fac) {
+                    t1 = Number(fac.tier1_rate) || 5.00;
+                    t2 = Number(fac.tier2_rate) || 3.50;
+                    t3 = Number(fac.tier3_rate) || 2.00;
+                    t4 = Number(fac.tier4_rate) || 1.00;
+                }
             }
 
-            document.getElementById('cbd-customer-rate').textContent = `$${toteRate.toFixed(2)}/tote/mo ($${recurringTotal.toFixed(2)} total)`;
+            let volumeTierRate = t1;
+            let tierNum = 1;
+            if (toteCount >= 50) { volumeTierRate = t4; tierNum = 4; }
+            else if (toteCount >= 25) { volumeTierRate = t3; tierNum = 3; }
+            else if (toteCount >= 10) { volumeTierRate = t2; tierNum = 2; }
+
+            let toteRate = volumeTierRate;
+            if (sub && Number(sub.tote_rate) > 0) {
+                toteRate = Number(sub.tote_rate);
+                if (toteCount >= 10 && toteRate > volumeTierRate && (!sub.is_custom_override)) {
+                    toteRate = volumeTierRate;
+                }
+            }
+
+            let recurringTotal = toteCount * toteRate;
+            if (sub && Number(sub.recurring_storage) > 0 && sub.tote_rate === toteRate) {
+                recurringTotal = Number(sub.recurring_storage);
+            }
+
+            const lockBadge = isPriceLock ? ' 🔒 Price Locked' : '';
+            document.getElementById('cbd-customer-rate').textContent = `$${toteRate.toFixed(2)}/tote/mo ($${recurringTotal.toFixed(2)} total — Tier ${tierNum}${lockBadge})`;
 
             const cardBrand = user.card_brand || user.payment_method_brand || 'Visa';
             const cardLast4 = user.card_last4 || user.payment_method_last4 || '4242';

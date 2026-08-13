@@ -7,14 +7,101 @@
 
   const CloudVaultBilling = {
     /**
+     * Dynamically resolves rate schedules and volume tier rate for a customer at billing execution time.
+     * Evaluates customer price lock (price lock immunity) first, then falls back to live regional facility rates.
+     * Tier thresholds: 50+ (Tier 4), 25-49 (Tier 3), 10-24 (Tier 2), 1-9 (Tier 1).
+     * @param {string} userId - User UUID
+     * @param {string} facilityId - Facility ID
+     * @param {number} toteCount - Number of storage totes
+     * @returns {Promise<{toteRate: number, tierNumber: number, tierName: string, recurringStorage: number, ratesUsed: Object, isPriceLock: boolean}>}
+     */
+    resolveCustomerPricing: async function (userId, facilityId, toteCount = 1) {
+      const sb = global.supabase;
+      let rates = { tier1: 5.00, tier2: 3.50, tier3: 2.00, tier4: 1.00 };
+      let isPriceLock = false;
+      let assignedFacId = facilityId || null;
+
+      if (sb) {
+        try {
+          if (userId) {
+            const { data: user } = await sb.from('users')
+              .select('assigned_facility_id, has_price_lock, price_lock_rates')
+              .eq('id', userId)
+              .maybeSingle();
+
+            if (user) {
+              if (user.assigned_facility_id && !assignedFacId) {
+                assignedFacId = user.assigned_facility_id;
+              }
+              if (user.has_price_lock && user.price_lock_rates) {
+                const plr = user.price_lock_rates;
+                rates.tier1 = Number(plr.tier1_rate || plr.tier1 || rates.tier1);
+                rates.tier2 = Number(plr.tier2_rate || plr.tier2 || rates.tier2);
+                rates.tier3 = Number(plr.tier3_rate || plr.tier3 || rates.tier3);
+                rates.tier4 = Number(plr.tier4_rate || plr.tier4 || rates.tier4);
+                isPriceLock = true;
+              }
+            }
+          }
+
+          if (!isPriceLock) {
+            const facIdToQuery = assignedFacId || 'facility_seattle_north';
+            const { data: fac } = await sb.from('facilities')
+              .select('tier1_rate, tier2_rate, tier3_rate, tier4_rate')
+              .eq('id', facIdToQuery)
+              .maybeSingle();
+
+            if (fac) {
+              rates.tier1 = Number(fac.tier1_rate) || 5.00;
+              rates.tier2 = Number(fac.tier2_rate) || 3.50;
+              rates.tier3 = Number(fac.tier3_rate) || 2.00;
+              rates.tier4 = Number(fac.tier4_rate) || 1.00;
+            }
+          }
+        } catch (err) {
+          console.warn('[CloudVaultBilling] Error resolving customer dynamic pricing:', err.message);
+        }
+      }
+
+      const count = Math.max(1, Number(toteCount) || 1);
+      let toteRate = rates.tier1;
+      let tierNumber = 1;
+      let tierName = 'Tier 1 Standard Volume';
+
+      if (count >= 50) {
+        toteRate = rates.tier4;
+        tierNumber = 4;
+        tierName = 'Tier 4 Enterprise Volume';
+      } else if (count >= 25) {
+        toteRate = rates.tier3;
+        tierNumber = 3;
+        tierName = 'Tier 3 Commercial Volume';
+      } else if (count >= 10) {
+        toteRate = rates.tier2;
+        tierNumber = 2;
+        tierName = 'Tier 2 Preferred Volume';
+      }
+
+      return {
+        toteRate,
+        tierNumber,
+        tierName,
+        recurringStorage: count * toteRate,
+        ratesUsed: rates,
+        isPriceLock
+      };
+    },
+
+    /**
      * Generates a standard CloudVault invoice number.
      * Example: "INV-2026-89421"
      * @returns {string}
      */
     generateInvoiceNumber: function () {
       const year = new Date().getFullYear();
-      const randomPart = Math.floor(10000 + Math.random() * 90000);
-      return `INV-${year}-${randomPart}`;
+      const timePart = Date.now().toString().slice(-6);
+      const randomPart = Math.floor(100 + Math.random() * 900);
+      return `INV-${year}-${timePart}${randomPart}`;
     },
 
     /**
@@ -49,8 +136,6 @@
         }
 
         // --- Tax Resolution ---
-        // Look up tax rate from service_areas by customer ZIP. Never assume a rate.
-        // If admin hasn't configured a ZIP rate, tax = $0.
         let resolvedTaxRate = params.tax_rate != null ? Number(params.tax_rate) : null;
         let resolvedTaxLabel = params.tax_label || null;
         if (resolvedTaxRate == null && params.zip_code) {
@@ -69,7 +154,7 @@
         }
         const taxableBase = Number(params.subtotal || 0);
         const taxAmount = resolvedTaxRate != null ? Math.round(taxableBase * resolvedTaxRate * 100) / 100 : (Number(params.tax) || 0.00);
-        // Recompute total with tax
+        
         const computedTotal = taxableBase
           + Number(params.delivery_fee || 0)
           + Number(params.surge_fee || 0)
@@ -121,11 +206,24 @@
           refunded_at: params.refunded_at || params.refundedAt || null
         };
 
-        const { data, error } = await sb
+        let { data, error } = await sb
           .from('invoices')
           .insert([record])
           .select()
           .single();
+
+        // Retry with timestamp-backed invoice number on duplicate key / 409 conflict
+        if (error && (error.code === '23505' || error.status === 409 || (error.message && error.message.includes('unique')))) {
+          console.warn('[CloudVaultBilling] Unique invoice_number collision, retrying with fresh number...');
+          record.invoice_number = this.generateInvoiceNumber();
+          const retryRes = await sb
+            .from('invoices')
+            .insert([record])
+            .select()
+            .single();
+          data = retryRes.data;
+          error = retryRes.error;
+        }
 
         if (error) {
           console.error('[CloudVaultBilling] Error creating invoice record:', error);
@@ -146,27 +244,32 @@
     createSignupInvoice: async function(userId, subscriptionData, userZip) {
       if (!userId || !subscriptionData) return { success: false, error: 'Missing params' };
       const toteCount = Number(subscriptionData.total_totes || subscriptionData.tote_count || 0);
-      const toteRate = Number(subscriptionData.tote_rate || 0);
-      const storageAmt = Number(subscriptionData.recurring_storage || (toteCount * toteRate) || 0);
+      const pricingRes = await this.resolveCustomerPricing(userId, subscriptionData.facility_id, toteCount);
+      
+      const toteRate = (Number(subscriptionData.tote_rate) > 0 && !(toteCount >= 10 && Number(subscriptionData.tote_rate) > pricingRes.toteRate)) 
+        ? Number(subscriptionData.tote_rate) 
+        : pricingRes.toteRate;
+      const storageAmt = Number(subscriptionData.recurring_storage || (toteCount * toteRate) || pricingRes.recurringStorage);
       const valetFee = Number(subscriptionData.valet_fee || 0);
       const now = new Date().toISOString();
       return this.createInvoiceRecord({
         uid: userId,
         customer_name: subscriptionData.customer_name || 'CloudVault Customer',
         customer_email: subscriptionData.customer_email || null,
+        facility_id: subscriptionData.facility_id || null,
         invoice_type: 'initial_reservation',
         payment_status: 'paid',
         subtotal: storageAmt,
         delivery_fee: valetFee,
-        total_amount: storageAmt + valetFee, // tax will be added by createInvoiceRecord
+        total_amount: storageAmt + valetFee,
         payment_method: 'card',
         zip_code: userZip || null,
         transaction_reference: window.CloudVaultStripe
           ? window.CloudVaultStripe.generateChargeId()
           : 'ch_signup_' + Date.now(),
-        notes: 'First month — charged at signup',
+        notes: `First month — charged at signup (${toteCount} totes, ${pricingRes.tierName}${pricingRes.isPriceLock ? ' [Price Locked]' : ''})`,
         line_items: [
-          { description: `CloudVault Storage (${toteCount} totes @ $${toteRate.toFixed(2)}/mo)`, qty: toteCount || 1, unit_price: toteRate, amount: storageAmt },
+          { description: `CloudVault Storage (${toteCount} totes @ $${toteRate.toFixed(2)}/mo — ${pricingRes.tierName})`, qty: toteCount || 1, unit_price: toteRate, amount: storageAmt },
           ...(valetFee > 0 ? [{ description: 'Valet Delivery Service Fee', qty: 1, unit_price: valetFee, amount: valetFee }] : [])
         ],
         created_at: now,
@@ -279,15 +382,18 @@
             if (!alreadyHasTxn && !alreadyInNotes && !hasSubInvoice) {
               const userObj = usersMap[sub.uid] || {};
               const toteCount = Number(sub.tote_count || sub.total_totes || 0);
-              const toteRate = Number(sub.tote_rate || 0);
-              const storageAmt = Number(sub.recurring_storage || (toteCount * toteRate) || 0);
+              const pricingRes = await this.resolveCustomerPricing(sub.uid, sub.facility_id || userObj.assigned_facility_id, toteCount);
+              const toteRate = (Number(sub.tote_rate) > 0 && !(toteCount >= 10 && Number(sub.tote_rate) > pricingRes.toteRate)) 
+                ? Number(sub.tote_rate) 
+                : pricingRes.toteRate;
+              const storageAmt = Number(sub.recurring_storage || (toteCount * toteRate) || pricingRes.recurringStorage);
               const valetFee = Number(sub.valet_fee || 0);
               const total = Number(sub.first_month_total || sub.monthly_total || (storageAmt + valetFee));
               const createdAt = sub.created_at || new Date().toISOString();
 
               const lineItems = [
                 {
-                  description: `CloudVault Storage Subscription (${toteCount} totes @ $${toteRate.toFixed(2)}/mo)`,
+                  description: `CloudVault Storage Subscription (${toteCount} totes @ $${toteRate.toFixed(2)}/mo — ${pricingRes.tierName})`,
                   qty: toteCount || 1,
                   unit_price: toteRate || storageAmt,
                   amount: storageAmt
@@ -590,8 +696,11 @@
           const userObj = usersMap[sub.uid] || {};
 
           const toteCount = Number(sub.tote_count || sub.total_totes || 0);
-          const toteRate = Number(sub.tote_rate || 0);
-          const storageAmt = Number(sub.recurring_storage || (toteCount * toteRate) || 0);
+          const pricingRes = await this.resolveCustomerPricing(sub.uid, sub.facility_id || userObj.assigned_facility_id, toteCount);
+          const toteRate = (Number(sub.tote_rate) > 0 && !(toteCount >= 10 && Number(sub.tote_rate) > pricingRes.toteRate)) 
+            ? Number(sub.tote_rate) 
+            : pricingRes.toteRate;
+          const storageAmt = Number(sub.recurring_storage || (toteCount * toteRate) || pricingRes.recurringStorage);
           const valetFee = Number(sub.valet_fee || 0);
           let monthlyTotal = Number(sub.monthly_total || (storageAmt + valetFee));
 
@@ -614,10 +723,10 @@
             total_amount: monthlyTotal,
             payment_method: 'autopay',
             transaction_reference: txnRef,
-            notes: 'Automated monthly subscription autopay renewal',
+            notes: `Automated monthly subscription autopay renewal (${pricingRes.tierName}${pricingRes.isPriceLock ? ' [Price Locked]' : ''})`,
             line_items: [
               {
-                description: `CloudVault Monthly Autopay Storage Subscription (${toteCount} totes @ $${toteRate.toFixed(2)}/mo)`,
+                description: `CloudVault Monthly Autopay Storage Subscription (${toteCount} totes @ $${toteRate.toFixed(2)}/mo — ${pricingRes.tierName})`,
                 qty: toteCount || 1,
                 unit_price: toteRate || storageAmt,
                 amount: storageAmt
@@ -824,15 +933,18 @@
 
             if (!alreadyHasTxn && !alreadyInNotes && !hasSubInvoice) {
               const toteCount = Number(sub.tote_count || sub.total_totes || 0);
-              const toteRate = Number(sub.tote_rate || 0);
-              const storageAmt = Number(sub.recurring_storage || (toteCount * toteRate) || 0);
+              const pricingRes = await this.resolveCustomerPricing(userId, sub.facility_id || user.assigned_facility_id, toteCount);
+              const toteRate = (Number(sub.tote_rate) > 0 && !(toteCount >= 10 && Number(sub.tote_rate) > pricingRes.toteRate)) 
+                ? Number(sub.tote_rate) 
+                : pricingRes.toteRate;
+              const storageAmt = Number(sub.recurring_storage || (toteCount * toteRate) || pricingRes.recurringStorage);
               const valetFee = Number(sub.valet_fee || 0);
               const total = Number(sub.first_month_total || sub.monthly_total || (storageAmt + valetFee));
               const createdAt = sub.created_at || new Date().toISOString();
 
               const lineItems = [
                 {
-                  description: `CloudVault Storage Subscription (${toteCount} totes @ $${toteRate.toFixed(2)}/mo)`,
+                  description: `CloudVault Storage Subscription (${toteCount} totes @ $${toteRate.toFixed(2)}/mo — ${pricingRes.tierName})`,
                   qty: toteCount || 1,
                   unit_price: toteRate || storageAmt,
                   amount: storageAmt
@@ -1102,8 +1214,11 @@
         const user = userObj || {};
 
         const toteCount = Number(sub.tote_count || sub.total_totes || 0);
-        const toteRate = Number(sub.tote_rate || 0);
-        const storageAmt = Number(sub.recurring_storage || (toteCount * toteRate) || 0);
+        const pricingRes = await this.resolveCustomerPricing(userId, sub.facility_id || user.assigned_facility_id, toteCount);
+        const toteRate = (Number(sub.tote_rate) > 0 && !(toteCount >= 10 && Number(sub.tote_rate) > pricingRes.toteRate)) 
+          ? Number(sub.tote_rate) 
+          : pricingRes.toteRate;
+        const storageAmt = Number(sub.recurring_storage || (toteCount * toteRate) || pricingRes.recurringStorage);
         const valetFee = Number(sub.valet_fee || 0);
         let monthlyTotal = Number(sub.monthly_total || (storageAmt + valetFee));
 
@@ -1126,10 +1241,10 @@
           total_amount: monthlyTotal,
           payment_method: 'autopay',
           transaction_reference: txnRef,
-          notes: 'Granular customer monthly subscription autopay renewal',
+          notes: `Granular customer monthly subscription autopay renewal (${pricingRes.tierName}${pricingRes.isPriceLock ? ' [Price Locked]' : ''})`,
           line_items: [
             {
-              description: `CloudVault Monthly Autopay Storage Subscription (${toteCount} totes @ $${toteRate.toFixed(2)}/mo)`,
+              description: `CloudVault Monthly Autopay Storage Subscription (${toteCount} totes @ $${toteRate.toFixed(2)}/mo — ${pricingRes.tierName})`,
               qty: toteCount || 1,
               unit_price: toteRate || storageAmt,
               amount: storageAmt
@@ -1239,13 +1354,14 @@
 
       const invType = (invoiceObj.invoice_type || invoiceObj.invoiceType || '').toLowerCase();
 
-      // --- Volume Tier Rate Schedule ---
-      const getVolumeRateForCount = (toteCount) => {
+      // --- Dynamic Volume Tier Rate Schedule ---
+      const rates = invoiceObj._resolvedRates || window.regionalRates || { tier1: 5.00, tier2: 3.50, tier3: 2.00, tier4: 1.00 };
+      const getVolumeRateForCount = (toteCount, r = rates) => {
         const count = Number(toteCount) || 1;
-        if (count >= 26) return { tierName: 'Tier 4 Enterprise Volume', rate: 1.00 };
-        if (count >= 11) return { tierName: 'Tier 3 Commercial Volume', rate: 2.00 };
-        if (count >= 5) return { tierName: 'Tier 2 Preferred Volume', rate: 3.50 };
-        return { tierName: 'Tier 1 Standard Volume', rate: 5.00 };
+        if (count >= 50) return { tierName: 'Tier 4 Enterprise Volume', rate: Number(r.tier4 || 1.00) };
+        if (count >= 25) return { tierName: 'Tier 3 Commercial Volume', rate: Number(r.tier3 || 2.00) };
+        if (count >= 10) return { tierName: 'Tier 2 Preferred Volume', rate: Number(r.tier2 || 3.50) };
+        return { tierName: 'Tier 1 Standard Volume', rate: Number(r.tier1 || 5.00) };
       };
 
       // Extract or infer tote count intelligently for all invoices (including legacy backfills)
@@ -1266,11 +1382,12 @@
       // Smart Inference for legacy backfilled invoices where subtotal >= 10 but qty was set to 1:
       if (!activeToteCount || activeToteCount === 1) {
         const itemAmt = storageItem ? Number(storageItem.amount || storageItem.unit_price || subtotal) : subtotal;
-        if (itemAmt >= 10) {
-          if (itemAmt % 5 === 0) activeToteCount = Math.round(itemAmt / 5.00);
-          else if (itemAmt % 3.5 === 0) activeToteCount = Math.round(itemAmt / 3.50);
-          else if (itemAmt % 2 === 0) activeToteCount = Math.round(itemAmt / 2.00);
-          else activeToteCount = Math.max(1, Math.round(itemAmt / 5.00));
+        if (itemAmt > 0) {
+          if (itemAmt % rates.tier3 === 0 && (itemAmt / rates.tier3) >= 25 && (itemAmt / rates.tier3) < 50) activeToteCount = Math.round(itemAmt / rates.tier3);
+          else if (itemAmt % rates.tier4 === 0 && (itemAmt / rates.tier4) >= 50) activeToteCount = Math.round(itemAmt / rates.tier4);
+          else if (itemAmt % rates.tier2 === 0 && (itemAmt / rates.tier2) >= 10 && (itemAmt / rates.tier2) < 25) activeToteCount = Math.round(itemAmt / rates.tier2);
+          else if (itemAmt % rates.tier1 === 0 && (itemAmt / rates.tier1) < 10) activeToteCount = Math.round(itemAmt / rates.tier1);
+          else activeToteCount = Math.max(1, Math.round(itemAmt / rates.tier1));
         }
       }
       if (!activeToteCount || activeToteCount < 1) activeToteCount = 1;

@@ -2492,7 +2492,16 @@
         }
 
         function getWizardTierRate(count) {
-            const rates = window.regionalRates || { tier1: 5.00, tier2: 3.50, tier3: 2.00, tier4: 1.00 };
+            let rates = window.regionalRates || { tier1: 5.00, tier2: 3.50, tier3: 2.00, tier4: 1.00 };
+            if (window.currentUserData && window.currentUserData.has_price_lock && window.currentUserData.price_lock_rates) {
+                const plr = window.currentUserData.price_lock_rates;
+                rates = {
+                    tier1: Number(plr.tier1_rate || plr.tier1 || rates.tier1),
+                    tier2: Number(plr.tier2_rate || plr.tier2 || rates.tier2),
+                    tier3: Number(plr.tier3_rate || plr.tier3 || rates.tier3),
+                    tier4: Number(plr.tier4_rate || plr.tier4 || rates.tier4)
+                };
+            }
             if (count >= 50) return { rate: rates.tier4, tier: 4, label: `Tier 4 — $${rates.tier4.toFixed(2)}/tote` };
             if (count >= 25) return { rate: rates.tier3, tier: 3, label: `Tier 3 — $${rates.tier3.toFixed(2)}/tote` };
             if (count >= 10) return { rate: rates.tier2, tier: 2, label: `Tier 2 — $${rates.tier2.toFixed(2)}/tote` };
@@ -3788,8 +3797,10 @@
                 if (retrievalLogisticsType === 'valet_delivery') {
                     showToast('Valet delivery requested successfully!');
                 } else {
-                    document.getElementById('pin-display').textContent = data.pin;
-                    document.getElementById('pin-modal').classList.remove('hidden');
+                    const pinDisplay = document.getElementById('pin-display');
+                    if (pinDisplay) pinDisplay.textContent = data.pin || '----';
+                    const pinModal = document.getElementById('pin-modal');
+                    if (pinModal) pinModal.classList.remove('hidden');
                 }
 
                 selectedItems.clear();
