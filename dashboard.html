@@ -1090,10 +1090,14 @@
                     <span class="text-2xl font-extrabold text-white" id="billing-monthly-amount">$0.00<span class="text-xs font-normal text-blue-200">/mo</span></span>
                 </div>
                 
-                <div class="grid grid-cols-2 gap-4 pt-2 border-t border-white/20 text-xs text-blue-100">
+                <div class="grid grid-cols-3 gap-3 pt-2 border-t border-white/20 text-xs text-blue-100">
                     <div>
                         <span class="text-[10px] font-bold uppercase text-blue-200 block">Tote Rate Tier</span>
                         <span id="billing-tier-label" class="font-bold text-white text-sm">--</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold uppercase text-blue-200 block">Last Billed Date</span>
+                        <span id="billing-last-date" class="font-bold text-white text-sm">--</span>
                     </div>
                     <div>
                         <span class="text-[10px] font-bold uppercase text-blue-200 block">Next Renewal Date</span>
@@ -4568,11 +4572,13 @@
             const planNameEl = document.getElementById('billing-plan-name');
             const monthlyAmountEl = document.getElementById('billing-monthly-amount');
             const tierLabelEl = document.getElementById('billing-tier-label');
+            const lastDateEl = document.getElementById('billing-last-date');
             const nextDateEl = document.getElementById('billing-next-date');
             
             if (planNameEl) planNameEl.textContent = 'Loading...';
             if (monthlyAmountEl) monthlyAmountEl.textContent = '...';
             if (tierLabelEl) tierLabelEl.textContent = '...';
+            if (lastDateEl) lastDateEl.textContent = '...';
             if (nextDateEl) nextDateEl.textContent = 'Loading...';
 
             if (currentSubscription) {
@@ -4583,6 +4589,14 @@
                 if (planNameEl) planNameEl.textContent = `${totalTotes} Tote${totalTotes !== 1 ? 's' : ''} Storage Plan`;
                 if (monthlyAmountEl) monthlyAmountEl.innerHTML = `$${monthly.toFixed(2)}<span class="text-xs font-normal text-blue-200">/mo</span>`;
                 if (tierLabelEl) tierLabelEl.textContent = `Tier @ $${toteRate.toFixed(2)}/tote`;
+
+                if (lastDateEl) {
+                    const sub = currentSubscription;
+                    const lastDate = sub.last_billed_at ? new Date(sub.last_billed_at) : (sub.created_at ? new Date(sub.created_at) : null);
+                    lastDateEl.textContent = lastDate
+                        ? lastDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+                        : 'N/A';
+                }
 
                 if (nextDateEl) {
                     // Priority: next_billing_date → last_billed_at+30d → created_at+30d → current_period_end
@@ -4605,6 +4619,7 @@
                 if (planNameEl) planNameEl.textContent = 'No Active Plan';
                 if (monthlyAmountEl) monthlyAmountEl.textContent = '$0.00';
                 if (tierLabelEl) tierLabelEl.textContent = 'Inactive';
+                if (lastDateEl) lastDateEl.textContent = 'N/A';
                 if (nextDateEl) nextDateEl.textContent = 'N/A';
             }
 

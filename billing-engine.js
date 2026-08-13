@@ -349,12 +349,29 @@
         const paidAt = params.paid_at || params.paidAt || (paymentStatus === 'paid' ? createdAt : null);
         const dueDate = params.due_date || params.dueDate || new Date(new Date(createdAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
+        const targetUid = params.uid || params.userId || params.user_id || null;
+        if (!targetUid) {
+          console.error('[CloudVaultBilling] Customer UID is required to create an invoice record');
+          return { success: false, error: 'Customer UID is required' };
+        }
+
+        let subId = params.subscription_id || params.subscriptionId || null;
+        if (!subId) {
+          try {
+            const { data: subRow } = await sb.from('subscriptions').select('id').eq('uid', targetUid).maybeSingle();
+            if (subRow) subId = subRow.id;
+          } catch (e) {
+            console.warn('[CloudVaultBilling] Notice resolving subscription_id for invoice:', e.message);
+          }
+        }
+
         const rawFacilityId = params.facility_id || params.facilityId || null;
         const validFacilityId = await this.validateFacilityId(rawFacilityId);
 
         const record = {
           invoice_number: invoiceNumber,
-          uid: params.uid || params.userId || params.user_id || null,
+          uid: targetUid,
+          subscription_id: subId,
           customer_name: params.customer_name || params.customerName || null,
           customer_email: params.customer_email || params.customerEmail || null,
           facility_id: validFacilityId,

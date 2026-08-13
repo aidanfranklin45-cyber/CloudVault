@@ -788,7 +788,8 @@ BEGIN
     plan_tier,
     status,
     current_period_end,
-    next_billing_date
+    next_billing_date,
+    last_billed_at
   ) VALUES (
     v_uid,
     'stub_' || substring(md5(random()::text) from 1 for 9),
@@ -803,13 +804,9 @@ BEGIN
     'valet_flex',
     'active',
     now() + interval '30 days',
-    now() + interval '30 days'
+    now() + interval '30 days',
+    now()
   );
-
-  -- Set last_billed_at to NOW() at signup so autopay cron skips this user for 30 days
-  UPDATE public.subscriptions
-  SET last_billed_at = now()
-  WHERE uid = v_uid;
   IF p_logistics_type IN ('valet_pickup', 'valet_delivery') THEN
     v_initial_status := 'pending-dispatch';
   ELSE
@@ -1514,7 +1511,7 @@ BEGIN
 
   -- Create default subscription if not exists
   IF NOT v_sub_exists THEN
-    INSERT INTO public.subscriptions (uid, stripe_subscription_id, total_totes, tote_rate, recurring_storage, logistics_type, valet_fee, first_month_total, status, current_period_end)
+    INSERT INTO public.subscriptions (uid, stripe_subscription_id, total_totes, tote_rate, recurring_storage, logistics_type, valet_fee, first_month_total, status, current_period_end, next_billing_date, last_billed_at)
     VALUES (
       v_uid,
       'stub_' || substring(md5(random()::text) from 1 for 9),
@@ -1525,7 +1522,9 @@ BEGIN
       0.00,
       25.00,
       'active',
-      now() + interval '30 days'
+      now() + interval '30 days',
+      now() + interval '30 days',
+      now()
     );
 
     UPDATE public.metadata
