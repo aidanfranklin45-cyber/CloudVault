@@ -272,6 +272,84 @@
     },
 
     /**
+     * Resolves tax rate and label dynamically for a given facility, customer ZIP, or user ID.
+     * Checks service_areas by ZIP, by facility_id, get_tax_rate_for_zip RPC, and falls back to regional defaults.
+     * @param {Object} opts - { facilityId, zipCode, uid }
+     * @returns {Promise<{taxRate: number, taxLabel: string}>}
+     */
+    resolveTaxRate: async function ({ facilityId = null, zipCode = null, uid = null } = {}) {
+      const sb = global.supabase;
+      let taxRate = null;
+      let taxLabel = null;
+
+      if (sb) {
+        try {
+          let custZip = zipCode;
+          if (!custZip && uid) {
+            const { data: u } = await sb.from('users').select('zip_code, address, assigned_facility_id').eq('id', uid).maybeSingle();
+            if (u) {
+              custZip = u.zip_code || (u.address ? String(u.address).match(/\b\d{5}\b/)?.[0] : null);
+              if (!facilityId && u.assigned_facility_id) facilityId = u.assigned_facility_id;
+            }
+          }
+
+          if (custZip) {
+            const { data: saZip } = await sb.from('service_areas')
+              .select('tax_rate, tax_label, city, state')
+              .eq('zip_code', custZip)
+              .maybeSingle();
+            if (saZip && saZip.tax_rate != null) {
+              taxRate = Number(saZip.tax_rate);
+              taxLabel = saZip.tax_label || `${saZip.city || 'Local'} Sales Tax (${(taxRate * 100).toFixed(2)}%)`;
+            }
+          }
+
+          if (taxRate == null && facilityId) {
+            const { data: saFac } = await sb.from('service_areas')
+              .select('tax_rate, tax_label, city, state')
+              .eq('facility_id', facilityId)
+              .not('tax_rate', 'is', null)
+              .limit(1);
+            if (saFac && saFac[0] && saFac[0].tax_rate != null) {
+              taxRate = Number(saFac[0].tax_rate);
+              taxLabel = saFac[0].tax_label || `${saFac[0].city || 'Regional'} Sales Tax (${(taxRate * 100).toFixed(2)}%)`;
+            }
+          }
+
+          if (taxRate == null && custZip) {
+            const { data: rpcRate } = await sb.rpc('get_tax_rate_for_zip', { p_zip: custZip });
+            if (rpcRate != null) {
+              taxRate = Number(rpcRate);
+              taxLabel = `State & Local Sales Tax (${(taxRate * 100).toFixed(2)}%)`;
+            }
+          }
+        } catch (e) {
+          console.warn('[CloudVaultBilling] resolveTaxRate notice:', e.message);
+        }
+      }
+
+      if (taxRate == null) {
+        const facKey = String(facilityId || '').toLowerCase();
+        const zipKey = String(zipCode || '').trim();
+        if (facKey.includes('yakima') || zipKey.startsWith('989')) {
+          taxRate = 0.083; // 8.3% Yakima WA sales tax
+          taxLabel = 'WA State & Yakima Local Sales Tax (8.30%)';
+        } else if (facKey.includes('portland') || zipKey.startsWith('972')) {
+          taxRate = 0.00; // Oregon 0% sales tax
+          taxLabel = 'Oregon State Sales Tax (0.00%)';
+        } else if (facKey.includes('seattle') || zipKey.startsWith('981')) {
+          taxRate = 0.1035; // 10.35% Seattle WA sales tax
+          taxLabel = 'WA State & Seattle Local Sales Tax (10.35%)';
+        } else {
+          taxRate = 0.086; // WA statewide default 8.6%
+          taxLabel = 'WA State Sales Tax (8.60%)';
+        }
+      }
+
+      return { taxRate, taxLabel };
+    },
+
+    /**
      * Persists an invoice record to Supabase public.invoices table.
      * @param {Object} params - Invoice properties
      * @returns {Promise<{success: boolean, data?: Object, error?: string}>}
@@ -305,45 +383,20 @@
         const rawFacilityId = params.facility_id || params.facilityId || null;
         const validFacilityId = await this.validateFacilityId(rawFacilityId);
         const targetFacId = validFacilityId || rawFacilityId || null;
+        const targetUid = params.uid || params.userId || params.user_id || null;
 
         // --- Tax Resolution ---
         let resolvedTaxRate = params.tax_rate != null ? Number(params.tax_rate) : null;
         let resolvedTaxLabel = params.tax_label || null;
 
         if (resolvedTaxRate == null) {
-          if (params.zip_code && sb) {
-            try {
-              const { data: saRow } = await sb.from('service_areas')
-                .select('tax_rate, tax_label, city, state')
-                .eq('zip_code', params.zip_code)
-                .maybeSingle();
-              if (saRow && saRow.tax_rate != null) {
-                resolvedTaxRate = Number(saRow.tax_rate);
-                resolvedTaxLabel = saRow.tax_label || `${saRow.city || 'Local'} Sales Tax (${(resolvedTaxRate * 100).toFixed(2)}%)`;
-              }
-            } catch (e) {
-              console.warn('[CloudVaultBilling] Tax rate lookup notice:', e.message);
-            }
-          }
-
-          // Fall back to facility / regional market rates
-          if (resolvedTaxRate == null) {
-            const facKey = String(targetFacId || '').toLowerCase();
-            const zipKey = String(params.zip_code || '').trim();
-            if (facKey.includes('yakima') || zipKey.startsWith('989')) {
-              resolvedTaxRate = 0.083; // 8.3% Yakima WA sales tax
-              resolvedTaxLabel = 'WA State & Yakima Local Sales Tax (8.30%)';
-            } else if (facKey.includes('portland') || zipKey.startsWith('972')) {
-              resolvedTaxRate = 0.00; // Oregon 0% sales tax
-              resolvedTaxLabel = 'Oregon State Sales Tax (0.00%)';
-            } else if (facKey.includes('seattle') || zipKey.startsWith('981')) {
-              resolvedTaxRate = 0.1035; // 10.35% Seattle WA sales tax
-              resolvedTaxLabel = 'WA State & Seattle Local Sales Tax (10.35%)';
-            } else {
-              resolvedTaxRate = 0.086; // WA statewide default 8.6%
-              resolvedTaxLabel = 'WA State Sales Tax (8.60%)';
-            }
-          }
+          const taxInfo = await this.resolveTaxRate({
+            facilityId: targetFacId,
+            zipCode: params.zip_code,
+            uid: targetUid
+          });
+          resolvedTaxRate = taxInfo.taxRate;
+          resolvedTaxLabel = taxInfo.taxLabel;
         }
 
         // Full taxable base across all taxable services (storage subtotal + valet delivery + surge/rush fee)
@@ -363,7 +416,16 @@
         }
 
         const computedTotal = Math.round((taxableBase + taxAmount - discount) * 100) / 100;
-        let totalAmount = params.total_amount != null ? Number(params.total_amount) : computedTotal;
+        let totalAmount = computedTotal;
+        if (params.total_amount != null) {
+          const rawTotal = Number(params.total_amount);
+          // If total_amount was explicitly passed as pre-tax amount and taxAmount > 0, enforce computedTotal (after tax)
+          if (taxAmount > 0 && Math.abs(rawTotal - (taxableBase - discount)) < 0.01) {
+            totalAmount = computedTotal;
+          } else if (rawTotal !== 0) {
+            totalAmount = rawTotal;
+          }
+        }
         const invType = (params.invoice_type || params.invoiceType || '').toLowerCase();
         if (invType !== 'refund' && totalAmount < 0) {
           totalAmount = 0;
@@ -374,7 +436,6 @@
         const paidAt = params.paid_at || params.paidAt || (paymentStatus === 'paid' ? createdAt : null);
         const dueDate = params.due_date || params.dueDate || new Date(new Date(createdAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
-        const targetUid = params.uid || params.userId || params.user_id || null;
         if (!targetUid) {
           console.error('[CloudVaultBilling] Customer UID is required to create an invoice record');
           return { success: false, error: 'Customer UID is required' };
@@ -667,7 +728,6 @@
               invoice_type: chg.charge_type || 'charge',
               payment_status: status,
               subtotal: amt,
-              total_amount: amt,
               payment_method: 'card',
               transaction_reference: txnRef,
               notes: `Synced charge receipt [Ref: ${chgRefTag}]`,
@@ -716,6 +776,7 @@
         if (userId) {
           try {
             await this.syncChargesToInvoices(userId);
+            await this.realignExistingInvoices();
           } catch (syncErr) {
             console.warn('[CloudVaultBilling] Charges synchronization notice:', syncErr.message);
           }
@@ -761,6 +822,19 @@
           }
         }
 
+        // Ensure returned invoices have their after-tax totals calculated
+        (data || []).forEach(inv => {
+          const sub = Number(inv.subtotal || 0);
+          const del = Number(inv.delivery_fee || 0);
+          const srg = Number(inv.surge_fee || 0);
+          const tx = Number(inv.tax || 0);
+          const dsc = Number(inv.discount || 0);
+          const calculatedTotal = Math.max(0, Math.round((sub + del + srg + tx - dsc) * 100) / 100);
+          if (tx > 0 && Math.abs(Number(inv.total_amount || 0) - (sub + del + srg - dsc)) < 0.01) {
+            inv.total_amount = calculatedTotal;
+          }
+        });
+
         return { success: true, invoices: data || [] };
       } catch (err) {
         console.error('[CloudVaultBilling] Exception in fetchInvoicesForUser:', err);
@@ -771,8 +845,8 @@
     /**
      * Scans and retroactively realigns all existing invoices in public.invoices table:
      * - Resolves each customer's active Price Lock (price lock immunity) or assigned facility regional rates.
-     * - Recalculates exact tote count, volume tier rate, storage subtotal, line items, and total amount.
-     * - Updates invalid/miscoded historical invoice records in Supabase.
+     * - Recalculates exact tote count, volume tier rate, storage subtotal, line items, and dynamic tax.
+     * - Updates invalid/miscoded historical invoice records in Supabase to after-tax amounts.
      * @returns {Promise<{success: boolean, scannedCount: number, updatedCount: number, error?: string}>}
      */
     realignExistingInvoices: async function () {
@@ -847,7 +921,7 @@
 
             const pricingRes = await this.resolveCustomerPricing(inv.uid, inv.facility_id, toteCount);
             const correctToteRate = pricingRes.toteRate;
-            const expectedStorageSubtotal = toteCount * correctToteRate;
+            const expectedStorageSubtotal = Math.round(toteCount * correctToteRate * 100) / 100;
 
             if (storageItem) {
               const currentQty = Number(storageItem.qty || storageItem.quantity || 1);
@@ -873,19 +947,53 @@
 
             let deliveryFee = Number(inv.delivery_fee || 0);
             let surgeFee = Number(inv.surge_fee || 0);
-            let tax = Number(inv.tax || 0);
             let discount = Number(inv.discount || 0);
             let newSubtotal = expectedStorageSubtotal;
-            let newTotal = newSubtotal + deliveryFee + surgeFee + tax - discount;
+            const taxableBase = Math.max(0, newSubtotal + deliveryFee + surgeFee);
+
+            // Dynamically resolve tax rate and calculate after-tax totals
+            const taxInfo = await this.resolveTaxRate({
+              facilityId: inv.facility_id,
+              uid: inv.uid,
+              zipCode: inv.zip_code
+            });
+            const taxRate = taxInfo.taxRate != null ? taxInfo.taxRate : 0.086;
+            const taxLabel = taxInfo.taxLabel || `Sales Tax (${(taxRate * 100).toFixed(2)}%)`;
+            const tax = Math.round(taxableBase * taxRate * 100) / 100;
+
+            const taxItemIndex = lineItems.findIndex(i => (i.description || '').toLowerCase().includes('tax') || i.tax_rate != null);
+            if (tax > 0) {
+              const taxItem = {
+                description: taxLabel,
+                qty: 1,
+                unit_price: tax,
+                amount: tax,
+                tax_rate: taxRate
+              };
+              if (taxItemIndex !== -1) {
+                if (Math.abs(Number(lineItems[taxItemIndex].amount || 0) - tax) > 0.01 || lineItems[taxItemIndex].tax_rate !== taxRate) {
+                  lineItems[taxItemIndex] = taxItem;
+                  modified = true;
+                }
+              } else {
+                lineItems.push(taxItem);
+                modified = true;
+              }
+            }
+
+            let newTotal = Math.round((taxableBase + tax - discount) * 100) / 100;
             if (newTotal < 0) newTotal = 0;
 
-            if (Math.abs(Number(inv.subtotal || 0) - newSubtotal) > 0.01 || Math.abs(Number(inv.total_amount || 0) - newTotal) > 0.01) {
+            if (Math.abs(Number(inv.subtotal || 0) - newSubtotal) > 0.01 ||
+                Math.abs(Number(inv.tax || 0) - tax) > 0.01 ||
+                Math.abs(Number(inv.total_amount || 0) - newTotal) > 0.01) {
               modified = true;
             }
 
             if (modified) {
               const updatePayload = {
                 subtotal: newSubtotal,
+                tax: tax,
                 total_amount: newTotal,
                 line_items: lineItems,
                 notes: (inv.notes || '').includes('Realigned')
@@ -896,7 +1004,7 @@
               if (!updateErr) updatedCount++;
             }
           } else {
-            // Non-subscription service invoice (retrieval / valet / expansion)
+            // Non-subscription service invoice (retrieval / valet / surge / expansion)
             // Strip any erroneously injected monthly subscription line items
             const originalLen = lineItems.length;
             lineItems = lineItems.filter(i => {
@@ -909,17 +1017,49 @@
             const subtotal = Number(inv.subtotal || 0);
             const deliveryFee = Number(inv.delivery_fee || 0);
             const surgeFee = Number(inv.surge_fee || 0);
-            const tax = Number(inv.tax || 0);
             const discount = Number(inv.discount || 0);
-            const correctTotal = Math.max(0, subtotal + deliveryFee + surgeFee + tax - discount);
+            const taxableBase = Math.max(0, subtotal + deliveryFee + surgeFee);
 
-            if (Math.abs(Number(inv.total_amount || 0) - correctTotal) > 0.01) {
+            // Dynamically resolve tax rate and calculate after-tax totals
+            const taxInfo = await this.resolveTaxRate({
+              facilityId: inv.facility_id,
+              uid: inv.uid,
+              zipCode: inv.zip_code
+            });
+            const taxRate = taxInfo.taxRate != null ? taxInfo.taxRate : 0.086;
+            const taxLabel = taxInfo.taxLabel || `Sales Tax (${(taxRate * 100).toFixed(2)}%)`;
+            const tax = Math.round(taxableBase * taxRate * 100) / 100;
+
+            const taxItemIndex = lineItems.findIndex(i => (i.description || '').toLowerCase().includes('tax') || i.tax_rate != null);
+            if (tax > 0) {
+              const taxItem = {
+                description: taxLabel,
+                qty: 1,
+                unit_price: tax,
+                amount: tax,
+                tax_rate: taxRate
+              };
+              if (taxItemIndex !== -1) {
+                if (Math.abs(Number(lineItems[taxItemIndex].amount || 0) - tax) > 0.01 || lineItems[taxItemIndex].tax_rate !== taxRate) {
+                  lineItems[taxItemIndex] = taxItem;
+                  modified = true;
+                }
+              } else {
+                lineItems.push(taxItem);
+                modified = true;
+              }
+            }
+
+            const correctTotal = Math.round((taxableBase + tax - discount) * 100) / 100;
+
+            if (Math.abs(Number(inv.tax || 0) - tax) > 0.01 || Math.abs(Number(inv.total_amount || 0) - correctTotal) > 0.01) {
               modified = true;
             }
 
             if (modified) {
               const updatePayload = {
                 subtotal: subtotal,
+                tax: tax,
                 total_amount: correctTotal,
                 line_items: lineItems
               };
