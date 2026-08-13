@@ -1814,12 +1814,14 @@
                             };
                         }
 
+                        const facRooms = Number(currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || resData?.numStagingRooms || 3);
                         const roomNums = stgLocs.map(l => {
                             const match = (l.identifier || '').match(/ROOM-(\d+)/i);
                             return match ? parseInt(match[1], 10) : 1;
                         });
                         const maxRoomFromLocs = Math.max(...roomNums, 1);
-                        const numRooms = maxRoomFromLocs;
+                        const countFromLocations = stgLocs ? stgLocs.length : 0;
+                        const numRooms = Math.max(facRooms, maxRoomFromLocs, countFromLocations, 1);
 
                         const reservations = resData ? (resData.reservations || []) : [];
 

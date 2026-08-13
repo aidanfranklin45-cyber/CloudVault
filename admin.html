@@ -3552,7 +3552,7 @@
                         const slotStr = reqManifest?.time_slot || '09:00 AM - 12:00 PM';
                         const isSameDay = reqManifest?.surge_tier === 'same_day_surge';
 
-                        const numRooms = currentLoadedFac?.num_staging_rooms || 2;
+                        const numRooms = Number(currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 3);
                         const assignedRoomNum = getAssignedRoom(uid, numRooms);
 
                         const isIntakeProcessingTote = totes.some(t => !t.activated || (t.location_code && t.location_code.startsWith('INTAKE')) || (t.status === 'pending-stage' && !t.activated));
@@ -3703,7 +3703,7 @@
                         const dateStr = reqDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
                         const slotStr = time_slot;
 
-                        const numRooms = currentLoadedFac?.num_staging_rooms || 2;
+                        const numRooms = Number(currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 3);
                         // Seed room calculation with groupKey so distinct schedule windows get non-conflicting staging rooms
                         const assignedRoomNum = getAssignedRoom(groupKey, numRooms);
                         const toteIdsJson = JSON.stringify(totes.map(t => t.id)).replace(/"/g, '&quot;');
