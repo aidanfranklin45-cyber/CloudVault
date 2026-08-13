@@ -1340,6 +1340,7 @@
         // ============================================================
         let currentUser = null;
         let currentProfile = null;
+        let currentUserProfile = null;
         let currentUserColor = 'blue';
         let selectedItems = new Set();
         let currentInventory = [];
@@ -2841,6 +2842,7 @@
             
             const handleProfileUpdate = (profileData) => {
                 currentProfile = profileData;
+                currentUserProfile = profileData;
                 document.getElementById('loading-state').classList.add('hidden');
                 document.getElementById('main-content').classList.remove('hidden');
                 
@@ -2951,7 +2953,8 @@
             const curTotes = currentSubscription ? (currentSubscription.total_totes || 0) : 0;
             const curRate = currentSubscription ? (Number(currentSubscription.tote_rate) || 5.00) : 5.00;
             const curMonthly = currentSubscription ? (Number(currentSubscription.recurring_storage) || (curTotes * curRate)) : 0;
-            const userFac = currentUserProfile ? currentUserProfile.assigned_facility_id : 'facility_seattle_north';
+            const prof = currentProfile || currentUserProfile || {};
+            const userFac = prof.assigned_facility_id || prof.assigned_facility || 'facility_seattle_north';
 
             const warningBanner = document.getElementById('tpm-warning-banner');
 
@@ -3034,6 +3037,9 @@
             submitBtn.textContent = 'Processing Plan Change...';
 
             try {
+                const prof = currentProfile || currentUserProfile || {};
+                const userFac = prof.assigned_facility_id || prof.assigned_facility || 'facility_seattle_north';
+
                 if (tpmCurrentMode === 'reduce') {
                     if (window.CloudVaultBilling && typeof window.CloudVaultBilling.processToteReduction === 'function') {
                         const res = await window.CloudVaultBilling.processToteReduction(currentUser.id, tpmCount);
@@ -3041,6 +3047,7 @@
                             showToast(res.message || `Successfully unsubscribed ${tpmCount} tote(s)!`);
                             closeTotePlanManagerModal();
                             closeBillingModal();
+                            initDashboard();
                         } else {
                             alert(`Reduction error: ${res.error}`);
                         }
@@ -3053,7 +3060,7 @@
                             currentTotes: curTotes,
                             additionalTotes: tpmCount,
                             userId: currentUser.id,
-                            facilityId: currentUserProfile ? currentUserProfile.assigned_facility_id : null,
+                            facilityId: userFac,
                             nextBillingDate: currentSubscription ? currentSubscription.next_billing_date : null
                         });
 
@@ -3064,9 +3071,36 @@
                         });
 
                         if (error) throw error;
+
+                        if (proRataRes && proRataRes.proRataAmount > 0 && window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
+                            await window.CloudVaultBilling.createInvoiceRecord({
+                                uid: currentUser.id,
+                                customer_name: currentUser.user_metadata?.name || currentUser.email.split('@')[0],
+                                customer_email: currentUser.email,
+                                facility_id: userFac,
+                                invoice_type: 'subscription_expansion',
+                                payment_status: 'paid',
+                                subtotal: proRataRes.proRataAmount,
+                                total_amount: proRataRes.proRataAmount,
+                                payment_method: 'card',
+                                notes: `Mid-cycle tote expansion (+${tpmCount} totes, pro-rata billing)`,
+                                line_items: [
+                                    {
+                                        description: `Prorated Tote Expansion (+${tpmCount} totes @ $${proRataRes.newRate.toFixed(2)}/mo — ${proRataRes.daysRemaining} days remaining)`,
+                                        qty: tpmCount,
+                                        unit_price: proRataRes.proRataAmount / tpmCount,
+                                        amount: proRataRes.proRataAmount
+                                    }
+                                ],
+                                created_at: new Date().toISOString(),
+                                paid_at: new Date().toISOString()
+                            });
+                        }
+
                         showToast(`Successfully added +${tpmCount} totes to plan! Pro-rated storage: $${proRataRes.proRataAmount.toFixed(2)}`);
                         closeTotePlanManagerModal();
                         closeBillingModal();
+                        initDashboard();
                     }
                 }
             } catch (err) {
