@@ -1608,100 +1608,121 @@
             const isNewCustomerOnboarding = currentProfile && currentProfile.onboarding_status !== 'active' && currentProfile.onboarding_status !== 'completed';
 
             if (activationReqs.length > 0 || pendingUnactivatedItems.length > 0 || (isNewCustomerOnboarding && (stagingRoomItems.length > 0 || valetItems.length > 0))) {
-                const isValetActivation = activationReqs.some(r => r.fulfillment_type === 'valet_delivery');
-                const isStagedReady = stagingRoomItems.length > 0 || (currentInventory || []).some(i => i.status === 'staged' || i.status === 'pending-stage');
+                    const isValetActivation = activationReqs.some(r => r.fulfillment_type === 'valet_delivery');
+                    const isStagedReady = stagingRoomItems.length > 0 || (currentInventory || []).some(i => i.status === 'staged' || i.status === 'pending-stage');
 
-                if (isValetActivation || valetItems.length > 0) {
-                    const isOutForDelivery = valetItems.some(i => i.status === 'out-for-delivery');
-                    const req = activationReqs.find(r => r.fulfillment_type === 'valet_delivery') || activationReqs[0];
-                    const dateStr = req && req.target_date ? new Date(req.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
-                    const timeStr = (req && req.time_slot) || '12:00 PM – 03:00 PM';
-                    cards.push(buildFlowCard({
-                        flowType: 'activation-valet',
-                        icon: '🚚',
-                        title: 'New Tote Activation — Valet Door Delivery',
-                        subtitle: isOutForDelivery ? `Driver en route • ${timeStr}` : `Dispatch window: ${dateStr} • ${timeStr}`,
-                        badgeText: isOutForDelivery ? 'OUT FOR DELIVERY' : 'DISPATCHED',
-                        badgeColor: isOutForDelivery ? 'orange' : 'blue',
-                        steps: [
-                            { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
-                            { label: '2. Intake Prep', sub: '✓ Empty totes prepped', done: true },
-                            { label: '3. On Truck', sub: isOutForDelivery ? 'Driver en route to you' : 'Loading on van', done: false, active: true },
-                            { label: '4. With Customer', sub: isOutForDelivery ? 'Arriving soon' : dateStr, done: false, active: false },
-                        ],
-                        totes: valetItems.length > 0 ? valetItems : currentInventory,
-                        pinBlock: buildValetBlock(timeStr, dateStr),
-                    }));
-                } else {
-                    const req = activationReqs[0];
-                    const { room: roomNum, pin } = resolveRoomAndPin(req);
-                    const dateStr = req && req.target_date ? new Date(req.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Thu, Aug 13';
-                    const timeStr = (req && req.time_slot) || '12:00 PM – 03:00 PM';
-                    const isStagedReady = stagingRoomItems.some(i => i.status === 'staged') || (req && (req.status === 'staged' || req.status === 'ready'));
-
-                    cards.push(buildFlowCard({
-                        flowType: 'activation-staging',
-                        icon: '📦',
-                        title: isStagedReady ? `New Tote Activation — Staging Room #${roomNum} Pickup` : `New Tote Activation — Vault Prep in Progress`,
-                        subtitle: isStagedReady
-                            ? `Your empty tote(s) are ready in Staging Room #${roomNum} • PIN: ${pin}`
-                            : `Intake preparation in progress • ${dateStr} • ${timeStr}`,
-                        badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'INTAKE PREPARATION IN PROGRESS',
-                        badgeColor: isStagedReady ? 'emerald' : 'blue',
-                        steps: [
-                            { label: '1. Intake & Activation', sub: '✓ Empty totes prepped', done: true, active: false },
-                            { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting room assignment...', done: isStagedReady, active: !isStagedReady },
-                            { label: '3. With Customer', sub: isStagedReady ? `PIN: ${pin} — Awaiting pickup` : 'PIN code pending', done: false, active: isStagedReady },
-                            { label: '4. Vault Storage', sub: 'After packing & return', done: false, active: false },
-                        ],
-                        totes: stagingRoomItems.length > 0 ? stagingRoomItems : currentInventory,
-                        pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : buildPendingPinBlock(dateStr, timeStr),
-                    }));
-                }
-            }
-
-            // ── 2. Stored Tote Retrieval Flow Cards ────────────────────────────
-            if (retrievalReqs.length > 0) {
-                // Group retrieval requests by unique schedule window: (fulfillment_type :: target_date :: time_slot)
-                const retrievalGroups = {};
-                retrievalReqs.forEach(r => {
-                    const type = r.fulfillment_type || 'staging';
-                    const date = r.target_date || 'unscheduled';
-                    const slot = r.time_slot || 'standard';
-                    const key = `${type}::${date}::${slot}`;
-                    if (!retrievalGroups[key]) retrievalGroups[key] = [];
-                    retrievalGroups[key].push(r);
-                });
-
-                Object.values(retrievalGroups).forEach(groupReqs => {
-                    const primaryReq = groupReqs[0];
-                    const fulfillmentType = primaryReq.fulfillment_type || 'staging';
-                    const { room: roomNum, pin } = resolveRoomAndPin(primaryReq);
-
-                    // Collect all requested tote IDs or tote codes for this specific retrieval group
-                    const groupRequestedIdentifiers = new Set();
-                    groupReqs.forEach(req => {
-                        const items = req.requested_items || req.requested_tote_codes || req.totes || [];
-                        if (Array.isArray(items)) {
-                            items.forEach(id => groupRequestedIdentifiers.add(id));
+                    if (isValetActivation || valetItems.length > 0) {
+                        const isOutForDelivery = valetItems.some(i => i.status === 'out-for-delivery');
+                        const req = activationReqs.find(r => r.fulfillment_type === 'valet_delivery') || activationReqs[0];
+                        let rawDate = (req && req.target_date) ? req.target_date : new Date().toISOString().split('T')[0];
+                        let rawSlot = (req && req.time_slot) ? req.time_slot : null;
+                        if (!rawSlot || isSlotPastOrActive(rawDate, rawSlot)) {
+                            const upcoming = getUpcomingAvailableSlot(rawDate);
+                            rawDate = upcoming.targetDate;
+                            rawSlot = upcoming.timeSlot;
                         }
+                        const dateStr = new Date(rawDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                        const timeStr = rawSlot;
+                        cards.push(buildFlowCard({
+                            flowType: 'activation-valet',
+                            icon: '🚚',
+                            title: 'New Tote Activation — Valet Door Delivery',
+                            subtitle: isOutForDelivery ? `Driver en route • ${timeStr}` : `Dispatch window: ${dateStr} • ${timeStr}`,
+                            badgeText: isOutForDelivery ? 'OUT FOR DELIVERY' : 'DISPATCHED',
+                            badgeColor: isOutForDelivery ? 'orange' : 'blue',
+                            steps: [
+                                { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
+                                { label: '2. Intake Prep', sub: '✓ Empty totes prepped', done: true },
+                                { label: '3. On Truck', sub: isOutForDelivery ? 'Driver en route to you' : 'Loading on van', done: false, active: true },
+                                { label: '4. With Customer', sub: isOutForDelivery ? 'Arriving soon' : dateStr, done: false, active: false },
+                            ],
+                            totes: valetItems.length > 0 ? valetItems : currentInventory,
+                            pinBlock: buildValetBlock(timeStr, dateStr),
+                        }));
+                    } else {
+                        const req = activationReqs[0];
+                        const { room: roomNum, pin } = resolveRoomAndPin(req);
+                        let rawDate = (req && req.target_date) ? req.target_date : new Date().toISOString().split('T')[0];
+                        let rawSlot = (req && req.time_slot) ? req.time_slot : null;
+                        if (!rawSlot || isSlotPastOrActive(rawDate, rawSlot)) {
+                            const upcoming = getUpcomingAvailableSlot(rawDate);
+                            rawDate = upcoming.targetDate;
+                            rawSlot = upcoming.timeSlot;
+                        }
+                        const dateStr = new Date(rawDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                        const timeStr = rawSlot;
+                        const isStagedReady = stagingRoomItems.some(i => i.status === 'staged') || (req && (req.status === 'staged' || req.status === 'ready'));
+
+                        cards.push(buildFlowCard({
+                            flowType: 'activation-staging',
+                            icon: '📦',
+                            title: isStagedReady ? `New Tote Activation — Staging Room #${roomNum} Pickup` : `New Tote Activation — Vault Prep in Progress`,
+                            subtitle: isStagedReady
+                                ? `Your empty tote(s) are ready in Staging Room #${roomNum} • PIN: ${pin}`
+                                : `Intake preparation in progress • ${dateStr} • ${timeStr}`,
+                            badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'INTAKE PREPARATION IN PROGRESS',
+                            badgeColor: isStagedReady ? 'emerald' : 'blue',
+                            steps: [
+                                { label: '1. Intake & Activation', sub: '✓ Empty totes prepped', done: true, active: false },
+                                { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting room assignment...', done: isStagedReady, active: !isStagedReady },
+                                { label: '3. With Customer', sub: isStagedReady ? `PIN: ${pin} — Awaiting pickup` : 'PIN code pending', done: false, active: isStagedReady },
+                                { label: '4. Vault Storage', sub: 'After packing & return', done: false, active: false },
+                            ],
+                            totes: stagingRoomItems.length > 0 ? stagingRoomItems : currentInventory,
+                            pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : buildPendingPinBlock(dateStr, timeStr),
+                        }));
+                    }
+                }
+
+                // ── 2. Stored Tote Retrieval Flow Cards ────────────────────────────
+                if (retrievalReqs.length > 0) {
+                    // Group retrieval requests by unique schedule window: (fulfillment_type :: target_date :: time_slot)
+                    const retrievalGroups = {};
+                    retrievalReqs.forEach(r => {
+                        const type = r.fulfillment_type || 'staging';
+                        const date = r.target_date || 'unscheduled';
+                        const slot = r.time_slot || 'standard';
+                        const key = `${type}::${date}::${slot}`;
+                        if (!retrievalGroups[key]) retrievalGroups[key] = [];
+                        retrievalGroups[key].push(r);
                     });
 
-                    // Filter current inventory to ONLY include totes belonging to this specific retrieval group
-                    const groupTotes = (currentInventory || []).filter(item => 
-                        groupRequestedIdentifiers.has(item.id) ||
-                        groupRequestedIdentifiers.has(item.tote_code) ||
-                        groupRequestedIdentifiers.has(item.barcode) ||
-                        groupRequestedIdentifiers.has(item.label)
-                    );
+                    Object.values(retrievalGroups).forEach(groupReqs => {
+                        const primaryReq = groupReqs[0];
+                        const fulfillmentType = primaryReq.fulfillment_type || 'staging';
+                        const { room: roomNum, pin } = resolveRoomAndPin(primaryReq);
 
-                    // Fallback to stagingRoomItems / currentInventory if no specific items recorded
-                    const groupTotesToDisplay = groupTotes.length > 0 
-                        ? groupTotes 
-                        : (stagingRoomItems.length > 0 ? stagingRoomItems : currentInventory);
+                        // Collect all requested tote IDs or tote codes for this specific retrieval group
+                        const groupRequestedIdentifiers = new Set();
+                        groupReqs.forEach(req => {
+                            const items = req.requested_items || req.requested_tote_codes || req.totes || [];
+                            if (Array.isArray(items)) {
+                                items.forEach(id => groupRequestedIdentifiers.add(id));
+                            }
+                        });
 
-                    const dateStr = primaryReq.target_date ? new Date(primaryReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
-                    const timeStr = primaryReq.time_slot || '12:00 PM – 03:00 PM';
+                        // Filter current inventory to ONLY include totes belonging to this specific retrieval group
+                        const groupTotes = (currentInventory || []).filter(item => 
+                            groupRequestedIdentifiers.has(item.id) ||
+                            groupRequestedIdentifiers.has(item.tote_code) ||
+                            groupRequestedIdentifiers.has(item.barcode) ||
+                            groupRequestedIdentifiers.has(item.label)
+                        );
+
+                        // Fallback to stagingRoomItems / currentInventory if no specific items recorded
+                        const groupTotesToDisplay = groupTotes.length > 0 
+                            ? groupTotes 
+                            : (stagingRoomItems.length > 0 ? stagingRoomItems : currentInventory);
+
+                        let rawDate = primaryReq.target_date || new Date().toISOString().split('T')[0];
+                        let rawSlot = primaryReq.time_slot || null;
+                        if (!rawSlot || isSlotPastOrActive(rawDate, rawSlot)) {
+                            const upcoming = getUpcomingAvailableSlot(rawDate);
+                            rawDate = upcoming.targetDate;
+                            rawSlot = upcoming.timeSlot;
+                        }
+                        const dateStr = new Date(rawDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                        const timeStr = rawSlot;
 
                     if (fulfillmentType === 'valet_delivery') {
                         const isOutForDelivery = valetItems.some(i => i.status === 'out-for-delivery');
@@ -1941,6 +1962,7 @@
                 const valetUnlinked = unlinkedActiveItems.filter(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery');
                 const selfServeUnlinked = unlinkedActiveItems.filter(i => i.status === 'pending-stage' || i.status === 'staged');
 
+                const upcomingSlot = getUpcomingAvailableSlot();
                 if (valetUnlinked.length > 0) {
                     allActiveRequests.push({
                         id: 'synth_valet_req',
@@ -1950,8 +1972,8 @@
                         requested_items: valetUnlinked.map(i => i.id),
                         requested_tote_codes: valetUnlinked.map(i => i.tote_code),
                         status: valetUnlinked.some(i => i.status === 'out-for-delivery') ? 'out-for-delivery' : 'pending-dispatch',
-                        target_date: new Date().toISOString().split('T')[0],
-                        time_slot: '12:00 PM - 03:00 PM',
+                        target_date: upcomingSlot.targetDate,
+                        time_slot: upcomingSlot.timeSlot,
                         requested_at: new Date().toISOString()
                     });
                 }
@@ -1965,8 +1987,8 @@
                         requested_items: selfServeUnlinked.map(i => i.id),
                         requested_tote_codes: selfServeUnlinked.map(i => i.tote_code),
                         status: selfServeUnlinked.some(i => i.status === 'staged') ? 'staged' : 'pending',
-                        target_date: new Date().toISOString().split('T')[0],
-                        time_slot: '12:00 PM - 03:00 PM',
+                        target_date: upcomingSlot.targetDate,
+                        time_slot: upcomingSlot.timeSlot,
                         requested_at: new Date().toISOString()
                     });
                 }
@@ -3768,6 +3790,27 @@
             }
 
             return false;
+        }
+
+        // Upcoming Available Slot Helper: calculates the next available valid time slot for a target date
+        function getUpcomingAvailableSlot(targetDateStr = null) {
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            let targetDate = targetDateStr || todayStr;
+            const currentHour = now.getHours();
+
+            if (targetDate === todayStr) {
+                if (currentHour < 9) return { timeSlot: '09:00 AM - 12:00 PM', targetDate: todayStr };
+                if (currentHour < 12) return { timeSlot: '12:00 PM - 03:00 PM', targetDate: todayStr };
+                if (currentHour < 15) return { timeSlot: '03:00 PM - 06:00 PM', targetDate: todayStr };
+
+                // Past 3 PM cutoff for today — move to tomorrow morning!
+                const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+                const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+                return { timeSlot: '09:00 AM - 12:00 PM', targetDate: tomorrowStr };
+            }
+
+            return { timeSlot: '09:00 AM - 12:00 PM', targetDate };
         }
 
         // Capacity Checker: Queries active access_requests for a target date & disables full/past/active slots
