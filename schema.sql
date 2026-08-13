@@ -994,6 +994,7 @@ BEGIN
       v_pin,
       v_expires_at,
       v_valet_fee,
+      v_user_facility,
       'pending'
     );
   END IF;
@@ -2486,10 +2487,16 @@ DECLARE
   v_target_date DATE;
   v_expires_at TIMESTAMPTZ;
   v_cutoff_passed BOOLEAN;
+  v_user_facility TEXT;
 BEGIN
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  SELECT assigned_facility_id INTO v_user_facility FROM public.users WHERE id = v_uid;
+  IF v_user_facility IS NULL THEN
+    v_user_facility := 'facility_seattle_north';
   END IF;
 
   SELECT * INTO v_canc
@@ -2512,9 +2519,9 @@ BEGIN
   v_expires_at := now() + interval '48 hours';
 
   INSERT INTO public.access_requests (
-    uid, request_type, fulfillment_type, pin, pin_expires_at, target_date, status
+    uid, request_type, fulfillment_type, pin, pin_expires_at, target_date, facility_id, status
   ) VALUES (
-    v_uid, 'cancellation_tote_return', p_fulfillment_type, v_pin, v_expires_at, v_target_date, 'pending'
+    v_uid, 'cancellation_tote_return', p_fulfillment_type, v_pin, v_expires_at, v_target_date, v_user_facility, 'pending'
   );
 
   RETURN jsonb_build_object(

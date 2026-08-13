@@ -276,6 +276,39 @@
                 .replace(/'/g, '&#039;');
         }
 
+        // Time Slot Filter Helper: checks if a given time slot is in the past or currently active based on current local time
+        function isSlotPastOrActive(dateStr, slotValue) {
+            if (!dateStr || !slotValue) return false;
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            
+            if (dateStr < todayStr) return true;
+            if (dateStr > todayStr) return false;
+
+            const currentHour = now.getHours();
+            if (slotValue.includes('09:00') || slotValue.toLowerCase().includes('morning') || slotValue.includes('9 AM')) {
+                return currentHour >= 9;
+            }
+            if (slotValue.includes('12:00') || slotValue.toLowerCase().includes('afternoon') || slotValue.includes('12 PM')) {
+                return currentHour >= 12;
+            }
+            if (slotValue.includes('03:00') || slotValue.toLowerCase().includes('evening') || slotValue.includes('3 PM')) {
+                return currentHour >= 15;
+            }
+
+            const match = slotValue.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+            if (match) {
+                let hour = parseInt(match[1], 10);
+                const isPM = match[3] && match[3].toUpperCase() === 'PM';
+                const isAM = match[3] && match[3].toUpperCase() === 'AM';
+                if (isPM && hour < 12) hour += 12;
+                if (isAM && hour === 12) hour = 0;
+                return currentHour >= hour;
+            }
+
+            return false;
+        }
+
         async function loadLogisticsFacilities() {
             try {
                 const savedFacility = localStorage.getItem('cloudvault_selected_facility');

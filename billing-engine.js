@@ -225,6 +225,53 @@
     },
 
     /**
+     * Validates a facility_id against public.facilities table.
+     * If facility_id is invalid or missing, defaults to a valid facility ID in public.facilities (e.g. 'facility_seattle_north').
+     * @param {string} facilityId
+     * @returns {Promise<string>}
+     */
+    validateFacilityId: async function (facilityId) {
+      const sb = global.supabase;
+      const defaultFacility = 'facility_seattle_north';
+      if (!sb) return facilityId || defaultFacility;
+
+      if (facilityId) {
+        try {
+          const { data } = await sb.from('facilities')
+            .select('id')
+            .eq('id', facilityId)
+            .maybeSingle();
+          if (data && data.id) {
+            return data.id;
+          }
+        } catch (e) {
+          console.warn('[CloudVaultBilling] Error validating facility_id:', e.message);
+        }
+      }
+
+      try {
+        const { data: defFac } = await sb.from('facilities')
+          .select('id')
+          .eq('id', defaultFacility)
+          .maybeSingle();
+        if (defFac && defFac.id) {
+          return defFac.id;
+        }
+        const { data: firstFac } = await sb.from('facilities')
+          .select('id')
+          .limit(1)
+          .maybeSingle();
+        if (firstFac && firstFac.id) {
+          return firstFac.id;
+        }
+      } catch (e) {
+        console.warn('[CloudVaultBilling] Error fetching fallback facility_id:', e.message);
+      }
+
+      return defaultFacility;
+    },
+
+    /**
      * Persists an invoice record to Supabase public.invoices table.
      * @param {Object} params - Invoice properties
      * @returns {Promise<{success: boolean, data?: Object, error?: string}>}
@@ -302,12 +349,15 @@
         const paidAt = params.paid_at || params.paidAt || (paymentStatus === 'paid' ? createdAt : null);
         const dueDate = params.due_date || params.dueDate || new Date(new Date(createdAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString();
 
+        const rawFacilityId = params.facility_id || params.facilityId || null;
+        const validFacilityId = await this.validateFacilityId(rawFacilityId);
+
         const record = {
           invoice_number: invoiceNumber,
           uid: params.uid || params.userId || params.user_id || null,
           customer_name: params.customer_name || params.customerName || null,
           customer_email: params.customer_email || params.customerEmail || null,
-          facility_id: params.facility_id || params.facilityId || null,
+          facility_id: validFacilityId,
           invoice_type: params.invoice_type || params.invoiceType || 'subscription',
           payment_status: paymentStatus,
           subtotal: subtotal,
@@ -360,6 +410,8 @@
     /**
      * Creates the Day-0 first-month invoice charged at signup.
      * Called immediately after create_subscription RPC succeeds.
+     * Charges the customer immediately (paid_at = now(), payment_status = 'paid')
+     * and updates subscription next_billing_date to 1 month from now.
      */
     createSignupInvoice: async function(userId, subscriptionData, userZip) {
       if (!userId || !subscriptionData) return { success: false, error: 'Missing params' };
@@ -371,8 +423,14 @@
         : pricingRes.toteRate;
       const storageAmt = Number(subscriptionData.recurring_storage || (toteCount * toteRate) || pricingRes.recurringStorage);
       const valetFee = Number(subscriptionData.valet_fee || 0);
-      const now = new Date().toISOString();
-      return this.createInvoiceRecord({
+      const now = new Date();
+      const nowIso = now.toISOString();
+
+      const nextBilling = new Date(now);
+      nextBilling.setMonth(nextBilling.getMonth() + 1);
+      const nextBillingIso = nextBilling.toISOString();
+
+      const invRes = await this.createInvoiceRecord({
         uid: userId,
         customer_name: subscriptionData.customer_name || 'CloudVault Customer',
         customer_email: subscriptionData.customer_email || null,
@@ -384,7 +442,7 @@
         total_amount: storageAmt + valetFee,
         payment_method: 'card',
         zip_code: userZip || null,
-        transaction_reference: window.CloudVaultStripe
+        transaction_reference: (typeof window !== 'undefined' && window.CloudVaultStripe)
           ? window.CloudVaultStripe.generateChargeId()
           : 'ch_signup_' + Date.now(),
         notes: `First month — charged at signup (${toteCount} totes, ${pricingRes.tierName}${pricingRes.isPriceLock ? ' [Price Locked]' : ''})`,
@@ -392,14 +450,217 @@
           { description: `CloudVault Storage (${toteCount} totes @ $${toteRate.toFixed(2)}/mo — ${pricingRes.tierName})`, qty: toteCount || 1, unit_price: toteRate, amount: storageAmt },
           ...(valetFee > 0 ? [{ description: 'Valet Delivery Service Fee', qty: 1, unit_price: valetFee, amount: valetFee }] : [])
         ],
-        created_at: now,
-        paid_at: now,
-        due_date: new Date(new Date(now).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
+        created_at: nowIso,
+        paid_at: nowIso,
+        due_date: nowIso
+      });
+
+      const sb = global.supabase;
+      if (sb && userId) {
+        try {
+          await sb.from('subscriptions')
+            .update({
+              last_billed_at: nowIso,
+              next_billing_date: nextBillingIso,
+              status: 'active'
+            })
+            .eq('uid', userId);
+        } catch (e) {
+          console.warn('[CloudVaultBilling] Warning updating subscription timing on signup:', e.message);
+        }
+      }
+
+      return invRes;
+    },
+
+    /**
+     * Computes accurate itemized subtotal, valet fee, line items, and grand total for an access request / retrieval flow,
+     * persisting a paid receipt invoice to public.invoices.
+     * @param {Object} req - Access request record
+     * @param {Object} [userObj] - Customer metadata (name, email, assigned_facility_id)
+     * @returns {Promise<{success: boolean, data?: Object, error?: string}>}
+     */
+    createAccessRequestInvoice: async function (req, userObj = {}) {
+      const sb = global.supabase;
+      const reqId = req.id;
+      const txnRef = `AR-${reqId}`;
+      const reqRefTag = `ar_${reqId}`;
+
+      const toteCount = Array.isArray(req.requested_tote_codes) && req.requested_tote_codes.length > 0
+        ? req.requested_tote_codes.length
+        : (Array.isArray(req.requested_items) && req.requested_items.length > 0
+          ? req.requested_items.length
+          : (Number(req.additional_totes) || 1));
+
+      let valetFee = Number(req.valet_fee || 0);
+      const isValet = req.fulfillment_type === 'valet_delivery' || req.request_type === 'valet' || req.fulfillment_type === 'valet';
+
+      if (isValet && valetFee === 0) {
+        let valetBase = 15.00;
+        let valetAdder = 1.00;
+        const facId = req.facility_id || userObj.assigned_facility_id;
+        if (sb && facId) {
+          try {
+            const { data: fac } = await sb.from('facilities')
+              .select('valet_base, valet_tote_adder')
+              .eq('id', facId)
+              .maybeSingle();
+            if (fac) {
+              valetBase = Number(fac.valet_base) || 15.00;
+              valetAdder = Number(fac.valet_tote_adder) || 1.00;
+            }
+          } catch (e) {
+            console.warn('[CloudVaultBilling] Error fetching facility valet rates:', e.message);
+          }
+        }
+        valetFee = valetBase + (toteCount * valetAdder);
+      }
+
+      const surgeFee = Number(req.surge_fee || 0);
+      const subtotal = Number(req.subtotal || 0);
+      const grandTotal = subtotal + valetFee + surgeFee;
+      const invType = isValet ? 'valet_delivery' : (req.request_type || 'access_request');
+      const createdAt = req.requested_at || req.created_at || new Date().toISOString();
+
+      const lineItems = [];
+      lineItems.push({
+        description: `Staging & Storage Tote Retrieval (${toteCount} tote${toteCount > 1 ? 's' : ''})`,
+        qty: toteCount,
+        unit_price: subtotal > 0 ? (subtotal / toteCount) : 0,
+        amount: subtotal
+      });
+      if (valetFee > 0) {
+        lineItems.push({
+          description: 'Valet Doorstep Delivery Service Fee',
+          qty: 1,
+          unit_price: valetFee,
+          amount: valetFee
+        });
+      }
+      if (surgeFee > 0) {
+        lineItems.push({
+          description: `Priority / Surge Slot Fee (${req.surge_tier || 'surge'})`,
+          qty: 1,
+          unit_price: surgeFee,
+          amount: surgeFee
+        });
+      }
+
+      const status = req.status === 'cancelled' ? 'refunded' : 'paid';
+
+      return this.createInvoiceRecord({
+        uid: req.uid,
+        customer_name: userObj.name || userObj.customer_name || 'Valued Customer',
+        customer_email: userObj.email || userObj.customer_email || null,
+        facility_id: req.facility_id || userObj.assigned_facility_id || null,
+        invoice_type: invType,
+        payment_status: status,
+        subtotal: subtotal,
+        delivery_fee: valetFee,
+        surge_fee: surgeFee,
+        total_amount: grandTotal,
+        payment_method: 'card',
+        transaction_reference: txnRef,
+        notes: `Access request receipt [Ref: ${reqRefTag}]`,
+        line_items: lineItems,
+        created_at: createdAt,
+        paid_at: status === 'paid' ? createdAt : null,
+        due_date: new Date(new Date(createdAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
       });
     },
 
     /**
+     * Synchronizes charges table records with public.invoices table for clean receipt tracking.
+     * @param {string} [userId] - Optional User UUID filter
+     * @returns {Promise<{success: boolean, syncedCount: number}>}
+     */
+    syncChargesToInvoices: async function (userId = null) {
+      const sb = global.supabase;
+      if (!sb) return { success: false, syncedCount: 0 };
+
+      try {
+        let invQuery = sb.from('invoices').select('transaction_reference, notes');
+        if (userId) invQuery = invQuery.eq('uid', userId);
+        const { data: existingInvoices } = await invQuery;
+
+        const existingRefs = new Set();
+        const existingNotesArr = [];
+        (existingInvoices || []).forEach(i => {
+          if (i.transaction_reference) existingRefs.add(i.transaction_reference);
+          if (i.notes) existingNotesArr.push(i.notes);
+        });
+        const existingNotesStr = existingNotesArr.join(' ');
+
+        let chgQuery = sb.from('charges').select('*');
+        if (userId) chgQuery = chgQuery.eq('uid', userId);
+        const { data: charges } = await chgQuery;
+
+        if (!charges || charges.length === 0) {
+          return { success: true, syncedCount: 0 };
+        }
+
+        let usersMap = {};
+        if (!userId) {
+          const { data: users } = await sb.from('users').select('id, name, email, assigned_facility_id');
+          (users || []).forEach(u => { usersMap[u.id] = u; });
+        } else {
+          const { data: u } = await sb.from('users').select('id, name, email, assigned_facility_id').eq('id', userId).maybeSingle();
+          if (u) usersMap[u.id] = u;
+        }
+
+        let syncedCount = 0;
+        for (const chg of charges) {
+          const txnRef = `CHG-${chg.id}`;
+          const chgRefTag = `charge_${chg.id}`;
+
+          if (!existingRefs.has(txnRef) && !existingNotesStr.includes(chgRefTag) && !existingNotesStr.includes(chg.id)) {
+            const userObj = usersMap[chg.uid] || {};
+            const amt = Number(chg.amount || 0);
+            const status = (chg.status === 'success' || chg.status === 'paid') ? 'paid' : (chg.status || 'paid');
+            const createdAt = chg.charged_at || chg.created_at || new Date().toISOString();
+
+            const res = await this.createInvoiceRecord({
+              uid: chg.uid,
+              customer_name: userObj.name || 'Valued Customer',
+              customer_email: userObj.email || null,
+              facility_id: userObj.assigned_facility_id || null,
+              invoice_type: chg.charge_type || 'charge',
+              payment_status: status,
+              subtotal: amt,
+              total_amount: amt,
+              payment_method: 'card',
+              transaction_reference: txnRef,
+              notes: `Synced charge receipt [Ref: ${chgRefTag}]`,
+              line_items: [
+                {
+                  description: `CloudVault Fee / Charge: ${chg.charge_type || 'General Fee'}`,
+                  qty: Number(chg.totes_charged || 1),
+                  unit_price: amt,
+                  amount: amt
+                }
+              ],
+              created_at: createdAt,
+              paid_at: status === 'paid' ? createdAt : null,
+              due_date: new Date(new Date(createdAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
+            });
+
+            if (res.success) {
+              existingRefs.add(txnRef);
+              syncedCount++;
+            }
+          }
+        }
+
+        return { success: true, syncedCount };
+      } catch (err) {
+        console.error('[CloudVaultBilling] Error synchronizing charges to invoices:', err);
+        return { success: false, syncedCount: 0, error: err.message };
+      }
+    },
+
+    /**
      * Fetches invoice records for a user by userId or customerEmail.
+     * Automatically synchronizes charges table records to public.invoices table for clean receipt tracking.
      * @param {string} userId - User UUID
      * @param {string} customerEmail - User Email address
      * @returns {Promise<{success: boolean, invoices: Array, error?: string}>}
@@ -410,6 +671,14 @@
         if (!sb) {
           console.error('[CloudVaultBilling] Supabase client missing');
           return { success: false, error: 'Supabase client missing', invoices: [] };
+        }
+
+        if (userId) {
+          try {
+            await this.syncChargesToInvoices(userId);
+          } catch (syncErr) {
+            console.warn('[CloudVaultBilling] Charges synchronization notice:', syncErr.message);
+          }
         }
 
         let query = sb.from('invoices').select('*');
@@ -776,43 +1045,7 @@
 
             if (!alreadyHasTxn && !alreadyInNotes) {
               const userObj = usersMap[req.uid] || {};
-              const valetFee = Number(req.valet_fee || 0);
-              const surgeFee = Number(req.surge_fee || 0);
-              const total = valetFee + surgeFee;
-              const invType = req.fulfillment_type === 'valet_delivery' || req.request_type === 'valet' ? 'valet_delivery' : (req.request_type || 'access_request');
-              const createdAt = req.requested_at || new Date().toISOString();
-
-              const lineItems = [];
-              if (valetFee > 0) {
-                lineItems.push({ description: 'Valet Delivery Service Fee', qty: 1, unit_price: valetFee, amount: valetFee });
-              }
-              if (surgeFee > 0) {
-                lineItems.push({ description: `Priority / Surge Slot Fee (${req.surge_tier || 'surge'})`, qty: 1, unit_price: surgeFee, amount: surgeFee });
-              }
-              if (lineItems.length === 0) {
-                const toteCount = Array.isArray(req.requested_items) ? req.requested_items.length : 1;
-                lineItems.push({ description: `Staging Tote Access Request (${toteCount} totes)`, qty: toteCount, unit_price: 0, amount: 0 });
-              }
-
-              const res = await this.createInvoiceRecord({
-                uid: req.uid,
-                customer_name: userObj.name || 'Valued Customer',
-                customer_email: userObj.email || null,
-                facility_id: req.facility_id || userObj.assigned_facility_id || null,
-                invoice_type: invType,
-                payment_status: req.status === 'cancelled' ? 'refunded' : 'paid',
-                subtotal: 0,
-                delivery_fee: valetFee,
-                surge_fee: surgeFee,
-                total_amount: total,
-                payment_method: 'card',
-                transaction_reference: txnRef,
-                notes: `Retroactive access request backfill [Ref: ${reqRefTag}]`,
-                line_items: lineItems,
-                created_at: createdAt,
-                paid_at: createdAt,
-                due_date: new Date(new Date(createdAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
-              });
+              const res = await this.createAccessRequestInvoice(req, userObj);
 
               if (res.success && res.data) {
                 createdInvoices.push(res.data);
@@ -1321,43 +1554,7 @@
             const alreadyInNotes = existingNotes.includes(reqRefTag) || existingNotes.includes(req.id);
 
             if (!alreadyHasTxn && !alreadyInNotes) {
-              const valetFee = Number(req.valet_fee || 0);
-              const surgeFee = Number(req.surge_fee || 0);
-              const total = valetFee + surgeFee;
-              const invType = req.fulfillment_type === 'valet_delivery' || req.request_type === 'valet' ? 'valet_delivery' : (req.request_type || 'access_request');
-              const createdAt = req.requested_at || new Date().toISOString();
-
-              const lineItems = [];
-              if (valetFee > 0) {
-                lineItems.push({ description: 'Valet Delivery Service Fee', qty: 1, unit_price: valetFee, amount: valetFee });
-              }
-              if (surgeFee > 0) {
-                lineItems.push({ description: `Priority / Surge Slot Fee (${req.surge_tier || 'surge'})`, qty: 1, unit_price: surgeFee, amount: surgeFee });
-              }
-              if (lineItems.length === 0) {
-                const toteCount = Array.isArray(req.requested_items) ? req.requested_items.length : 1;
-                lineItems.push({ description: `Staging Tote Access Request (${toteCount} totes)`, qty: toteCount, unit_price: 0, amount: 0 });
-              }
-
-              const res = await this.createInvoiceRecord({
-                uid: req.uid,
-                customer_name: user.name || 'Valued Customer',
-                customer_email: user.email || null,
-                facility_id: req.facility_id || user.assigned_facility_id || null,
-                invoice_type: invType,
-                payment_status: req.status === 'cancelled' ? 'refunded' : 'paid',
-                subtotal: 0,
-                delivery_fee: valetFee,
-                surge_fee: surgeFee,
-                total_amount: total,
-                payment_method: 'card',
-                transaction_reference: txnRef,
-                notes: `Retroactive access request backfill [Ref: ${reqRefTag}]`,
-                line_items: lineItems,
-                created_at: createdAt,
-                paid_at: createdAt,
-                due_date: new Date(new Date(createdAt).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
-              });
+              const res = await this.createAccessRequestInvoice(req, user);
 
               if (res.success && res.data) {
                 createdInvoices.push(res.data);
