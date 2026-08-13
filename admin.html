@@ -3985,6 +3985,10 @@
 
                 // Mark matching access request as completed
                 if (Array.isArray(toteIds) && toteIds.length > 0) {
+                    const handedOffCodes = (updatedTotes || []).map(t => t.tote_code).filter(Boolean);
+                    const handedOffIds = (updatedTotes || []).map(t => t.id).filter(Boolean);
+                    const allKeys = new Set([...toteIds, ...handedOffCodes, ...handedOffIds]);
+
                     const { data: reqs } = await supabase.from('access_requests')
                         .select('*')
                         .eq('uid', customerUid)
@@ -3994,7 +3998,9 @@
                     if (reqs && reqs.length > 0) {
                         for (const r of reqs) {
                             const reqItems = r.requested_items || r.requested_tote_codes || [];
-                            const hasMatch = reqItems.some(item => toteIds.includes(item));
+                            const hasMatch = (Array.isArray(reqItems) && reqItems.length > 0)
+                                ? reqItems.some(item => allKeys.has(item))
+                                : true;
                             if (hasMatch) {
                                 await supabase.from('access_requests').update({ status: 'completed' }).eq('id', r.id);
                             }

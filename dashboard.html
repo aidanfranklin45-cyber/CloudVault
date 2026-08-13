@@ -1710,6 +1710,15 @@
                             groupRequestedIdentifiers.has(item.label)
                         );
 
+                        // Skip rendering retrieval card if ALL requested totes are already physically with the customer
+                        const allWithCustomer = groupTotes.length > 0 && groupTotes.every(i => i.status === 'with-customer' || i.location_type === 'with_customer');
+                        if (allWithCustomer) {
+                            groupReqs.forEach(r => {
+                                if (r.id) supabase.from('access_requests').update({ status: 'completed' }).eq('id', r.id);
+                            });
+                            return;
+                        }
+
                         // Fallback to stagingRoomItems / currentInventory if no specific items recorded
                         const groupTotesToDisplay = groupTotes.length > 0 
                             ? groupTotes 
