@@ -715,17 +715,15 @@
 
     <!-- PIN Confirmation Modal -->
     <div id="pin-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
-            <div class="w-16 h-16 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center space-y-4">
+            <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             </div>
-            <h2 class="text-2xl font-bold text-gray-900 mb-2">Staging Requested</h2>
-            <p class="text-gray-600 mb-6">Your items will be ready in the staging room. Use this PIN at the door:</p>
-            <div class="bg-gray-900 text-white text-5xl font-mono font-bold py-6 px-8 rounded-xl tracking-[0.3em] mb-4" id="pin-display">
-                ----
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900">Retrieval Request Confirmed!</h2>
+                <p class="text-xs text-gray-600 mt-2 leading-relaxed font-medium">Our warehouse team is retrieving your tote(s) from vault storage. Your staging room access PIN will unlock on your dashboard as soon as your tote(s) are placed in a staging room.</p>
             </div>
-            <p class="text-sm text-gray-500 mb-6">This PIN expires in <strong>24 hours</strong>.</p>
-            <button onclick="closeModal()" class="w-full bg-gray-100 text-gray-800 font-bold py-3 rounded-xl hover:bg-gray-200 transition">Return to Vault</button>
+            <button onclick="closeModal()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition cursor-pointer text-sm">Got It</button>
         </div>
     </div>
 
@@ -1551,10 +1549,12 @@
                     const { room: roomNum, pin } = resolveRoomAndPin(req);
                     const dateStr = req && req.target_date ? new Date(req.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Thu, Aug 13';
                     const timeStr = (req && req.time_slot) || '12:00 PM – 03:00 PM';
+                    const isStagedReady = stagingRoomItems.some(i => i.status === 'staged') || (req && (req.status === 'staged' || req.status === 'ready'));
+
                     cards.push(buildFlowCard({
                         flowType: 'activation-staging',
                         icon: '📦',
-                        title: `New Tote Activation — Staging Room #${roomNum} Pickup`,
+                        title: isStagedReady ? `New Tote Activation — Staging Room #${roomNum} Pickup` : `New Tote Activation — Vault Prep in Progress`,
                         subtitle: isStagedReady
                             ? `Your empty tote(s) are ready in Staging Room #${roomNum} • PIN: ${pin}`
                             : `Intake preparation in progress • ${dateStr} • ${timeStr}`,
@@ -1562,12 +1562,12 @@
                         badgeColor: isStagedReady ? 'emerald' : 'blue',
                         steps: [
                             { label: '1. Intake & Activation', sub: '✓ Empty totes prepped', done: true, active: false },
-                            { label: '2. Staging Room', sub: `Room #${roomNum} ready`, done: true, active: false },
-                            { label: '3. With Customer', sub: `PIN: ${pin} — Awaiting pickup`, done: false, active: true },
+                            { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting room assignment...', done: isStagedReady, active: !isStagedReady },
+                            { label: '3. With Customer', sub: isStagedReady ? `PIN: ${pin} — Awaiting pickup` : 'PIN code pending', done: false, active: isStagedReady },
                             { label: '4. Vault Storage', sub: 'After packing & return', done: false, active: false },
                         ],
                         totes: stagingRoomItems.length > 0 ? stagingRoomItems : currentInventory,
-                        pinBlock: buildPinBlock(pin, roomNum, dateStr, timeStr),
+                        pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : buildPendingPinBlock(dateStr, timeStr),
                     }));
                 }
             }
@@ -1581,13 +1581,13 @@
                 if (stagingReqs.length > 0) {
                     const stagingReq = stagingReqs[0];
                     const { room: roomNum, pin } = resolveRoomAndPin(stagingReq);
-                    const isStagedReady = stagingRoomItems.some(i => i.status === 'staged');
+                    const isStagedReady = stagingRoomItems.some(i => i.status === 'staged') || stagingReq.status === 'staged' || stagingReq.status === 'ready';
                     const dateStr = stagingReq.target_date ? new Date(stagingReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
                     const timeStr = stagingReq.time_slot || '12:00 PM – 03:00 PM';
                     cards.push(buildFlowCard({
                         flowType: 'retrieval-staging',
                         icon: '🚪',
-                        title: `Tote Retrieval — Staging Room #${roomNum} Pickup`,
+                        title: isStagedReady ? `Tote Retrieval — Staging Room #${roomNum} Pickup` : `Tote Retrieval — Vault Pull in Progress`,
                         subtitle: isStagedReady
                             ? `Totes are ready • Staging Room #${roomNum} • PIN: ${pin}`
                             : `Vault pull in progress • ${dateStr} • ${timeStr}`,
@@ -1595,12 +1595,12 @@
                         badgeColor: isStagedReady ? 'emerald' : 'amber',
                         steps: [
                             { label: '1. Vault & Intake Pull', sub: isStagedReady ? '✓ Pulled from deep storage' : 'Pulling from storage bay...', done: isStagedReady, active: !isStagedReady },
-                            { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting vault pull...', done: isStagedReady, active: false },
-                            { label: '3. With Customer', sub: isStagedReady ? `PIN: ${pin} — Awaiting pickup` : dateStr, done: false, active: isStagedReady },
+                            { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting room placement...', done: isStagedReady, active: false },
+                            { label: '3. With Customer', sub: isStagedReady ? `PIN: ${pin} — Awaiting pickup` : 'PIN code pending', done: false, active: isStagedReady },
                             { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
                         ],
                         totes: stagingRoomItems.length > 0 ? stagingRoomItems : currentInventory,
-                        pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : null,
+                        pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : buildPendingPinBlock(dateStr, timeStr),
                     }));
                 }
 
@@ -1753,12 +1753,30 @@
                 <div class="text-center flex-1">
                     <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Staging Room #${roomNum} Access PIN</p>
                     <div class="text-3xl font-mono font-black text-emerald-400 tracking-[0.25em]">${pin}</div>
-                    <button onclick="copyStagingPin()" class="mt-2 text-[10px] font-bold text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded-lg transition">Copy PIN</button>
+                    <button onclick="copyStagingPin()" class="mt-2 text-[10px] font-bold text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded-lg transition cursor-pointer">Copy PIN</button>
                 </div>
                 ${dateStr ? `<div class="text-center flex-1 border-t sm:border-t-0 sm:border-l border-gray-800 pt-3 sm:pt-0 sm:pl-4">
                     <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Your Pickup Window</p>
                     <p class="text-sm font-extrabold text-white">${dateStr}</p>
                     <p class="text-xs text-blue-300">${timeStr}</p>
+                </div>` : ''}
+            </div>`;
+        }
+
+        function buildPendingPinBlock(dateStr, timeStr) {
+            return `
+            <div class="bg-gray-950 border border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+                <div class="space-y-1">
+                    <p class="text-[10px] font-black text-amber-400 uppercase tracking-widest flex items-center gap-1.5 justify-center sm:justify-start">
+                        <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                        Room Assignment &amp; PIN Pending
+                    </p>
+                    <p class="text-xs text-gray-300">Our warehouse team is retrieving your tote(s) from vault storage. Your staging room access PIN will unlock here once placed in a room.</p>
+                </div>
+                ${dateStr ? `<div class="text-center shrink-0 border-t sm:border-t-0 sm:border-l border-gray-800 pt-2 sm:pt-0 sm:pl-4 min-w-[140px]">
+                    <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Pickup Window</p>
+                    <p class="text-xs font-bold text-white">${dateStr}</p>
+                    <p class="text-[11px] text-blue-300 font-mono">${timeStr}</p>
                 </div>` : ''}
             </div>`;
         }
