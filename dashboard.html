@@ -3861,6 +3861,17 @@
             const selectEl = document.getElementById(selectId);
             if (!selectEl || !dateStr) return;
 
+            // Normalize dateStr to YYYY-MM-DD
+            let normalizedDate = dateStr;
+            if (dateStr.includes('T')) {
+                normalizedDate = dateStr.split('T')[0];
+            } else if (dateStr.includes('/')) {
+                const parts = dateStr.split('/');
+                if (parts.length === 3) {
+                    normalizedDate = `${parts[2]}-${String(parts[0]).padStart(2, '0')}-${String(parts[1]).padStart(2, '0')}`;
+                }
+            }
+
             const targetFacId = facilityId || 'facility_seattle_north';
 
             // 1. Always evaluate local elapsed / currently active time FIRST so past and active slots are disabled immediately
@@ -3870,7 +3881,7 @@
                                   cleanVal.includes('12:00') ? 'Afternoon (12 PM - 3 PM)' :
                                   'Evening Peak (3 PM - 6 PM)';
                 
-                const isUnavailableToday = isSlotPastOrActive(dateStr, cleanVal);
+                const isUnavailableToday = isSlotPastOrActive(normalizedDate, cleanVal);
 
                 if (isUnavailableToday) {
                     opt.disabled = true;
@@ -3891,7 +3902,7 @@
                 // 2. Fetch RPC capacity data if available to overlay capacity badges
                 const { data: availability } = await supabase.rpc('get_staging_availability', {
                     p_facility_id: targetFacId,
-                    p_target_date: dateStr
+                    p_target_date: normalizedDate
                 });
 
                 if (availability && availability.length > 0) {
