@@ -711,11 +711,31 @@
           return { success: true, invoices: [] };
         }
 
-        const { data, error } = await query.order('created_at', { ascending: false });
+        let { data, error } = await query.order('created_at', { ascending: false });
 
         if (error) {
           console.error('[CloudVaultBilling] Error fetching invoices:', error);
           return { success: false, error: error.message, invoices: [] };
+        }
+
+        // If no invoice records exist for this customer, run automatic backfill to populate missing subscription / request invoices
+        if (!data || data.length === 0) {
+          try {
+            console.log('[CloudVaultBilling] No invoice records found for customer, executing automatic backfill...');
+            await this.backfillCustomerInvoices();
+            const recheck = await sb.from('invoices').select('*').order('created_at', { ascending: false });
+            if (recheck.data) {
+              if (userId && customerEmail) {
+                data = recheck.data.filter(i => i.uid === userId || i.customer_email === customerEmail);
+              } else if (userId) {
+                data = recheck.data.filter(i => i.uid === userId);
+              } else if (customerEmail) {
+                data = recheck.data.filter(i => i.customer_email === customerEmail);
+              }
+            }
+          } catch (backfillErr) {
+            console.warn('[CloudVaultBilling] Automatic invoice backfill notice:', backfillErr.message);
+          }
         }
 
         return { success: true, invoices: data || [] };
