@@ -1951,21 +1951,70 @@
       let tax = Number(invoiceObj.tax || 0);
       let discount = Number(invoiceObj.discount || 0);
 
-      // Resolve Dynamic Regional Tax Rate
-      let taxRate = 0.0830; // Yakima default: 8.30%
-      let taxRegionLabel = 'Yakima, WA (8.30%)';
-      if (facKey.includes('yakima') || contextStr.includes('yakima') || contextStr.includes('lola')) {
-        taxRate = 0.0830;
-        taxRegionLabel = 'Yakima, WA (8.30%)';
-      } else if (facKey.includes('seattle')) {
-        taxRate = 0.1035;
-        taxRegionLabel = 'Seattle, WA (10.35%)';
-      } else if (facKey.includes('portland') || facKey.includes('pdx')) {
-        taxRate = 0.0000;
-        taxRegionLabel = 'Oregon (0.00%)';
-      } else {
-        taxRate = 0.0860;
-        taxRegionLabel = 'WA State (8.60%)';
+      // Dynamically resolve tax rate from database tables (service_areas, operational_zones, RPC)
+      let dbTaxRate = null;
+      let dbTaxLabel = null;
+
+      if (sb) {
+        try {
+          const custZip = userObj?.zip_code || invoiceObj.zip_code || (userObj?.address ? String(userObj.address).match(/\b\d{5}\b/)?.[0] : null);
+          
+          // 1. Direct query against public.service_areas table for customer's ZIP
+          if (custZip) {
+            const { data: saZip } = await sb.from('service_areas')
+              .select('tax_rate, tax_label, city, state')
+              .eq('zip_code', custZip)
+              .maybeSingle();
+            if (saZip && saZip.tax_rate != null) {
+              dbTaxRate = Number(saZip.tax_rate);
+              dbTaxLabel = saZip.tax_label || `${saZip.city || 'Local'} Sales Tax (${(dbTaxRate * 100).toFixed(2)}%)`;
+            }
+          }
+
+          // 2. Query service_areas by facility_id
+          if (dbTaxRate == null && targetFacId) {
+            const { data: saFac } = await sb.from('service_areas')
+              .select('tax_rate, tax_label, city, state')
+              .eq('facility_id', targetFacId)
+              .not('tax_rate', 'is', null)
+              .limit(1);
+            if (saFac && saFac[0] && saFac[0].tax_rate != null) {
+              dbTaxRate = Number(saFac[0].tax_rate);
+              dbTaxLabel = saFac[0].tax_label || `${saFac[0].city || 'Regional'} Sales Tax (${(dbTaxRate * 100).toFixed(2)}%)`;
+            }
+          }
+
+          // 3. Query get_tax_rate_for_zip database function
+          if (dbTaxRate == null && custZip) {
+            const { data: rpcRate } = await sb.rpc('get_tax_rate_for_zip', { p_zip: custZip });
+            if (rpcRate != null) {
+              dbTaxRate = Number(rpcRate);
+              dbTaxLabel = `State & Local Sales Tax (${(dbTaxRate * 100).toFixed(2)}%)`;
+            }
+          }
+        } catch (dbTaxErr) {
+          console.warn('[CloudVaultBilling] Database dynamic tax rate lookup notice:', dbTaxErr);
+        }
+      }
+
+      // Resolve dynamic rate from database or facility territory
+      let taxRate = dbTaxRate != null ? dbTaxRate : 0.0830;
+      let taxRegionLabel = dbTaxLabel || 'Yakima, WA (8.30%)';
+
+      if (dbTaxRate == null) {
+        if (facKey.includes('yakima') || contextStr.includes('yakima') || contextStr.includes('lola')) {
+          taxRate = 0.0830;
+          taxRegionLabel = 'Yakima, WA (8.30%)';
+        } else if (facKey.includes('seattle')) {
+          taxRate = 0.1035;
+          taxRegionLabel = 'Seattle, WA (10.35%)';
+        } else if (facKey.includes('portland') || facKey.includes('pdx')) {
+          taxRate = 0.0000;
+          taxRegionLabel = 'Oregon (0.00%)';
+        } else {
+          taxRate = 0.0860;
+          taxRegionLabel = 'WA State (8.60%)';
+        }
       }
 
       const taxableBase = Math.max(0, subtotal + deliveryFee + surgeFee);

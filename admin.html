@@ -4183,44 +4183,55 @@
             openFacilityMapModal();
         }
 
+        let _facilityMapOpening = false;
         async function openFacilityMapModal(preferredZone = null) {
+            // Guard against re-entrant double-calls (e.g. from onclick + event listener both firing)
+            if (_facilityMapOpening) return;
+            _facilityMapOpening = true;
             console.log('[openFacilityMapModal] Opening facility layout modal...');
-            const modal = document.getElementById('facility-map-modal');
-            if (!modal) {
-                console.error('[openFacilityMapModal] Modal element #facility-map-modal not found');
-                return;
-            }
 
-            modal.classList.remove('hidden');
-            modal.style.display = 'flex';
-
-            const currentFac = getSafeSavedFacilityId();
-            window.facMapState.activeFacilityId = currentFac;
-            if (preferredZone) {
-                window.facMapState.activeTab = preferredZone;
-            }
-            window.facMapState.searchQuery = '';
-            const searchInput = document.getElementById('facmap-search-input');
-            if (searchInput) searchInput.value = '';
-
-            // 1. Immediately render complete blueprint map synchronously (0ms wait)
             try {
-                updateFacilityMapTargetBadge();
-                renderFacilityMap();
-            } catch (e) {
-                console.error('[openFacilityMapModal] Error in initial renderFacilityMap:', e);
-            }
+                const modal = document.getElementById('facility-map-modal');
+                if (!modal) {
+                    console.error('[openFacilityMapModal] Modal element #facility-map-modal not found');
+                    return;
+                }
 
-            // 2. Background sync of live facility specs & inventory occupancy
-            try {
-                populateFacilityMapSelector();
-                loadFacilityMapData(currentFac);
-            } catch (e) {
-                console.error('[openFacilityMapModal] Error in background data fetch:', e);
-            }
+                // Clear inline display:none first, then remove Tailwind hidden class
+                modal.style.display = 'flex';
+                modal.classList.remove('hidden');
 
-            if (typeof lucide !== 'undefined' && lucide.createIcons) {
-                try { lucide.createIcons(); } catch(e) {}
+                const currentFac = getSafeSavedFacilityId();
+                window.facMapState.activeFacilityId = currentFac;
+                if (preferredZone) {
+                    window.facMapState.activeTab = preferredZone;
+                }
+                window.facMapState.searchQuery = '';
+                const searchInput = document.getElementById('facmap-search-input');
+                if (searchInput) searchInput.value = '';
+
+                // 1. Immediately render complete blueprint map synchronously (0ms wait)
+                try {
+                    updateFacilityMapTargetBadge();
+                    renderFacilityMap();
+                } catch (e) {
+                    console.error('[openFacilityMapModal] Error in initial renderFacilityMap:', e);
+                }
+
+                // 2. Background sync of live facility specs & inventory occupancy
+                try {
+                    populateFacilityMapSelector();
+                    loadFacilityMapData(currentFac);
+                } catch (e) {
+                    console.error('[openFacilityMapModal] Error in background data fetch:', e);
+                }
+
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    try { lucide.createIcons(); } catch(e) {}
+                }
+            } finally {
+                // Release the guard after a short delay to allow paint to complete
+                setTimeout(() => { _facilityMapOpening = false; }, 150);
             }
         }
         window.openFacilityMapModal = openFacilityMapModal;
@@ -4966,21 +4977,13 @@
             }
         }
 
-        // Periodically purge browser password manager autofill from barcode scanner & bind modal buttons
+        // Periodically purge browser password manager autofill from barcode scanner
+        // NOTE: The facility map button uses onclick= attribute directly — no redundant listener needed here
         document.addEventListener('DOMContentLoaded', () => {
             const scanInput = document.getElementById('scan-barcode');
             if (scanInput) {
                 sanitizeBarcodeAutofill(scanInput);
                 [100, 300, 600, 1200, 2500].forEach(ms => setTimeout(() => sanitizeBarcodeAutofill(scanInput), ms));
-            }
-            const mapBtn = document.getElementById('btn-open-facility-map');
-            if (mapBtn) {
-                mapBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (typeof openFacilityMapModal === 'function') {
-                        openFacilityMapModal();
-                    }
-                });
             }
         });
 
