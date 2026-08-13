@@ -1107,8 +1107,9 @@
                                 <div>
                                     <div class="flex items-center justify-between mb-1.5">
                                         <label class="block text-xs font-bold uppercase text-gray-400">Scan Barcode / SKU (Hardware Laser Auto-Intercept)</label>
-                                        <button type="button" onclick="promptManualTargetLocation()" class="text-[10px] font-mono font-bold text-indigo-300 hover:text-white bg-indigo-900/60 hover:bg-indigo-800/80 border border-indigo-500/40 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition shadow-sm">
-                                            <i data-lucide="map-pin" class="w-3 h-3 text-indigo-400"></i> Set Target Shelf/Bay
+                                        <button type="button" onclick="openFacilityMapModal()" class="text-[10px] font-mono font-bold text-indigo-300 hover:text-white bg-indigo-900/60 hover:bg-indigo-800/80 border border-indigo-500/40 px-2.5 py-1 rounded-lg flex items-center gap-1.5 cursor-pointer transition shadow-sm hover:scale-[1.02] active:scale-95" title="Open Dynamic Facility Map & Interactive Shelf Configurator">
+                                            <i data-lucide="map" class="w-3.5 h-3.5 text-indigo-400"></i>
+                                            <span>Facility Map &amp; Shelf Config</span>
                                         </button>
                                     </div>
                                      <!-- Decoy Form Trap to absorb Google Password Manager autofill -->
@@ -8070,6 +8071,110 @@
                 </div>
                 <div id="cbd-billing-list" class="overflow-x-auto border border-gray-850 rounded-2xl bg-gray-950">
                     <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dynamic Facility Layout Blueprint & Interactive Shelf Configurator Modal -->
+    <div id="facility-map-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 transition-all duration-300">
+        <div class="glass-panel max-w-6xl w-full max-h-[94vh] flex flex-col rounded-3xl border border-indigo-500/40 shadow-2xl overflow-hidden relative bg-gray-950/95">
+            <!-- Modal Header -->
+            <div class="p-4 sm:p-6 border-b border-gray-800/80 flex flex-wrap items-center justify-between gap-4 bg-gray-900/60">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 rounded-2xl bg-indigo-600/20 text-indigo-400 font-black flex items-center justify-center text-lg border border-indigo-500/30 font-mono shadow-inner">
+                        <i data-lucide="map" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2.5">
+                            <h3 class="font-black text-white text-lg sm:text-xl tracking-tight">Facility Blueprint &amp; Shelf Configurator</h3>
+                            <span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase font-mono tracking-wider">Dynamic Layout</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-xs text-gray-400 font-mono flex items-center gap-1">
+                                <i data-lucide="building" class="w-3.5 h-3.5 text-gray-500"></i>
+                                Facility:
+                            </span>
+                            <select id="facmap-facility-select" onchange="onFacilityMapFacilityChange(this.value)" class="bg-gray-950 text-indigo-300 border border-indigo-500/30 text-xs font-bold rounded-lg px-2.5 py-1 outline-none cursor-pointer hover:border-indigo-400 transition">
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Side: Active Target & Close -->
+                <div class="flex items-center gap-3">
+                    <div id="facmap-active-target-badge" class="hidden sm:flex items-center gap-2 bg-indigo-950/80 border border-indigo-500/40 px-3 py-1.5 rounded-xl font-mono text-xs shadow-sm">
+                        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-indigo-400"></i>
+                        <span class="text-gray-400">Target:</span>
+                        <span id="facmap-active-target-code" class="text-white font-bold tracking-wide">NONE</span>
+                        <button onclick="clearTargetLocationLock(); updateFacilityMapTargetBadge();" class="text-[10px] text-red-400 hover:text-red-300 underline ml-1 cursor-pointer">Clear</button>
+                    </div>
+                    <button onclick="closeFacilityMapModal()" class="text-gray-400 hover:text-white p-2 rounded-xl bg-gray-900 border border-gray-800 transition cursor-pointer hover:bg-gray-800">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Navigation Bar & Controls -->
+            <div class="p-3 sm:px-6 py-2.5 bg-gray-950/80 border-b border-gray-850 flex flex-wrap items-center justify-between gap-3">
+                <!-- Zone Filter Tabs -->
+                <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                    <button id="facmap-tab-overview" onclick="switchFacilityMapTab('overview')" class="px-3.5 py-1.5 text-xs font-bold rounded-xl border border-indigo-500/40 bg-indigo-600/20 text-indigo-300 transition flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap">
+                        <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i> Blueprint Overview
+                    </button>
+                    <button id="facmap-tab-vault" onclick="switchFacilityMapTab('vault')" class="px-3.5 py-1.5 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white transition flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap">
+                        <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i> Vault Aisles &amp; Shelves
+                    </button>
+                    <button id="facmap-tab-staging" onclick="switchFacilityMapTab('staging')" class="px-3.5 py-1.5 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white transition flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap">
+                        <i data-lucide="door-open" class="w-3.5 h-3.5 text-emerald-400"></i> Staging Lockers
+                    </button>
+                    <button id="facmap-tab-docks" onclick="switchFacilityMapTab('docks')" class="px-3.5 py-1.5 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white transition flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap">
+                        <i data-lucide="truck" class="w-3.5 h-3.5 text-amber-400"></i> Docks &amp; Intake
+                    </button>
+                </div>
+
+                <!-- Search & Status Legend -->
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <div class="relative flex-1 sm:w-64">
+                        <i data-lucide="search" class="w-3.5 h-3.5 text-gray-500 absolute left-3 top-2.5"></i>
+                        <input type="text" id="facmap-search-input" oninput="filterFacilityMapSlots(this.value)" placeholder="Filter by bay/shelf (e.g. A1, B02, S1)..." class="w-full bg-gray-900 border border-gray-800 focus:border-indigo-500 rounded-xl py-1.5 pl-8 pr-3 text-xs text-white font-mono placeholder-gray-600 outline-none transition">
+                    </div>
+                    <div class="hidden md:flex items-center gap-3 text-[10px] font-mono text-gray-400 pl-2 border-l border-gray-800">
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> Available</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400"></span> Occupied</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-indigo-400"></span> Locked Target</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scrollable Floorplan Canvas -->
+            <div id="facmap-canvas-container" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-gradient-to-b from-gray-950 via-gray-900/40 to-gray-950">
+                <!-- Populated dynamically by renderFacilityMap() -->
+            </div>
+
+            <!-- Modal Footer with Manual Code Fallback & Instructions -->
+            <div class="p-4 sm:px-6 py-3 border-t border-gray-800 bg-gray-950/90 flex flex-wrap items-center justify-between gap-3">
+                <!-- Manual Code Input Fallback -->
+                <div class="flex items-center gap-2">
+                    <label class="text-[11px] font-bold text-gray-400 uppercase font-mono hidden sm:inline">Manual Lock:</label>
+                    <div class="flex items-center gap-1.5">
+                        <input type="text" id="facmap-manual-input" placeholder="e.g. A1-B04-S2 or ROOM-1-BAY-01" class="bg-gray-900 border border-gray-800 focus:border-indigo-500 text-xs font-mono text-white rounded-xl px-3 py-1.5 outline-none w-52 uppercase" onkeydown="if(event.key==='Enter') lockManualCodeFromMap();">
+                        <button onclick="lockManualCodeFromMap()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold font-mono px-3 py-1.5 rounded-xl transition cursor-pointer active:scale-95 flex items-center gap-1">
+                            <i data-lucide="check" class="w-3.5 h-3.5"></i> Lock Target
+                        </button>
+                    </div>
+                </div>
+
+                <div class="text-[11px] text-gray-400 font-mono flex items-center gap-1.5">
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-indigo-400"></i>
+                    <span>Click any shelf/bay above to set target for scanning, or scan location barcodes directly.</span>
+                </div>
+
+                <div>
+                    <button onclick="closeFacilityMapModal()" class="px-4 py-1.5 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 hover:text-white rounded-xl text-xs font-mono transition cursor-pointer">
+                        Done / Close
+                    </button>
                 </div>
             </div>
         </div>

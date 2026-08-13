@@ -2067,11 +2067,9 @@
         let details = item.details || item.notes || item.subtext || '';
         let badges = [];
 
-        if (desc.includes('subscription') || desc.includes('storage') || invType === 'initial_reservation') {
+        if (isSubscriptionInvoice && (desc.includes('subscription') || desc.includes('storage') || invType === 'initial_reservation')) {
           badges.push(`📦 ${activeToteCount} Active Storage Tote${activeToteCount !== 1 ? 's' : ''}`);
           badges.push(`📊 ${currentTier.tierName} (${formatMoney(effectiveRate)}/tote/mo)`);
-          badges.push('🔒 Secure Vault Rack Storage');
-          badges.push('📱 24/7 Barcode Cataloging');
         } else if (desc.includes('valet') || desc.includes('delivery') || invType === 'valet_delivery') {
           badges.push('🚚 White-Glove Doorstep Valet');
           badges.push('📍 Real-Time Live Driver Tracking');
