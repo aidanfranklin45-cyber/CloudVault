@@ -1928,29 +1928,46 @@
         storageItem.description = `CloudVault Storage Subscription (${activeToteCount} totes @ $${effectiveRate.toFixed(2)}/mo — ${currentTier.tierName})`;
       }
 
-      // Smart Volume Expansion Metric (+2 Totes Expansion Calculation)
-      const plus2Count = activeToteCount + 2;
-      const plus2Tier = await this.resolveCustomerPricing(targetUid, targetFacId, plus2Count);
-      const plus2TotalCost = plus2Count * plus2Tier.toteRate;
-      const diff = plus2TotalCost - subtotal;
-      const marginalPerTote = diff / 2;
+      // Dynamic Smart Volume Expansion Calculation based on actual volume tier thresholds
+      let targetTierCount = 10;
+      if (activeToteCount >= 50) {
+        targetTierCount = activeToteCount + 25; // Already at max Tier 4 Enterprise, suggest next 25-tote bulk milestone
+      } else if (activeToteCount >= 25) {
+        targetTierCount = 50; // Current: Tier 3 Commercial (25-49 totes). Next Tier: Tier 4 Enterprise (50 totes)
+      } else if (activeToteCount >= 10) {
+        targetTierCount = 25; // Current: Tier 2 Preferred (10-24 totes). Next Tier: Tier 3 Commercial (25 totes)
+      } else {
+        targetTierCount = 10; // Current: Tier 1 Standard (1-9 totes). Next Tier: Tier 2 Preferred (10 totes)
+      }
+
+      const additionalTotesNeeded = Math.max(1, targetTierCount - activeToteCount);
+      const nextTierObj = await this.resolveCustomerPricing(targetUid, targetFacId, targetTierCount);
+      const nextTierTotalCost = targetTierCount * nextTierObj.toteRate;
+      const diff = nextTierTotalCost - subtotal;
+      const marginalPerTote = additionalTotesNeeded > 0 ? (diff / additionalTotesNeeded) : 0;
 
       let upsellBannerHtml = '';
       if (diff <= 0) {
-        // Volume Tier Jump Savings! (Adding totes reduces the total bill)
+        // Volume Tier Jump Savings! (Adding totes reduces or keeps total bill identical while unlocking a lower unit rate)
+        const isFreeExpansion = Math.abs(diff) < 0.01;
+        const diffText = isFreeExpansion ? `+$0.00/mo (FREE Expansion)` : `Save ${formatMoney(Math.abs(diff))}/mo`;
+        const actionText = isFreeExpansion 
+          ? `Adding +${additionalTotesNeeded} Totes is <span class="text-emerald-700 font-mono font-black">FREE (+$0.00/mo)</span> by unlocking lower unit rates!` 
+          : `Adding +${additionalTotesNeeded} Totes REDUCES your total monthly bill by <span class="text-emerald-700 font-mono font-black text-base">${formatMoney(Math.abs(diff))}/mo</span>!`;
+
         upsellBannerHtml = `
           <div class="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border-2 border-emerald-500/40 rounded-2xl p-4 sm:p-5 text-xs text-slate-800 space-y-2 no-print shadow-sm">
             <div class="flex items-center justify-between">
               <span class="inline-flex items-center gap-1.5 bg-emerald-600 text-white font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full tracking-wider">
                 💡 Volume Tier Discount Alert
               </span>
-              <span class="font-mono font-black text-emerald-700 text-xs">Save ${formatMoney(Math.abs(diff))}/mo by adding storage!</span>
+              <span class="font-mono font-black text-emerald-700 text-xs">${diffText}</span>
             </div>
             <p class="font-black text-sm text-slate-900 leading-snug">
-              Unlock Volume Tier Savings: Adding +2 Totes REDUCES your total monthly bill by <span class="text-emerald-700 font-mono font-black text-base">${formatMoney(Math.abs(diff))}/mo</span>!
+              Unlock Volume Tier Savings: ${actionText}
             </p>
             <p class="text-slate-600 leading-relaxed text-[11px]">
-              You are currently renting <strong>${activeToteCount} tote${activeToteCount !== 1 ? 's' : ''}</strong> at ${formatMoney(effectiveRate)}/tote/mo (${formatMoney(subtotal)}/mo). Adding 2 more totes (${plus2Count} totes total) automatically unlocks our <strong>${plus2Tier.tierName}</strong> ($${plus2Tier.toteRate.toFixed(2)}/tote/mo), bringing your new monthly total down to <strong>${formatMoney(plus2TotalCost)}/mo</strong>!
+              You are currently renting <strong>${activeToteCount} tote${activeToteCount !== 1 ? 's' : ''}</strong> at ${formatMoney(effectiveRate)}/tote/mo (${formatMoney(subtotal)}/mo). Upgrading to <strong>${targetTierCount} totes</strong> (+${additionalTotesNeeded} tote${additionalTotesNeeded !== 1 ? 's' : ''}) automatically unlocks our <strong>${nextTierObj.tierName}</strong> ($${nextTierObj.toteRate.toFixed(2)}/tote/mo), bringing your total monthly bill to <strong>${formatMoney(nextTierTotalCost)}/mo</strong>!
             </p>
           </div>`;
       } else {
@@ -1961,13 +1978,13 @@
               <span class="inline-flex items-center gap-1.5 bg-blue-600 text-white font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full tracking-wider">
                 🚀 Smart Volume Expansion Opportunity
               </span>
-              <span class="font-mono font-bold text-blue-700 text-xs">+2 Totes for +${formatMoney(diff)}/mo</span>
+              <span class="font-mono font-bold text-blue-700 text-xs">+${additionalTotesNeeded} Tote${additionalTotesNeeded !== 1 ? 's' : ''} for +${formatMoney(diff)}/mo</span>
             </div>
             <p class="font-black text-sm text-slate-900 leading-snug">
-              Adding +2 totes will only increase your monthly bill by <span class="text-blue-700 font-mono font-black">+${formatMoney(diff)}/mo</span> (just <span class="text-blue-700 font-mono font-bold">+${formatMoney(marginalPerTote)}/tote/mo</span>)!
+              Adding +${additionalTotesNeeded} tote${additionalTotesNeeded !== 1 ? 's' : ''} will only increase your monthly bill by <span class="text-blue-700 font-mono font-black">+${formatMoney(diff)}/mo</span> (just <span class="text-blue-700 font-mono font-bold">+${formatMoney(marginalPerTote)}/tote/mo</span>)!
             </p>
             <p class="text-slate-600 leading-relaxed text-[11px]">
-              You are currently renting <strong>${activeToteCount} tote${activeToteCount !== 1 ? 's' : ''}</strong> (${formatMoney(subtotal)}/mo). Upgrading to <strong>${plus2Count} totes</strong> unlocks our <strong>${plus2Tier.tierName}</strong> ($${plus2Tier.toteRate.toFixed(2)}/tote/mo) for a total of <strong>${formatMoney(plus2TotalCost)}/mo</strong>.
+              You are currently renting <strong>${activeToteCount} tote${activeToteCount !== 1 ? 's' : ''}</strong> (${formatMoney(subtotal)}/mo). Upgrading to <strong>${targetTierCount} totes</strong> (+${additionalTotesNeeded} tote${additionalTotesNeeded !== 1 ? 's' : ''}) unlocks our <strong>${nextTierObj.tierName}</strong> ($${nextTierObj.toteRate.toFixed(2)}/tote/mo) for a total of <strong>${formatMoney(nextTierTotalCost)}/mo</strong>.
             </p>
           </div>`;
       }
