@@ -3435,8 +3435,7 @@
                 // ── Tab 1: NEW INTAKE CARDS ──
                 const activateItems = (allItems || []).filter(i => 
                     i.activated === false || 
-                    i.status === 'intake' || 
-                    (i.location_code && i.location_code.startsWith('INTAKE'))
+                    i.status === 'intake'
                 );
                 document.getElementById('wtab-activate-count').textContent = activateItems.length;
                 const printIntakeBadge = document.getElementById('print-intake-count');
@@ -3489,17 +3488,17 @@
                                 </div>
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
+                                    ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-850 flex items-center justify-between font-mono text-xs">
                                         <div class="flex items-center space-x-2">
                                             <span class="text-white font-bold">${t.tote_code}</span>
                                             <span class="text-cyan-400 text-[10px] bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 font-mono">📍 INTAKE-PREP</span>
                                         </div>
-                                        <button onclick="document.getElementById('scan-barcode').value='${t.tote_code}';simulateScan('pending-stage')" class="text-emerald-300 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 text-[10px] font-bold px-2 py-1 rounded-xl border border-emerald-500/30 transition flex items-center gap-1 cursor-pointer">⚡ Activate (${t.tote_code})</button>
+                                        <button onclick="document.getElementById('scan-barcode').value='${t.tote_code}';simulateScan('activate')" class="text-emerald-300 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 text-[10px] font-bold px-2 py-1 rounded-xl border border-emerald-500/30 transition flex items-center gap-1 cursor-pointer">⚡ Activate (${t.tote_code})</button>
                                     </div>`).join('')}
                                 </div>
 
                                 <!-- Full-Width 60px Ergonomic Industrial Action Button -->
-                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('pending-stage')" class="w-full min-h-[60px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('activate')" class="w-full min-h-[60px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                     <i data-lucide="qr-code" class="w-6 h-6"></i>
                                     <span>ACTIVATE TOTE (${firstCode}) &amp; STAGE FOR CUSTOMER/DISPATCH →</span>
                                 </button>
