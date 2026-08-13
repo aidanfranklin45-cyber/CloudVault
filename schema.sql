@@ -647,24 +647,30 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
--- Generator function for unique structured tote codes (e.g. CV-SEA-49AK)
+-- Generator function for unique structured tote codes with guaranteed alphanumeric mix (e.g. CV-SEA-49AK, CV-YAK-8K3M)
 CREATE OR REPLACE FUNCTION public.generate_tote_code(p_facility_id TEXT)
 RETURNS TEXT AS $$
 DECLARE
   v_prefix TEXT;
-  v_charset TEXT := '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+  v_digits TEXT := '23456789';
+  v_letters TEXT := 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  v_all_chars TEXT := '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
   v_random_code TEXT;
   v_tote_code TEXT;
   v_exists BOOLEAN;
-  v_i INT;
 BEGIN
   v_prefix := public.get_facility_prefix(p_facility_id);
 
   LOOP
-    v_random_code := '';
-    FOR v_i IN 1..4 LOOP
-      v_random_code := v_random_code || substr(v_charset, floor(random() * length(v_charset) + 1)::int, 1);
-    END LOOP;
+    -- Guarantee at least one digit and one letter for a clean alphanumeric mixture
+    v_random_code := substr(v_digits, floor(random() * length(v_digits) + 1)::int, 1)
+                  || substr(v_letters, floor(random() * length(v_letters) + 1)::int, 1)
+                  || substr(v_all_chars, floor(random() * length(v_all_chars) + 1)::int, 1)
+                  || substr(v_all_chars, floor(random() * length(v_all_chars) + 1)::int, 1);
+    
+    -- Shuffle the 4 characters
+    SELECT string_agg(ch, '' ORDER BY random()) INTO v_random_code
+    FROM regexp_split_to_table(v_random_code, '') AS ch;
 
     v_tote_code := 'CV-' || v_prefix || '-' || v_random_code;
 

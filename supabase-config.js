@@ -130,15 +130,35 @@ function isPastCutoff() {
     return now.getHours() >= 18; // 6:00 PM local time
 }
 
-// Utility: Generate facility-tethered non-colliding tote code (e.g. CV-SEA-49AK, CV-PDX-8B2X)
+// Utility: Generate facility-tethered non-colliding tote code with guaranteed alphanumeric mixture (e.g. CV-SEA-49AK, CV-YAK-8K3M)
 function generateToteCode(facilityId = 'facility_seattle_north') {
-    const prefix = (facilityId.includes('portland') || facilityId.includes('pdx')) ? 'PDX' : 'SEA';
-    const charset = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
-    let code = '';
-    for (let i = 0; i < 4; i++) {
-        code += charset.charAt(Math.floor(Math.random() * charset.length));
+    let prefix = 'SEA';
+    const fid = String(facilityId).toLowerCase();
+    if (fid.includes('yakima') || fid.includes('yak')) prefix = 'YAK';
+    else if (fid.includes('portland') || fid.includes('pdx') || fid.includes('por')) prefix = 'PDX';
+    else if (fid.includes('denver') || fid.includes('den')) prefix = 'DEN';
+    else if (fid.includes('spokane') || fid.includes('spo')) prefix = 'SPO';
+    else if (fid.includes('austin') || fid.includes('atx')) prefix = 'ATX';
+    else prefix = 'SEA';
+
+    // Disambiguated digit & letter sets (excludes 0, O, 1, I to prevent scanning confusion)
+    const digits = '23456789';
+    const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const allChars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+
+    // Guarantee a mixture of both letters and numbers in the last 4 characters
+    const chars = [
+        digits.charAt(Math.floor(Math.random() * digits.length)),
+        letters.charAt(Math.floor(Math.random() * letters.length)),
+        allChars.charAt(Math.floor(Math.random() * allChars.length)),
+        allChars.charAt(Math.floor(Math.random() * allChars.length))
+    ];
+    // Fisher-Yates shuffle
+    for (let i = chars.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [chars[i], chars[j]] = [chars[j], chars[i]];
     }
-    return `CV-${prefix}-${code}`;
+    return `CV-${prefix}-${chars.join('')}`;
 }
 
 // Shared Pricing Engine

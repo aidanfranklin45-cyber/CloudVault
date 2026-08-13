@@ -4232,22 +4232,46 @@
                 if (typeof lucide !== 'undefined') lucide.createIcons();
             }
 
+            let targetFacId = facilityId || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+            if (!targetFacId || targetFacId === 'null' || targetFacId === 'undefined') {
+                targetFacId = document.getElementById('global-facility-select')?.value || 'facility_seattle_north';
+            }
+            window.facMapState.activeFacilityId = targetFacId;
+
             try {
-                // 1. Fetch Facility Details
-                const { data: fac } = await supabase.from('facilities').select('*').eq('id', facilityId).single();
-                window.facMapState.facilityData = fac || { id: facilityId, name: facilityId, staging_rooms: 2 };
+                // 1. Fetch Facility Details safely
+                let fac = null;
+                try {
+                    const { data, error } = await supabase.from('facilities').select('*').eq('id', targetFacId).maybeSingle();
+                    if (!error && data) fac = data;
+                } catch (e) {
+                    console.warn('[FacilityMap] Facility fetch fallback:', e);
+                }
+                window.facMapState.facilityData = fac || { id: targetFacId, name: targetFacId, staging_rooms: 3 };
 
                 // 2. Fetch Warehouse Locations for this Facility
-                const { data: locs } = await supabase.from('warehouse_locations')
-                    .select('*')
-                    .eq('facility_id', facilityId);
-                window.facMapState.locations = locs || [];
+                let locs = [];
+                try {
+                    const { data, error } = await supabase.from('warehouse_locations')
+                        .select('*')
+                        .eq('facility_id', targetFacId);
+                    if (!error && data) locs = data;
+                } catch (e) {
+                    console.warn('[FacilityMap] Locations fetch fallback:', e);
+                }
+                window.facMapState.locations = locs;
 
                 // 3. Fetch Stored Inventory for Occupancy
-                const { data: totes } = await supabase.from('inventory')
-                    .select('id, tote_code, location_code, uid, status')
-                    .or(`facility_id.eq.${facilityId},facility_id.is.null`)
-                    .neq('status', 'with-customer');
+                let totes = [];
+                try {
+                    const { data, error } = await supabase.from('inventory')
+                        .select('id, tote_code, location_code, uid, status')
+                        .or(`facility_id.eq.${targetFacId},facility_id.is.null`)
+                        .neq('status', 'with-customer');
+                    if (!error && data) totes = data;
+                } catch (e) {
+                    console.warn('[FacilityMap] Inventory fetch fallback:', e);
+                }
 
                 const occupied = {};
                 (totes || []).forEach(t => {
@@ -4273,7 +4297,7 @@
                         <div class="p-6 bg-red-950/40 border border-red-500/40 rounded-2xl text-center space-y-2">
                             <p class="text-red-300 font-bold">Failed to load facility blueprint.</p>
                             <p class="text-xs text-gray-400 font-mono">${escapeHtml(err.message || 'Unknown error')}</p>
-                            <button onclick="loadFacilityMapData('${escapeHtml(facilityId)}')" class="mt-2 px-4 py-1.5 bg-red-600/30 hover:bg-red-600 text-white rounded-xl text-xs font-mono font-bold transition">Retry</button>
+                            <button onclick="loadFacilityMapData('${escapeHtml(targetFacId)}')" class="mt-2 px-4 py-1.5 bg-red-600/30 hover:bg-red-600 text-white rounded-xl text-xs font-mono font-bold transition">Retry</button>
                         </div>
                     `;
                 }
@@ -8013,7 +8037,7 @@
 
             const rawVal = codeInput ? codeInput.value.trim() : '';
             let codes = rawVal.split(',').map(c => c.trim()).filter(Boolean);
-            if (codes.length === 0) codes = ['CV-SEA-1001'];
+            if (codes.length === 0) codes = ['CV-SEA-49AK'];
 
             // Render Selected Chips Box
             if (chipsBox) {
@@ -8031,7 +8055,7 @@
             }
 
             const todayStr = new Date().toLocaleDateString();
-            const firstCode = codes[0] || 'CV-SEA-1001';
+            const firstCode = codes[0] || 'CV-SEA-49AK';
 
             // Render preview UI immediately in 0ms without waiting for async QR generation
             previewBox.innerHTML = `
