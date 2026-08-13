@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS public.warehouse_locations (
     zone_type VARCHAR(50) NOT NULL CHECK (zone_type IN ('VAULT', 'STAGING', 'LOGISTICS')),
     identifier VARCHAR(100) NOT NULL,
     is_occupied BOOLEAN DEFAULT false NOT NULL,
-    capacity INTEGER DEFAULT 1,
+    capacity INTEGER DEFAULT 3,
     assigned_tote_id UUID REFERENCES public.inventory(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
     UNIQUE(facility_id, identifier)
@@ -1675,7 +1675,7 @@ BEGIN
 
   -- Capacity Enforcement Check
   IF p_location_code IS NOT NULL THEN
-    SELECT id, is_occupied, COALESCE(capacity, 4) as capacity INTO v_target_loc
+    SELECT id, is_occupied, COALESCE(capacity, 3) as capacity INTO v_target_loc
     FROM public.warehouse_locations
     WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL) AND (identifier = p_location_code OR location_code = p_location_code)
     LIMIT 1;
@@ -1685,7 +1685,7 @@ BEGIN
     ELSIF p_location_code ILIKE '%ROOM%' OR p_location_code ILIKE '%STAGE%' OR p_location_code ILIKE '%LOCKER%' THEN
       v_capacity := 1;
     ELSE
-      v_capacity := 4;
+      v_capacity := 3;
     END IF;
 
     SELECT COUNT(*) INTO v_current_count
@@ -2064,7 +2064,7 @@ DECLARE
   v_item RECORD;
   v_user_role public.user_role;
   v_assigned_location_code TEXT;
-  v_capacity INT := 4;
+  v_capacity INT := 3;
   v_current_count INT := 0;
   v_target_loc RECORD;
 BEGIN
@@ -2091,13 +2091,13 @@ BEGIN
   END IF;
 
   IF p_target_location_code IS NULL OR trim(p_target_location_code) = '' OR p_target_location_code IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING') THEN
-    RAISE EXCEPTION 'Target Location Required: Please scan a shelf/bay barcode or set a Target Shelf/Bay before executing a reshelf for tote %.', p_tote_code;
+    RAISE EXCEPTION 'Target Location Required: Please scan or enter a shelf/bay code before executing a reshelf for tote %.', p_tote_code;
   END IF;
 
   v_assigned_location_code := trim(p_target_location_code);
 
   -- Capacity Enforcement Check
-  SELECT id, COALESCE(capacity, 4) as capacity INTO v_target_loc
+  SELECT id, COALESCE(capacity, 3) as capacity INTO v_target_loc
   FROM public.warehouse_locations
   WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
     AND (identifier = v_assigned_location_code OR location_code = v_assigned_location_code)
@@ -2108,7 +2108,7 @@ BEGIN
   ELSIF v_assigned_location_code ILIKE '%ROOM%' OR v_assigned_location_code ILIKE '%STAGE%' OR v_assigned_location_code ILIKE '%LOCKER%' THEN
     v_capacity := 1;
   ELSE
-    v_capacity := 4;
+    v_capacity := 3;
   END IF;
 
   SELECT COUNT(*) INTO v_current_count
@@ -2717,9 +2717,9 @@ BEGIN
     FROM public.inventory 
     WHERE (location_id = p_new_location_id OR location_code = v_new_identifier) AND id != p_tote_id;
 
-    -- Fail-Fast Logic: Check if at/above capacity limit or if location is marked full (default max 5 totes per shelf)
-    IF (v_old_location_id IS NULL OR v_old_location_id != p_new_location_id) AND (v_current_count >= COALESCE(v_capacity, 5)) THEN
-      RAISE EXCEPTION 'Location % is already full (%/% totes occupied). Shelves hold maximum % totes.', v_new_identifier, v_current_count, COALESCE(v_capacity, 5), COALESCE(v_capacity, 5);
+    -- Fail-Fast Logic: Check if at/above capacity limit or if location is marked full (default max 3 totes per shelf)
+    IF (v_old_location_id IS NULL OR v_old_location_id != p_new_location_id) AND (v_current_count >= COALESCE(v_capacity, 3)) THEN
+      RAISE EXCEPTION 'Location % is already full (%/% totes occupied). Shelves hold maximum % totes.', v_new_identifier, v_current_count, COALESCE(v_capacity, 3), COALESCE(v_capacity, 3);
     END IF;
   END IF;
 
@@ -2736,7 +2736,7 @@ BEGIN
   IF v_old_location_id IS NOT NULL AND (p_new_location_id IS NULL OR v_old_location_id != p_new_location_id) THEN
     SELECT COUNT(*) INTO v_old_count FROM public.inventory WHERE location_id = v_old_location_id;
     UPDATE public.warehouse_locations
-    SET is_occupied = (v_old_count >= COALESCE(capacity, 5))
+    SET is_occupied = (v_old_count >= COALESCE(capacity, 3))
     WHERE id = v_old_location_id;
   END IF;
 
@@ -2744,7 +2744,7 @@ BEGIN
   IF p_new_location_id IS NOT NULL THEN
     SELECT COUNT(*) INTO v_current_count FROM public.inventory WHERE location_id = p_new_location_id;
     UPDATE public.warehouse_locations
-    SET is_occupied = (v_current_count >= COALESCE(capacity, 5))
+    SET is_occupied = (v_current_count >= COALESCE(capacity, 3))
     WHERE id = p_new_location_id;
   END IF;
 
