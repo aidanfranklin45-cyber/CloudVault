@@ -4379,7 +4379,10 @@
                 if (mapIframe) {
                     const zips = stops.map(s => s.users?.zip || s.users?.active_zone).filter(Boolean);
                     const mapQuery = encodeURIComponent(`${activeCity} ${zips.slice(0, 3).join(' ')}`.trim());
-                    mapIframe.src = `https://maps.google.com/maps?q=${mapQuery}&t=&z=12&ie=UTF8&iwloc=&output=embed`;
+                    const targetSrc = `https://maps.google.com/maps?q=${mapQuery}&t=&z=12&ie=UTF8&iwloc=&output=embed`;
+                    if (mapIframe.getAttribute('src') !== targetSrc && mapIframe.src !== targetSrc) {
+                        mapIframe.src = targetSrc;
+                    }
                 }
 
                 if (telemetryStops) {
