@@ -1791,7 +1791,7 @@
             const driverName = req.driver_name || 'CloudVault Driver';
             const vehicle = req.vehicle_info || 'Valet Delivery Van';
             const trkStatus = req.tracking_status || 'en_route';
-            const driverPhone = req.driver_phone || '(800) 256-8382';
+            const driverPhone = req.driver_phone || '';
 
             let etaText = "Arriving Soon";
             if (req.estimated_arrival_at) {
@@ -1825,7 +1825,7 @@
                         </div>
                         <div class="text-right">
                             <p class="text-xs font-extrabold text-amber-400 font-mono">${etaText}</p>
-                            <a href="tel:${driverPhone}" class="text-[10px] text-blue-400 hover:underline font-bold">📞 ${escapeHtml(driverPhone)}</a>
+                            ${driverPhone ? `<a href="tel:${driverPhone}" class="text-[10px] text-blue-400 hover:underline font-bold">📞 ${escapeHtml(driverPhone)}</a>` : ''}
                         </div>
                     </div>
                 </div>`;
