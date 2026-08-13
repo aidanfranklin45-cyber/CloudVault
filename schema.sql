@@ -1573,30 +1573,29 @@ BEGIN
     RAISE EXCEPTION 'Fail-Fast Error: Tote code % not found in system', p_tote_code;
   END IF;
 
-  -- Check if target location is already full (default max capacity = 5 totes per shelf)
+  -- Capacity Enforcement Check
   IF p_location_code IS NOT NULL THEN
-    SELECT id, is_occupied, COALESCE(capacity, 5) as capacity INTO v_target_loc
+    SELECT id, is_occupied, COALESCE(capacity, 4) as capacity INTO v_target_loc
     FROM public.warehouse_locations
     WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL) AND (identifier = p_location_code OR location_code = p_location_code)
     LIMIT 1;
 
     IF v_target_loc IS NOT NULL THEN
-      SELECT COUNT(*) INTO v_current_count
-      FROM public.inventory
-      WHERE (location_id = v_target_loc.id OR location_code = p_location_code) AND id != v_item.id;
-
-      IF (v_item.location_id IS NULL OR v_item.location_id != v_target_loc.id) AND (v_current_count >= v_target_loc.capacity OR (v_target_loc.is_occupied AND v_current_count >= v_target_loc.capacity)) THEN
-        RAISE EXCEPTION 'Location % is already full (%/% totes occupied). Shelves hold maximum % totes.', p_location_code, v_current_count, v_target_loc.capacity, v_target_loc.capacity;
-      END IF;
+      v_capacity := v_target_loc.capacity;
+    ELSIF p_location_code ILIKE '%ROOM%' OR p_location_code ILIKE '%STAGE%' OR p_location_code ILIKE '%LOCKER%' THEN
+      v_capacity := 1;
     ELSE
-      -- Fallback check for location_code string if warehouse_locations record is not yet created
-      SELECT COUNT(*) INTO v_current_count
-      FROM public.inventory
-      WHERE location_code = p_location_code AND id != v_item.id;
+      v_capacity := 4;
+    END IF;
 
-      IF v_current_count >= 5 THEN
-        RAISE EXCEPTION 'Shelf % is already full (%/5 totes occupied). Shelves hold maximum 5 totes.', p_location_code, v_current_count;
-      END IF;
+    SELECT COUNT(*) INTO v_current_count
+    FROM public.inventory
+    WHERE (location_code = p_location_code OR (v_target_loc.id IS NOT NULL AND location_id = v_target_loc.id))
+      AND status IN ('stored', 'staged', 'pending-stage')
+      AND id != v_item.id;
+
+    IF v_current_count >= v_capacity THEN
+      RAISE EXCEPTION 'Location % is already FULL (%/% totes occupied). Shelves hold maximum % totes.', p_location_code, v_current_count, v_capacity, v_capacity;
     END IF;
   END IF;
 
@@ -1965,6 +1964,9 @@ DECLARE
   v_item RECORD;
   v_user_role public.user_role;
   v_assigned_location_code TEXT;
+  v_capacity INT := 4;
+  v_current_count INT := 0;
+  v_target_loc RECORD;
 BEGIN
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
@@ -1993,6 +1995,31 @@ BEGIN
   END IF;
 
   v_assigned_location_code := trim(p_target_location_code);
+
+  -- Capacity Enforcement Check
+  SELECT id, COALESCE(capacity, 4) as capacity INTO v_target_loc
+  FROM public.warehouse_locations
+  WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
+    AND (identifier = v_assigned_location_code OR location_code = v_assigned_location_code)
+  LIMIT 1;
+
+  IF v_target_loc IS NOT NULL THEN
+    v_capacity := v_target_loc.capacity;
+  ELSIF v_assigned_location_code ILIKE '%ROOM%' OR v_assigned_location_code ILIKE '%STAGE%' OR v_assigned_location_code ILIKE '%LOCKER%' THEN
+    v_capacity := 1;
+  ELSE
+    v_capacity := 4;
+  END IF;
+
+  SELECT COUNT(*) INTO v_current_count
+  FROM public.inventory
+  WHERE location_code = v_assigned_location_code
+    AND status IN ('stored', 'staged', 'pending-stage')
+    AND id != v_item.id;
+
+  IF v_current_count >= v_capacity THEN
+    RAISE EXCEPTION 'Shelf/Location % is already FULL (%/% totes occupied). Maximum capacity for this location is % totes.', v_assigned_location_code, v_current_count, v_capacity, v_capacity;
+  END IF;
 
   UPDATE public.inventory
   SET status = 'stored'::public.inventory_status,
