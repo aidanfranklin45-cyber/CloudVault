@@ -1231,12 +1231,45 @@
       let statusBadgeClasses = 'bg-emerald-500/10 text-emerald-700 border-emerald-300';
       if (status === 'PENDING') statusBadgeClasses = 'bg-amber-500/10 text-amber-700 border-amber-300';
       else if (status === 'OVERDUE' || status === 'FAILED') statusBadgeClasses = 'bg-red-500/10 text-red-700 border-red-300';
-      else if (status === 'REFUNDED') statusBadgeClasses = 'bg-rose-500/10 text-rose-700 border-rose-300';
-
       const formatMoney = (val) => {
         const n = Number(val) || 0;
         if (n < 0) return `-$${Math.abs(n).toFixed(2)}`;
         return `$${n.toFixed(2)}`;
+      };
+
+      const invType = (invoiceObj.invoice_type || invoiceObj.invoiceType || '').toLowerCase();
+
+      const renderItemBreakdown = (item) => {
+        const desc = (item.description || item.name || '').toLowerCase();
+        let details = item.details || item.notes || item.subtext || '';
+        let badges = [];
+
+        if (desc.includes('subscription') || desc.includes('storage') || invType === 'initial_reservation') {
+          badges.push('🔒 Secure Vault Rack Storage');
+          badges.push('📱 24/7 Digital Barcode Cataloging');
+          badges.push('🚪 Staging Room Access Included');
+        } else if (desc.includes('valet') || desc.includes('delivery') || invType === 'valet_delivery') {
+          badges.push('🚚 White-Glove Doorstep Valet');
+          badges.push('📍 Real-Time Live Driver Tracking');
+        } else if (desc.includes('surge') || desc.includes('priority')) {
+          badges.push('⚡ Expedited Rush Queue Dispatch');
+        } else if (desc.includes('unreturned') || desc.includes('tote fee')) {
+          badges.push('📦 Industrial Stackable Tote Replacement');
+        } else if (desc.includes('deposit') || desc.includes('waitlist')) {
+          badges.push('⭐ Priority Launch Queue Slot');
+          badges.push('💯 100% Fully Refundable Deposit');
+        } else if (desc.includes('tax')) {
+          badges.push('🏛️ State & Local Tax Compliance');
+        }
+
+        const badgesHtml = badges.map(b => `<span class="inline-flex items-center gap-1 bg-blue-50/80 border border-blue-200/60 text-blue-800 px-2 py-0.5 rounded-md text-[10px] font-semibold font-sans">${b}</span>`).join(' ');
+
+        return `
+          <div class="mt-1.5 space-y-1">
+            ${details ? `<p class="text-[11px] text-slate-500 font-normal leading-relaxed">${details}</p>` : ''}
+            ${badgesHtml ? `<div class="flex flex-wrap gap-1.5 pt-0.5">${badgesHtml}</div>` : ''}
+          </div>
+        `;
       };
 
       const lineItemsRowsHtml = lineItems.map((item, idx) => {
@@ -1245,12 +1278,17 @@
         const rate = Number(item.unit_price || item.unitPrice || item.rate || item.amount || 0);
         const amt = Number(item.amount || (qty * rate));
         const rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
+        const breakdownHtml = renderItemBreakdown(item);
+
         return `
-          <tr class="border-b border-slate-100 ${rowBg} text-xs font-medium text-slate-800 transition">
-            <td class="py-3.5 px-4 font-semibold text-slate-900">${desc}</td>
-            <td class="py-3.5 px-4 text-center font-mono text-slate-600">${qty}</td>
-            <td class="py-3.5 px-4 text-right font-mono text-slate-600">${formatMoney(rate)}</td>
-            <td class="py-3.5 px-4 text-right font-mono font-extrabold text-slate-900">${formatMoney(amt)}</td>
+          <tr class="border-b border-slate-100 ${rowBg} text-xs transition">
+            <td class="py-4 px-4 align-top">
+              <span class="font-extrabold text-slate-900 text-sm block">${desc}</span>
+              ${breakdownHtml}
+            </td>
+            <td class="py-4 px-4 text-center font-mono font-semibold text-slate-700 align-top">${qty}</td>
+            <td class="py-4 px-4 text-right font-mono font-semibold text-slate-700 align-top">${formatMoney(rate)}</td>
+            <td class="py-4 px-4 text-right font-mono font-black text-slate-900 text-sm align-top">${formatMoney(amt)}</td>
           </tr>
         `;
       }).join('');
