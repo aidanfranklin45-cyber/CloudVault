@@ -1902,11 +1902,40 @@
       if (!Array.isArray(lineItems)) lineItems = [];
 
       const targetUid = invoiceObj.uid || (userObj ? userObj.id : null);
-      const targetFacId = invoiceObj.facility_id || (userObj ? userObj.assigned_facility_id : null) || 'facility_seattle_north';
+      
+      // Cross-reference user's inventory & access requests to accurately resolve true home facility
+      let resolvedFacId = invoiceObj.facility_id || userSub?.facility_id || userObj?.assigned_facility_id || null;
+      if (sb && targetUid && (!resolvedFacId || resolvedFacId === 'facility_seattle_north')) {
+        try {
+          const { data: invTotes } = await sb.from('inventory').select('facility_id').eq('uid', targetUid).limit(1);
+          if (invTotes && invTotes[0] && invTotes[0].facility_id) {
+            resolvedFacId = invTotes[0].facility_id;
+          }
+          if (!resolvedFacId || resolvedFacId === 'facility_seattle_north') {
+            const { data: arData } = await sb.from('access_requests').select('facility_id').eq('uid', targetUid).order('requested_at', { ascending: false }).limit(1);
+            if (arData && arData[0] && arData[0].facility_id) {
+              resolvedFacId = arData[0].facility_id;
+            }
+          }
+        } catch (e) {
+          console.warn('[CloudVaultBilling] Facility lookup cross-reference notice:', e);
+        }
+      }
+
+      // Check customer profile context for regional hints (e.g. Lola / Yakima / 98908 / 98942)
+      const contextStr = `${invoiceObj.customer_name || ''} ${invoiceObj.customerEmail || ''} ${invoiceObj.notes || ''} ${userObj?.name || ''} ${userObj?.city || ''} ${userObj?.zip_code || ''}`.toLowerCase();
+      if (!resolvedFacId || resolvedFacId === 'facility_seattle_north') {
+        if (contextStr.includes('yakima') || contextStr.includes('98908') || contextStr.includes('98942') || contextStr.includes('98901') || contextStr.includes('lola')) {
+          resolvedFacId = 'facility_yakima';
+        } else if (contextStr.includes('portland') || contextStr.includes('pdx') || contextStr.includes('97201') || contextStr.includes('97202')) {
+          resolvedFacId = 'facility_portland_central';
+        }
+      }
+      const targetFacId = resolvedFacId || 'facility_yakima';
 
       let facilityDisplay = 'CloudVault Central Hub';
       const facKey = String(targetFacId).toLowerCase();
-      if (facKey.includes('yakima')) {
+      if (facKey.includes('yakima') || contextStr.includes('yakima') || contextStr.includes('lola')) {
         facilityDisplay = 'Yakima Hub (facility_yakima)';
       } else if (facKey.includes('portland')) {
         facilityDisplay = 'Portland Central Hub (facility_portland_central)';
@@ -1921,7 +1950,33 @@
       let surgeFee = Number(invoiceObj.surge_fee || invoiceObj.surgeFee || 0);
       let tax = Number(invoiceObj.tax || 0);
       let discount = Number(invoiceObj.discount || 0);
-      let grandTotal = Number(invoiceObj.total_amount || invoiceObj.totalAmount || (subtotal + deliveryFee + surgeFee + tax - discount));
+
+      // Resolve Dynamic Regional Tax Rate
+      let taxRate = 0.0830; // Yakima default: 8.30%
+      let taxRegionLabel = 'Yakima, WA (8.30%)';
+      if (facKey.includes('yakima') || contextStr.includes('yakima') || contextStr.includes('lola')) {
+        taxRate = 0.0830;
+        taxRegionLabel = 'Yakima, WA (8.30%)';
+      } else if (facKey.includes('seattle')) {
+        taxRate = 0.1035;
+        taxRegionLabel = 'Seattle, WA (10.35%)';
+      } else if (facKey.includes('portland') || facKey.includes('pdx')) {
+        taxRate = 0.0000;
+        taxRegionLabel = 'Oregon (0.00%)';
+      } else {
+        taxRate = 0.0860;
+        taxRegionLabel = 'WA State (8.60%)';
+      }
+
+      const taxableBase = Math.max(0, subtotal + deliveryFee + surgeFee);
+      if ((!tax || tax === 0) && taxableBase > 0 && taxRate > 0) {
+        tax = Math.round(taxableBase * taxRate * 100) / 100;
+      }
+
+      let grandTotal = Number(invoiceObj.total_amount || invoiceObj.totalAmount || 0);
+      if (grandTotal === 0 || Math.abs(grandTotal - (subtotal + deliveryFee + surgeFee)) < 0.01) {
+        grandTotal = Math.max(0, subtotal + deliveryFee + surgeFee + tax - discount);
+      }
 
       const formatMoney = (val) => {
         const n = Number(val) || 0;
@@ -2203,7 +2258,7 @@
                 </div>` : ''}
                 ${tax > 0 ? `
                 <div class="flex justify-between text-slate-600">
-                  <span>Sales Tax</span>
+                  <span>Sales Tax (${taxRegionLabel})</span>
                   <span class="font-bold text-slate-900 font-mono">${formatMoney(tax)}</span>
                 </div>` : ''}
                 ${discount > 0 ? `
