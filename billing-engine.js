@@ -1248,22 +1248,42 @@
         return { tierName: 'Tier 1 Standard Volume', rate: 5.00 };
       };
 
-      // Extract tote count from invoice line items or invoiceObj
+      // Extract or infer tote count intelligently for all invoices (including legacy backfills)
       let activeToteCount = Number(invoiceObj.tote_count || invoiceObj.total_totes || invoiceObj.totes || 0);
-      if (!activeToteCount) {
-        const storageItem = lineItems.find(i => (i.description || '').toLowerCase().includes('storage') || (i.description || '').toLowerCase().includes('subscription'));
-        if (storageItem) {
-          activeToteCount = Number(storageItem.qty || storageItem.quantity || 1);
-          const match = (storageItem.description || '').match(/(\d+)\s*tote/i);
-          if (match && match[1]) {
-            activeToteCount = parseInt(match[1], 10);
-          }
+      
+      const storageItemIndex = lineItems.findIndex(i => (i.description || '').toLowerCase().includes('storage') || (i.description || '').toLowerCase().includes('subscription'));
+      const storageItem = storageItemIndex !== -1 ? lineItems[storageItemIndex] : null;
+
+      if (!activeToteCount && storageItem) {
+        const match = (storageItem.description || '').match(/(\d+)\s*tote/i);
+        if (match && match[1]) {
+          activeToteCount = parseInt(match[1], 10);
+        } else if (Number(storageItem.qty || storageItem.quantity) > 1) {
+          activeToteCount = Number(storageItem.qty || storageItem.quantity);
+        }
+      }
+
+      // Smart Inference for legacy backfilled invoices where subtotal >= 10 but qty was set to 1:
+      if (!activeToteCount || activeToteCount === 1) {
+        const itemAmt = storageItem ? Number(storageItem.amount || storageItem.unit_price || subtotal) : subtotal;
+        if (itemAmt >= 10) {
+          if (itemAmt % 5 === 0) activeToteCount = Math.round(itemAmt / 5.00);
+          else if (itemAmt % 3.5 === 0) activeToteCount = Math.round(itemAmt / 3.50);
+          else if (itemAmt % 2 === 0) activeToteCount = Math.round(itemAmt / 2.00);
+          else activeToteCount = Math.max(1, Math.round(itemAmt / 5.00));
         }
       }
       if (!activeToteCount || activeToteCount < 1) activeToteCount = 1;
 
       const currentTier = getVolumeRateForCount(activeToteCount);
       const effectiveRate = subtotal > 0 ? (subtotal / activeToteCount) : currentTier.rate;
+
+      // Update storage line item in lineItems array so qty and unit_price display accurately in the table!
+      if (storageItem) {
+        storageItem.qty = activeToteCount;
+        storageItem.unit_price = effectiveRate;
+        storageItem.amount = subtotal;
+      }
 
       // Smart Upsell & Retention Metric (+2 Totes Expansion Calculation)
       const plus2Count = activeToteCount + 2;
@@ -1274,17 +1294,17 @@
 
       let upsellBannerHtml = '';
       if (diff <= 0) {
-        // Counter-Intuitive Volume Tier Jump Savings! (Adding totes reduces the total bill)
+        // Volume Tier Jump Savings! (Adding totes reduces the total bill)
         upsellBannerHtml = `
           <div class="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border-2 border-emerald-500/40 rounded-2xl p-4 sm:p-5 text-xs text-slate-800 space-y-2 no-print shadow-sm">
             <div class="flex items-center justify-between">
               <span class="inline-flex items-center gap-1.5 bg-emerald-600 text-white font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full tracking-wider">
-                💡 Counter-Intuitive Volume Saver Alert
+                💡 Volume Tier Discount Alert
               </span>
               <span class="font-mono font-black text-emerald-700 text-xs">Save ${formatMoney(Math.abs(diff))}/mo by adding storage!</span>
             </div>
             <p class="font-black text-sm text-slate-900 leading-snug">
-              Adding +2 Totes REDUCES your total monthly bill by <span class="text-emerald-700 font-mono font-black text-base">${formatMoney(Math.abs(diff))}/mo</span>!
+              Unlock Volume Tier Savings: Adding +2 Totes REDUCES your total monthly bill by <span class="text-emerald-700 font-mono font-black text-base">${formatMoney(Math.abs(diff))}/mo</span>!
             </p>
             <p class="text-slate-600 leading-relaxed text-[11px]">
               You are currently renting <strong>${activeToteCount} tote${activeToteCount !== 1 ? 's' : ''}</strong> at ${formatMoney(effectiveRate)}/tote/mo (${formatMoney(subtotal)}/mo). Adding 2 more totes (${plus2Count} totes total) automatically unlocks our <strong>${plus2Tier.tierName}</strong> ($${plus2Tier.rate.toFixed(2)}/tote/mo), bringing your new monthly total down to <strong>${formatMoney(plus2TotalCost)}/mo</strong>!
