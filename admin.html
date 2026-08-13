@@ -1139,14 +1139,15 @@
                                             <i data-lucide="scan-line" class="w-4 h-4 animate-pulse"></i>
                                         </div>
                                     </div>
-                                    <p class="text-[10px] text-gray-500 mt-1">Scan shelf/bay barcode (e.g. V-A01-S01) or click "Set Target Shelf/Bay" above.</p>
+                                    <p class="text-[10px] text-gray-500 mt-1">Scan shelf/bay barcode (e.g. V-A01-S01) or click "Facility Map &amp; Shelf Config" above.</p>
                                 </div>              </div>
 
                                 <!-- Target Location Lock Banner -->
                                 <div id="target-location-banner" class="hidden p-3 bg-gradient-to-r from-indigo-950/90 to-purple-950/90 border border-indigo-500/40 rounded-xl flex items-center justify-between text-xs font-mono shadow-md">
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-2 cursor-pointer hover:opacity-90 transition" onclick="openFacilityMapModal()" title="Click to view blueprint or change target location">
                                         <i data-lucide="map-pin" class="w-4 h-4 text-indigo-400 animate-pulse"></i>
-                                        <span class="text-indigo-200">Locked Target: <strong id="target-location-code-display" class="text-white font-bold text-sm tracking-wide">V-A01-S01</strong></span>
+                                        <span class="text-indigo-200">Locked Target: <strong id="target-location-code-display" class="text-white font-bold text-sm tracking-wide underline decoration-indigo-400/50">V-A01-S01</strong></span>
+                                        <span class="text-[10px] text-indigo-300 bg-indigo-900/60 px-1.5 py-0.5 rounded border border-indigo-500/30 font-sans">Change</span>
                                     </div>
                                     <button onclick="clearTargetLocationLock()" class="text-xs text-indigo-300 hover:text-red-300 bg-gray-900/80 hover:bg-red-950/40 px-2 py-1 rounded-lg border border-indigo-500/30 hover:border-red-500/30 transition flex items-center gap-1 cursor-pointer">
                                         <i data-lucide="x" class="w-3 h-3"></i> Clear Lock
@@ -4055,17 +4056,770 @@
                 clean.startsWith('STAGE-') ||
                 clean.startsWith('BAY-') ||
                 clean.startsWith('A') ||
-                clean.includes('BAY')
+                clean.includes('BAY') ||
+                clean.startsWith('INTAKE') ||
+                clean.startsWith('LOGISTICS')
             );
         }
 
+        // =====================================================================
+        // DYNAMIC FACILITY LAYOUT MAP & INTERACTIVE SHELF TARGET SELECTOR
+        // =====================================================================
+        window.facMapState = {
+            activeFacilityId: null,
+            activeTab: 'overview',
+            selectedAisle: 'ALL',
+            facilityData: null,
+            locations: [],
+            occupiedMap: {}, // locCode -> inventory item
+            allFacilities: [],
+            searchQuery: ''
+        };
+
         function promptManualTargetLocation() {
-            const current = window.activeTargetLocationCode || '';
-            const input = prompt("Enter or Paste Target Location Code (Vault shelf e.g. V-A01-S01 or Staging locker e.g. ROOM-1-BAY-01):", current);
-            if (input && input.trim()) {
-                setTargetLocationLock(input.trim());
-                triggerScanFeedbackOverlay(true, `Target Location Set: ${window.activeTargetLocationCode}`, input.trim());
+            openFacilityMapModal();
+        }
+
+        async function openFacilityMapModal(preferredZone = null) {
+            const modal = document.getElementById('facility-map-modal');
+            if (!modal) return;
+
+            modal.classList.remove('hidden');
+
+            const currentFac = window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility') || 'facility_seattle_north';
+            window.facMapState.activeFacilityId = currentFac;
+            if (preferredZone) {
+                window.facMapState.activeTab = preferredZone;
             }
+            window.facMapState.searchQuery = '';
+            const searchInput = document.getElementById('facmap-search-input');
+            if (searchInput) searchInput.value = '';
+
+            updateFacilityMapTargetBadge();
+            await populateFacilityMapSelector();
+            await loadFacilityMapData(currentFac);
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function closeFacilityMapModal() {
+            const modal = document.getElementById('facility-map-modal');
+            if (modal) modal.classList.add('hidden');
+            const barcodeInput = document.getElementById('scan-barcode');
+            if (barcodeInput) barcodeInput.focus();
+        }
+
+        function updateFacilityMapTargetBadge() {
+            const badge = document.getElementById('facmap-active-target-badge');
+            const codeEl = document.getElementById('facmap-active-target-code');
+            if (!badge || !codeEl) return;
+
+            if (window.activeTargetLocationCode) {
+                codeEl.textContent = window.activeTargetLocationCode;
+                badge.classList.remove('hidden');
+            } else {
+                codeEl.textContent = 'NONE';
+                badge.classList.add('hidden');
+            }
+        }
+
+        async function populateFacilityMapSelector() {
+            const sel = document.getElementById('facmap-facility-select');
+            if (!sel) return;
+
+            try {
+                const { data: facs } = await supabase.from('facilities').select('id, name');
+                if (facs && facs.length > 0) {
+                    window.facMapState.allFacilities = facs;
+                    sel.innerHTML = facs.map(f => `<option value="${escapeHtml(f.id)}">${escapeHtml(f.name || f.id)}</option>`).join('');
+                    if (window.facMapState.activeFacilityId) {
+                        sel.value = window.facMapState.activeFacilityId;
+                    }
+                }
+            } catch (e) {
+                console.warn('[FacilityMap] Could not populate facility selector:', e);
+            }
+        }
+
+        async function onFacilityMapFacilityChange(newFacId) {
+            if (!newFacId) return;
+            window.facMapState.activeFacilityId = newFacId;
+            window.facMapState.selectedAisle = 'ALL';
+            await loadFacilityMapData(newFacId);
+        }
+
+        function switchFacilityMapTab(tabName) {
+            window.facMapState.activeTab = tabName;
+            ['overview', 'vault', 'staging', 'docks'].forEach(t => {
+                const btn = document.getElementById(`facmap-tab-${t}`);
+                if (btn) {
+                    if (t === tabName) {
+                        btn.className = "px-3.5 py-1.5 text-xs font-bold rounded-xl border border-indigo-500/40 bg-indigo-600/20 text-indigo-300 transition flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap shadow-sm";
+                    } else {
+                        btn.className = "px-3.5 py-1.5 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white transition flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap";
+                    }
+                }
+            });
+            renderFacilityMap();
+        }
+
+        function selectFacilityAisle(aisleKey) {
+            window.facMapState.selectedAisle = aisleKey;
+            renderFacilityMap();
+        }
+
+        function filterFacilityMapSlots(query) {
+            window.facMapState.searchQuery = (query || '').trim().toUpperCase();
+            renderFacilityMap();
+        }
+
+        async function loadFacilityMapData(facilityId) {
+            const container = document.getElementById('facmap-canvas-container');
+            if (container) {
+                container.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-16 space-y-3">
+                        <i data-lucide="loader" class="w-8 h-8 text-indigo-400 animate-spin"></i>
+                        <p class="text-sm font-mono text-gray-400">Loading dynamic facility blueprint &amp; shelf occupancy...</p>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+
+            try {
+                // 1. Fetch Facility Details
+                const { data: fac } = await supabase.from('facilities').select('*').eq('id', facilityId).single();
+                window.facMapState.facilityData = fac || { id: facilityId, name: facilityId, staging_rooms: 2 };
+
+                // 2. Fetch Warehouse Locations for this Facility
+                const { data: locs } = await supabase.from('warehouse_locations')
+                    .select('*')
+                    .eq('facility_id', facilityId);
+                window.facMapState.locations = locs || [];
+
+                // 3. Fetch Stored Inventory for Occupancy
+                const { data: totes } = await supabase.from('inventory')
+                    .select('id, tote_code, location_code, customer_id, status')
+                    .eq('facility_id', facilityId)
+                    .neq('status', 'with-customer');
+
+                const occupied = {};
+                (totes || []).forEach(t => {
+                    if (t.location_code) {
+                        occupied[t.location_code.toUpperCase().trim()] = t;
+                    }
+                });
+                (locs || []).forEach(l => {
+                    if (l.is_occupied && l.identifier) {
+                        const code = l.identifier.toUpperCase().trim();
+                        if (!occupied[code]) {
+                            occupied[code] = { tote_code: l.assigned_tote_id || 'Occupied', status: 'stored' };
+                        }
+                    }
+                });
+                window.facMapState.occupiedMap = occupied;
+
+                renderFacilityMap();
+            } catch (err) {
+                console.error('[FacilityMap] Failed to load facility layout data:', err);
+                if (container) {
+                    container.innerHTML = `
+                        <div class="p-6 bg-red-950/40 border border-red-500/40 rounded-2xl text-center space-y-2">
+                            <p class="text-red-300 font-bold">Failed to load facility blueprint.</p>
+                            <p class="text-xs text-gray-400 font-mono">${escapeHtml(err.message || 'Unknown error')}</p>
+                            <button onclick="loadFacilityMapData('${escapeHtml(facilityId)}')" class="mt-2 px-4 py-1.5 bg-red-600/30 hover:bg-red-600 text-white rounded-xl text-xs font-mono font-bold transition">Retry</button>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        function extractFacilityLayoutMatrix() {
+            const rawLocs = window.facMapState.locations || [];
+            const fac = window.facMapState.facilityData || {};
+
+            // Vault parsing
+            const vaultLocs = rawLocs.filter(l => (l.zone_type || 'VAULT').toUpperCase() === 'VAULT');
+            const aisleMap = {};
+
+            if (vaultLocs.length > 0) {
+                vaultLocs.forEach(l => {
+                    const id = (l.identifier || l.location_code || '').toUpperCase().trim();
+                    // Match formats like A1-B01-S1 or V-A01-S01 or A1-B1-S1
+                    let aisle = 'A1';
+                    let bay = 'B01';
+                    let shelf = 'S1';
+
+                    const matchStandard = id.match(/^(?:V-)?(A\d+)-?(B\d+)?-?(S\d+)?/i);
+                    if (matchStandard) {
+                        aisle = matchStandard[1].toUpperCase();
+                        bay = matchStandard[2] ? matchStandard[2].toUpperCase() : 'B01';
+                        shelf = matchStandard[3] ? matchStandard[3].toUpperCase() : 'S1';
+                    } else if (id.includes('-')) {
+                        const parts = id.split('-');
+                        aisle = parts[0] || 'A1';
+                        bay = parts[1] || 'B01';
+                        shelf = parts[2] || 'S1';
+                    }
+
+                    if (!aisleMap[aisle]) aisleMap[aisle] = { bays: {}, totalSlots: 0, occupiedSlots: 0 };
+                    if (!aisleMap[aisle].bays[bay]) aisleMap[aisle].bays[bay] = [];
+
+                    const isOcc = !!window.facMapState.occupiedMap[id] || l.is_occupied;
+                    aisleMap[aisle].totalSlots++;
+                    if (isOcc) aisleMap[aisle].occupiedSlots++;
+
+                    aisleMap[aisle].bays[bay].push({
+                        code: id,
+                        aisle,
+                        bay,
+                        shelf,
+                        isOccupied: isOcc,
+                        tote: window.facMapState.occupiedMap[id] || null
+                    });
+                });
+            } else {
+                // Synthesize dynamic 5 Aisles x 8 Bays x 4 Shelves from configuration specs
+                const totalAisles = 5;
+                const baysPerAisle = 8;
+                const shelvesPerBay = 4;
+
+                for (let a = 1; a <= totalAisles; a++) {
+                    const aisleKey = `A${a}`;
+                    aisleMap[aisleKey] = { bays: {}, totalSlots: 0, occupiedSlots: 0 };
+                    for (let b = 1; b <= baysPerAisle; b++) {
+                        const bayKey = `B${String(b).padStart(2, '0')}`;
+                        aisleMap[aisleKey].bays[bayKey] = [];
+                        for (let s = 1; s <= shelvesPerBay; s++) {
+                            const shelfKey = `S${s}`;
+                            const code = `${aisleKey}-${bayKey}-${shelfKey}`;
+                            const isOcc = !!window.facMapState.occupiedMap[code];
+                            aisleMap[aisleKey].totalSlots++;
+                            if (isOcc) aisleMap[aisleKey].occupiedSlots++;
+
+                            aisleMap[aisleKey].bays[bayKey].push({
+                                code: code,
+                                aisle: aisleKey,
+                                bay: bayKey,
+                                shelf: shelfKey,
+                                isOccupied: isOcc,
+                                tote: window.facMapState.occupiedMap[code] || null
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Staging rooms parsing
+            const stagingLocs = rawLocs.filter(l => (l.zone_type || '').toUpperCase() === 'STAGING');
+            const roomMap = {};
+
+            if (stagingLocs.length > 0) {
+                stagingLocs.forEach(l => {
+                    const id = (l.identifier || l.location_code || '').toUpperCase().trim();
+                    let roomKey = 'ROOM-1';
+                    let bayKey = 'BAY-01';
+
+                    const matchRoom = id.match(/^(ROOM-\d+)/i);
+                    if (matchRoom) {
+                        roomKey = matchRoom[1].toUpperCase();
+                        bayKey = id.replace(roomKey + '-', '') || 'BAY-01';
+                    } else if (id.includes('-')) {
+                        const parts = id.split('-');
+                        roomKey = parts[0] || 'ROOM-1';
+                        bayKey = parts.slice(1).join('-') || 'BAY-01';
+                    }
+
+                    if (!roomMap[roomKey]) roomMap[roomKey] = [];
+                    const isOcc = !!window.facMapState.occupiedMap[id] || l.is_occupied;
+                    roomMap[roomKey].push({
+                        code: id,
+                        room: roomKey,
+                        bay: bayKey,
+                        isOccupied: isOcc,
+                        tote: window.facMapState.occupiedMap[id] || null
+                    });
+                });
+            } else {
+                const totalRooms = fac.staging_rooms || 2;
+                for (let r = 1; r <= totalRooms; r++) {
+                    const roomKey = `ROOM-${r}`;
+                    roomMap[roomKey] = [];
+                    for (let b = 1; b <= 8; b++) {
+                        const bayStr = String(b).padStart(2, '0');
+                        const code = `${roomKey}-BAY-${bayStr}`;
+                        const isOcc = !!window.facMapState.occupiedMap[code];
+                        roomMap[roomKey].push({
+                            code: code,
+                            room: roomKey,
+                            bay: `BAY-${bayStr}`,
+                            isOccupied: isOcc,
+                            tote: window.facMapState.occupiedMap[code] || null
+                        });
+                    }
+                }
+            }
+
+            // Dock / Logistics locations
+            const dockLocs = [
+                { code: 'INTAKE-PROCESSING', name: 'Intake Processing Hub', type: 'DOCK', isOccupied: !!window.facMapState.occupiedMap['INTAKE-PROCESSING'] },
+                { code: 'LOGISTICS-STAGE', name: 'Driver Logistics Staging', type: 'DOCK', isOccupied: !!window.facMapState.occupiedMap['LOGISTICS-STAGE'] },
+                { code: 'DROP-OFF-BUFFER', name: 'Customer Self-Drop Buffer', type: 'DOCK', isOccupied: !!window.facMapState.occupiedMap['DROP-OFF-BUFFER'] }
+            ];
+
+            return { aisleMap, roomMap, dockLocs };
+        }
+
+        function renderFacilityMap() {
+            const container = document.getElementById('facmap-canvas-container');
+            if (!container) return;
+
+            const matrix = extractFacilityLayoutMatrix();
+            const tab = window.facMapState.activeTab;
+
+            if (tab === 'overview') {
+                container.innerHTML = renderOverviewBlueprint(matrix);
+            } else if (tab === 'vault') {
+                container.innerHTML = renderVaultAisleMatrix(matrix);
+            } else if (tab === 'staging') {
+                container.innerHTML = renderStagingRoomsMatrix(matrix);
+            } else if (tab === 'docks') {
+                container.innerHTML = renderDocksMatrix(matrix);
+            }
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function renderOverviewBlueprint(matrix) {
+            const { aisleMap, roomMap, dockLocs } = matrix;
+            const aisleKeys = Object.keys(aisleMap);
+            const roomKeys = Object.keys(roomMap);
+            const query = window.facMapState.searchQuery;
+
+            return `
+                <div class="space-y-6">
+                    <!-- Top Zone Overview Banner -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Zone 1 Card: Staging Rooms -->
+                        <div class="bg-gray-900/70 border border-emerald-500/30 p-4 rounded-2xl space-y-3 relative overflow-hidden">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider font-mono">
+                                    <i data-lucide="door-open" class="w-4 h-4"></i> Staging Zone (${roomKeys.length} Rooms)
+                                </div>
+                                <button onclick="switchFacilityMapTab('staging')" class="text-[10px] text-emerald-300 hover:underline font-mono">View All &rarr;</button>
+                            </div>
+                            <p class="text-[11px] text-gray-400">Self-serve customer pickup lockers &amp; temporary fulfillment staging.</p>
+                            <div class="grid grid-cols-2 gap-2 pt-1">
+                                ${roomKeys.slice(0, 4).map(rk => {
+                                    const lockers = roomMap[rk] || [];
+                                    const occ = lockers.filter(l => l.isOccupied).length;
+                                    return `
+                                        <div onclick="switchFacilityMapTab('staging')" class="p-2 bg-gray-950/80 border border-gray-800 hover:border-emerald-500/50 rounded-xl cursor-pointer transition text-xs font-mono">
+                                            <div class="text-white font-bold">${escapeHtml(rk)}</div>
+                                            <div class="text-[10px] text-gray-400">${occ}/${lockers.length} Used</div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Zone 2 Card: Vault High-Density Racks -->
+                        <div class="bg-gray-900/70 border border-cyan-500/30 p-4 rounded-2xl space-y-3 relative overflow-hidden">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2 text-cyan-400 font-bold text-xs uppercase tracking-wider font-mono">
+                                    <i data-lucide="layers" class="w-4 h-4"></i> Vault High-Density (${aisleKeys.length} Aisles)
+                                </div>
+                                <button onclick="switchFacilityMapTab('vault')" class="text-[10px] text-cyan-300 hover:underline font-mono">Configure &rarr;</button>
+                            </div>
+                            <p class="text-[11px] text-gray-400">Multi-tier warehouse storage racks with 4-level vertical shelf stacking.</p>
+                            <div class="grid grid-cols-3 gap-2 pt-1">
+                                ${aisleKeys.slice(0, 6).map(ak => {
+                                    const data = aisleMap[ak];
+                                    const pct = data.totalSlots > 0 ? Math.round((data.occupiedSlots / data.totalSlots) * 100) : 0;
+                                    return `
+                                        <div onclick="switchFacilityMapTab('vault'); selectFacilityAisle('${escapeHtml(ak)}');" class="p-2 bg-gray-950/80 border border-gray-800 hover:border-cyan-500/50 rounded-xl cursor-pointer transition text-xs font-mono">
+                                            <div class="text-white font-bold">Aisle ${escapeHtml(ak.replace('A', ''))}</div>
+                                            <div class="text-[10px] text-cyan-300">${pct}% Full</div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Zone 3 Card: Logistics & Intake -->
+                        <div class="bg-gray-900/70 border border-amber-500/30 p-4 rounded-2xl space-y-3 relative overflow-hidden">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider font-mono">
+                                    <i data-lucide="truck" class="w-4 h-4"></i> Logistics &amp; Intake Dock
+                                </div>
+                                <button onclick="switchFacilityMapTab('docks')" class="text-[10px] text-amber-300 hover:underline font-mono">View Docks &rarr;</button>
+                            </div>
+                            <p class="text-[11px] text-gray-400">Incoming tote intake buffer, QR tagging station &amp; driver dispatch staging.</p>
+                            <div class="space-y-1.5 pt-1">
+                                ${dockLocs.map(d => `
+                                    <button onclick="selectFacilityMapLocation('${escapeHtml(d.code)}')" class="w-full text-left p-2 bg-gray-950/80 border border-gray-800 hover:border-amber-500/50 rounded-xl transition flex items-center justify-between font-mono text-xs cursor-pointer">
+                                        <span class="text-white font-bold">${escapeHtml(d.code)}</span>
+                                        <span class="text-[10px] text-amber-400 uppercase font-bold">Select</span>
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2D Interactive Blueprint Floorplan Visualizer -->
+                    <div class="bg-gray-950/90 border border-gray-800 rounded-3xl p-5 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-extrabold uppercase text-white tracking-wider flex items-center gap-2 font-mono">
+                                <i data-lucide="compass" class="w-4 h-4 text-indigo-400"></i> Interactive 2D Facility Floorplan Map
+                            </h4>
+                            <span class="text-[10px] text-gray-400 font-mono">Click any shelf/bay below to lock target</span>
+                        </div>
+
+                        <!-- Floorplan Matrix -->
+                        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                            <!-- Left Wing: Staging Rooms -->
+                            <div class="lg:col-span-3 space-y-3 bg-gray-900/40 p-3 rounded-2xl border border-emerald-500/20">
+                                <div class="text-[11px] font-bold text-emerald-400 uppercase font-mono flex items-center gap-1.5">
+                                    <i data-lucide="door-open" class="w-3.5 h-3.5"></i> Staging Locker Bays
+                                </div>
+                                <div class="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                                    ${roomKeys.map(rk => {
+                                        const lockers = roomMap[rk] || [];
+                                        return `
+                                            <div class="bg-gray-950/80 border border-gray-800/80 rounded-xl p-2.5 space-y-2">
+                                                <div class="flex items-center justify-between text-xs font-bold text-white font-mono">
+                                                    <span>${escapeHtml(rk)}</span>
+                                                    <span class="text-[10px] text-emerald-400 font-normal">${lockers.length} Bays</span>
+                                                </div>
+                                                <div class="grid grid-cols-4 gap-1.5">
+                                                    ${lockers.map(l => renderSlotButton(l, query)).join('')}
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+
+                            <!-- Center: Vault Aisle Racks -->
+                            <div class="lg:col-span-7 space-y-3 bg-gray-900/40 p-3 rounded-2xl border border-cyan-500/20">
+                                <div class="flex items-center justify-between">
+                                    <div class="text-[11px] font-bold text-cyan-400 uppercase font-mono flex items-center gap-1.5">
+                                        <i data-lucide="layers" class="w-3.5 h-3.5"></i> Vault Storage Matrix (Aisles &amp; Shelves)
+                                    </div>
+                                    <button onclick="switchFacilityMapTab('vault')" class="text-[10px] text-cyan-300 font-mono hover:underline">Open Shelf Configurator &rarr;</button>
+                                </div>
+
+                                <div class="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                                    ${aisleKeys.map(ak => {
+                                        const aisleData = aisleMap[ak];
+                                        const bayKeys = Object.keys(aisleData.bays || {});
+                                        return `
+                                            <div class="bg-gray-950/80 border border-gray-800/80 rounded-xl p-3 space-y-2">
+                                                <div class="flex items-center justify-between text-xs font-mono">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-cyan-300 font-bold">Aisle ${escapeHtml(ak.replace('A', ''))}</span>
+                                                        <span class="text-[10px] text-gray-500">${bayKeys.length} Bays</span>
+                                                    </div>
+                                                    <button onclick="switchFacilityMapTab('vault'); selectFacilityAisle('${escapeHtml(ak)}');" class="text-[10px] text-indigo-400 hover:text-indigo-300">Detailed Elevation &rarr;</button>
+                                                </div>
+                                                <div class="overflow-x-auto pb-1">
+                                                    <div class="flex gap-2 min-w-max">
+                                                        ${bayKeys.map(bk => {
+                                                            const slots = aisleData.bays[bk] || [];
+                                                            return `
+                                                                <div class="bg-gray-900/90 border border-gray-800 rounded-lg p-1.5 w-20 flex flex-col gap-1 items-center">
+                                                                    <span class="text-[9px] font-bold text-gray-400 font-mono">${escapeHtml(bk)}</span>
+                                                                    <div class="grid grid-cols-1 gap-1 w-full">
+                                                                        ${slots.map(s => renderSlotButton(s, query, true)).join('')}
+                                                                    </div>
+                                                                </div>
+                                                            `;
+                                                        }).join('')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+
+                            <!-- Right Wing: Intake & Dispatch Hub -->
+                            <div class="lg:col-span-2 space-y-3 bg-gray-900/40 p-3 rounded-2xl border border-amber-500/20">
+                                <div class="text-[11px] font-bold text-amber-400 uppercase font-mono flex items-center gap-1.5">
+                                    <i data-lucide="truck" class="w-3.5 h-3.5"></i> Dock Buffer
+                                </div>
+                                <div class="space-y-2">
+                                    ${dockLocs.map(d => `
+                                        <div onclick="selectFacilityMapLocation('${escapeHtml(d.code)}')" class="p-3 bg-gray-950/80 border ${window.activeTargetLocationCode === d.code ? 'border-indigo-500 bg-indigo-950/40 shadow-md shadow-indigo-500/20' : 'border-gray-800 hover:border-amber-500/50'} rounded-xl cursor-pointer transition text-xs font-mono space-y-1">
+                                            <div class="text-white font-bold text-[11px] truncate">${escapeHtml(d.name)}</div>
+                                            <div class="text-[10px] text-amber-400 font-bold">${escapeHtml(d.code)}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderVaultAisleMatrix(matrix) {
+            const { aisleMap } = matrix;
+            const aisleKeys = Object.keys(aisleMap);
+            const selAisle = window.facMapState.selectedAisle || 'ALL';
+            const query = window.facMapState.searchQuery;
+
+            const visibleAisles = selAisle === 'ALL' ? aisleKeys : [selAisle];
+
+            return `
+                <div class="space-y-5">
+                    <!-- Aisle Ribbon Selector -->
+                    <div class="flex flex-wrap items-center gap-2 p-3 bg-gray-900/70 border border-cyan-500/20 rounded-2xl">
+                        <span class="text-xs font-bold text-gray-400 uppercase font-mono mr-1">Select Aisle:</span>
+                        <button onclick="selectFacilityAisle('ALL')" class="px-3 py-1 rounded-xl text-xs font-bold font-mono transition cursor-pointer ${selAisle === 'ALL' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30' : 'bg-gray-950 text-gray-400 hover:text-white border border-gray-800'}">
+                            All Aisles (${aisleKeys.length})
+                        </button>
+                        ${aisleKeys.map(ak => {
+                            const data = aisleMap[ak];
+                            const isSelected = selAisle === ak;
+                            return `
+                                <button onclick="selectFacilityAisle('${escapeHtml(ak)}')" class="px-3 py-1 rounded-xl text-xs font-bold font-mono transition cursor-pointer flex items-center gap-1.5 ${isSelected ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30' : 'bg-gray-950 text-gray-400 hover:text-white border border-gray-800'}">
+                                    <span>Aisle ${escapeHtml(ak.replace('A', ''))}</span>
+                                    <span class="text-[10px] ${isSelected ? 'text-cyan-200' : 'text-gray-500'}">(${data.occupiedSlots}/${data.totalSlots})</span>
+                                </button>
+                            `;
+                        }).join('')}
+                    </div>
+
+                    <!-- Shelf Elevation Configurator Grid -->
+                    <div class="space-y-6">
+                        ${visibleAisles.map(ak => {
+                            const aisleData = aisleMap[ak];
+                            const bayKeys = Object.keys(aisleData.bays || {});
+                            return `
+                                <div class="bg-gray-950/90 border border-gray-800 rounded-3xl p-5 space-y-4 shadow-xl">
+                                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800/80 pb-3">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 font-black flex items-center justify-center text-sm font-mono border border-cyan-500/30">
+                                                ${escapeHtml(ak)}
+                                            </div>
+                                            <div>
+                                                <h4 class="text-sm font-bold text-white font-mono">Aisle ${escapeHtml(ak.replace('A', ''))} &bull; Shelf Elevation Rack</h4>
+                                                <p class="text-[10px] text-gray-400 font-mono">${bayKeys.length} Bays &bull; 4 Shelves/Bay &bull; Capacity: ${aisleData.totalSlots} Totes</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-xs font-mono text-cyan-300 bg-cyan-950/50 border border-cyan-500/30 px-3 py-1 rounded-xl">
+                                            ${aisleData.occupiedSlots} of ${aisleData.totalSlots} Slots Slotted (${Math.round((aisleData.occupiedSlots / aisleData.totalSlots) * 100)}%)
+                                        </div>
+                                    </div>
+
+                                    <!-- Horizontal Bay Stack with Vertical Shelf Tiers -->
+                                    <div class="overflow-x-auto pb-2">
+                                        <div class="flex gap-3 min-w-max">
+                                            ${bayKeys.map(bk => {
+                                                const slots = aisleData.bays[bk] || [];
+                                                // Sort shelf tiers descending (Top S4 down to Ground S1)
+                                                const sortedSlots = [...slots].sort((a, b) => (b.shelf || '').localeCompare(a.shelf || ''));
+                                                return `
+                                                    <div class="bg-gray-900/90 border border-gray-800 hover:border-gray-700 rounded-2xl p-2.5 w-28 flex flex-col gap-1.5 shadow-sm">
+                                                        <div class="text-center font-mono font-bold text-xs text-white border-b border-gray-800 pb-1 flex items-center justify-center gap-1">
+                                                            <i data-lucide="archive" class="w-3 h-3 text-cyan-400"></i>
+                                                            <span>${escapeHtml(bk)}</span>
+                                                        </div>
+                                                        <div class="space-y-1.5 pt-1">
+                                                            ${sortedSlots.map(s => renderShelfSlotCard(s, query)).join('')}
+                                                        </div>
+                                                    </div>
+                                                `;
+                                            }).join('')}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStagingRoomsMatrix(matrix) {
+            const { roomMap } = matrix;
+            const roomKeys = Object.keys(roomMap);
+            const query = window.facMapState.searchQuery;
+
+            return `
+                <div class="space-y-6">
+                    <div class="p-4 bg-emerald-950/30 border border-emerald-500/30 rounded-2xl text-xs text-emerald-300 font-mono flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="door-open" class="w-4 h-4 text-emerald-400"></i>
+                            <span>Staging Lockers for Self-Serve Customer Pickup and In-Facility Staged Retrievals</span>
+                        </div>
+                        <span class="font-bold">${roomKeys.length} Configured Staging Rooms</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        ${roomKeys.map(rk => {
+                            const lockers = roomMap[rk] || [];
+                            const occupiedCount = lockers.filter(l => l.isOccupied).length;
+                            return `
+                                <div class="bg-gray-950/90 border border-gray-800 rounded-3xl p-5 space-y-4 shadow-xl">
+                                    <div class="flex items-center justify-between border-b border-gray-800/80 pb-3">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 font-black flex items-center justify-center text-sm font-mono border border-emerald-500/30">
+                                                <i data-lucide="door-closed" class="w-4 h-4"></i>
+                                            </div>
+                                            <div>
+                                                <h4 class="text-sm font-bold text-white font-mono">${escapeHtml(rk)}</h4>
+                                                <p class="text-[10px] text-gray-400 font-mono">${lockers.length} Total Locker Bays</p>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1 rounded-xl">
+                                            ${occupiedCount} / ${lockers.length} Occupied
+                                        </span>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                                        ${lockers.map(l => `
+                                            <button onclick="selectFacilityMapLocation('${escapeHtml(l.code)}')" class="p-3 rounded-2xl border text-left font-mono transition cursor-pointer flex flex-col justify-between min-h-[70px] ${getSlotCardStyle(l, query)}">
+                                                <div class="flex items-center justify-between w-full">
+                                                    <span class="text-xs font-bold ${l.isOccupied ? 'text-amber-300' : 'text-white'}">${escapeHtml(l.bay || l.code)}</span>
+                                                    <span class="w-2 h-2 rounded-full ${l.isOccupied ? 'bg-amber-400' : 'bg-emerald-400'}"></span>
+                                                </div>
+                                                <div class="text-[10px] text-gray-400 truncate">
+                                                    ${l.isOccupied ? (l.tote?.tote_code || 'Occupied') : 'Available'}
+                                                </div>
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDocksMatrix(matrix) {
+            const { dockLocs } = matrix;
+            return `
+                <div class="space-y-6">
+                    <div class="p-4 bg-amber-950/30 border border-amber-500/30 rounded-2xl text-xs text-amber-300 font-mono flex items-center gap-2">
+                        <i data-lucide="truck" class="w-4 h-4 text-amber-400"></i>
+                        <span>Incoming Logistics, Intake Processing, and Driver Van Loading Hub</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        ${dockLocs.map(d => `
+                            <div onclick="selectFacilityMapLocation('${escapeHtml(d.code)}')" class="bg-gray-950/90 border ${window.activeTargetLocationCode === d.code ? 'border-indigo-500 bg-indigo-950/40 shadow-indigo-500/20' : 'border-gray-800 hover:border-amber-500/50'} rounded-3xl p-5 space-y-4 cursor-pointer transition shadow-xl group">
+                                <div class="flex items-center justify-between">
+                                    <div class="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+                                        <i data-lucide="package-check" class="w-5 h-5"></i>
+                                    </div>
+                                    <span class="text-xs font-mono font-bold text-amber-400 uppercase bg-amber-950/60 px-2.5 py-1 rounded-xl border border-amber-500/30">Select Target</span>
+                                </div>
+                                <div>
+                                    <h4 class="text-white font-bold text-sm">${escapeHtml(d.name)}</h4>
+                                    <p class="text-xs font-mono text-gray-400 mt-1">Target Code: <span class="text-amber-300 font-bold">${escapeHtml(d.code)}</span></p>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderSlotButton(slot, query, compact = false) {
+            const isMatch = !query || slot.code.includes(query);
+            const isLocked = window.activeTargetLocationCode === slot.code;
+            let style = "border-gray-800 bg-gray-900/80 text-gray-300 hover:border-indigo-500 hover:text-white";
+
+            if (isLocked) {
+                style = "border-indigo-500 bg-indigo-600 text-white font-bold shadow-md shadow-indigo-500/30 scale-105";
+            } else if (slot.isOccupied) {
+                style = "border-amber-500/40 bg-amber-950/40 text-amber-300 hover:border-amber-400";
+            } else {
+                style = "border-emerald-500/30 bg-emerald-950/20 text-emerald-300 hover:border-emerald-400 hover:bg-emerald-900/40";
+            }
+
+            if (!isMatch) {
+                style += " opacity-25";
+            }
+
+            const label = compact ? (slot.shelf || slot.bay || slot.code) : (slot.shelf || slot.bay || slot.code);
+            return `
+                <button type="button" onclick="selectFacilityMapLocation('${escapeHtml(slot.code)}')" title="${escapeHtml(slot.code)}${slot.isOccupied ? ' (Occupied: ' + escapeHtml(slot.tote?.tote_code || 'Tote') + ')' : ' (Available)'}" class="p-1 rounded text-[10px] font-mono text-center transition cursor-pointer truncate ${style}">
+                    ${escapeHtml(label)}
+                </button>
+            `;
+        }
+
+        function renderShelfSlotCard(slot, query) {
+            const isMatch = !query || slot.code.includes(query);
+            const isLocked = window.activeTargetLocationCode === slot.code;
+            let style = "border-gray-800 bg-gray-950/90 text-gray-300 hover:border-indigo-500";
+
+            if (isLocked) {
+                style = "border-indigo-500 bg-indigo-600 text-white font-bold shadow-md shadow-indigo-500/30";
+            } else if (slot.isOccupied) {
+                style = "border-amber-500/40 bg-amber-950/40 text-amber-200 hover:border-amber-400";
+            } else {
+                style = "border-emerald-500/30 bg-emerald-950/20 text-emerald-300 hover:border-emerald-400 hover:bg-emerald-900/40";
+            }
+
+            if (!isMatch) {
+                style += " opacity-20";
+            }
+
+            const tierName = slot.shelf === 'S4' ? 'Top (S4)' : (slot.shelf === 'S1' ? 'Gnd (S1)' : slot.shelf);
+
+            return `
+                <button type="button" onclick="selectFacilityMapLocation('${escapeHtml(slot.code)}')" title="Set Target: ${escapeHtml(slot.code)}" class="w-full p-1.5 rounded-xl border text-left font-mono transition cursor-pointer flex items-center justify-between text-[11px] ${style}">
+                    <span class="font-bold">${escapeHtml(tierName)}</span>
+                    <span class="w-1.5 h-1.5 rounded-full ${isLocked ? 'bg-white animate-ping' : (slot.isOccupied ? 'bg-amber-400' : 'bg-emerald-400')}"></span>
+                </button>
+            `;
+        }
+
+        function getSlotCardStyle(slot, query) {
+            const isMatch = !query || slot.code.includes(query);
+            const isLocked = window.activeTargetLocationCode === slot.code;
+
+            let s = "border-gray-800 bg-gray-900 hover:border-indigo-500";
+            if (isLocked) {
+                s = "border-indigo-500 bg-indigo-950/80 shadow-md shadow-indigo-500/30";
+            } else if (slot.isOccupied) {
+                s = "border-amber-500/40 bg-amber-950/40 hover:border-amber-400";
+            } else {
+                s = "border-emerald-500/30 bg-emerald-950/20 hover:border-emerald-400";
+            }
+
+            if (!isMatch) s += " opacity-25";
+            return s;
+        }
+
+        function selectFacilityMapLocation(locCode) {
+            if (!locCode) return;
+            setTargetLocationLock(locCode);
+            triggerScanFeedbackOverlay(true, `Target Location Set: ${window.activeTargetLocationCode}`, locCode);
+
+            const terminalOutput = document.getElementById('terminal-output');
+            if (terminalOutput) {
+                terminalOutput.innerHTML = `
+                    <span class="text-indigo-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="map-pin" class="w-4 h-4 text-indigo-400"></i> Location Locked!</span>
+                    <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">Target Bay: ${window.activeTargetLocationCode} &bull; Ready for Tote Scans</span>
+                `;
+            }
+
+            closeFacilityMapModal();
+        }
+
+        function lockManualCodeFromMap() {
+            const input = document.getElementById('facmap-manual-input');
+            const val = input ? input.value.trim() : '';
+            if (!val) {
+                alert("Please enter a valid target location code (e.g. A1-B04-S2 or ROOM-1-BAY-01).");
+                return;
+            }
+            selectFacilityMapLocation(val);
         }
 
         function sanitizeBarcodeAutofill(input) {
