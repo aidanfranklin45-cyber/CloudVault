@@ -817,6 +817,72 @@
             <select id="manager-facility-select" onchange="onGlobalFacilityChange(this.value)" class="hidden">
             </select>
 
+            <!-- Admin Staging Reservation Calendar (Feature 4) -->
+            <div id="admin-scheduling-calendar" class="glass-panel p-6 rounded-3xl space-y-6 border border-blue-500/30">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-4 gap-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="p-2.5 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20">
+                            <i data-lucide="calendar" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-white text-lg flex items-center gap-2">
+                                Staging &amp; Logistics Reservation Calendar
+                                <span class="bg-blue-500/10 text-blue-400 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-wider">Weekly Heatmap</span>
+                            </h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Capacity heatmap &amp; customer reservation schedule per time window</p>
+                        </div>
+                    </div>
+                    <!-- Calendar Controls -->
+                    <div class="flex items-center space-x-2 bg-gray-900 border border-gray-800 p-1.5 rounded-2xl">
+                        <button onclick="navigateCalendarWeek(-7)" class="p-1.5 hover:bg-gray-800 text-gray-400 hover:text-white rounded-xl transition cursor-pointer" title="Previous Week">
+                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="navigateCalendarWeek(0)" class="px-2.5 py-1 text-xs font-bold text-blue-400 hover:bg-blue-500/10 rounded-xl transition cursor-pointer">
+                            Today
+                        </button>
+                        <span id="cal-week-range-label" class="text-xs font-mono font-bold text-white px-2">Loading...</span>
+                        <button onclick="navigateCalendarWeek(7)" class="p-1.5 hover:bg-gray-800 text-gray-400 hover:text-white rounded-xl transition cursor-pointer" title="Next Week">
+                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Calendar Weekly Grid -->
+                <div class="overflow-x-auto">
+                    <div class="min-w-[700px] space-y-2">
+                        <!-- Grid Header (Days) -->
+                        <div class="grid grid-cols-8 gap-2 text-center text-xs font-bold font-mono uppercase tracking-wider text-gray-400 pb-2 border-b border-gray-800">
+                            <div class="text-left text-gray-500 text-[10px] pt-1">Time Slot</div>
+                            <div id="cal-day-col-0" class="p-1 rounded-xl">Mon</div>
+                            <div id="cal-day-col-1" class="p-1 rounded-xl">Tue</div>
+                            <div id="cal-day-col-2" class="p-1 rounded-xl">Wed</div>
+                            <div id="cal-day-col-3" class="p-1 rounded-xl">Thu</div>
+                            <div id="cal-day-col-4" class="p-1 rounded-xl">Fri</div>
+                            <div id="cal-day-col-5" class="p-1 rounded-xl">Sat</div>
+                            <div id="cal-day-col-6" class="p-1 rounded-xl">Sun</div>
+                        </div>
+                        <!-- Grid Body (Populated dynamically) -->
+                        <div id="cal-grid-body" class="space-y-2">
+                            <div class="p-8 text-center text-xs text-gray-500 font-mono">Loading reservation heatmap calendar...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expanded Slot Customer Details Drawer/Panel -->
+                <div id="cal-slot-detail-panel" class="hidden bg-gray-950 border border-blue-500/30 rounded-2xl p-4 space-y-3 animate-fade-in">
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-2">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="users" class="w-4 h-4 text-blue-400"></i>
+                            <h4 id="cal-slot-detail-title" class="text-xs font-bold text-white uppercase tracking-wider">Slot Details</h4>
+                        </div>
+                        <button onclick="closeCalendarSlotDetail()" class="text-gray-400 hover:text-white text-xs font-bold cursor-pointer">✕ Close</button>
+                    </div>
+                    <div id="cal-slot-detail-content" class="space-y-2 text-xs font-mono">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
             <!-- Tote Master Control & Search Console (Manager & Executive Only) -->
             <div class="glass-panel p-6 rounded-3xl space-y-6 border border-indigo-500/30">
                 <div
@@ -928,6 +994,64 @@
 
         <!-- VIEW 3: WAREHOUSE WORKER ROLE (HARDWARE-OPTIMIZED INDUSTRIAL TERMINAL) -->
         <div id="view-worker" class="space-y-6 hidden animate-fade-in">
+
+                <!-- Worker Shift Productivity Tracker (Feature 3) -->
+                <div id="worker-shift-tracker" class="glass-panel p-5 rounded-3xl border border-emerald-500/30 space-y-4">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-gray-800 pb-3">
+                        <div class="flex items-center space-x-3">
+                            <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
+                                <i data-lucide="activity" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-white text-base flex items-center gap-2">
+                                    Worker Shift Productivity Telemetry
+                                    <span class="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase">Live Shift</span>
+                                </h3>
+                                <p class="text-xs text-gray-400">Real-time throughput &amp; performance metrics for current shift</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2 text-xs font-mono">
+                            <span class="text-gray-400">Active Worker:</span>
+                            <span id="wstat-worker-name" class="font-bold text-emerald-400">Operations Staff</span>
+                        </div>
+                    </div>
+
+                    <!-- Stat Chips Grid -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-gray-950/70 border border-gray-800 p-3.5 rounded-2xl space-y-1">
+                            <div class="flex items-center justify-between text-[11px] text-gray-400 font-bold uppercase">
+                                <span>Scans Today</span>
+                                <i data-lucide="scan" class="w-3.5 h-3.5 text-blue-400"></i>
+                            </div>
+                            <div class="text-2xl font-black text-white font-mono" id="wstat-scans-today">0</div>
+                            <div class="text-[10px] text-gray-500">Totes scanned in shift</div>
+                        </div>
+                        <div class="bg-gray-950/70 border border-gray-800 p-3.5 rounded-2xl space-y-1">
+                            <div class="flex items-center justify-between text-[11px] text-gray-400 font-bold uppercase">
+                                <span>Activations</span>
+                                <i data-lucide="package-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+                            </div>
+                            <div class="text-2xl font-black text-emerald-400 font-mono" id="wstat-activations-today">0</div>
+                            <div class="text-[10px] text-gray-500">New totes processed</div>
+                        </div>
+                        <div class="bg-gray-950/70 border border-gray-800 p-3.5 rounded-2xl space-y-1">
+                            <div class="flex items-center justify-between text-[11px] text-gray-400 font-bold uppercase">
+                                <span>Staged &amp; Handed Off</span>
+                                <i data-lucide="door-open" class="w-3.5 h-3.5 text-purple-400"></i>
+                            </div>
+                            <div class="text-2xl font-black text-purple-400 font-mono" id="wstat-staged-today">0</div>
+                            <div class="text-[10px] text-gray-500">Retrievals processed</div>
+                        </div>
+                        <div class="bg-gray-950/70 border border-gray-800 p-3.5 rounded-2xl space-y-1">
+                            <div class="flex items-center justify-between text-[11px] text-gray-400 font-bold uppercase">
+                                <span>SLA Adherence</span>
+                                <i data-lucide="shield-check" class="w-3.5 h-3.5 text-amber-400"></i>
+                            </div>
+                            <div class="text-2xl font-black text-amber-400 font-mono" id="wstat-sla-score">100%</div>
+                            <div class="text-[10px] text-emerald-400 font-bold" id="wstat-sla-label">ON TARGET</div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- SLA-Driven Cutoff Banner (Past 18:00 Cutoff Alert) -->
                 <div id="sla-cutoff-banner"
@@ -2310,6 +2434,8 @@
                 }
                 if (!facId) return;
 
+                loadSchedulingCalendar(facId);
+
                 const { data: fac, error: facErr } = await supabase.from('facilities').select('*').eq('id', facId).single();
                 if (facErr || !fac) {
                     const msg = `Manager View Error: Facility record '${facId}' not found in Supabase.`;
@@ -2771,8 +2897,329 @@
             });
         }
 
+        // =========================================================================
+        // FEATURE 3: Worker Shift Productivity Tracker Telemetry
+        // =========================================================================
+        async function loadWorkerShiftStats(facilityId = null) {
+            try {
+                let facId = facilityId || window.currentSelectedFacilityId;
+                if (!facId) {
+                    const globalSel = document.getElementById('global-facility-select');
+                    const execSel = document.getElementById('exec-facility-select');
+                    const mgrSel = document.getElementById('manager-facility-select');
+                    facId = globalSel?.value || execSel?.value || mgrSel?.value || actualAssignedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+                }
+                if (!facId) return;
+
+                const nameEl = document.getElementById('wstat-worker-name');
+                if (nameEl) {
+                    nameEl.textContent = actualUserName || (activeRole === 'worker' ? "David Worker" : actualUserRole || "Operations Staff");
+                }
+
+                // Midnight today timestamp ISO
+                const todayMidnight = new Date();
+                todayMidnight.setHours(0,0,0,0);
+                const todayIso = todayMidnight.toISOString();
+                const todayYmd = todayMidnight.toISOString().split('T')[0];
+
+                // 1. Fetch inventory items scanned today
+                const { data: scannedToday } = await supabase
+                    .from('inventory')
+                    .select('id, status, last_scanned_at')
+                    .or(`facility_id.eq.${facId},facility_id.is.null`)
+                    .gte('last_scanned_at', todayIso);
+
+                const scanCount = scannedToday ? scannedToday.length : 0;
+                const activationsCount = scannedToday ? scannedToday.filter(i => i.status === 'stored' || i.status === 'staged' || i.status === 'with-customer').length : 0;
+
+                // 2. Fetch access_requests updated/staged today
+                const { data: reqsToday } = await supabase
+                    .from('access_requests')
+                    .select('id, status, target_date, updated_at')
+                    .or(`facility_id.eq.${facId},facility_id.is.null`)
+                    .gte('updated_at', todayIso);
+
+                const stagedCount = reqsToday ? reqsToday.filter(r => r.status === 'completed' || r.status === 'staged' || r.status === 'in_progress').length : 0;
+
+                // 3. Evaluate SLA score (Past 18:00 check)
+                const now = new Date();
+                const isPast1800 = now.getHours() >= 18;
+                const pendingUnstagedReqs = reqsToday ? reqsToday.filter(r => r.status === 'pending' && r.target_date === todayYmd).length : 0;
+                
+                let slaScore = "100%";
+                let slaLabel = "ON TARGET";
+                let slaClass = "text-[10px] text-emerald-400 font-bold";
+
+                if (isPast1800 && pendingUnstagedReqs > 0) {
+                    slaScore = "SLA BREACH";
+                    slaLabel = `${pendingUnstagedReqs} OVERDUE`;
+                    slaClass = "text-[10px] text-red-400 font-bold uppercase animate-pulse";
+                } else if (pendingUnstagedReqs > 0) {
+                    slaScore = "ELEVATED";
+                    slaLabel = `${pendingUnstagedReqs} Pending`;
+                    slaClass = "text-[10px] text-amber-400 font-bold uppercase";
+                }
+
+                // Update DOM elements
+                const elScans = document.getElementById('wstat-scans-today');
+                const elAct = document.getElementById('wstat-activations-today');
+                const elStaged = document.getElementById('wstat-staged-today');
+                const elSlaScore = document.getElementById('wstat-sla-score');
+                const elSlaLabel = document.getElementById('wstat-sla-label');
+
+                if (elScans) elScans.textContent = scanCount;
+                if (elAct) elAct.textContent = activationsCount;
+                if (elStaged) elStaged.textContent = stagedCount;
+                if (elSlaScore) elSlaScore.textContent = slaScore;
+                if (elSlaLabel) {
+                    elSlaLabel.textContent = slaLabel;
+                    elSlaLabel.className = slaClass;
+                }
+            } catch (err) {
+                console.warn("[Worker Shift Stats] Error loading metrics:", err);
+            }
+        }
+
+        // =========================================================================
+        // FEATURE 4: Admin Staging & Logistics Reservation Calendar Heatmap
+        // =========================================================================
+        let currentCalendarStartMonday = null;
+        let calendarLoadedData = {};
+
+        function getMondayOfDate(d) {
+            const date = new Date(d);
+            const day = date.getDay();
+            const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+            return new Date(date.setDate(diff));
+        }
+
+        function formatShortYmd(d) {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        async function loadSchedulingCalendar(facilityId = null) {
+            try {
+                if (!currentCalendarStartMonday) {
+                    currentCalendarStartMonday = getMondayOfDate(new Date());
+                }
+
+                let facId = facilityId || window.currentSelectedFacilityId;
+                if (!facId) {
+                    const globalSel = document.getElementById('global-facility-select');
+                    const mgrSel = document.getElementById('manager-facility-select');
+                    facId = globalSel?.value || mgrSel?.value || actualAssignedFacilityId;
+                }
+                if (!facId) return;
+
+                // Calculate Monday - Sunday dates for current selected week
+                const days = [];
+                for (let i = 0; i < 7; i++) {
+                    const d = new Date(currentCalendarStartMonday);
+                    d.setDate(d.getDate() + i);
+                    days.push(d);
+                }
+
+                const startDateYmd = formatShortYmd(days[0]);
+                const endDateYmd = formatShortYmd(days[6]);
+
+                // Update Week Range Header Label
+                const rangeLabel = document.getElementById('cal-week-range-label');
+                if (rangeLabel) {
+                    const m1 = days[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const m2 = days[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    rangeLabel.textContent = `${m1} – ${m2}`;
+                }
+
+                // Update Column Header Dates (Mon..Sun)
+                const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                const todayYmd = formatShortYmd(new Date());
+                days.forEach((d, idx) => {
+                    const colEl = document.getElementById(`cal-day-col-${idx}`);
+                    if (colEl) {
+                        const ymd = formatShortYmd(d);
+                        const isToday = ymd === todayYmd;
+                        colEl.innerHTML = `<span class="block ${isToday ? 'text-blue-400 font-extrabold' : 'text-gray-300'}">${dayNames[idx]}</span><span class="text-[10px] ${isToday ? 'bg-blue-600 text-white px-1.5 py-0.5 rounded-full' : 'text-gray-500'}">${d.getDate()}</span>`;
+                        colEl.className = `p-1 rounded-xl text-center ${isToday ? 'bg-blue-500/10 border border-blue-500/30' : ''}`;
+                    }
+                });
+
+                // Fetch reservations & access requests for this week range at facility
+                const [resResult, reqResult] = await Promise.all([
+                    supabase.from('staging_reservations')
+                        .select('*, users!uid(name)')
+                        .or(`facility_id.eq.${facId},facility_id.is.null`)
+                        .gte('start_time', `${startDateYmd}T00:00:00Z`)
+                        .lte('start_time', `${endDateYmd}T23:59:59Z`),
+                    supabase.from('access_requests')
+                        .select('*, users!uid(name)')
+                        .or(`facility_id.eq.${facId},facility_id.is.null`)
+                        .gte('target_date', startDateYmd)
+                        .lte('target_date', endDateYmd)
+                        .neq('status', 'cancelled')
+                ]);
+
+                const reservations = resResult.data || [];
+                const accessRequests = reqResult.data || [];
+
+                calendarLoadedData = { days, reservations, accessRequests, facId };
+                renderCalendarHeatmapGrid();
+            } catch (err) {
+                console.error("[Scheduling Calendar] Error loading data:", err);
+            }
+        }
+
+        function renderCalendarHeatmapGrid() {
+            const gridBody = document.getElementById('cal-grid-body');
+            if (!gridBody || !calendarLoadedData.days) return;
+
+            const { days, reservations, accessRequests } = calendarLoadedData;
+            const slots = [
+                { id: 'Morning (9 AM - 12 PM)', label: 'Morning (9-12)' },
+                { id: 'Afternoon (12 PM - 3 PM)', label: 'Afternoon (12-3)' },
+                { id: 'Evening Peak (3 PM - 6 PM)', label: 'Evening (3-6)' }
+            ];
+
+            const DEFAULT_MAX_CAPACITY_TOTES = 12; // Default limit per slot for heatmap filling
+
+            let html = '';
+            slots.forEach(slot => {
+                html += `<div class="grid grid-cols-8 gap-2 items-stretch">`;
+                html += `<div class="flex items-center text-xs font-bold text-gray-400 font-mono pr-1 truncate">${slot.label}</div>`;
+
+                days.forEach((dayDate) => {
+                    const dayYmd = formatShortYmd(dayDate);
+                    
+                    // Match access requests or staging_reservations for this day + time slot
+                    const matchedRequests = (accessRequests || []).filter(r => {
+                        const targetMatch = r.target_date === dayYmd;
+                        const slotMatch = !r.time_slot || r.time_slot.toLowerCase().includes(slot.id.split(' ')[0].toLowerCase());
+                        return targetMatch && slotMatch;
+                    });
+
+                    const matchedReservations = (reservations || []).filter(sr => {
+                        const resYmd = formatShortYmd(new Date(sr.start_time));
+                        return resYmd === dayYmd;
+                    });
+
+                    // Aggregate tote count & customer bookings count
+                    let totalTotes = 0;
+                    matchedRequests.forEach(r => {
+                        const items = r.requested_items || [];
+                        totalTotes += Array.isArray(items) ? items.length : 1;
+                    });
+                    matchedReservations.forEach(sr => {
+                        const totes = sr.tote_ids || [];
+                        totalTotes += Array.isArray(totes) ? totes.length : 1;
+                    });
+
+                    const totalBookings = Math.max(matchedRequests.length, matchedReservations.length);
+                    const fillPercent = Math.min(100, Math.round((totalTotes / DEFAULT_MAX_CAPACITY_TOTES) * 100));
+
+                    // Heatmap badge color calculation
+                    let badgeClass = "bg-gray-900/60 border-gray-800 text-gray-500 hover:border-blue-500/40";
+                    let fillBarClass = "bg-blue-500";
+                    
+                    if (totalBookings > 0) {
+                        if (fillPercent >= 80) {
+                            badgeClass = "bg-red-950/60 border-red-500/50 text-red-300 shadow-sm shadow-red-900/30";
+                            fillBarClass = "bg-red-500";
+                        } else if (fillPercent >= 45) {
+                            badgeClass = "bg-amber-950/60 border-amber-500/50 text-amber-300 shadow-sm shadow-amber-900/30";
+                            fillBarClass = "bg-amber-500";
+                        } else {
+                            badgeClass = "bg-emerald-950/60 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-900/30";
+                            fillBarClass = "bg-emerald-500";
+                        }
+                    }
+
+                    html += `
+                    <div onclick="onCalendarCellClick('${dayYmd}', '${slot.id}')"
+                        class="p-2 rounded-2xl border ${badgeClass} transition flex flex-col justify-between min-h-[64px] cursor-pointer group hover:scale-[1.02]">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold font-mono ${totalBookings > 0 ? 'text-white' : 'text-gray-600'}">${totalBookings} Booking${totalBookings !== 1 ? 's' : ''}</span>
+                            <span class="text-[9px] font-bold font-mono px-1.5 py-0.2 rounded bg-black/40 text-gray-300">${totalTotes} Totes</span>
+                        </div>
+                        <div class="space-y-1 mt-2">
+                            <div class="w-full bg-gray-950 rounded-full h-1.5 overflow-hidden">
+                                <div class="${fillBarClass} h-full transition-all duration-500" style="width: ${fillPercent}%;"></div>
+                            </div>
+                            <div class="text-[9px] text-right font-mono font-bold text-gray-400 group-hover:text-white">${fillPercent}% Cap</div>
+                        </div>
+                    </div>`;
+                });
+
+                html += `</div>`;
+            });
+
+            gridBody.innerHTML = html;
+        }
+
+        function navigateCalendarWeek(offsetDays) {
+            if (offsetDays === 0) {
+                currentCalendarStartMonday = getMondayOfDate(new Date());
+            } else {
+                currentCalendarStartMonday.setDate(currentCalendarStartMonday.getDate() + offsetDays);
+            }
+            loadSchedulingCalendar();
+        }
+
+        function onCalendarCellClick(dateYmd, slotId) {
+            const panel = document.getElementById('cal-slot-detail-panel');
+            const title = document.getElementById('cal-slot-detail-title');
+            const content = document.getElementById('cal-slot-detail-content');
+            if (!panel || !title || !content) return;
+
+            const { accessRequests } = calendarLoadedData;
+            
+            const matchedRequests = (accessRequests || []).filter(r => {
+                const targetMatch = r.target_date === dateYmd;
+                const slotMatch = !r.time_slot || r.time_slot.toLowerCase().includes(slotId.split(' ')[0].toLowerCase());
+                return targetMatch && slotMatch;
+            });
+
+            const dateObj = new Date(dateYmd + 'T12:00:00');
+            const dateFormatted = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+            title.textContent = `Scheduled Reservations: ${dateFormatted} (${slotId})`;
+
+            if (matchedRequests.length === 0) {
+                content.innerHTML = `<div class="p-3 text-center text-gray-500">No customer staging reservations scheduled for this slot.</div>`;
+            } else {
+                content.innerHTML = matchedRequests.map(r => {
+                    const custName = r.users?.name || "Customer " + (r.uid || '').substring(0, 8);
+                    const toteCount = Array.isArray(r.requested_items) ? r.requested_items.length : 1;
+                    const pin = r.pin || r.access_pin || "----";
+                    const fulType = (r.fulfillment_type || 'self_serve_pickup').replace(/_/g, ' ').toUpperCase();
+
+                    return `
+                    <div class="p-3 bg-gray-900 border border-gray-800 rounded-xl flex items-center justify-between gap-2">
+                        <div>
+                            <div class="font-bold text-white text-sm">${escapeHtml(custName)}</div>
+                            <div class="text-[10px] text-blue-300 font-mono">${toteCount} Tote(s) &bull; ${fulType}</div>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xs font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded-lg font-mono">PIN: ${pin}</span>
+                            <span class="block text-[10px] text-gray-400 mt-1 uppercase font-bold">${r.status || 'pending'}</span>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+
+            panel.classList.remove('hidden');
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function closeCalendarSlotDetail() {
+            const panel = document.getElementById('cal-slot-detail-panel');
+            if (panel) panel.classList.add('hidden');
+        }
+
         function loadWorkerQueues(facilityId = null) {
             updateOfflineQueueBadge();
+            loadWorkerShiftStats(facilityId);
             loadWorkerLiveData(facilityId);
             loadWorkerLogisticsRouting(facilityId);
         }
