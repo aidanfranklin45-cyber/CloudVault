@@ -1141,12 +1141,96 @@
                 </div>
             </div>
 
-            <div class="pt-2 flex justify-between items-center border-t border-gray-100">
+            <div class="pt-2 flex justify-between items-center border-t border-gray-100 flex-wrap gap-2">
                 <button onclick="triggerCancelFlowUser()" class="text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-xl border border-red-200 transition">
                     Cancel Subscription
                 </button>
-                <button onclick="closeBillingModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold px-6 py-2.5 rounded-xl transition text-sm">
-                    Close
+                <div class="flex items-center gap-2">
+                    <button onclick="openTotePlanManagerModal()" class="text-xs font-extrabold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl border border-blue-200 transition flex items-center gap-1.5 cursor-pointer">
+                        📦 Manage Plan / Add &amp; Unsubscribe Totes
+                    </button>
+                    <button onclick="closeBillingModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold px-5 py-2 rounded-xl transition text-xs">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Tote Plan & Partial Unsubscribe Modal -->
+    <div id="tote-plan-manager-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm z-[60] flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full mx-4 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto border border-gray-100">
+            <div class="flex justify-between items-center border-b border-gray-100 pb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900">Manage Storage Totes Plan</h2>
+                    <p class="text-xs text-gray-500 font-medium">Add additional totes or unsubscribe from existing totes.</p>
+                </div>
+                <button onclick="closeTotePlanManagerModal()" class="text-gray-400 hover:text-gray-600 transition p-2 rounded-xl hover:bg-gray-100">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Current Plan Badge -->
+            <div class="bg-blue-50 border border-blue-200/80 rounded-2xl p-4 flex justify-between items-center text-xs">
+                <div>
+                    <span class="text-[10px] font-extrabold uppercase text-blue-600 block tracking-wider">Current Active Plan</span>
+                    <span id="tpm-current-totes-label" class="font-extrabold text-gray-900 text-sm">-- Totes</span>
+                </div>
+                <div class="text-right">
+                    <span id="tpm-current-rate-label" class="font-bold text-blue-700 block">--</span>
+                    <span id="tpm-current-monthly-label" class="text-gray-500 text-[11px]">--</span>
+                </div>
+            </div>
+
+            <!-- Action Selector: Add vs Reduce -->
+            <div class="grid grid-cols-2 gap-2 bg-gray-100 p-1.5 rounded-2xl">
+                <button type="button" id="tpm-mode-add" onclick="setTpmMode('add')" class="py-2.5 px-3 rounded-xl font-bold text-xs transition bg-white text-blue-700 shadow-sm">
+                    ➕ Add Totes (+ Pro-Rata)
+                </button>
+                <button type="button" id="tpm-mode-reduce" onclick="setTpmMode('reduce')" class="py-2.5 px-3 rounded-xl font-bold text-xs transition text-gray-600 hover:text-gray-900">
+                    ➖ Unsubscribe Totes
+                </button>
+            </div>
+
+            <!-- Tote Stepper Selector -->
+            <div class="space-y-3 bg-gray-50 p-5 rounded-2xl border border-gray-200">
+                <label id="tpm-stepper-label" class="block text-xs font-extrabold uppercase tracking-wider text-gray-700">Totes to Add</label>
+                <div class="flex items-center justify-between gap-4">
+                    <button type="button" onclick="adjustTpmCount(-1)" class="w-12 h-12 bg-white hover:bg-gray-100 border border-gray-300 rounded-2xl font-black text-xl text-gray-700 shadow-sm flex items-center justify-center transition active:scale-95 cursor-pointer">-</button>
+                    <div class="text-center flex-1">
+                        <span id="tpm-count-display" class="text-3xl font-black text-gray-900 font-mono">1</span>
+                        <span id="tpm-unit-label" class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">Tote</span>
+                    </div>
+                    <button type="button" onclick="adjustTpmCount(1)" class="w-12 h-12 bg-white hover:bg-gray-100 border border-gray-300 rounded-2xl font-black text-xl text-gray-700 shadow-sm flex items-center justify-center transition active:scale-95 cursor-pointer">+</button>
+                </div>
+            </div>
+
+            <!-- Dynamic Live Calculation Ledger -->
+            <div id="tpm-ledger" class="space-y-3 bg-slate-900 text-white p-5 rounded-2xl shadow-md text-xs">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-slate-400">Target Total Totes:</span>
+                    <span id="tpm-target-totes" class="font-extrabold font-mono text-sm text-white">--</span>
+                </div>
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-slate-400">Volume Tier Rate:</span>
+                    <span id="tpm-target-rate" class="font-extrabold font-mono text-emerald-400">--</span>
+                </div>
+                <div id="tpm-prorated-row" class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-slate-400">Mid-Cycle Pro-Rata Storage (Remaining Days):</span>
+                    <span id="tpm-prorated-amt" class="font-black font-mono text-blue-400 text-sm">$0.00</span>
+                </div>
+                <div class="flex justify-between items-center pt-1">
+                    <span class="font-extrabold text-slate-200">New Monthly Recurring Total:</span>
+                    <span id="tpm-new-monthly" class="font-black text-base font-mono text-white">$0.00/mo</span>
+                </div>
+            </div>
+
+            <!-- Tier Change & Warning Banners -->
+            <div id="tpm-warning-banner" class="hidden"></div>
+
+            <div class="pt-2">
+                <button type="button" id="tpm-submit-btn" onclick="submitTpmAction()" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+                    Confirm Storage Plan Change
                 </button>
             </div>
         </div>
@@ -1574,59 +1658,88 @@
 
             // ── 2. Stored Tote Retrieval Flow Cards ────────────────────────────
             if (retrievalReqs.length > 0) {
-                const stagingReqs = retrievalReqs.filter(r => !r.fulfillment_type || r.fulfillment_type === 'staging');
-                const valetReqs = retrievalReqs.filter(r => r.fulfillment_type === 'valet_delivery');
+                // Group retrieval requests by unique schedule window: (fulfillment_type :: target_date :: time_slot)
+                const retrievalGroups = {};
+                retrievalReqs.forEach(r => {
+                    const type = r.fulfillment_type || 'staging';
+                    const date = r.target_date || 'unscheduled';
+                    const slot = r.time_slot || 'standard';
+                    const key = `${type}::${date}::${slot}`;
+                    if (!retrievalGroups[key]) retrievalGroups[key] = [];
+                    retrievalGroups[key].push(r);
+                });
 
-                // Flow C: Staging Room Retrieval
-                if (stagingReqs.length > 0) {
-                    const stagingReq = stagingReqs[0];
-                    const { room: roomNum, pin } = resolveRoomAndPin(stagingReq);
-                    const isStagedReady = stagingRoomItems.some(i => i.status === 'staged') || stagingReq.status === 'staged' || stagingReq.status === 'ready';
-                    const dateStr = stagingReq.target_date ? new Date(stagingReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
-                    const timeStr = stagingReq.time_slot || '12:00 PM – 03:00 PM';
-                    cards.push(buildFlowCard({
-                        flowType: 'retrieval-staging',
-                        icon: '🚪',
-                        title: isStagedReady ? `Tote Retrieval — Staging Room #${roomNum} Pickup` : `Tote Retrieval — Vault Pull in Progress`,
-                        subtitle: isStagedReady
-                            ? `Totes are ready • Staging Room #${roomNum} • PIN: ${pin}`
-                            : `Vault pull in progress • ${dateStr} • ${timeStr}`,
-                        badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'VAULT PULL IN PROGRESS',
-                        badgeColor: isStagedReady ? 'emerald' : 'amber',
-                        steps: [
-                            { label: '1. Vault & Intake Pull', sub: isStagedReady ? '✓ Pulled from deep storage' : 'Pulling from storage bay...', done: isStagedReady, active: !isStagedReady },
-                            { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting room placement...', done: isStagedReady, active: false },
-                            { label: '3. With Customer', sub: isStagedReady ? `PIN: ${pin} — Awaiting pickup` : 'PIN code pending', done: false, active: isStagedReady },
-                            { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
-                        ],
-                        totes: stagingRoomItems.length > 0 ? stagingRoomItems : currentInventory,
-                        pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : buildPendingPinBlock(dateStr, timeStr),
-                    }));
-                }
+                Object.values(retrievalGroups).forEach(groupReqs => {
+                    const primaryReq = groupReqs[0];
+                    const fulfillmentType = primaryReq.fulfillment_type || 'staging';
+                    const { room: roomNum, pin } = resolveRoomAndPin(primaryReq);
 
-                // Flow D: Valet Delivery Retrieval
-                if (valetReqs.length > 0) {
-                    const valetReq = valetReqs[0];
-                    const isOutForDelivery = valetItems.some(i => i.status === 'out-for-delivery');
-                    const dateStr = valetReq.target_date ? new Date(valetReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
-                    const timeStr = valetReq.time_slot || '12:00 PM – 03:00 PM';
-                    cards.push(buildFlowCard({
-                        flowType: 'retrieval-valet',
-                        icon: '🚚',
-                        title: 'Tote Retrieval — Valet Door Delivery',
-                        subtitle: isOutForDelivery ? `Driver en route to you • ${timeStr}` : `Est. delivery: ${dateStr} • ${timeStr}`,
-                        badgeText: isOutForDelivery ? 'OUT FOR DELIVERY' : 'DISPATCHED',
-                        badgeColor: isOutForDelivery ? 'orange' : 'blue',
-                        steps: [
-                            { label: '1. Vault & Intake Pull', sub: '✓ Pulled from deep storage', done: true },
-                            { label: '2. On Truck', sub: isOutForDelivery ? 'Driver en route to you' : 'Loading on van', done: false, active: true },
-                            { label: '3. With Customer', sub: isOutForDelivery ? 'Arriving soon' : dateStr, done: false, active: false },
-                            { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
-                        ],
-                        totes: valetReqs.length > 0 ? (valetItems.length > 0 ? valetItems : currentInventory) : currentInventory,
-                        pinBlock: buildValetBlock(timeStr, dateStr, valetReqs[0]),
-                    }));
-                }
+                    // Collect all requested tote IDs or tote codes for this specific retrieval group
+                    const groupRequestedIdentifiers = new Set();
+                    groupReqs.forEach(req => {
+                        const items = req.requested_items || req.requested_tote_codes || req.totes || [];
+                        if (Array.isArray(items)) {
+                            items.forEach(id => groupRequestedIdentifiers.add(id));
+                        }
+                    });
+
+                    // Filter current inventory to ONLY include totes belonging to this specific retrieval group
+                    const groupTotes = (currentInventory || []).filter(item => 
+                        groupRequestedIdentifiers.has(item.id) ||
+                        groupRequestedIdentifiers.has(item.tote_code) ||
+                        groupRequestedIdentifiers.has(item.barcode) ||
+                        groupRequestedIdentifiers.has(item.label)
+                    );
+
+                    // Fallback to stagingRoomItems / currentInventory if no specific items recorded
+                    const groupTotesToDisplay = groupTotes.length > 0 
+                        ? groupTotes 
+                        : (stagingRoomItems.length > 0 ? stagingRoomItems : currentInventory);
+
+                    const dateStr = primaryReq.target_date ? new Date(primaryReq.target_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Scheduled';
+                    const timeStr = primaryReq.time_slot || '12:00 PM – 03:00 PM';
+
+                    if (fulfillmentType === 'valet_delivery') {
+                        const isOutForDelivery = valetItems.some(i => i.status === 'out-for-delivery');
+                        cards.push(buildFlowCard({
+                            flowType: 'retrieval-valet',
+                            icon: '🚚',
+                            title: 'Tote Retrieval — Valet Door Delivery',
+                            subtitle: isOutForDelivery ? `Driver en route to you • ${timeStr}` : `Est. delivery: ${dateStr} • ${timeStr}`,
+                            badgeText: isOutForDelivery ? 'OUT FOR DELIVERY' : 'DISPATCHED',
+                            badgeColor: isOutForDelivery ? 'orange' : 'blue',
+                            steps: [
+                                { label: '1. Vault & Intake Pull', sub: '✓ Pulled from deep storage', done: true },
+                                { label: '2. On Truck', sub: isOutForDelivery ? 'Driver en route to you' : 'Loading on van', done: false, active: true },
+                                { label: '3. With Customer', sub: isOutForDelivery ? 'Arriving soon' : dateStr, done: false, active: false },
+                                { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
+                            ],
+                            totes: groupTotesToDisplay,
+                            pinBlock: buildValetBlock(timeStr, dateStr, primaryReq),
+                        }));
+                    } else {
+                        // Staging Room Retrieval
+                        const isStagedReady = groupTotesToDisplay.some(i => i.status === 'staged') || groupReqs.some(r => r.status === 'staged' || r.status === 'ready');
+                        cards.push(buildFlowCard({
+                            flowType: 'retrieval-staging',
+                            icon: '🚪',
+                            title: isStagedReady ? `Tote Retrieval — Staging Room #${roomNum} Pickup` : `Tote Retrieval — Vault Pull in Progress`,
+                            subtitle: isStagedReady
+                                ? `Totes are ready • Staging Room #${roomNum} • PIN: ${pin}`
+                                : `Vault pull in progress • ${dateStr} • ${timeStr}`,
+                            badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'VAULT PULL IN PROGRESS',
+                            badgeColor: isStagedReady ? 'emerald' : 'amber',
+                            steps: [
+                                { label: '1. Vault & Intake Pull', sub: isStagedReady ? '✓ Pulled from deep storage' : 'Pulling from storage bay...', done: isStagedReady, active: !isStagedReady },
+                                { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting room placement...', done: isStagedReady, active: false },
+                                { label: '3. With Customer', sub: isStagedReady ? `PIN: ${pin} — Awaiting pickup` : 'PIN code pending', done: false, active: isStagedReady },
+                                { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
+                            ],
+                            totes: groupTotesToDisplay,
+                            pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : buildPendingPinBlock(dateStr, timeStr),
+                        }));
+                    }
+                });
             }
 
             if (cards.length === 0) {
@@ -2736,6 +2849,208 @@
                     attachInventoryListener(currentUser.id);
                 }
             };
+
+        // ============================================================
+        // Tote Plan Manager Modal (Add & Unsubscribe Flow)
+        // ============================================================
+        let tpmCurrentMode = 'add'; // 'add' or 'reduce'
+        let tpmCount = 1;
+
+        async function openTotePlanManagerModal() {
+            const modal = document.getElementById('tote-plan-manager-modal');
+            if (modal) modal.classList.remove('hidden');
+
+            tpmCurrentMode = 'add';
+            tpmCount = 1;
+
+            if (currentSubscription) {
+                const curTotes = currentSubscription.total_totes || 0;
+                const curRate = Number(currentSubscription.tote_rate) || 5.00;
+                const curMonthly = Number(currentSubscription.recurring_storage) || (curTotes * curRate);
+
+                document.getElementById('tpm-current-totes-label').textContent = `${curTotes} Active Tote${curTotes !== 1 ? 's' : ''}`;
+                document.getElementById('tpm-current-rate-label').textContent = `$${curRate.toFixed(2)}/tote/mo`;
+                document.getElementById('tpm-current-monthly-label').textContent = `$${curMonthly.toFixed(2)}/mo total`;
+            }
+
+            setTpmMode('add');
+        }
+
+        function closeTotePlanManagerModal() {
+            const modal = document.getElementById('tote-plan-manager-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function setTpmMode(mode) {
+            tpmCurrentMode = mode;
+            tpmCount = 1;
+
+            const addBtn = document.getElementById('tpm-mode-add');
+            const reduceBtn = document.getElementById('tpm-mode-reduce');
+            const stepperLabel = document.getElementById('tpm-stepper-label');
+            const submitBtn = document.getElementById('tpm-submit-btn');
+
+            if (mode === 'add') {
+                addBtn.className = 'py-2.5 px-3 rounded-xl font-bold text-xs transition bg-white text-blue-700 shadow-sm';
+                reduceBtn.className = 'py-2.5 px-3 rounded-xl font-bold text-xs transition text-gray-600 hover:text-gray-900';
+                stepperLabel.textContent = 'Totes to Add (+ Pro-Rata)';
+                submitBtn.className = 'w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95';
+                submitBtn.textContent = 'Confirm Tote Expansion (+ Pro-Rata Billing)';
+            } else {
+                reduceBtn.className = 'py-2.5 px-3 rounded-xl font-bold text-xs transition bg-white text-amber-800 shadow-sm';
+                addBtn.className = 'py-2.5 px-3 rounded-xl font-bold text-xs transition text-gray-600 hover:text-gray-900';
+                stepperLabel.textContent = 'Totes to Unsubscribe / Reduce';
+                submitBtn.className = 'w-full py-4 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-amber-500/25 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95';
+                submitBtn.textContent = 'Confirm Partial Tote Unsubscribe';
+            }
+
+            updateTpmLedger();
+        }
+
+        function adjustTpmCount(delta) {
+            const curTotes = currentSubscription ? (currentSubscription.total_totes || 0) : 0;
+            if (tpmCurrentMode === 'reduce') {
+                const maxReducible = Math.max(1, curTotes - 1);
+                tpmCount = Math.max(1, Math.min(maxReducible, tpmCount + delta));
+            } else {
+                tpmCount = Math.max(1, tpmCount + delta);
+            }
+            updateTpmLedger();
+        }
+
+        async function updateTpmLedger() {
+            document.getElementById('tpm-count-display').textContent = tpmCount;
+            document.getElementById('tpm-unit-label').textContent = `Tote${tpmCount !== 1 ? 's' : ''}`;
+
+            const curTotes = currentSubscription ? (currentSubscription.total_totes || 0) : 0;
+            const curRate = currentSubscription ? (Number(currentSubscription.tote_rate) || 5.00) : 5.00;
+            const curMonthly = currentSubscription ? (Number(currentSubscription.recurring_storage) || (curTotes * curRate)) : 0;
+            const userFac = currentUserProfile ? currentUserProfile.assigned_facility_id : 'facility_seattle_north';
+
+            const warningBanner = document.getElementById('tpm-warning-banner');
+
+            if (tpmCurrentMode === 'add') {
+                const targetTotal = curTotes + tpmCount;
+                document.getElementById('tpm-target-totes').textContent = `${targetTotal} Totes (+${tpmCount})`;
+                document.getElementById('tpm-prorated-row').classList.remove('hidden');
+
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.calculateProratedExpansion === 'function') {
+                    const res = await window.CloudVaultBilling.calculateProratedExpansion({
+                        currentTotes: curTotes,
+                        additionalTotes: tpmCount,
+                        userId: currentUser.id,
+                        facilityId: userFac,
+                        nextBillingDate: currentSubscription ? currentSubscription.next_billing_date : null
+                    });
+
+                    document.getElementById('tpm-target-rate').textContent = `$${res.newRate.toFixed(2)}/tote (${res.tierName})`;
+                    document.getElementById('tpm-prorated-amt').textContent = `$${res.proRataAmount.toFixed(2)} (${res.daysRemaining} days remaining)`;
+                    document.getElementById('tpm-new-monthly').textContent = `$${res.newMonthly.toFixed(2)}/mo`;
+
+                    if (res.newRate < curRate) {
+                        warningBanner.className = 'p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 leading-relaxed font-medium space-y-1';
+                        warningBanner.innerHTML = `<strong>💡 Volume Tier Discount Unlocked!</strong> Adding +${tpmCount} totes upgrades your storage plan to <strong>${res.tierName}</strong> ($${res.newRate.toFixed(2)}/tote/mo).`;
+                        warningBanner.classList.remove('hidden');
+                    } else {
+                        warningBanner.classList.add('hidden');
+                    }
+                }
+            } else {
+                // Reduce mode
+                const targetTotal = Math.max(1, curTotes - tpmCount);
+                document.getElementById('tpm-target-totes').textContent = `${targetTotal} Totes (-${tpmCount})`;
+                document.getElementById('tpm-prorated-row').classList.add('hidden');
+
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.resolveCustomerPricing === 'function') {
+                    const newPricing = await window.CloudVaultBilling.resolveCustomerPricing(currentUser.id, userFac, targetTotal);
+                    const newRate = newPricing.toteRate;
+                    const newMonthly = targetTotal * newRate;
+
+                    document.getElementById('tpm-target-rate').textContent = `$${newRate.toFixed(2)}/tote (${newPricing.tierName})`;
+                    document.getElementById('tpm-new-monthly').textContent = `$${newMonthly.toFixed(2)}/mo`;
+
+                    if (newRate > curRate) {
+                        // Rate bump warning!
+                        let bannerHtml = `
+                            <div class="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl text-xs text-amber-900 leading-relaxed space-y-1.5 shadow-sm">
+                                <div class="font-extrabold text-amber-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                                    ⚠️ Volume Tier Downgrade Warning
+                                </div>
+                                <p>
+                                    Unsubscribing from <strong>${tpmCount} tote(s)</strong> drops your plan from Tier @ $${curRate.toFixed(2)}/tote to <strong>${newPricing.tierName} ($${newRate.toFixed(2)}/tote)</strong>. Your remaining ${targetTotal} tote(s) will be billed at $${newRate.toFixed(2)}/tote ($${newMonthly.toFixed(2)}/mo total).
+                                </p>`;
+
+                        // Tier Inversion Check: Check if keeping 10 totes costs LESS than targetTotal (e.g. 9 totes)!
+                        if (targetTotal < 10) {
+                            const tier2Pricing = await window.CloudVaultBilling.resolveCustomerPricing(currentUser.id, userFac, 10);
+                            const tier2Cost = 10 * tier2Pricing.toteRate;
+                            if (tier2Cost < newMonthly) {
+                                const savings = newMonthly - tier2Cost;
+                                bannerHtml += `
+                                    <div class="p-2.5 bg-emerald-100 border border-emerald-300 rounded-xl text-[11px] text-emerald-900 font-extrabold flex items-center justify-between">
+                                        <span>💡 Keeping 10 totes (Tier 2 $${tier2Pricing.toteRate.toFixed(2)} = $${tier2Cost.toFixed(2)}/mo) is $${savings.toFixed(2)}/mo CHEAPER than keeping ${targetTotal} totes!</span>
+                                    </div>`;
+                            }
+                        }
+                        bannerHtml += `</div>`;
+                        warningBanner.innerHTML = bannerHtml;
+                        warningBanner.classList.remove('hidden');
+                    } else {
+                        warningBanner.classList.add('hidden');
+                    }
+                }
+            }
+        }
+
+        async function submitTpmAction() {
+            const submitBtn = document.getElementById('tpm-submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing Plan Change...';
+
+            try {
+                if (tpmCurrentMode === 'reduce') {
+                    if (window.CloudVaultBilling && typeof window.CloudVaultBilling.processToteReduction === 'function') {
+                        const res = await window.CloudVaultBilling.processToteReduction(currentUser.id, tpmCount);
+                        if (res.success) {
+                            showToast(res.message || `Successfully unsubscribed ${tpmCount} tote(s)!`);
+                            closeTotePlanManagerModal();
+                            closeBillingModal();
+                        } else {
+                            alert(`Reduction error: ${res.error}`);
+                        }
+                    }
+                } else {
+                    // Add mode
+                    if (window.CloudVaultBilling && typeof window.CloudVaultBilling.calculateProratedExpansion === 'function') {
+                        const curTotes = currentSubscription ? (currentSubscription.total_totes || 0) : 0;
+                        const proRataRes = await window.CloudVaultBilling.calculateProratedExpansion({
+                            currentTotes: curTotes,
+                            additionalTotes: tpmCount,
+                            userId: currentUser.id,
+                            facilityId: currentUserProfile ? currentUserProfile.assigned_facility_id : null,
+                            nextBillingDate: currentSubscription ? currentSubscription.next_billing_date : null
+                        });
+
+                        const { data, error } = await supabase.rpc('add_totes_to_subscription', {
+                            p_uid: currentUser.id,
+                            p_additional_totes: tpmCount,
+                            p_logistics_type: 'self_dropoff'
+                        });
+
+                        if (error) throw error;
+                        showToast(`Successfully added +${tpmCount} totes to plan! Pro-rated storage: $${proRataRes.proRataAmount.toFixed(2)}`);
+                        closeTotePlanManagerModal();
+                        closeBillingModal();
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to submit Tote Plan action:", err);
+                alert("Failed to update storage plan: " + err.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Confirm Storage Plan Change';
+            }
+        }
 
             // Get initial user profile
             const { data: initialUser } = await supabase.from('users').select('*').eq('id', currentUser.id).maybeSingle();

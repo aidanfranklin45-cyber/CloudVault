@@ -1009,6 +1009,100 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Partial Tote Unsubscribe / Reduction Function
+CREATE OR REPLACE FUNCTION public.reduce_subscription_totes(
+    p_uid UUID,
+    p_reduce_count INT
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_sub RECORD;
+  v_user RECORD;
+  v_facility_id TEXT;
+  v_current_totes INT;
+  v_new_total INT;
+  v_t1 NUMERIC; v_t2 NUMERIC; v_t3 NUMERIC; v_t4 NUMERIC;
+  v_new_rate NUMERIC;
+  v_new_recurring NUMERIC;
+  v_delta NUMERIC;
+  v_removed_totes INT := 0;
+BEGIN
+  IF p_reduce_count <= 0 THEN
+    RAISE EXCEPTION 'Reduction count must be greater than 0';
+  END IF;
+
+  SELECT * INTO v_user FROM public.users WHERE id = p_uid;
+  IF v_user IS NULL THEN
+    RAISE EXCEPTION 'User not found';
+  END IF;
+
+  SELECT * INTO v_sub FROM public.subscriptions WHERE uid = p_uid AND status = 'active' LIMIT 1;
+  IF v_sub IS NULL THEN
+    RAISE EXCEPTION 'No active subscription found';
+  END IF;
+
+  v_current_totes := COALESCE(v_sub.total_totes, v_sub.tote_count, 0);
+  v_new_total := GREATEST(1, v_current_totes - p_reduce_count);
+
+  -- Resolve facility / price lock rates
+  v_facility_id := COALESCE(v_sub.facility_id, v_user.assigned_facility_id, 'facility_seattle_north');
+  SELECT 
+    COALESCE(tier1_rate, 5.00), COALESCE(tier2_rate, 3.50), COALESCE(tier3_rate, 2.00), COALESCE(tier4_rate, 1.00)
+  INTO v_t1, v_t2, v_t3, v_t4
+  FROM public.facilities WHERE id = v_facility_id;
+
+  IF v_user.has_price_lock IS TRUE AND v_user.price_lock_rates IS NOT NULL THEN
+    v_t1 := COALESCE((v_user.price_lock_rates->>'tier1_rate')::NUMERIC, (v_user.price_lock_rates->>'tier1')::NUMERIC, v_t1);
+    v_t2 := COALESCE((v_user.price_lock_rates->>'tier2_rate')::NUMERIC, (v_user.price_lock_rates->>'tier2')::NUMERIC, v_t2);
+    v_t3 := COALESCE((v_user.price_lock_rates->>'tier3_rate')::NUMERIC, (v_user.price_lock_rates->>'tier3')::NUMERIC, v_t3);
+    v_t4 := COALESCE((v_user.price_lock_rates->>'tier4_rate')::NUMERIC, (v_user.price_lock_rates->>'tier4')::NUMERIC, v_t4);
+  END IF;
+
+  IF v_new_total >= 50 THEN v_new_rate := v_t4;
+  ELSIF v_new_total >= 25 THEN v_new_rate := v_t3;
+  ELSIF v_new_total >= 10 THEN v_new_rate := v_t2;
+  ELSE v_new_rate := v_t1;
+  END IF;
+
+  v_new_recurring := v_new_total * v_new_rate;
+  v_delta := v_new_recurring - COALESCE(v_sub.recurring_storage, 0);
+
+  -- Update subscription
+  UPDATE public.subscriptions
+  SET total_totes = v_new_total,
+      tote_rate = v_new_rate,
+      recurring_storage = v_new_recurring,
+      last_updated = now()
+  WHERE id = v_sub.id;
+
+  -- Archive / Remove unassigned empty inventory totes for user
+  WITH empty_to_delete AS (
+    SELECT id FROM public.inventory
+    WHERE uid = p_uid AND status = 'stored' AND (label LIKE 'Empty Tote%' OR label LIKE 'Additional Tote%')
+    LIMIT (v_current_totes - v_new_total)
+  )
+  DELETE FROM public.inventory WHERE id IN (SELECT id FROM empty_to_delete);
+  GET DIAGNOSTICS v_removed_totes = ROW_COUNT;
+
+  -- Update users table
+  UPDATE public.users 
+  SET active_totes_held = GREATEST(0, active_totes_held - (v_current_totes - v_new_total))
+  WHERE id = p_uid;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'oldTotes', v_current_totes,
+    'newTotes', v_new_total,
+    'oldRate', COALESCE(v_sub.tote_rate, 0),
+    'newRate', v_new_rate,
+    'oldMonthly', COALESCE(v_sub.recurring_storage, 0),
+    'newMonthly', v_new_recurring,
+    'delta', v_delta,
+    'removedTotes', v_removed_totes
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+
 -- Check Staging Capacity Engine
 CREATE OR REPLACE FUNCTION public.check_staging_capacity(
     p_facility_id TEXT,

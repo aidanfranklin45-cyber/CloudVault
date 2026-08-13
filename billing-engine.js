@@ -93,6 +93,126 @@
     },
 
     /**
+     * Calculates pro-rata storage fee for mid-cycle tote additions.
+     * @param {Object} params - { currentTotes, additionalTotes, userId, facilityId, nextBillingDate }
+     * @returns {Promise<{proRataAmount: number, daysRemaining: number, oldRate: number, newRate: number, oldMonthly: number, newMonthly: number, newTotalTotes: number, tierName: string, isPriceLock: boolean}>}
+     */
+    calculateProratedExpansion: async function ({ currentTotes = 0, additionalTotes = 0, userId = null, facilityId = null, nextBillingDate = null } = {}) {
+      const curTotes = Number(currentTotes) || 0;
+      const addTotes = Number(additionalTotes) || 0;
+      const newTotal = curTotes + addTotes;
+
+      const currentPricing = await this.resolveCustomerPricing(userId, facilityId, Math.max(1, curTotes));
+      const newPricing = await this.resolveCustomerPricing(userId, facilityId, newTotal);
+
+      const oldMonthly = curTotes * currentPricing.toteRate;
+      const newMonthly = newTotal * newPricing.toteRate;
+      const monthlyDelta = Math.max(0, newMonthly - oldMonthly);
+
+      // Calculate days remaining in billing cycle (default 15 days if no nextBillingDate)
+      const now = new Date();
+      let daysRemaining = 15;
+      if (nextBillingDate) {
+        const nextDate = new Date(nextBillingDate);
+        const diffMs = nextDate.getTime() - now.getTime();
+        if (diffMs > 0) {
+          daysRemaining = Math.max(1, Math.min(31, Math.ceil(diffMs / (1000 * 60 * 60 * 24))));
+        }
+      }
+
+      // Pro-rata storage = (Monthly Delta / 30) * daysRemaining
+      const proRataAmount = Number(((monthlyDelta / 30) * daysRemaining).toFixed(2));
+
+      return {
+        proRataAmount,
+        daysRemaining,
+        oldRate: currentPricing.toteRate,
+        newRate: newPricing.toteRate,
+        oldMonthly,
+        newMonthly,
+        monthlyDelta,
+        newTotalTotes: newTotal,
+        tierName: newPricing.tierName,
+        isPriceLock: newPricing.isPriceLock
+      };
+    },
+
+    /**
+     * Executes partial tote unsubscribe/reduction workflow for a customer.
+     * @param {string} userId - User UUID
+     * @param {number} reduceCount - Number of totes to unsubscribe
+     * @returns {Promise<{success: boolean, result?: Object, invoice?: Object, error?: string}>}
+     */
+    processToteReduction: async function (userId, reduceCount) {
+      try {
+        if (!userId || !reduceCount || reduceCount <= 0) {
+          return { success: false, error: 'User ID and positive reduction count are required' };
+        }
+
+        const sb = global.supabase;
+        if (!sb) return { success: false, error: 'Supabase client missing' };
+
+        // 1. Call RPC function reduce_subscription_totes
+        const { data: rpcRes, error: rpcErr } = await sb.rpc('reduce_subscription_totes', {
+          p_uid: userId,
+          p_reduce_count: reduceCount
+        });
+
+        if (rpcErr) {
+          console.error('[CloudVaultBilling] Error calling reduce_subscription_totes RPC:', rpcErr);
+          return { success: false, error: rpcErr.message };
+        }
+
+        // 2. Create confirmation invoice/statement record for the subscription modification
+        const userRes = await sb.from('users').select('*').eq('id', userId).maybeSingle();
+        const user = userRes.data || {};
+
+        const oldTotes = rpcRes.oldTotes;
+        const newTotes = rpcRes.newTotes;
+        const oldRate = Number(rpcRes.oldRate) || 0;
+        const newRate = Number(rpcRes.newRate) || 0;
+        const newMonthly = Number(rpcRes.newMonthly) || 0;
+
+        const rateChanged = oldRate !== newRate;
+        const noteText = rateChanged
+          ? `Partial Tote Unsubscribe: Reduced ${reduceCount} tote(s) (${oldTotes} -> ${newTotes}). Volume tier rate updated from $${oldRate.toFixed(2)} to $${newRate.toFixed(2)}/tote/mo.`
+          : `Partial Tote Unsubscribe: Reduced ${reduceCount} tote(s) (${oldTotes} -> ${newTotes}). Maintained rate of $${newRate.toFixed(2)}/tote/mo.`;
+
+        const invRes = await this.createInvoiceRecord({
+          uid: userId,
+          customer_name: user.name || 'Valued Customer',
+          customer_email: user.email,
+          facility_id: user.assigned_facility_id,
+          invoice_type: 'subscription_modification',
+          payment_status: 'processed',
+          subtotal: newMonthly,
+          total_amount: newMonthly,
+          payment_method: 'account_adjustment',
+          transaction_reference: `SUB-MOD-${Date.now().toString().slice(-6)}`,
+          notes: noteText,
+          line_items: [
+            {
+              description: `Subscription Modification: Tote Reduction (${oldTotes} totes down to ${newTotes} totes @ $${newRate.toFixed(2)}/mo)`,
+              qty: newTotes,
+              unit_price: newRate,
+              amount: newMonthly
+            }
+          ]
+        });
+
+        return {
+          success: true,
+          result: rpcRes,
+          invoice: invRes.data || null,
+          message: noteText
+        };
+      } catch (err) {
+        console.error('[CloudVaultBilling] Exception in processToteReduction:', err);
+        return { success: false, error: err.message };
+      }
+    },
+
+    /**
      * Generates a standard CloudVault invoice number.
      * Example: "INV-2026-89421"
      * @returns {string}
@@ -320,8 +440,159 @@
     },
 
     /**
+     * Scans and retroactively realigns all existing invoices in public.invoices table:
+     * - Resolves each customer's active Price Lock (price lock immunity) or assigned facility regional rates.
+     * - Recalculates exact tote count, volume tier rate, storage subtotal, line items, and total amount.
+     * - Updates invalid/miscoded historical invoice records in Supabase.
+     * @returns {Promise<{success: boolean, scannedCount: number, updatedCount: number, error?: string}>}
+     */
+    realignExistingInvoices: async function () {
+      try {
+        const sb = global.supabase;
+        if (!sb) {
+          console.error('[CloudVaultBilling] Supabase client missing');
+          return { success: false, error: 'Supabase client missing', scannedCount: 0, updatedCount: 0 };
+        }
+
+        const { data: invoices, error: fetchErr } = await sb
+          .from('invoices')
+          .select('*');
+
+        if (fetchErr) {
+          console.error('[CloudVaultBilling] Error fetching invoices for realignment:', fetchErr);
+          return { success: false, error: fetchErr.message, scannedCount: 0, updatedCount: 0 };
+        }
+
+        if (!invoices || invoices.length === 0) {
+          return { success: true, scannedCount: 0, updatedCount: 0 };
+        }
+
+        let updatedCount = 0;
+
+        for (const inv of invoices) {
+          if (!inv.uid && !inv.customer_email) continue;
+
+          // Parse line items
+          let lineItems = inv.line_items || [];
+          if (typeof lineItems === 'string') {
+            try { lineItems = JSON.parse(lineItems); } catch (e) { lineItems = []; }
+          }
+          if (!Array.isArray(lineItems)) lineItems = [];
+
+          // Determine tote count from invoice, line items, or user subscription
+          let toteCount = Number(inv.tote_count || inv.total_totes || inv.totes || 0);
+
+          const storageItemIndex = lineItems.findIndex(i => {
+            const d = (i.description || i.name || '').toLowerCase();
+            return d.includes('storage') || d.includes('subscription') || inv.invoice_type === 'subscription' || inv.invoice_type === 'initial_reservation';
+          });
+          const storageItem = storageItemIndex !== -1 ? lineItems[storageItemIndex] : null;
+
+          if (!toteCount && storageItem) {
+            const match = (storageItem.description || '').match(/(\d+)\s*tote/i);
+            if (match && match[1]) {
+              toteCount = parseInt(match[1], 10);
+            } else if (Number(storageItem.qty || storageItem.quantity) > 1) {
+              toteCount = Number(storageItem.qty || storageItem.quantity);
+            }
+          }
+
+          if (!toteCount && inv.uid) {
+            // Check active subscription or inventory count
+            const { data: userSub } = await sb.from('subscriptions').select('total_totes, tote_count').eq('uid', inv.uid).maybeSingle();
+            if (userSub) {
+              toteCount = Number(userSub.total_totes || userSub.tote_count || 0);
+            }
+            if (!toteCount) {
+              const { count: invToteCount } = await sb.from('inventory').select('*', { count: 'exact', head: true }).eq('uid', inv.uid);
+              if (invToteCount) toteCount = invToteCount;
+            }
+          }
+
+          if (!toteCount || toteCount < 1) toteCount = 1;
+
+          // Resolve dynamic customer pricing (Price lock immunity + regional facility rates)
+          const pricingRes = await this.resolveCustomerPricing(inv.uid, inv.facility_id, toteCount);
+          const correctToteRate = pricingRes.toteRate;
+          const expectedStorageSubtotal = toteCount * correctToteRate;
+
+          let modified = false;
+
+          if (storageItem) {
+            const currentQty = Number(storageItem.qty || storageItem.quantity || 1);
+            const currentUnitPrice = Number(storageItem.unit_price || storageItem.unitPrice || 0);
+            const currentAmount = Number(storageItem.amount || 0);
+
+            // If storage item line item was miscoded (e.g. qty=1 for 25 totes, or unit_price=$5.00 for Tier 3 25 totes)
+            if (currentQty !== toteCount || currentUnitPrice !== correctToteRate || Math.abs(currentAmount - expectedStorageSubtotal) > 0.01) {
+              storageItem.qty = toteCount;
+              storageItem.unit_price = correctToteRate;
+              storageItem.amount = expectedStorageSubtotal;
+              storageItem.description = `CloudVault Storage Subscription (${toteCount} totes @ $${correctToteRate.toFixed(2)}/mo — ${pricingRes.tierName})`;
+              modified = true;
+            }
+          } else if (inv.invoice_type === 'subscription' || inv.invoice_type === 'initial_reservation') {
+            lineItems.unshift({
+              description: `CloudVault Storage Subscription (${toteCount} totes @ $${correctToteRate.toFixed(2)}/mo — ${pricingRes.tierName})`,
+              qty: toteCount,
+              unit_price: correctToteRate,
+              amount: expectedStorageSubtotal
+            });
+            modified = true;
+          }
+
+          // Check if subtotal or total_amount needs realignment
+          let deliveryFee = Number(inv.delivery_fee || 0);
+          let surgeFee = Number(inv.surge_fee || 0);
+          let tax = Number(inv.tax || 0);
+          let discount = Number(inv.discount || 0);
+
+          let newSubtotal = storageItem ? expectedStorageSubtotal : Number(inv.subtotal || 0);
+          if (inv.invoice_type === 'subscription' || inv.invoice_type === 'initial_reservation') {
+            newSubtotal = expectedStorageSubtotal;
+          }
+
+          let newTotal = newSubtotal + deliveryFee + surgeFee + tax - discount;
+          if (inv.invoice_type !== 'refund' && newTotal < 0) newTotal = 0;
+
+          if (Math.abs(Number(inv.subtotal || 0) - newSubtotal) > 0.01 || Math.abs(Number(inv.total_amount || 0) - newTotal) > 0.01) {
+            modified = true;
+          }
+
+          if (modified) {
+            const updatePayload = {
+              subtotal: newSubtotal,
+              total_amount: newTotal,
+              line_items: lineItems,
+              notes: (inv.notes || '').includes('Realigned')
+                ? inv.notes
+                : `${inv.notes || ''} [Realigned to dynamic ${pricingRes.tierName} rate $${correctToteRate.toFixed(2)}/tote/mo${pricingRes.isPriceLock ? ' Price Locked' : ''}]`.trim()
+            };
+
+            const { error: updateErr } = await sb
+              .from('invoices')
+              .update(updatePayload)
+              .eq('id', inv.id);
+
+            if (!updateErr) {
+              updatedCount++;
+            } else {
+              console.warn(`[CloudVaultBilling] Warning updating invoice ${inv.invoice_number}:`, updateErr.message);
+            }
+          }
+        }
+
+        console.log(`[CloudVaultBilling] Retroactive invoice realignment complete: ${updatedCount} of ${invoices.length} invoices realigned.`);
+        return { success: true, scannedCount: invoices.length, updatedCount };
+      } catch (err) {
+        console.error('[CloudVaultBilling] Exception in realignExistingInvoices:', err);
+        return { success: false, error: err.message, scannedCount: 0, updatedCount: 0 };
+      }
+    },
+
+    /**
      * Scans subscriptions, charges, access_requests, and waitlist for unbilled records,
-     * creating retroactive invoices in public.invoices without duplicates.
+     * creating retroactive invoices in public.invoices without duplicates and realigning existing invoices.
      * @returns {Promise<{success: boolean, count: number, backfilled: Object, invoices: Array, error?: string}>}
      */
     backfillRetroactiveInvoices: async function () {
@@ -331,6 +602,9 @@
           console.error('[CloudVaultBilling] Supabase client missing');
           return { success: false, error: 'Supabase client missing', count: 0, invoices: [] };
         }
+
+        // First realign any miscoded existing invoices
+        await this.realignExistingInvoices();
 
         // 1. Fetch existing invoices to prevent duplicates
         const { data: existingInvoices, error: invErr } = await sb
@@ -1297,7 +1571,11 @@
      * Renders and displays the executive printable invoice modal (#printable-invoice-modal).
      * @param {Object} invoiceObj - Invoice record object
      */
-    renderPrintableInvoiceModal: function (invoiceObj = {}) {
+    /**
+     * Renders and displays the executive printable invoice modal (#printable-invoice-modal).
+     * @param {Object} invoiceObj - Invoice record object
+     */
+    renderPrintableInvoiceModal: async function (invoiceObj = {}) {
       this.ensurePrintStyles();
 
       let modalEl = document.getElementById('printable-invoice-modal');
@@ -1309,29 +1587,35 @@
 
       modalEl.className = 'fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto';
 
-      const invoiceNum = invoiceObj.invoice_number || invoiceObj.invoiceNumber || 'INV-2026-00000';
-      const status = (invoiceObj.payment_status || invoiceObj.paymentStatus || 'paid').toUpperCase();
-      const customerName = invoiceObj.customer_name || invoiceObj.customerName || 'Valued CloudVault Customer';
-      const customerEmail = invoiceObj.customer_email || invoiceObj.customerEmail || 'N/A';
-      const facilityId = invoiceObj.facility_id || invoiceObj.facilityId || 'CloudVault Central Facility';
-      const paymentMethod = invoiceObj.payment_method || invoiceObj.paymentMethod || 'Credit Card (Stripe)';
-      const txnRef = invoiceObj.transaction_reference || invoiceObj.transactionReference || 'N/A';
-      const notes = invoiceObj.notes || '';
+      const sb = global.supabase;
+      let activeToteCount = Number(invoiceObj.tote_count || invoiceObj.total_totes || invoiceObj.totes || 0);
+      let userSub = null;
+      let userObj = null;
 
-      const createdAt = invoiceObj.created_at || invoiceObj.createdAt
-        ? new Date(invoiceObj.created_at || invoiceObj.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-        : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      // Cross-reference customer's subscription & user records from Supabase if available
+      if (sb && (invoiceObj.uid || invoiceObj.customer_email)) {
+        try {
+          if (invoiceObj.uid) {
+            const { data: sData } = await sb.from('subscriptions').select('*').eq('uid', invoiceObj.uid).maybeSingle();
+            userSub = sData;
+            const { data: uData } = await sb.from('users').select('*').eq('id', invoiceObj.uid).maybeSingle();
+            userObj = uData;
+          } else if (invoiceObj.customer_email) {
+            const { data: uData } = await sb.from('users').select('*').eq('email', invoiceObj.customer_email).maybeSingle();
+            userObj = uData;
+            if (userObj) {
+              const { data: sData } = await sb.from('subscriptions').select('*').eq('uid', userObj.id).maybeSingle();
+              userSub = sData;
+            }
+          }
+        } catch (e) {
+          console.warn('[CloudVaultBilling] Modal subscription cross-reference notice:', e);
+        }
+      }
 
-      const paidAt = invoiceObj.paid_at || invoiceObj.paidAt
-        ? new Date(invoiceObj.paid_at || invoiceObj.paidAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-        : (status === 'PAID' ? createdAt : 'Pending');
-
-      const subtotal = Number(invoiceObj.subtotal || 0);
-      const deliveryFee = Number(invoiceObj.delivery_fee || invoiceObj.deliveryFee || 0);
-      const surgeFee = Number(invoiceObj.surge_fee || invoiceObj.surgeFee || 0);
-      const tax = Number(invoiceObj.tax || 0);
-      const discount = Number(invoiceObj.discount || 0);
-      const grandTotal = Number(invoiceObj.total_amount || invoiceObj.totalAmount || (subtotal + deliveryFee + surgeFee + tax - discount));
+      if (userSub && Number(userSub.total_totes || userSub.tote_count || 0) > 0) {
+        activeToteCount = Number(userSub.total_totes || userSub.tote_count);
+      }
 
       let lineItems = invoiceObj.line_items || invoiceObj.lineItems || [];
       if (typeof lineItems === 'string') {
@@ -1339,34 +1623,10 @@
       }
       if (!Array.isArray(lineItems) || lineItems.length === 0) {
         lineItems = [
-          { description: 'CloudVault Monthly Tote Storage Subscription', qty: 1, unit_price: subtotal, amount: subtotal }
+          { description: 'CloudVault Monthly Tote Storage Subscription', qty: 1, unit_price: Number(invoiceObj.subtotal || 0), amount: Number(invoiceObj.subtotal || 0) }
         ];
       }
 
-      let statusBadgeClasses = 'bg-emerald-500/10 text-emerald-700 border-emerald-300';
-      if (status === 'PENDING') statusBadgeClasses = 'bg-amber-500/10 text-amber-700 border-amber-300';
-      else if (status === 'OVERDUE' || status === 'FAILED') statusBadgeClasses = 'bg-red-500/10 text-red-700 border-red-300';
-      const formatMoney = (val) => {
-        const n = Number(val) || 0;
-        if (n < 0) return `-$${Math.abs(n).toFixed(2)}`;
-        return `$${n.toFixed(2)}`;
-      };
-
-      const invType = (invoiceObj.invoice_type || invoiceObj.invoiceType || '').toLowerCase();
-
-      // --- Dynamic Volume Tier Rate Schedule ---
-      const rates = invoiceObj._resolvedRates || window.regionalRates || { tier1: 5.00, tier2: 3.50, tier3: 2.00, tier4: 1.00 };
-      const getVolumeRateForCount = (toteCount, r = rates) => {
-        const count = Number(toteCount) || 1;
-        if (count >= 50) return { tierName: 'Tier 4 Enterprise Volume', rate: Number(r.tier4 || 1.00) };
-        if (count >= 25) return { tierName: 'Tier 3 Commercial Volume', rate: Number(r.tier3 || 2.00) };
-        if (count >= 10) return { tierName: 'Tier 2 Preferred Volume', rate: Number(r.tier2 || 3.50) };
-        return { tierName: 'Tier 1 Standard Volume', rate: Number(r.tier1 || 5.00) };
-      };
-
-      // Extract or infer tote count intelligently for all invoices (including legacy backfills)
-      let activeToteCount = Number(invoiceObj.tote_count || invoiceObj.total_totes || invoiceObj.totes || 0);
-      
       const storageItemIndex = lineItems.findIndex(i => (i.description || '').toLowerCase().includes('storage') || (i.description || '').toLowerCase().includes('subscription'));
       const storageItem = storageItemIndex !== -1 ? lineItems[storageItemIndex] : null;
 
@@ -1379,33 +1639,65 @@
         }
       }
 
-      // Smart Inference for legacy backfilled invoices where subtotal >= 10 but qty was set to 1:
-      if (!activeToteCount || activeToteCount === 1) {
-        const itemAmt = storageItem ? Number(storageItem.amount || storageItem.unit_price || subtotal) : subtotal;
-        if (itemAmt > 0) {
-          if (itemAmt % rates.tier3 === 0 && (itemAmt / rates.tier3) >= 25 && (itemAmt / rates.tier3) < 50) activeToteCount = Math.round(itemAmt / rates.tier3);
-          else if (itemAmt % rates.tier4 === 0 && (itemAmt / rates.tier4) >= 50) activeToteCount = Math.round(itemAmt / rates.tier4);
-          else if (itemAmt % rates.tier2 === 0 && (itemAmt / rates.tier2) >= 10 && (itemAmt / rates.tier2) < 25) activeToteCount = Math.round(itemAmt / rates.tier2);
-          else if (itemAmt % rates.tier1 === 0 && (itemAmt / rates.tier1) < 10) activeToteCount = Math.round(itemAmt / rates.tier1);
-          else activeToteCount = Math.max(1, Math.round(itemAmt / rates.tier1));
-        }
-      }
       if (!activeToteCount || activeToteCount < 1) activeToteCount = 1;
 
-      const currentTier = getVolumeRateForCount(activeToteCount);
-      const effectiveRate = subtotal > 0 ? (subtotal / activeToteCount) : currentTier.rate;
+      // Resolve dynamic customer pricing (Price Lock immunity + facility regional rates)
+      const targetUid = invoiceObj.uid || (userObj ? userObj.id : null);
+      const targetFacId = invoiceObj.facility_id || (userObj ? userObj.assigned_facility_id : null);
+      const pricingRes = await this.resolveCustomerPricing(targetUid, targetFacId, activeToteCount);
+
+      const rates = pricingRes.ratesUsed;
+      const currentTier = pricingRes;
+      const effectiveRate = pricingRes.toteRate;
+      const accurateStorageSubtotal = activeToteCount * effectiveRate;
+
+      const subtotal = storageItem ? accurateStorageSubtotal : (Number(invoiceObj.subtotal) || accurateStorageSubtotal);
+      const deliveryFee = Number(invoiceObj.delivery_fee || invoiceObj.deliveryFee || 0);
+      const surgeFee = Number(invoiceObj.surge_fee || invoiceObj.surgeFee || 0);
+      const tax = Number(invoiceObj.tax || 0);
+      const discount = Number(invoiceObj.discount || 0);
+      const grandTotal = Number(invoiceObj.total_amount || invoiceObj.totalAmount || (subtotal + deliveryFee + surgeFee + tax - discount));
+
+      const invoiceNum = invoiceObj.invoice_number || invoiceObj.invoiceNumber || 'INV-2026-00000';
+      const status = (invoiceObj.payment_status || invoiceObj.paymentStatus || 'paid').toUpperCase();
+      const customerName = invoiceObj.customer_name || (userObj ? userObj.name : null) || invoiceObj.customerName || 'Valued CloudVault Customer';
+      const customerEmail = invoiceObj.customer_email || (userObj ? userObj.email : null) || invoiceObj.customerEmail || 'N/A';
+      const facilityId = invoiceObj.facility_id || (userObj ? userObj.assigned_facility_id : null) || invoiceObj.facilityId || 'CloudVault Central Facility';
+      const paymentMethod = invoiceObj.payment_method || invoiceObj.paymentMethod || 'Credit Card (Stripe)';
+      const txnRef = invoiceObj.transaction_reference || invoiceObj.transactionReference || 'N/A';
+      const notes = invoiceObj.notes || '';
+
+      const createdAt = invoiceObj.created_at || invoiceObj.createdAt
+        ? new Date(invoiceObj.created_at || invoiceObj.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+
+      const paidAt = invoiceObj.paid_at || invoiceObj.paidAt
+        ? new Date(invoiceObj.paid_at || invoiceObj.paidAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+        : (status === 'PAID' ? createdAt : 'Pending');
+
+      let statusBadgeClasses = 'bg-emerald-500/10 text-emerald-700 border-emerald-300';
+      if (status === 'PENDING') statusBadgeClasses = 'bg-amber-500/10 text-amber-700 border-amber-300';
+      else if (status === 'OVERDUE' || status === 'FAILED') statusBadgeClasses = 'bg-red-500/10 text-red-700 border-red-300';
+      const formatMoney = (val) => {
+        const n = Number(val) || 0;
+        if (n < 0) return `-$${Math.abs(n).toFixed(2)}`;
+        return `$${n.toFixed(2)}`;
+      };
+
+      const invType = (invoiceObj.invoice_type || invoiceObj.invoiceType || '').toLowerCase();
 
       // Update storage line item in lineItems array so qty and unit_price display accurately in the table!
       if (storageItem) {
         storageItem.qty = activeToteCount;
         storageItem.unit_price = effectiveRate;
         storageItem.amount = subtotal;
+        storageItem.description = `CloudVault Storage Subscription (${activeToteCount} totes @ $${effectiveRate.toFixed(2)}/mo — ${currentTier.tierName})`;
       }
 
-      // Smart Upsell & Retention Metric (+2 Totes Expansion Calculation)
+      // Smart Volume Expansion Metric (+2 Totes Expansion Calculation)
       const plus2Count = activeToteCount + 2;
-      const plus2Tier = getVolumeRateForCount(plus2Count);
-      const plus2TotalCost = plus2Count * plus2Tier.rate;
+      const plus2Tier = await this.resolveCustomerPricing(targetUid, targetFacId, plus2Count);
+      const plus2TotalCost = plus2Count * plus2Tier.toteRate;
       const diff = plus2TotalCost - subtotal;
       const marginalPerTote = diff / 2;
 
@@ -1424,7 +1716,7 @@
               Unlock Volume Tier Savings: Adding +2 Totes REDUCES your total monthly bill by <span class="text-emerald-700 font-mono font-black text-base">${formatMoney(Math.abs(diff))}/mo</span>!
             </p>
             <p class="text-slate-600 leading-relaxed text-[11px]">
-              You are currently renting <strong>${activeToteCount} tote${activeToteCount !== 1 ? 's' : ''}</strong> at ${formatMoney(effectiveRate)}/tote/mo (${formatMoney(subtotal)}/mo). Adding 2 more totes (${plus2Count} totes total) automatically unlocks our <strong>${plus2Tier.tierName}</strong> ($${plus2Tier.rate.toFixed(2)}/tote/mo), bringing your new monthly total down to <strong>${formatMoney(plus2TotalCost)}/mo</strong>!
+              You are currently renting <strong>${activeToteCount} tote${activeToteCount !== 1 ? 's' : ''}</strong> at ${formatMoney(effectiveRate)}/tote/mo (${formatMoney(subtotal)}/mo). Adding 2 more totes (${plus2Count} totes total) automatically unlocks our <strong>${plus2Tier.tierName}</strong> ($${plus2Tier.toteRate.toFixed(2)}/tote/mo), bringing your new monthly total down to <strong>${formatMoney(plus2TotalCost)}/mo</strong>!
             </p>
           </div>`;
       } else {
@@ -1441,7 +1733,7 @@
               Adding +2 totes will only increase your monthly bill by <span class="text-blue-700 font-mono font-black">+${formatMoney(diff)}/mo</span> (just <span class="text-blue-700 font-mono font-bold">+${formatMoney(marginalPerTote)}/tote/mo</span>)!
             </p>
             <p class="text-slate-600 leading-relaxed text-[11px]">
-              You are currently renting <strong>${activeToteCount} tote${activeToteCount !== 1 ? 's' : ''}</strong> (${formatMoney(subtotal)}/mo). Upgrading to <strong>${plus2Count} totes</strong> unlocks our <strong>${plus2Tier.tierName}</strong> ($${plus2Tier.rate.toFixed(2)}/tote/mo) for a total of <strong>${formatMoney(plus2TotalCost)}/mo</strong>.
+              You are currently renting <strong>${activeToteCount} tote${activeToteCount !== 1 ? 's' : ''}</strong> (${formatMoney(subtotal)}/mo). Upgrading to <strong>${plus2Count} totes</strong> unlocks our <strong>${plus2Tier.tierName}</strong> ($${plus2Tier.toteRate.toFixed(2)}/tote/mo) for a total of <strong>${formatMoney(plus2TotalCost)}/mo</strong>.
             </p>
           </div>`;
       }
