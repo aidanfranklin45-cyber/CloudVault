@@ -3089,6 +3089,24 @@
 
             const DEFAULT_MAX_CAPACITY_TOTES = 12; // Default limit per slot for heatmap filling
 
+            // Helper for matching DB time_slot strings to heatmap slot categories
+            function matchesSlotCategory(timeSlotStr, slotCategoryName) {
+                if (!timeSlotStr) return true;
+                const req = String(timeSlotStr).toLowerCase();
+                const cat = String(slotCategoryName).toLowerCase();
+
+                if (cat.includes('morning') || cat.includes('9')) {
+                    return req.includes('09:') || req.includes('9:') || req.includes('morning') || req.includes('9-12');
+                }
+                if (cat.includes('afternoon') || cat.includes('12')) {
+                    return req.includes('12:') || req.includes('afternoon') || req.includes('12-3');
+                }
+                if (cat.includes('evening') || cat.includes('3') || cat.includes('15')) {
+                    return req.includes('03:') || req.includes('3:') || req.includes('15:') || req.includes('evening') || req.includes('3-6');
+                }
+                return true;
+            }
+
             let html = '';
             slots.forEach(slot => {
                 html += `<div class="grid grid-cols-8 gap-2 items-stretch">`;
@@ -3100,7 +3118,7 @@
                     // Match access requests or staging_reservations for this day + time slot
                     const matchedRequests = (accessRequests || []).filter(r => {
                         const targetMatch = r.target_date === dayYmd;
-                        const slotMatch = !r.time_slot || r.time_slot.toLowerCase().includes(slot.id.split(' ')[0].toLowerCase());
+                        const slotMatch = matchesSlotCategory(r.time_slot, slot.id);
                         return targetMatch && slotMatch;
                     });
 
@@ -3112,12 +3130,12 @@
                     // Aggregate tote count & customer bookings count
                     let totalTotes = 0;
                     matchedRequests.forEach(r => {
-                        const items = r.requested_items || [];
-                        totalTotes += Array.isArray(items) ? items.length : 1;
+                        const items = r.requested_items || r.requested_tote_codes || [];
+                        totalTotes += (Array.isArray(items) && items.length > 0) ? items.length : Number(r.additional_totes || 1);
                     });
                     matchedReservations.forEach(sr => {
                         const totes = sr.tote_ids || [];
-                        totalTotes += Array.isArray(totes) ? totes.length : 1;
+                        totalTotes += (Array.isArray(totes) && totes.length > 0) ? totes.length : 1;
                     });
 
                     const totalBookings = Math.max(matchedRequests.length, matchedReservations.length);
@@ -3181,7 +3199,7 @@
             
             const matchedRequests = (accessRequests || []).filter(r => {
                 const targetMatch = r.target_date === dateYmd;
-                const slotMatch = !r.time_slot || r.time_slot.toLowerCase().includes(slotId.split(' ')[0].toLowerCase());
+                const slotMatch = matchesSlotCategory(r.time_slot, slotId);
                 return targetMatch && slotMatch;
             });
 

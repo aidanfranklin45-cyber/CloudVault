@@ -1827,7 +1827,11 @@
 
                         let html = '';
                         for (let r = 1; r <= numRooms; r++) {
-                            const roomRes = reservations.filter((_, idx) => (idx % numRooms) + 1 === r);
+                            const roomRes = reservations.filter(res => {
+                                const groupKey = `${res.uid}::${res.target_date || 'unscheduled'}::${res.time_slot || '09:00 AM - 12:00 PM'}::${res.id || 'default'}`;
+                                const assigned = typeof getAssignedRoom === 'function' ? getAssignedRoom(groupKey, numRooms) : ((res.id ? res.id.charCodeAt(0) : 1) % numRooms + 1);
+                                return assigned === r || (r === 1 && res.is_currently_staged);
+                            });
                             const isOccupied = roomRes.length > 0;
 
                             html += `
@@ -1843,7 +1847,7 @@
                                     </div>
                                 </div>
                                 <span class="text-[10px] font-mono font-bold px-2.5 py-1 rounded-xl border ${isOccupied ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-gray-500 bg-gray-900 border-gray-800'}">
-                                    ${isOccupied ? 'RESERVED' : 'VACANT'}
+                                    ${isOccupied ? 'RESERVED / STAGED' : 'VACANT'}
                                 </span>
                             </div>
 
@@ -1856,8 +1860,8 @@
                                                 <span class="text-[10px] font-mono text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/30">PIN: ${res.pin || '—'}</span>
                                             </div>
                                             <div class="flex items-center justify-between text-[11px] font-mono text-gray-400">
-                                                <span><i data-lucide="clock" class="w-3 h-3 text-amber-400 inline"></i> ${res.time_slot}</span>
-                                                <span class="text-emerald-400 font-bold">${res.tote_count} Tote(s)</span>
+                                                <span><i data-lucide="calendar" class="w-3 h-3 text-blue-400 inline"></i> ${res.target_date || 'Scheduled'} (${res.time_slot})</span>
+                                                <span class="text-emerald-400 font-bold">${res.tote_count} Tote(s) ${res.is_currently_staged ? '• Ready in Room' : ''}</span>
                                             </div>
                                         </div>
                                     `).join('')}
