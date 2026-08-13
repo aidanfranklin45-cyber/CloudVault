@@ -3403,8 +3403,8 @@
                 // ── Tab 1: NEW INTAKE CARDS ──
                 const activateItems = (allItems || []).filter(i => 
                     i.activated === false || 
-                    (i.status === 'pending-stage' && (!i.label || i.label.toLowerCase().includes('empty'))) ||
-                    (i.status === 'stored' && i.activated !== true)
+                    i.status === 'intake' || 
+                    (i.location_code && i.location_code.startsWith('INTAKE'))
                 );
                 document.getElementById('wtab-activate-count').textContent = activateItems.length;
                 const printIntakeBadge = document.getElementById('print-intake-count');
@@ -3640,7 +3640,8 @@
                                         const sLabel = isValetItem ? `${originPrefix} &bull; Pending Driver Load` : `${originPrefix} &bull; Pending Staging`;
                                         const sColor = isValetItem ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
                                         const itemLabel = t.label ? ` &bull; ${escapeHtml(t.label)}` : '';
-                                        const locTag = t.location_code ? ` 📍 ${t.location_code}` : ' 📍 INTAKE-PROCESSING';
+                                        const rawLoc = t.location_code && t.location_code !== 'CUSTOMER-PREMISES' ? t.location_code : (isIntakeProcessingTote ? 'INTAKE-PROCESSING' : 'VAULT-BAY-01');
+                                        const locTag = ` 📍 ${rawLoc}`;
                                         return `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                             <div>
                                                 <span class="text-white font-bold">${t.tote_code}</span>
