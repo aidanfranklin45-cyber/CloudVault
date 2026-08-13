@@ -1868,6 +1868,11 @@
 
             if (!facId) return;
 
+            // Clear target location lock when switching facilities to prevent cross-facility target leaks
+            if (typeof clearTargetLocationLock === 'function') {
+                clearTargetLocationLock();
+            }
+
             localStorage.setItem('cloudvault_selected_facility', facId);
             window.currentSelectedFacilityId = facId;
 
