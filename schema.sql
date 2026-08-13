@@ -2280,6 +2280,19 @@ BEGIN
     v_next_status := 'staged'::public.inventory_status;
     v_next_location_code := COALESCE(p_target_staging_code, 'STAGE-BAY-A1');
     v_next_location_type := 'staging';
+
+    -- Physical Staging Room Occupancy Check: Prevent staging into a room with totes for another customer!
+    IF p_target_staging_code IS NOT NULL AND p_target_staging_code <> '' THEN
+      IF EXISTS (
+        SELECT 1 FROM public.inventory
+        WHERE location_code = p_target_staging_code
+          AND status IN ('staged', 'pending-stage')
+          AND id <> v_item.id
+          AND uid <> v_item.uid
+      ) THEN
+        RAISE EXCEPTION 'Staging Room Conflict: Room % is currently occupied by active totes for another customer! Please select a vacant room.', p_target_staging_code;
+      END IF;
+    END IF;
   END IF;
 
   UPDATE public.inventory

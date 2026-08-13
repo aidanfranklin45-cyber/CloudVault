@@ -3692,6 +3692,9 @@
                         <p class="text-xs text-gray-500 font-mono">No self-serve totes currently waiting for customer pickup.</p>
                     </div>`;
                 } else {
+                    const numRooms = Number(currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 3);
+                    const usedRoomNums = new Set();
+
                     bodyCustomer.innerHTML = Object.entries(stagedCardGroups).map(([groupKey, group]) => {
                         const { uid, target_date, time_slot, pin, totes } = group;
                         const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0, 8)}`;
@@ -3703,9 +3706,17 @@
                         const dateStr = reqDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
                         const slotStr = time_slot;
 
-                        const numRooms = Number(currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 3);
-                        // Seed room calculation with groupKey so distinct schedule windows get non-conflicting staging rooms
-                        const assignedRoomNum = getAssignedRoom(groupKey, numRooms);
+                        // Seed room calculation with groupKey, and fall back to next vacant room if candidate room is occupied by another card
+                        let assignedRoomNum = getAssignedRoom(groupKey, numRooms);
+                        if (usedRoomNums.has(assignedRoomNum) && usedRoomNums.size < numRooms) {
+                            for (let r = 1; r <= numRooms; r++) {
+                                if (!usedRoomNums.has(r)) {
+                                    assignedRoomNum = r;
+                                    break;
+                                }
+                            }
+                        }
+                        usedRoomNums.add(assignedRoomNum);
                         const toteIdsJson = JSON.stringify(totes.map(t => t.id)).replace(/"/g, '&quot;');
 
                         return `
