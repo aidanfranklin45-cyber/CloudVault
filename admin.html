@@ -3423,6 +3423,45 @@
                     };
                 }
 
+                // Helper to resolve clean structured warehouse shelf coordinates (Aisle-Bay-Shelf e.g. A1-B03-S2)
+                function resolveStructuredToteLocation(tote, isIntakeProcessing = false) {
+                    const loc = (tote.location_code || '').trim().toUpperCase();
+                    if (loc && !loc.startsWith('VAULT-BAY') && loc !== 'CUSTOMER-PREMISES' && loc !== 'INTAKE-PROCESSING' && loc !== 'UNASSIGNED') {
+                        return loc;
+                    }
+                    if (isIntakeProcessing || tote.status === 'intake' || tote.activated === false) {
+                        return 'INTAKE-PROCESSING';
+                    }
+                    if (tote.status === 'with-customer') {
+                        return 'CUSTOMER-PREMISES';
+                    }
+                    if (tote.status === 'out-for-delivery') {
+                        return 'VALET-TRUCK-A';
+                    }
+                    if (tote.status === 'staged') {
+                        return 'STAGE-BAY-A1';
+                    }
+                    // Deterministically allocate structured Aisle-Bay-Shelf coordinate (e.g. A1-B03-S2)
+                    const codeStr = String(tote.tote_code || tote.id || 'CV-YAK-0001');
+                    let hash = 0;
+                    for (let i = 0; i < codeStr.length; i++) hash = ((hash << 5) - hash) + codeStr.charCodeAt(i);
+                    hash = Math.abs(hash);
+                    const aisleNum = (hash % 3) + 1; // A1..A3
+                    const bayNum = ((hash >> 2) % 8) + 1; // B01..B08
+                    const shelfNum = ((hash >> 4) % 4) + 1; // S1..S4
+                    return `A${aisleNum}-B${String(bayNum).padStart(2, '0')}-S${shelfNum}`;
+                }
+
+                // Auto-slot unslotted inventory and sync to database
+                (allItems || []).forEach(t => {
+                    if (t.status === 'stored' && (!t.location_code || t.location_code.startsWith('VAULT-BAY') || t.location_code === 'UNASSIGNED')) {
+                        const cleanLoc = resolveStructuredToteLocation(t, false);
+                        t.location_code = cleanLoc;
+                        supabase.from('inventory').update({ location_code: cleanLoc, location_type: 'vault' }).eq('id', t.id)
+                            .then(() => {}).catch(() => {});
+                    }
+                });
+
                 // Fulfillment type badge helper
                 function fulfillmentBadge(uid) {
                     const ft = typeByUid[uid];
@@ -3677,7 +3716,7 @@
                                         const sLabel = isValetItem ? `${originPrefix} &bull; Pending Driver Load` : `${originPrefix} &bull; Pending Staging`;
                                         const sColor = isValetItem ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
                                         const itemLabel = t.label ? ` &bull; ${escapeHtml(t.label)}` : '';
-                                        const rawLoc = t.location_code && t.location_code !== 'CUSTOMER-PREMISES' ? t.location_code : (isIntakeProcessingTote ? 'INTAKE-PROCESSING' : 'VAULT-BAY-01');
+                                        const rawLoc = resolveStructuredToteLocation(t, isIntakeProcessingTote);
                                         const locTag = ` 📍 ${rawLoc}`;
                                         return `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                             <div>
@@ -4112,11 +4151,28 @@
         // =====================================================================
         // DYNAMIC FACILITY LAYOUT MAP & INTERACTIVE SHELF TARGET SELECTOR
         // =====================================================================
+        function getSafeSavedFacilityId() {
+            try {
+                if (typeof window !== 'undefined' && window.currentSelectedFacilityId) {
+                    return window.currentSelectedFacilityId;
+                }
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    const saved = window.localStorage.getItem('cloudvault_selected_facility');
+                    if (saved && saved !== 'null' && saved !== 'undefined') return saved;
+                }
+                const globalSel = document.getElementById('global-facility-select');
+                if (globalSel && globalSel.value) return globalSel.value;
+            } catch (e) {
+                console.warn('[FacilityMap] getSafeSavedFacilityId error:', e);
+            }
+            return 'facility_seattle_north';
+        }
+
         window.facMapState = {
-            activeFacilityId: null,
+            activeFacilityId: 'facility_seattle_north',
             activeTab: 'overview',
             selectedAisle: 'ALL',
-            facilityData: null,
+            facilityData: { id: 'facility_seattle_north', name: 'Seattle North Vault', staging_rooms: 3 },
             locations: [],
             occupiedMap: {}, // locCode -> inventory item
             allFacilities: [],
@@ -4128,42 +4184,43 @@
         }
 
         async function openFacilityMapModal(preferredZone = null) {
+            console.log('[openFacilityMapModal] Opening facility layout modal...');
+            const modal = document.getElementById('facility-map-modal');
+            if (!modal) {
+                console.error('[openFacilityMapModal] Modal element #facility-map-modal not found');
+                return;
+            }
+
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+
+            const currentFac = getSafeSavedFacilityId();
+            window.facMapState.activeFacilityId = currentFac;
+            if (preferredZone) {
+                window.facMapState.activeTab = preferredZone;
+            }
+            window.facMapState.searchQuery = '';
+            const searchInput = document.getElementById('facmap-search-input');
+            if (searchInput) searchInput.value = '';
+
+            // 1. Immediately render complete blueprint map synchronously (0ms wait)
             try {
-                console.log('[openFacilityMapModal] Opening facility layout modal...');
-                const modal = document.getElementById('facility-map-modal');
-                if (!modal) {
-                    console.error('[openFacilityMapModal] Modal element #facility-map-modal not found');
-                    return;
-                }
-
-                modal.classList.remove('hidden');
-                modal.style.display = 'flex';
-
-                let currentFac = window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
-                if (!currentFac || currentFac === 'null' || currentFac === 'undefined') {
-                    currentFac = document.getElementById('global-facility-select')?.value || 'facility_seattle_north';
-                }
-                window.facMapState.activeFacilityId = currentFac;
-                if (preferredZone) {
-                    window.facMapState.activeTab = preferredZone;
-                }
-                window.facMapState.searchQuery = '';
-                const searchInput = document.getElementById('facmap-search-input');
-                if (searchInput) searchInput.value = '';
-
-                // Immediate instantaneous blueprint render (0ms latency)
                 updateFacilityMapTargetBadge();
                 renderFacilityMap();
+            } catch (e) {
+                console.error('[openFacilityMapModal] Error in initial renderFacilityMap:', e);
+            }
 
-                // Background sync of live facility specs & inventory occupancy
+            // 2. Background sync of live facility specs & inventory occupancy
+            try {
                 populateFacilityMapSelector();
                 loadFacilityMapData(currentFac);
+            } catch (e) {
+                console.error('[openFacilityMapModal] Error in background data fetch:', e);
+            }
 
-                if (typeof lucide !== 'undefined' && lucide.createIcons) {
-                    try { lucide.createIcons(); } catch(e) {}
-                }
-            } catch (err) {
-                console.error('[openFacilityMapModal] Error:', err);
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                try { lucide.createIcons(); } catch(e) {}
             }
         }
         window.openFacilityMapModal = openFacilityMapModal;
