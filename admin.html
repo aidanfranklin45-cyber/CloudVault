@@ -3053,23 +3053,20 @@
                     }
                 });
 
-                // Fetch reservations & access requests for this week range at facility
-                const [resResult, reqResult] = await Promise.all([
-                    supabase.from('staging_reservations')
-                        .select('*, users!uid(name)')
-                        .or(`facility_id.eq.${facId},facility_id.is.null`)
-                        .gte('start_time', `${startDateYmd}T00:00:00Z`)
-                        .lte('start_time', `${endDateYmd}T23:59:59Z`),
-                    supabase.from('access_requests')
-                        .select('*, users!uid(name)')
-                        .or(`facility_id.eq.${facId},facility_id.is.null`)
-                        .gte('target_date', startDateYmd)
-                        .lte('target_date', endDateYmd)
-                        .neq('status', 'cancelled')
-                ]);
+                // Fetch access requests for this week range at facility
+                const { data: reqs, error: reqErr } = await supabase.from('access_requests')
+                    .select('*, users!uid(name)')
+                    .or(`facility_id.eq.${facId},facility_id.is.null`)
+                    .gte('target_date', startDateYmd)
+                    .lte('target_date', endDateYmd)
+                    .neq('status', 'cancelled');
 
-                const reservations = resResult.data || [];
-                const accessRequests = reqResult.data || [];
+                if (reqErr) {
+                    console.warn('[Scheduling Calendar] Access requests query notice:', reqErr.message);
+                }
+
+                const accessRequests = reqs || [];
+                const reservations = [];
 
                 calendarLoadedData = { days, reservations, accessRequests, facId };
                 renderCalendarHeatmapGrid();
