@@ -321,13 +321,6 @@
                         title="Role is locked to your live session credentials">🔒 LIVE</span>
                 </div>
 
-                <!-- Seed Database Trigger -->
-                <button onclick="triggerSeedDb()" id="seed-btn"
-                    class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-emerald-900/20">
-                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-                    <span>Seed Supabase</span>
-                </button>
-
                 <!-- Profile summary -->
                 <div class="flex items-center space-x-3 pl-2 border-l border-gray-800">
                     <div id="user-avatar"
@@ -348,22 +341,12 @@
         </div>
         <!-- Operational Telemetry & SLA Sub-Header Bar -->
         <div
-            class="bg-gray-950/80 border-t border-b border-gray-800/80 px-4 sm:px-6 lg:px-8 py-2 text-xs flex flex-wrap justify-between items-center font-mono gap-2">
+            class="bg-gray-950/80 border-t border-b border-gray-800/80 px-4 sm:px-6 lg:px-8 py-2.5 text-xs flex flex-wrap justify-between items-center font-mono gap-3">
             <div class="flex items-center space-x-3 text-gray-400">
-                <span class="flex items-center text-blue-400 font-bold mr-1">
+                <span class="flex items-center text-blue-400 font-bold tracking-wider text-xs">
                     <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping mr-2"></span>
                     LOGISTICS TELEMETRY
                 </span>
-                <div class="flex items-center space-x-2" id="admin-billing-audit-actions">
-                    <button onclick="runInvoiceBackfillAndSync()"
-                        class="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer min-h-[32px]">
-                        <span>🔄 System Billing Audit &amp; Sync</span>
-                    </button>
-                    <button onclick="triggerMonthlyAutopayBilling()"
-                        class="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer min-h-[32px]">
-                        <span>⚡ Trigger Monthly Autopay Billing</span>
-                    </button>
-                </div>
             </div>
 
             <!-- Daily 6:00 PM Cutoff SLA Countdown Widget -->
