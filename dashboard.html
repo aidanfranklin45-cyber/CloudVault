@@ -1515,10 +1515,13 @@
             };
 
             // ── 1. Activation / Intake Flow Cards ──────────────────────────────
-            const isUnactivatedInventory = (currentInventory || []).some(i => i.activated === false || !i.label || i.label.toLowerCase().includes('empty'));
-            const isNewCustomerOnboarding = currentProfile && currentProfile.onboarding_status !== 'active';
+            // Only show activation cards if there is an explicit active request or unactivated totes currently in intake/staging
+            const pendingUnactivatedItems = (currentInventory || []).filter(i => 
+                i.activated === false && ['pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery'].includes(i.status)
+            );
+            const isNewCustomerOnboarding = currentProfile && currentProfile.onboarding_status !== 'active' && currentProfile.onboarding_status !== 'completed';
 
-            if (activationReqs.length > 0 || isUnactivatedInventory || (isNewCustomerOnboarding && (stagingRoomItems.length > 0 || valetItems.length > 0))) {
+            if (activationReqs.length > 0 || pendingUnactivatedItems.length > 0 || (isNewCustomerOnboarding && (stagingRoomItems.length > 0 || valetItems.length > 0))) {
                 const isValetActivation = activationReqs.some(r => r.fulfillment_type === 'valet_delivery');
                 const isStagedReady = stagingRoomItems.length > 0 || (currentInventory || []).some(i => i.status === 'staged' || i.status === 'pending-stage');
 
