@@ -1620,8 +1620,8 @@
                             { label: '3. With Customer', sub: isOutForDelivery ? 'Arriving soon' : dateStr, done: false, active: false },
                             { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
                         ],
-                        totes: valetItems.length > 0 ? valetItems : currentInventory,
-                        pinBlock: buildValetBlock(timeStr, dateStr),
+                        totes: valetReqs.length > 0 ? (valetItems.length > 0 ? valetItems : currentInventory) : currentInventory,
+                        pinBlock: buildValetBlock(timeStr, dateStr, valetReqs[0]),
                     }));
                 }
             }
@@ -1633,6 +1633,51 @@
 
             section.classList.remove('hidden');
             list.innerHTML = cards.join('');
+        }
+
+        function buildLiveDriverTrackingBlock(req) {
+            if (!req) return '';
+            const driverName = req.driver_name || 'CloudVault Driver';
+            const vehicle = req.vehicle_info || 'Valet Delivery Van';
+            const trkStatus = req.tracking_status || 'en_route';
+            const driverPhone = req.driver_phone || '(206) 555-0192';
+
+            let etaText = "Arriving Soon";
+            if (req.estimated_arrival_at) {
+                const diffMs = new Date(req.estimated_arrival_at).getTime() - Date.now();
+                const diffMin = Math.max(1, Math.round(diffMs / 60000));
+                etaText = `Estimated Arrival in ~${diffMin} min`;
+            }
+
+            return `
+                <div class="mt-4 bg-gray-900/90 border border-amber-500/30 rounded-2xl p-4 space-y-3 shadow-lg">
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-2.5">
+                        <div class="flex items-center space-x-2">
+                            <span class="relative flex h-3 w-3">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                            </span>
+                            <span class="text-xs font-bold text-white uppercase tracking-wider">Live Valet Driver Tracking</span>
+                        </div>
+                        <span class="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full uppercase">${trkStatus.replace('_', ' ')}</span>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-3 text-xs">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-300 font-bold flex items-center justify-center text-base">
+                                🚚
+                            </div>
+                            <div>
+                                <p class="font-extrabold text-white">${escapeHtml(driverName)}</p>
+                                <p class="text-[11px] text-gray-400 font-mono">${escapeHtml(vehicle)}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs font-extrabold text-amber-400 font-mono">${etaText}</p>
+                            <a href="tel:${driverPhone}" class="text-[10px] text-blue-400 hover:underline font-bold">📞 ${escapeHtml(driverPhone)}</a>
+                        </div>
+                    </div>
+                </div>`;
         }
 
         // ── Flow card builder helpers ─────────────────────────────────────────
@@ -1715,13 +1760,15 @@
             </div>`;
         }
 
-        function buildValetBlock(timeStr, dateStr) {
+        function buildValetBlock(timeStr, dateStr, req) {
+            const liveBlock = buildLiveDriverTrackingBlock(req);
             return `
             <div class="bg-gradient-to-r from-blue-900 to-indigo-900 border border-blue-700/60 rounded-2xl p-4 text-center space-y-1">
                 <p class="text-[10px] font-black text-amber-300 uppercase tracking-widest">🚚 Valet Delivery Window</p>
                 <p class="text-xl font-black text-white">${timeStr}</p>
                 <p class="text-xs text-blue-200">Driver scheduled for ${dateStr}</p>
-            </div>`;
+            </div>
+            ${liveBlock}`;
         }
 
         function renderActiveRequests() {

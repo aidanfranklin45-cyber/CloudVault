@@ -294,6 +294,13 @@ CREATE TABLE public.access_requests (
 ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS surge_fee NUMERIC(10,2) DEFAULT 0.00;
 ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS surge_tier TEXT DEFAULT 'standard';
 ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS time_slot TEXT DEFAULT '09:00 AM - 12:00 PM';
+ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS driver_name TEXT DEFAULT NULL;
+ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS driver_phone TEXT DEFAULT NULL;
+ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS vehicle_info TEXT DEFAULT NULL;
+ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS driver_lat NUMERIC(10,6) DEFAULT NULL;
+ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS driver_lng NUMERIC(10,6) DEFAULT NULL;
+ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS estimated_arrival_at TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS tracking_status TEXT DEFAULT 'pending';
 
 -- Staging Reservations
 CREATE TABLE public.staging_reservations (

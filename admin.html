@@ -5453,6 +5453,19 @@
             }
         }
 
+        async function triggerCustomerBillingAudit(userId) {
+            if (!confirm("Execute billing audit (scan unreturned totes @ $15/tote and compute late interest)?")) return;
+            try {
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.processUnreturnedToteCharges === 'function') {
+                    const res = await window.CloudVaultBilling.processUnreturnedToteCharges(userId);
+                    alert(`Billing Audit Complete! New unreturned tote fee invoices issued: ${res.count || 0}`);
+                    loadCustomerBillingHistory(userId);
+                }
+            } catch (e) {
+                alert("Audit failed: " + e.message);
+            }
+        }
+
         async function triggerOneClickRefund(invoiceId, maxAmount) {
             const safeMax = Number(maxAmount) || 0;
             const amountStr = prompt(`Enter refund amount for Invoice #${invoiceId.substring(0, 8)} (Max: $${safeMax.toFixed(2)}):`, safeMax.toFixed(2));

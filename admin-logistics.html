@@ -618,23 +618,47 @@
                                 <p class="text-[10px] text-gray-500 font-mono">Hub operating in stationary intake mode in ${activeCity}.</p>
                             </div>`;
                     } else {
-                        stopsListEl.innerHTML = stops.map((s, idx) => {
-                            const name = s.users?.name || (s.uid ? `Customer ${s.uid.substring(0, 6)}` : 'Valet Customer');
-                            const zip = s.users?.zip || s.users?.active_zone || 'Local Zone';
-                            const slot = s.time_slot || '09:00 AM - 12:00 PM';
-                            const itemNum = (s.requested_items || s.requested_tote_codes || []).length || 1;
+                        stopsListEl.innerHTML = (requests || []).map((r, idx) => {
+                            const name = r.users?.name || `Customer ${(r.uid || '').substring(0, 6)}`;
+                            const zip = r.users?.zip || r.users?.active_zone || 'Local Zone';
+                            const slot = r.time_slot || '09:00 AM - 12:00 PM';
+                            const itemNum = (r.requested_items || r.requested_tote_codes || []).length || 1;
+                            const driver = r.driver_name ? `${r.driver_name} (${r.vehicle_info || 'Van'})` : 'No Driver Assigned';
+                            const trkStatus = r.tracking_status || r.status || 'pending';
+
                             return `
-                                <div class="bg-gray-950 border border-gray-850 p-3 rounded-2xl flex items-center justify-between hover:border-amber-500/40 transition">
-                                    <div class="flex items-center space-x-3">
-                                        <div class="w-7 h-7 rounded-xl bg-amber-600/20 text-amber-400 font-bold text-xs flex items-center justify-center border border-amber-500/30 font-mono">
-                                            #${idx + 1}
+                                <div class="bg-gray-950 border border-gray-850 p-4 rounded-2xl space-y-3 hover:border-amber-500/40 transition">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-8 h-8 rounded-xl bg-amber-600/20 text-amber-400 font-bold text-xs flex items-center justify-center border border-amber-500/30 font-mono">
+                                                #${idx + 1}
+                                            </div>
+                                            <div>
+                                                <h5 class="text-xs font-bold text-white">${escapeHtml(name)}</h5>
+                                                <p class="text-[10px] font-mono text-gray-400">ZIP ${zip} &bull; ${slot}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h5 class="text-xs font-bold text-white">${name}</h5>
-                                            <p class="text-[10px] font-mono text-gray-400">ZIP ${zip} &bull; ${slot}</p>
-                                        </div>
+                                        <span class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-xl border border-emerald-500/20">${itemNum} Tote(s)</span>
                                     </div>
-                                    <span class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">${itemNum} Tote(s)</span>
+
+                                    <!-- Driver Info Bar -->
+                                    <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800 text-[11px] font-mono flex items-center justify-between">
+                                        <span class="text-gray-300 flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5 text-amber-400"></i> ${escapeHtml(driver)}</span>
+                                        <span class="text-indigo-400 font-bold uppercase text-[10px] bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">${trkStatus}</span>
+                                    </div>
+
+                                    <!-- Action Buttons -->
+                                    <div class="flex gap-2 text-xs">
+                                        <button onclick="assignValetDriver('${r.id}')" class="flex-1 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 py-1.5 rounded-xl font-bold transition flex items-center justify-center gap-1 cursor-pointer">
+                                            <i data-lucide="navigation" class="w-3 h-3"></i> Dispatch Driver
+                                        </button>
+                                        <button onclick="updateDriverTrackingState('${r.id}', 'arrived')" class="bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded-xl font-bold transition cursor-pointer">
+                                            Arrived
+                                        </button>
+                                        <button onclick="updateDriverTrackingState('${r.id}', 'completed')" class="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl font-bold transition cursor-pointer">
+                                            Complete
+                                        </button>
+                                    </div>
                                 </div>`;
                         }).join('');
                     }
@@ -653,6 +677,46 @@
                 throw err;
             }
         }
+
+        window.assignValetDriver = async function(reqId) {
+            const driverName = prompt("Driver Name:", "Alex Rivera") || "Alex Rivera";
+            const driverPhone = prompt("Driver Phone:", "(206) 555-0192") || "(206) 555-0192";
+            const vehicleInfo = prompt("Vehicle & License Plate:", "Sprinter Van #42 • WA 7XYZ89") || "Sprinter Van #42 • WA 7XYZ89";
+            const etaMin = parseInt(prompt("ETA in minutes:", "15"), 10) || 15;
+
+            const etaTime = new Date(Date.now() + etaMin * 60 * 1000).toISOString();
+
+            try {
+                const { error } = await supabase.from('access_requests').update({
+                    driver_name: driverName,
+                    driver_phone: driverPhone,
+                    vehicle_info: vehicleInfo,
+                    tracking_status: 'en_route',
+                    estimated_arrival_at: etaTime,
+                    status: 'out-for-delivery'
+                }).eq('id', reqId);
+
+                if (error) throw error;
+                alert(`Driver ${driverName} assigned & en route! (ETA: ${etaMin} min)`);
+                onGlobalFacilityChange(activeFacilityId);
+            } catch (e) {
+                alert("Failed to assign driver: " + e.message);
+            }
+        };
+
+        window.updateDriverTrackingState = async function(reqId, status) {
+            try {
+                const { error } = await supabase.from('access_requests').update({
+                    tracking_status: status,
+                    status: status === 'completed' ? 'completed' : 'out-for-delivery'
+                }).eq('id', reqId);
+                if (error) throw error;
+                alert(`Valet status updated to ${status.toUpperCase()}`);
+                onGlobalFacilityChange(activeFacilityId);
+            } catch (e) {
+                alert("Update failed: " + e.message);
+            }
+        };
     </script>
 </body>
 </html>

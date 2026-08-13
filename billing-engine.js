@@ -1377,6 +1377,83 @@
     /**
      * Closes the printable invoice modal.
      */
+    /**
+     * Scans for cancelled subscriptions past their service end date with unreturned totes
+     * and generates $15.00 per tote unreturned tote invoices.
+     */
+    processUnreturnedToteCharges: async function (targetUserId) {
+      try {
+        const sb = global.supabase;
+        if (!sb) return { success: false, error: 'Supabase missing' };
+
+        let query = sb.from('subscriptions').select('*, users!uid(name, email, zip_code)');
+        if (targetUserId) {
+          query = query.eq('uid', targetUserId);
+        }
+        const { data: subs, error: subErr } = await query;
+        if (subErr) throw subErr;
+
+        let createdCount = 0;
+        const now = new Date();
+
+        for (const sub of (subs || [])) {
+          const isCancelled = sub.status === 'cancelled' || (sub.cancel_at && new Date(sub.cancel_at) <= now);
+          if (!isCancelled) continue;
+
+          // Check if customer holds active totes
+          const { count: unreturnedCount } = await sb.from('inventory')
+            .select('*', { count: 'exact', head: true })
+            .eq('uid', sub.uid)
+            .in('status', ['stored', 'with_customer']);
+
+          if (unreturnedCount > 0) {
+            // Check if unreturned invoice created in last 30d
+            const { data: recentInvoices } = await sb.from('invoices')
+              .select('id')
+              .eq('uid', sub.uid)
+              .eq('invoice_type', 'unreturned_tote_fee')
+              .gte('created_at', new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString());
+
+            if (!recentInvoices || recentInvoices.length === 0) {
+              const toteBase = unreturnedCount * 15.00;
+              const userObj = sub.users || {};
+              await this.createInvoiceRecord({
+                uid: sub.uid,
+                customer_name: userObj.name || 'CloudVault Customer',
+                customer_email: userObj.email || null,
+                facility_id: sub.facility_id,
+                invoice_type: 'unreturned_tote_fee',
+                payment_status: 'overdue',
+                subtotal: toteBase,
+                total_amount: toteBase,
+                zip_code: userObj.zip_code || null,
+                notes: `Unreturned Tote Charge (${unreturnedCount} tote(s) @ $15.00/tote)`,
+                line_items: [
+                  { description: 'Unreturned Storage Tote Charge', qty: unreturnedCount, unit_price: 15.00, amount: toteBase }
+                ]
+              });
+              await sb.from('users').update({ is_overdue: true }).eq('id', sub.uid);
+              createdCount++;
+            }
+          }
+        }
+        return { success: true, count: createdCount };
+      } catch (e) {
+        console.error('[CloudVaultBilling] processUnreturnedToteCharges failed:', e);
+        return { success: false, error: e.message };
+      }
+    },
+
+    /**
+     * Computes accrued interest (10% p.a. daily rate) on overdue unpaid balances.
+     */
+    calculateAccruedInterest: function (unpaidAmount, daysOverdue, annualRate = 0.10) {
+      if (!unpaidAmount || unpaidAmount <= 0 || !daysOverdue || daysOverdue <= 0) return 0.00;
+      const dailyRate = annualRate / 365;
+      const interest = unpaidAmount * dailyRate * daysOverdue;
+      return Math.round(interest * 100) / 100;
+    },
+
     closePrintableInvoiceModal: function () {
       const modalEl = document.getElementById('printable-invoice-modal');
       if (modalEl) {
