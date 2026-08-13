@@ -1228,10 +1228,10 @@
         ];
       }
 
-      let statusBadgeClasses = 'bg-emerald-100 text-emerald-800 border-emerald-300';
-      if (status === 'PENDING') statusBadgeClasses = 'bg-amber-100 text-amber-800 border-amber-300';
-      else if (status === 'OVERDUE' || status === 'FAILED') statusBadgeClasses = 'bg-red-100 text-red-800 border-red-300';
-      else if (status === 'REFUNDED') statusBadgeClasses = 'bg-rose-100 text-rose-800 border-rose-300';
+      let statusBadgeClasses = 'bg-emerald-500/10 text-emerald-700 border-emerald-300';
+      if (status === 'PENDING') statusBadgeClasses = 'bg-amber-500/10 text-amber-700 border-amber-300';
+      else if (status === 'OVERDUE' || status === 'FAILED') statusBadgeClasses = 'bg-red-500/10 text-red-700 border-red-300';
+      else if (status === 'REFUNDED') statusBadgeClasses = 'bg-rose-500/10 text-rose-700 border-rose-300';
 
       const formatMoney = (val) => {
         const n = Number(val) || 0;
@@ -1239,127 +1239,137 @@
         return `$${n.toFixed(2)}`;
       };
 
-      const lineItemsRowsHtml = lineItems.map(item => {
+      const lineItemsRowsHtml = lineItems.map((item, idx) => {
         const desc = item.description || item.name || 'Storage / Service Charge';
         const qty = Number(item.qty || item.quantity || 1);
         const rate = Number(item.unit_price || item.unitPrice || item.rate || item.amount || 0);
         const amt = Number(item.amount || (qty * rate));
+        const rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
         return `
-          <tr class="border-b border-gray-100 text-sm">
-            <td class="py-3 px-4 text-gray-800 font-medium">${desc}</td>
-            <td class="py-3 px-4 text-center text-gray-600">${qty}</td>
-            <td class="py-3 px-4 text-right text-gray-600">${formatMoney(rate)}</td>
-            <td class="py-3 px-4 text-right font-bold text-gray-900">${formatMoney(amt)}</td>
+          <tr class="border-b border-slate-100 ${rowBg} text-xs font-medium text-slate-800 transition">
+            <td class="py-3.5 px-4 font-semibold text-slate-900">${desc}</td>
+            <td class="py-3.5 px-4 text-center font-mono text-slate-600">${qty}</td>
+            <td class="py-3.5 px-4 text-right font-mono text-slate-600">${formatMoney(rate)}</td>
+            <td class="py-3.5 px-4 text-right font-mono font-extrabold text-slate-900">${formatMoney(amt)}</td>
           </tr>
         `;
       }).join('');
 
       modalEl.innerHTML = `
-        <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-auto border border-gray-100 overflow-hidden text-gray-800 my-8">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-auto border border-slate-200/80 overflow-hidden text-slate-800 my-8">
+          <!-- Top Gradient Accent Bar -->
+          <div class="h-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600"></div>
+
           <!-- Printable Invoice Header -->
-          <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-900 p-6 sm:p-8 text-white relative">
-            <div class="flex justify-between items-start flex-wrap gap-4">
-              <div>
+          <div class="p-6 sm:p-8 bg-white border-b border-slate-100">
+            <div class="flex justify-between items-start flex-wrap gap-6">
+              <!-- Logo & Brand Header -->
+              <div class="space-y-2">
                 <div class="flex items-center space-x-3">
-                  <div class="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center font-black text-xl text-blue-300">
-                    CV
-                  </div>
+                  <img src="logo.png" alt="CloudVault Logo" class="w-10 h-10 object-contain rounded-xl shadow-xs" />
                   <div>
-                    <h1 class="text-2xl font-extrabold tracking-tight">CloudVault</h1>
-                    <p class="text-xs text-blue-200 uppercase tracking-widest font-semibold">Storage &amp; Logistics Solutions</p>
+                    <h1 class="text-2xl font-black text-slate-900 tracking-tight leading-none">CloudVault</h1>
+                    <span class="text-[9px] font-extrabold text-blue-600 uppercase tracking-[0.2em] block mt-1">Storage &amp; Logistics Solutions</span>
                   </div>
                 </div>
+                <p class="text-[11px] text-slate-500 font-mono">CloudVault Storage Inc. &bull; support@cloudvault.io</p>
               </div>
-              <div class="text-right">
-                <span class="inline-block px-3 py-1 text-xs font-bold rounded-full border ${statusBadgeClasses} mb-1">
+
+              <!-- Invoice Status & Number Meta -->
+              <div class="text-right space-y-1">
+                <span class="inline-block px-3 py-1 text-xs font-extrabold rounded-full border ${statusBadgeClasses} font-mono tracking-wider">
                   ${status}
                 </span>
-                <h2 class="text-xl font-bold tracking-wider">${invoiceNum}</h2>
-                <p class="text-xs text-slate-300">Issued: ${createdAt}</p>
+                <h2 class="text-xl font-black font-mono text-slate-900 tracking-wider">${invoiceNum}</h2>
+                <p class="text-xs text-slate-500 font-mono">Issued: ${createdAt}</p>
               </div>
             </div>
           </div>
 
           <!-- Body Container -->
           <div class="p-6 sm:p-8 space-y-6">
-            <!-- Customer & Transaction Details -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50 p-5 rounded-2xl border border-slate-100 text-xs">
-              <div>
-                <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">Billed To</span>
-                <p class="font-bold text-sm text-slate-900">${customerName}</p>
-                <p class="text-slate-600">${customerEmail}</p>
-                <p class="text-slate-500 mt-1"><span class="font-semibold text-slate-700">Facility Hub:</span> ${facilityId}</p>
+            <!-- Customer & Payment Details Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 bg-slate-50/80 p-5 rounded-2xl border border-slate-200/70 text-xs">
+              <div class="space-y-1">
+                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Billed To</span>
+                <p class="font-extrabold text-sm text-slate-900">${customerName}</p>
+                <p class="text-slate-600 font-mono text-[11px]">${customerEmail}</p>
+                <p class="text-slate-500 pt-1"><span class="font-semibold text-slate-700">Facility Hub:</span> ${facilityId}</p>
               </div>
-              <div>
-                <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">Payment Information</span>
+              <div class="space-y-1">
+                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Payment Information</span>
                 <p class="font-semibold text-slate-800"><span class="text-slate-500">Method:</span> ${paymentMethod}</p>
-                <p class="text-slate-600"><span class="text-slate-500">Txn Ref:</span> ${txnRef}</p>
+                <p class="text-slate-600 text-[11px]"><span class="text-slate-500">Txn Ref:</span> <span class="font-mono bg-slate-200/70 px-1.5 py-0.5 rounded text-slate-800">${txnRef}</span></p>
                 <p class="text-slate-600"><span class="text-slate-500">Paid Date:</span> ${paidAt}</p>
               </div>
             </div>
 
             <!-- Itemized Line Items Table -->
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto rounded-xl border border-slate-200/80">
               <table class="w-full text-left border-collapse">
                 <thead>
-                  <tr class="border-b-2 border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 bg-slate-50/50">
-                    <th class="py-2.5 px-4">Item Description</th>
-                    <th class="py-2.5 px-4 text-center">Qty</th>
-                    <th class="py-2.5 px-4 text-right">Unit Price</th>
-                    <th class="py-2.5 px-4 text-right">Amount</th>
+                  <tr class="border-b border-slate-200 text-[10px] font-black uppercase tracking-wider text-slate-500 bg-slate-100/70">
+                    <th class="py-3 px-4">Item Description</th>
+                    <th class="py-3 px-4 text-center">Qty</th>
+                    <th class="py-3 px-4 text-right">Unit Price</th>
+                    <th class="py-3 px-4 text-right">Amount</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody class="divide-y divide-slate-100">
                   ${lineItemsRowsHtml}
                 </tbody>
               </table>
             </div>
 
-            <!-- Breakdown Summary -->
-            <div class="flex justify-end pt-4 border-t border-slate-100">
-              <div class="w-full sm:w-72 space-y-2 text-xs">
+            <!-- Financial Summary Breakdown -->
+            <div class="flex justify-end pt-2">
+              <div class="w-full sm:w-80 space-y-2 text-xs">
                 <div class="flex justify-between text-slate-600">
                   <span>Subtotal</span>
-                  <span class="font-semibold text-slate-800">${formatMoney(subtotal)}</span>
+                  <span class="font-bold text-slate-900 font-mono">${formatMoney(subtotal)}</span>
                 </div>
                 ${deliveryFee > 0 ? `
                 <div class="flex justify-between text-slate-600">
                   <span>Valet Delivery Fee</span>
-                  <span class="font-semibold text-slate-800">${formatMoney(deliveryFee)}</span>
+                  <span class="font-bold text-slate-900 font-mono">${formatMoney(deliveryFee)}</span>
                 </div>` : ''}
                 ${surgeFee > 0 ? `
                 <div class="flex justify-between text-slate-600">
                   <span>Surge / Priority Fee</span>
-                  <span class="font-semibold text-slate-800">${formatMoney(surgeFee)}</span>
+                  <span class="font-bold text-slate-900 font-mono">${formatMoney(surgeFee)}</span>
                 </div>` : ''}
                 ${tax > 0 ? `
                 <div class="flex justify-between text-slate-600">
-                  <span>Estimated Tax</span>
-                  <span class="font-semibold text-slate-800">${formatMoney(tax)}</span>
+                  <span>Sales Tax</span>
+                  <span class="font-bold text-slate-900 font-mono">${formatMoney(tax)}</span>
                 </div>` : ''}
                 ${discount > 0 ? `
-                <div class="flex justify-between text-emerald-600">
+                <div class="flex justify-between text-emerald-600 font-medium">
                   <span>Discount Applied</span>
-                  <span class="font-semibold">-${formatMoney(discount)}</span>
+                  <span class="font-bold font-mono">-${formatMoney(discount)}</span>
                 </div>` : ''}
-                <div class="flex justify-between text-base font-extrabold text-slate-900 pt-3 border-t-2 border-slate-200">
-                  <span>Grand Total</span>
-                  <span class="text-blue-700">${formatMoney(grandTotal)}</span>
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-4 rounded-2xl flex justify-between items-center mt-3 shadow-xs">
+                  <span class="text-sm font-black text-slate-900 uppercase tracking-wider">Grand Total</span>
+                  <span class="text-xl font-black font-mono text-blue-700">${formatMoney(grandTotal)}</span>
                 </div>
               </div>
             </div>
 
             ${notes ? `
-            <div class="p-4 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900">
-              <span class="font-bold">Notes:</span> ${notes}
+            <div class="p-4 bg-amber-50/80 rounded-2xl border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
+              <span class="text-base">📝</span>
+              <div>
+                <span class="font-extrabold uppercase text-[10px] tracking-wider text-amber-800 block mb-0.5">Invoice Notes</span>
+                <p class="font-medium">${notes}</p>
+              </div>
             </div>` : ''}
           </div>
 
           <!-- Printable Modal Footer Controls -->
           <div class="no-print bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-between items-center">
-            <p class="text-xs text-slate-500 font-medium">CloudVault Automated Invoice Engine</p>
+            <p class="text-xs text-slate-500 font-medium font-mono">CloudVault Automated Invoice Engine &bull; Official Statement</p>
             <div class="flex space-x-3">
-              <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition shadow flex items-center space-x-1.5 cursor-pointer">
+              <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center space-x-1.5 cursor-pointer">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                 <span>Print Invoice</span>
               </button>
@@ -1377,6 +1387,12 @@
     /**
      * Closes the printable invoice modal.
      */
+    closePrintableInvoiceModal: function () {
+      const modalEl = document.getElementById('printable-invoice-modal');
+      if (modalEl) {
+        modalEl.classList.add('hidden');
+      }
+    },
     /**
      * Scans for cancelled subscriptions past their service end date with unreturned totes
      * and generates $15.00 per tote unreturned tote invoices.
@@ -1470,6 +1486,14 @@
       style.id = 'cloudvault-billing-print-styles';
       style.textContent = `
         @media print {
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          @page {
+            margin: 10mm;
+            size: auto;
+          }
           body > *:not(#printable-invoice-modal) {
             display: none !important;
           }
@@ -1484,11 +1508,11 @@
           }
           #printable-invoice-modal > div {
             box-shadow: none !important;
-            border: none !important;
+            border: 1px solid #e2e8f0 !important;
             margin: 0 !important;
             max-width: 100% !important;
             width: 100% !important;
-            border-radius: 0 !important;
+            border-radius: 12px !important;
           }
           .no-print {
             display: none !important;
