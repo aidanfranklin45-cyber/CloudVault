@@ -2942,9 +2942,9 @@
                 // 2. Fetch access_requests updated/staged today
                 const { data: reqsToday } = await supabase
                     .from('access_requests')
-                    .select('id, status, target_date, updated_at')
+                    .select('id, status, target_date, requested_at')
                     .or(`facility_id.eq.${facId},facility_id.is.null`)
-                    .gte('updated_at', todayIso);
+                    .gte('requested_at', todayIso);
 
                 const stagedCount = reqsToday ? reqsToday.filter(r => r.status === 'completed' || r.status === 'staged' || r.status === 'in_progress').length : 0;
 
@@ -4198,8 +4198,8 @@
 
                 // 3. Fetch Stored Inventory for Occupancy
                 const { data: totes } = await supabase.from('inventory')
-                    .select('id, tote_code, location_code, customer_id, status')
-                    .eq('facility_id', facilityId)
+                    .select('id, tote_code, location_code, uid, status')
+                    .or(`facility_id.eq.${facilityId},facility_id.is.null`)
                     .neq('status', 'with-customer');
 
                 const occupied = {};
