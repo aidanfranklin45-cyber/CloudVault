@@ -302,35 +302,59 @@
           lineItems = [];
         }
 
+        const rawFacilityId = params.facility_id || params.facilityId || null;
+        const validFacilityId = await this.validateFacilityId(rawFacilityId);
+        const targetFacId = validFacilityId || rawFacilityId || null;
+
         // --- Tax Resolution ---
         let resolvedTaxRate = params.tax_rate != null ? Number(params.tax_rate) : null;
         let resolvedTaxLabel = params.tax_label || null;
-        if (resolvedTaxRate == null && params.zip_code) {
-          try {
-            const { data: saRow } = await sb.from('service_areas')
-              .select('tax_rate, tax_label')
-              .eq('zip_code', params.zip_code)
-              .maybeSingle();
-            if (saRow && saRow.tax_rate != null) {
-              resolvedTaxRate = Number(saRow.tax_rate);
-              resolvedTaxLabel = saRow.tax_label || null;
+
+        if (resolvedTaxRate == null) {
+          if (params.zip_code && sb) {
+            try {
+              const { data: saRow } = await sb.from('service_areas')
+                .select('tax_rate, tax_label, city, state')
+                .eq('zip_code', params.zip_code)
+                .maybeSingle();
+              if (saRow && saRow.tax_rate != null) {
+                resolvedTaxRate = Number(saRow.tax_rate);
+                resolvedTaxLabel = saRow.tax_label || `${saRow.city || 'Local'} Sales Tax (${(resolvedTaxRate * 100).toFixed(2)}%)`;
+              }
+            } catch (e) {
+              console.warn('[CloudVaultBilling] Tax rate lookup notice:', e.message);
             }
-          } catch (e) {
-            console.warn('[CloudVaultBilling] Tax rate lookup failed, defaulting to $0:', e.message);
+          }
+
+          // Fall back to facility / regional market rates
+          if (resolvedTaxRate == null) {
+            const facKey = String(targetFacId || '').toLowerCase();
+            const zipKey = String(params.zip_code || '').trim();
+            if (facKey.includes('yakima') || zipKey.startsWith('989')) {
+              resolvedTaxRate = 0.083; // 8.3% Yakima WA sales tax
+              resolvedTaxLabel = 'WA State & Yakima Local Sales Tax (8.30%)';
+            } else if (facKey.includes('portland') || zipKey.startsWith('972')) {
+              resolvedTaxRate = 0.00; // Oregon 0% sales tax
+              resolvedTaxLabel = 'Oregon State Sales Tax (0.00%)';
+            } else if (facKey.includes('seattle') || zipKey.startsWith('981')) {
+              resolvedTaxRate = 0.1035; // 10.35% Seattle WA sales tax
+              resolvedTaxLabel = 'WA State & Seattle Local Sales Tax (10.35%)';
+            } else {
+              resolvedTaxRate = 0.086; // WA statewide default 8.6%
+              resolvedTaxLabel = 'WA State Sales Tax (8.60%)';
+            }
           }
         }
-        const taxableBase = Number(params.subtotal || 0);
+
+        // Full taxable base across all taxable services (storage subtotal + valet delivery + surge/rush fee)
+        const taxableBase = Math.max(0, subtotal + deliveryFee + surgeFee);
         const taxAmount = resolvedTaxRate != null ? Math.round(taxableBase * resolvedTaxRate * 100) / 100 : (Number(params.tax) || 0.00);
         
-        const computedTotal = taxableBase
-          + Number(params.delivery_fee || 0)
-          + Number(params.surge_fee || 0)
-          + taxAmount
-          - Number(params.discount || 0);
-
-        if (resolvedTaxRate != null) {
+        // Ensure Sales Tax line item is present if taxAmount > 0
+        const hasTaxItem = lineItems.some(i => (i.description || '').toLowerCase().includes('tax') || i.tax_rate != null);
+        if (!hasTaxItem && resolvedTaxRate != null && taxAmount > 0) {
           lineItems.push({
-            description: resolvedTaxLabel || 'Sales Tax',
+            description: resolvedTaxLabel || `Sales Tax (${(resolvedTaxRate * 100).toFixed(2)}%)`,
             qty: 1,
             unit_price: taxAmount,
             amount: taxAmount,
@@ -338,6 +362,7 @@
           });
         }
 
+        const computedTotal = Math.round((taxableBase + taxAmount - discount) * 100) / 100;
         let totalAmount = params.total_amount != null ? Number(params.total_amount) : computedTotal;
         const invType = (params.invoice_type || params.invoiceType || '').toLowerCase();
         if (invType !== 'refund' && totalAmount < 0) {
@@ -364,9 +389,6 @@
             console.warn('[CloudVaultBilling] Notice resolving subscription_id for invoice:', e.message);
           }
         }
-
-        const rawFacilityId = params.facility_id || params.facilityId || null;
-        const validFacilityId = await this.validateFacilityId(rawFacilityId);
 
         const record = {
           invoice_number: invoiceNumber,
@@ -541,7 +563,7 @@
 
       const lineItems = [];
       lineItems.push({
-        description: `Staging & Storage Tote Retrieval (${toteCount} tote${toteCount > 1 ? 's' : ''})`,
+        description: `Staging Tote Retrieval (${toteCount} tote${toteCount > 1 ? 's' : ''})`,
         qty: toteCount,
         unit_price: subtotal > 0 ? (subtotal / toteCount) : 0,
         amount: subtotal
@@ -556,7 +578,7 @@
       }
       if (surgeFee > 0) {
         lineItems.push({
-          description: `Priority / Surge Slot Fee (${req.surge_tier || 'surge'})`,
+          description: `Priority / Surge Slot Fee (${req.surge_tier || 'rush'})`,
           qty: 1,
           unit_price: surgeFee,
           amount: surgeFee
@@ -564,18 +586,19 @@
       }
 
       const status = req.status === 'cancelled' ? 'refunded' : 'paid';
+      const userZip = userObj.zip_code || req.zip_code || null;
 
       return this.createInvoiceRecord({
         uid: req.uid,
         customer_name: userObj.name || userObj.customer_name || 'Valued Customer',
         customer_email: userObj.email || userObj.customer_email || null,
         facility_id: req.facility_id || userObj.assigned_facility_id || null,
+        zip_code: userZip,
         invoice_type: invType,
         payment_status: status,
         subtotal: subtotal,
         delivery_fee: valetFee,
         surge_fee: surgeFee,
-        total_amount: grandTotal,
         payment_method: 'card',
         transaction_reference: txnRef,
         notes: `Access request receipt [Ref: ${reqRefTag}]`,
@@ -778,6 +801,9 @@
         for (const inv of invoices) {
           if (!inv.uid && !inv.customer_email) continue;
 
+          const invType = (inv.invoice_type || '').toLowerCase();
+          const isSubscriptionInvoice = invType === 'subscription' || invType === 'initial_reservation' || invType === 'monthly_subscription';
+
           // Parse line items
           let lineItems = inv.line_items || [];
           if (typeof lineItems === 'string') {
@@ -785,105 +811,120 @@
           }
           if (!Array.isArray(lineItems)) lineItems = [];
 
-          // Determine tote count from invoice, line items, or user subscription
-          let toteCount = Number(inv.tote_count || inv.total_totes || inv.totes || 0);
-
-          const storageItemIndex = lineItems.findIndex(i => {
-            const d = (i.description || i.name || '').toLowerCase();
-            return d.includes('storage') || d.includes('subscription') || inv.invoice_type === 'subscription' || inv.invoice_type === 'initial_reservation';
-          });
-          const storageItem = storageItemIndex !== -1 ? lineItems[storageItemIndex] : null;
-
-          if (!toteCount && storageItem) {
-            const match = (storageItem.description || '').match(/(\d+)\s*tote/i);
-            if (match && match[1]) {
-              toteCount = parseInt(match[1], 10);
-            } else if (Number(storageItem.qty || storageItem.quantity) > 1) {
-              toteCount = Number(storageItem.qty || storageItem.quantity);
-            }
-          }
-
-          if (!toteCount && inv.uid) {
-            // Check active subscription or inventory count
-            const { data: userSub } = await sb.from('subscriptions').select('total_totes, tote_count').eq('uid', inv.uid).maybeSingle();
-            if (userSub) {
-              toteCount = Number(userSub.total_totes || userSub.tote_count || 0);
-            }
-            if (!toteCount) {
-              const { count: invToteCount } = await sb.from('inventory').select('*', { count: 'exact', head: true }).eq('uid', inv.uid);
-              if (invToteCount) toteCount = invToteCount;
-            }
-          }
-
-          if (!toteCount || toteCount < 1) toteCount = 1;
-
-          // Resolve dynamic customer pricing (Price lock immunity + regional facility rates)
-          const pricingRes = await this.resolveCustomerPricing(inv.uid, inv.facility_id, toteCount);
-          const correctToteRate = pricingRes.toteRate;
-          const expectedStorageSubtotal = toteCount * correctToteRate;
-
           let modified = false;
 
-          if (storageItem) {
-            const currentQty = Number(storageItem.qty || storageItem.quantity || 1);
-            const currentUnitPrice = Number(storageItem.unit_price || storageItem.unitPrice || 0);
-            const currentAmount = Number(storageItem.amount || 0);
+          if (isSubscriptionInvoice) {
+            // Determine tote count from invoice, line items, or user subscription
+            let toteCount = Number(inv.tote_count || inv.total_totes || inv.totes || 0);
 
-            // If storage item line item was miscoded (e.g. qty=1 for 25 totes, or unit_price=$5.00 for Tier 3 25 totes)
-            if (currentQty !== toteCount || currentUnitPrice !== correctToteRate || Math.abs(currentAmount - expectedStorageSubtotal) > 0.01) {
-              storageItem.qty = toteCount;
-              storageItem.unit_price = correctToteRate;
-              storageItem.amount = expectedStorageSubtotal;
-              storageItem.description = `CloudVault Storage Subscription (${toteCount} totes @ $${correctToteRate.toFixed(2)}/mo — ${pricingRes.tierName})`;
+            const storageItemIndex = lineItems.findIndex(i => {
+              const d = (i.description || i.name || '').toLowerCase();
+              return d.includes('subscription') || d.includes('storage plan') || d.includes('tote storage');
+            });
+            const storageItem = storageItemIndex !== -1 ? lineItems[storageItemIndex] : null;
+
+            if (!toteCount && storageItem) {
+              const match = (storageItem.description || '').match(/(\d+)\s*tote/i);
+              if (match && match[1]) {
+                toteCount = parseInt(match[1], 10);
+              } else if (Number(storageItem.qty || storageItem.quantity) > 1) {
+                toteCount = Number(storageItem.qty || storageItem.quantity);
+              }
+            }
+
+            if (!toteCount && inv.uid) {
+              const { data: userSub } = await sb.from('subscriptions').select('total_totes, tote_count').eq('uid', inv.uid).maybeSingle();
+              if (userSub) {
+                toteCount = Number(userSub.total_totes || userSub.tote_count || 0);
+              }
+              if (!toteCount) {
+                const { count: invToteCount } = await sb.from('inventory').select('*', { count: 'exact', head: true }).eq('uid', inv.uid);
+                if (invToteCount) toteCount = invToteCount;
+              }
+            }
+
+            if (!toteCount || toteCount < 1) toteCount = 1;
+
+            const pricingRes = await this.resolveCustomerPricing(inv.uid, inv.facility_id, toteCount);
+            const correctToteRate = pricingRes.toteRate;
+            const expectedStorageSubtotal = toteCount * correctToteRate;
+
+            if (storageItem) {
+              const currentQty = Number(storageItem.qty || storageItem.quantity || 1);
+              const currentUnitPrice = Number(storageItem.unit_price || storageItem.unitPrice || 0);
+              const currentAmount = Number(storageItem.amount || 0);
+
+              if (currentQty !== toteCount || currentUnitPrice !== correctToteRate || Math.abs(currentAmount - expectedStorageSubtotal) > 0.01) {
+                storageItem.qty = toteCount;
+                storageItem.unit_price = correctToteRate;
+                storageItem.amount = expectedStorageSubtotal;
+                storageItem.description = `CloudVault Storage Subscription (${toteCount} totes @ $${correctToteRate.toFixed(2)}/mo — ${pricingRes.tierName})`;
+                modified = true;
+              }
+            } else {
+              lineItems.unshift({
+                description: `CloudVault Storage Subscription (${toteCount} totes @ $${correctToteRate.toFixed(2)}/mo — ${pricingRes.tierName})`,
+                qty: toteCount,
+                unit_price: correctToteRate,
+                amount: expectedStorageSubtotal
+              });
               modified = true;
             }
-          } else if (inv.invoice_type === 'subscription' || inv.invoice_type === 'initial_reservation') {
-            lineItems.unshift({
-              description: `CloudVault Storage Subscription (${toteCount} totes @ $${correctToteRate.toFixed(2)}/mo — ${pricingRes.tierName})`,
-              qty: toteCount,
-              unit_price: correctToteRate,
-              amount: expectedStorageSubtotal
+
+            let deliveryFee = Number(inv.delivery_fee || 0);
+            let surgeFee = Number(inv.surge_fee || 0);
+            let tax = Number(inv.tax || 0);
+            let discount = Number(inv.discount || 0);
+            let newSubtotal = expectedStorageSubtotal;
+            let newTotal = newSubtotal + deliveryFee + surgeFee + tax - discount;
+            if (newTotal < 0) newTotal = 0;
+
+            if (Math.abs(Number(inv.subtotal || 0) - newSubtotal) > 0.01 || Math.abs(Number(inv.total_amount || 0) - newTotal) > 0.01) {
+              modified = true;
+            }
+
+            if (modified) {
+              const updatePayload = {
+                subtotal: newSubtotal,
+                total_amount: newTotal,
+                line_items: lineItems,
+                notes: (inv.notes || '').includes('Realigned')
+                  ? inv.notes
+                  : `${inv.notes || ''} [Realigned to dynamic ${pricingRes.tierName} rate $${correctToteRate.toFixed(2)}/tote/mo]`.trim()
+              };
+              const { error: updateErr } = await sb.from('invoices').update(updatePayload).eq('id', inv.id);
+              if (!updateErr) updatedCount++;
+            }
+          } else {
+            // Non-subscription service invoice (retrieval / valet / expansion)
+            // Strip any erroneously injected monthly subscription line items
+            const originalLen = lineItems.length;
+            lineItems = lineItems.filter(i => {
+              const desc = (i.description || i.name || '').toLowerCase();
+              return !(desc.includes('storage subscription') || (desc.includes('subscription (') && desc.includes('tier')));
             });
-            modified = true;
-          }
 
-          // Check if subtotal or total_amount needs realignment
-          let deliveryFee = Number(inv.delivery_fee || 0);
-          let surgeFee = Number(inv.surge_fee || 0);
-          let tax = Number(inv.tax || 0);
-          let discount = Number(inv.discount || 0);
+            if (lineItems.length !== originalLen) modified = true;
 
-          let newSubtotal = storageItem ? expectedStorageSubtotal : Number(inv.subtotal || 0);
-          if (inv.invoice_type === 'subscription' || inv.invoice_type === 'initial_reservation') {
-            newSubtotal = expectedStorageSubtotal;
-          }
+            const subtotal = Number(inv.subtotal || 0);
+            const deliveryFee = Number(inv.delivery_fee || 0);
+            const surgeFee = Number(inv.surge_fee || 0);
+            const tax = Number(inv.tax || 0);
+            const discount = Number(inv.discount || 0);
+            const correctTotal = Math.max(0, subtotal + deliveryFee + surgeFee + tax - discount);
 
-          let newTotal = newSubtotal + deliveryFee + surgeFee + tax - discount;
-          if (inv.invoice_type !== 'refund' && newTotal < 0) newTotal = 0;
+            if (Math.abs(Number(inv.total_amount || 0) - correctTotal) > 0.01) {
+              modified = true;
+            }
 
-          if (Math.abs(Number(inv.subtotal || 0) - newSubtotal) > 0.01 || Math.abs(Number(inv.total_amount || 0) - newTotal) > 0.01) {
-            modified = true;
-          }
-
-          if (modified) {
-            const updatePayload = {
-              subtotal: newSubtotal,
-              total_amount: newTotal,
-              line_items: lineItems,
-              notes: (inv.notes || '').includes('Realigned')
-                ? inv.notes
-                : `${inv.notes || ''} [Realigned to dynamic ${pricingRes.tierName} rate $${correctToteRate.toFixed(2)}/tote/mo${pricingRes.isPriceLock ? ' Price Locked' : ''}]`.trim()
-            };
-
-            const { error: updateErr } = await sb
-              .from('invoices')
-              .update(updatePayload)
-              .eq('id', inv.id);
-
-            if (!updateErr) {
-              updatedCount++;
-            } else {
-              console.warn(`[CloudVaultBilling] Warning updating invoice ${inv.invoice_number}:`, updateErr.message);
+            if (modified) {
+              const updatePayload = {
+                subtotal: subtotal,
+                total_amount: correctTotal,
+                line_items: lineItems
+              };
+              const { error: updateErr } = await sb.from('invoices').update(updatePayload).eq('id', inv.id);
+              if (!updateErr) updatedCount++;
             }
           }
         }
@@ -1822,6 +1863,9 @@
       modalEl.className = 'fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto';
 
       const sb = global.supabase;
+      const invType = (invoiceObj.invoice_type || invoiceObj.invoiceType || '').toLowerCase();
+      const isSubscriptionInvoice = invType === 'subscription' || invType === 'initial_reservation' || invType === 'monthly_subscription';
+
       let activeToteCount = Number(invoiceObj.tote_count || invoiceObj.total_totes || invoiceObj.totes || 0);
       let userSub = null;
       let userObj = null;
@@ -1855,42 +1899,35 @@
       if (typeof lineItems === 'string') {
         try { lineItems = JSON.parse(lineItems); } catch (e) { lineItems = []; }
       }
-      if (!Array.isArray(lineItems) || lineItems.length === 0) {
-        lineItems = [
-          { description: 'CloudVault Monthly Tote Storage Subscription', qty: 1, unit_price: Number(invoiceObj.subtotal || 0), amount: Number(invoiceObj.subtotal || 0) }
-        ];
-      }
+      if (!Array.isArray(lineItems)) lineItems = [];
 
-      const storageItemIndex = lineItems.findIndex(i => (i.description || '').toLowerCase().includes('storage') || (i.description || '').toLowerCase().includes('subscription'));
-      const storageItem = storageItemIndex !== -1 ? lineItems[storageItemIndex] : null;
-
-      if (!activeToteCount && storageItem) {
-        const match = (storageItem.description || '').match(/(\d+)\s*tote/i);
-        if (match && match[1]) {
-          activeToteCount = parseInt(match[1], 10);
-        } else if (Number(storageItem.qty || storageItem.quantity) > 1) {
-          activeToteCount = Number(storageItem.qty || storageItem.quantity);
-        }
-      }
-
-      if (!activeToteCount || activeToteCount < 1) activeToteCount = 1;
-
-      // Resolve dynamic customer pricing (Price Lock immunity + facility regional rates)
       const targetUid = invoiceObj.uid || (userObj ? userObj.id : null);
-      const targetFacId = invoiceObj.facility_id || (userObj ? userObj.assigned_facility_id : null);
-      const pricingRes = await this.resolveCustomerPricing(targetUid, targetFacId, activeToteCount);
+      const targetFacId = invoiceObj.facility_id || (userObj ? userObj.assigned_facility_id : null) || 'facility_seattle_north';
 
-      const rates = pricingRes.ratesUsed;
-      const currentTier = pricingRes;
-      const effectiveRate = pricingRes.toteRate;
-      const accurateStorageSubtotal = activeToteCount * effectiveRate;
+      let facilityDisplay = 'CloudVault Central Hub';
+      const facKey = String(targetFacId).toLowerCase();
+      if (facKey.includes('yakima')) {
+        facilityDisplay = 'Yakima Hub (facility_yakima)';
+      } else if (facKey.includes('portland')) {
+        facilityDisplay = 'Portland Central Hub (facility_portland_central)';
+      } else if (facKey.includes('seattle')) {
+        facilityDisplay = 'Seattle North Hub (facility_seattle_north)';
+      } else {
+        facilityDisplay = `${targetFacId.replace(/facility_/g, '').replace(/_/g, ' ').toUpperCase()} (${targetFacId})`;
+      }
 
-      const subtotal = storageItem ? accurateStorageSubtotal : (Number(invoiceObj.subtotal) || accurateStorageSubtotal);
-      const deliveryFee = Number(invoiceObj.delivery_fee || invoiceObj.deliveryFee || 0);
-      const surgeFee = Number(invoiceObj.surge_fee || invoiceObj.surgeFee || 0);
-      const tax = Number(invoiceObj.tax || 0);
-      const discount = Number(invoiceObj.discount || 0);
-      const grandTotal = Number(invoiceObj.total_amount || invoiceObj.totalAmount || (subtotal + deliveryFee + surgeFee + tax - discount));
+      let subtotal = Number(invoiceObj.subtotal || 0);
+      let deliveryFee = Number(invoiceObj.delivery_fee || invoiceObj.deliveryFee || 0);
+      let surgeFee = Number(invoiceObj.surge_fee || invoiceObj.surgeFee || 0);
+      let tax = Number(invoiceObj.tax || 0);
+      let discount = Number(invoiceObj.discount || 0);
+      let grandTotal = Number(invoiceObj.total_amount || invoiceObj.totalAmount || (subtotal + deliveryFee + surgeFee + tax - discount));
+
+      const formatMoney = (val) => {
+        const n = Number(val) || 0;
+        if (n < 0) return `-$${Math.abs(n).toFixed(2)}`;
+        return `$${n.toFixed(2)}`;
+      };
 
       const invoiceNum = invoiceObj.invoice_number || invoiceObj.invoiceNumber || 'INV-2026-00000';
       const status = (invoiceObj.payment_status || invoiceObj.paymentStatus || 'paid').toUpperCase();
@@ -1912,81 +1949,117 @@
       let statusBadgeClasses = 'bg-emerald-500/10 text-emerald-700 border-emerald-300';
       if (status === 'PENDING') statusBadgeClasses = 'bg-amber-500/10 text-amber-700 border-amber-300';
       else if (status === 'OVERDUE' || status === 'FAILED') statusBadgeClasses = 'bg-red-500/10 text-red-700 border-red-300';
-      const formatMoney = (val) => {
-        const n = Number(val) || 0;
-        if (n < 0) return `-$${Math.abs(n).toFixed(2)}`;
-        return `$${n.toFixed(2)}`;
-      };
-
-      const invType = (invoiceObj.invoice_type || invoiceObj.invoiceType || '').toLowerCase();
-
-      // Update storage line item in lineItems array so qty and unit_price display accurately in the table!
-      if (storageItem) {
-        storageItem.qty = activeToteCount;
-        storageItem.unit_price = effectiveRate;
-        storageItem.amount = subtotal;
-        storageItem.description = `CloudVault Storage Subscription (${activeToteCount} totes @ $${effectiveRate.toFixed(2)}/mo — ${currentTier.tierName})`;
-      }
-
-      // Dynamic Smart Volume Expansion Calculation based on actual volume tier thresholds
-      let targetTierCount = 10;
-      if (activeToteCount >= 50) {
-        targetTierCount = activeToteCount + 25; // Already at max Tier 4 Enterprise, suggest next 25-tote bulk milestone
-      } else if (activeToteCount >= 25) {
-        targetTierCount = 50; // Current: Tier 3 Commercial (25-49 totes). Next Tier: Tier 4 Enterprise (50 totes)
-      } else if (activeToteCount >= 10) {
-        targetTierCount = 25; // Current: Tier 2 Preferred (10-24 totes). Next Tier: Tier 3 Commercial (25 totes)
-      } else {
-        targetTierCount = 10; // Current: Tier 1 Standard (1-9 totes). Next Tier: Tier 2 Preferred (10 totes)
-      }
-
-      const additionalTotesNeeded = Math.max(1, targetTierCount - activeToteCount);
-      const nextTierObj = await this.resolveCustomerPricing(targetUid, targetFacId, targetTierCount);
-      const nextTierTotalCost = targetTierCount * nextTierObj.toteRate;
-      const diff = nextTierTotalCost - subtotal;
-      const marginalPerTote = additionalTotesNeeded > 0 ? (diff / additionalTotesNeeded) : 0;
 
       let upsellBannerHtml = '';
-      if (diff <= 0) {
-        // Volume Tier Jump Savings! (Adding totes reduces or keeps total bill identical while unlocking a lower unit rate)
-        const isFreeExpansion = Math.abs(diff) < 0.01;
-        const diffText = isFreeExpansion ? `+$0.00/mo (FREE Expansion)` : `Save ${formatMoney(Math.abs(diff))}/mo`;
-        const actionText = isFreeExpansion 
-          ? `Adding +${additionalTotesNeeded} Totes is <span class="text-emerald-700 font-mono font-black">FREE (+$0.00/mo)</span> by unlocking lower unit rates!` 
-          : `Adding +${additionalTotesNeeded} Totes REDUCES your total monthly bill by <span class="text-emerald-700 font-mono font-black text-base">${formatMoney(Math.abs(diff))}/mo</span>!`;
+      let currentTier = { tierName: 'Standard Volume', toteRate: 5.00 };
+      let effectiveRate = 5.00;
 
-        upsellBannerHtml = `
-          <div class="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border-2 border-emerald-500/40 rounded-2xl p-4 sm:p-5 text-xs text-slate-800 space-y-2 no-print shadow-sm">
-            <div class="flex items-center justify-between">
-              <span class="inline-flex items-center gap-1.5 bg-emerald-600 text-white font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full tracking-wider">
-                💡 Volume Tier Discount Alert
-              </span>
-              <span class="font-mono font-black text-emerald-700 text-xs">${diffText}</span>
-            </div>
-            <p class="font-black text-sm text-slate-900 leading-snug">
-              Unlock Volume Tier Savings: ${actionText}
-            </p>
-            <p class="text-slate-600 leading-relaxed text-[11px]">
-              You are currently renting <strong>${activeToteCount} tote${activeToteCount !== 1 ? 's' : ''}</strong> at ${formatMoney(effectiveRate)}/tote/mo (${formatMoney(subtotal)}/mo). Upgrading to <strong>${targetTierCount} totes</strong> (+${additionalTotesNeeded} tote${additionalTotesNeeded !== 1 ? 's' : ''}) automatically unlocks our <strong>${nextTierObj.tierName}</strong> ($${nextTierObj.toteRate.toFixed(2)}/tote/mo), bringing your total monthly bill to <strong>${formatMoney(nextTierTotalCost)}/mo</strong>!
-            </p>
-          </div>`;
+      if (isSubscriptionInvoice) {
+        if (!activeToteCount || activeToteCount < 1) activeToteCount = 1;
+
+        // Resolve dynamic customer pricing (Price Lock immunity + facility regional rates)
+        const pricingRes = await this.resolveCustomerPricing(targetUid, targetFacId, activeToteCount);
+        currentTier = pricingRes;
+        effectiveRate = pricingRes.toteRate;
+        const accurateStorageSubtotal = activeToteCount * effectiveRate;
+        subtotal = accurateStorageSubtotal;
+
+        const storageItemIndex = lineItems.findIndex(i => {
+          const d = (i.description || '').toLowerCase();
+          return d.includes('subscription') || d.includes('storage plan') || d.includes('tote storage');
+        });
+
+        if (storageItemIndex !== -1) {
+          lineItems[storageItemIndex].qty = activeToteCount;
+          lineItems[storageItemIndex].unit_price = effectiveRate;
+          lineItems[storageItemIndex].amount = subtotal;
+          lineItems[storageItemIndex].description = `CloudVault Storage Subscription (${activeToteCount} totes @ $${effectiveRate.toFixed(2)}/mo — ${currentTier.tierName})`;
+        } else {
+          lineItems.unshift({
+            description: `CloudVault Storage Subscription (${activeToteCount} totes @ $${effectiveRate.toFixed(2)}/mo — ${currentTier.tierName})`,
+            qty: activeToteCount,
+            unit_price: effectiveRate,
+            amount: subtotal
+          });
+        }
+
+        grandTotal = Math.max(0, subtotal + deliveryFee + surgeFee + tax - discount);
+
+        // Dynamic Smart Volume Expansion Calculation based on actual volume tier thresholds
+        let targetTierCount = 10;
+        if (activeToteCount >= 50) {
+          targetTierCount = activeToteCount + 25; // Already at max Tier 4 Enterprise, suggest next 25-tote bulk milestone
+        } else if (activeToteCount >= 25) {
+          targetTierCount = 50; // Current: Tier 3 Commercial (25-49 totes). Next Tier: Tier 4 Enterprise (50 totes)
+        } else if (activeToteCount >= 10) {
+          targetTierCount = 25; // Current: Tier 2 Preferred (10-24 totes). Next Tier: Tier 3 Commercial (25 totes)
+        } else {
+          targetTierCount = 10; // Current: Tier 1 Standard (1-9 totes). Next Tier: Tier 2 Preferred (10 totes)
+        }
+
+        const formatMoney = (val) => {
+          const n = Number(val) || 0;
+          if (n < 0) return `-$${Math.abs(n).toFixed(2)}`;
+          return `$${n.toFixed(2)}`;
+        };
+
+        const additionalTotesNeeded = Math.max(1, targetTierCount - activeToteCount);
+        const nextTierObj = await this.resolveCustomerPricing(targetUid, targetFacId, targetTierCount);
+        const nextTierTotalCost = targetTierCount * nextTierObj.toteRate;
+        const diff = nextTierTotalCost - subtotal;
+        const marginalPerTote = additionalTotesNeeded > 0 ? (diff / additionalTotesNeeded) : 0;
+
+        if (diff <= 0) {
+          const isFreeExpansion = Math.abs(diff) < 0.01;
+          const diffText = isFreeExpansion ? `+$0.00/mo (FREE Expansion)` : `Save ${formatMoney(Math.abs(diff))}/mo`;
+          const actionText = isFreeExpansion 
+            ? `Adding +${additionalTotesNeeded} Totes is <span class="text-emerald-700 font-mono font-black">FREE (+$0.00/mo)</span> by unlocking lower unit rates!` 
+            : `Adding +${additionalTotesNeeded} Totes REDUCES your total monthly bill by <span class="text-emerald-700 font-mono font-black text-base">${formatMoney(Math.abs(diff))}/mo</span>!`;
+
+          upsellBannerHtml = `
+            <div class="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border-2 border-emerald-500/40 rounded-2xl p-4 sm:p-5 text-xs text-slate-800 space-y-2 no-print shadow-sm">
+              <div class="flex items-center justify-between">
+                <span class="inline-flex items-center gap-1.5 bg-emerald-600 text-white font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full tracking-wider">
+                  💡 Volume Tier Discount Alert
+                </span>
+                <span class="font-mono font-black text-emerald-700 text-xs">${diffText}</span>
+              </div>
+              <p class="font-black text-sm text-slate-900 leading-snug">
+                Unlock Volume Tier Savings: ${actionText}
+              </p>
+              <p class="text-slate-600 leading-relaxed text-[11px]">
+                You are currently renting <strong>${activeToteCount} tote${activeToteCount !== 1 ? 's' : ''}</strong> at ${formatMoney(effectiveRate)}/tote/mo (${formatMoney(subtotal)}/mo). Upgrading to <strong>${targetTierCount} totes</strong> (+${additionalTotesNeeded} tote${additionalTotesNeeded !== 1 ? 's' : ''}) automatically unlocks our <strong>${nextTierObj.tierName}</strong> ($${nextTierObj.toteRate.toFixed(2)}/tote/mo), bringing your total monthly bill to <strong>${formatMoney(nextTierTotalCost)}/mo</strong>!
+              </p>
+            </div>`;
+        } else {
+          upsellBannerHtml = `
+            <div class="bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 border border-blue-500/30 rounded-2xl p-4 sm:p-5 text-xs text-slate-800 space-y-2 no-print shadow-sm">
+              <div class="flex items-center justify-between">
+                <span class="inline-flex items-center gap-1.5 bg-blue-600 text-white font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full tracking-wider">
+                  🚀 Smart Volume Expansion Opportunity
+                </span>
+                <span class="font-mono font-bold text-blue-700 text-xs">+${additionalTotesNeeded} Tote${additionalTotesNeeded !== 1 ? 's' : ''} for +${formatMoney(diff)}/mo</span>
+              </div>
+              <p class="font-black text-sm text-slate-900 leading-snug">
+                Adding +${additionalTotesNeeded} tote${additionalTotesNeeded !== 1 ? 's' : ''} will only increase your monthly bill by <span class="text-blue-700 font-mono font-black">+${formatMoney(diff)}/mo</span> (just <span class="text-blue-700 font-mono font-bold">+${formatMoney(marginalPerTote)}/tote/mo</span>)!
+              </p>
+              <p class="text-slate-600 leading-relaxed text-[11px]">
+                You are currently renting <strong>${activeToteCount} tote${activeToteCount !== 1 ? 's' : ''}</strong> (${formatMoney(subtotal)}/mo). Upgrading to <strong>${targetTierCount} totes</strong> (+${additionalTotesNeeded} tote${additionalTotesNeeded !== 1 ? 's' : ''}) unlocks our <strong>${nextTierObj.tierName}</strong> ($${nextTierObj.toteRate.toFixed(2)}/tote/mo) for a total of <strong>${formatMoney(nextTierTotalCost)}/mo</strong>.
+              </p>
+            </div>`;
+        }
       } else {
-        // Low Marginal Cost Expansion Upsell Banner
-        upsellBannerHtml = `
-          <div class="bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 border border-blue-500/30 rounded-2xl p-4 sm:p-5 text-xs text-slate-800 space-y-2 no-print shadow-sm">
-            <div class="flex items-center justify-between">
-              <span class="inline-flex items-center gap-1.5 bg-blue-600 text-white font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full tracking-wider">
-                🚀 Smart Volume Expansion Opportunity
-              </span>
-              <span class="font-mono font-bold text-blue-700 text-xs">+${additionalTotesNeeded} Tote${additionalTotesNeeded !== 1 ? 's' : ''} for +${formatMoney(diff)}/mo</span>
-            </div>
-            <p class="font-black text-sm text-slate-900 leading-snug">
-              Adding +${additionalTotesNeeded} tote${additionalTotesNeeded !== 1 ? 's' : ''} will only increase your monthly bill by <span class="text-blue-700 font-mono font-black">+${formatMoney(diff)}/mo</span> (just <span class="text-blue-700 font-mono font-bold">+${formatMoney(marginalPerTote)}/tote/mo</span>)!
-            </p>
-            <p class="text-slate-600 leading-relaxed text-[11px]">
-              You are currently renting <strong>${activeToteCount} tote${activeToteCount !== 1 ? 's' : ''}</strong> (${formatMoney(subtotal)}/mo). Upgrading to <strong>${targetTierCount} totes</strong> (+${additionalTotesNeeded} tote${additionalTotesNeeded !== 1 ? 's' : ''}) unlocks our <strong>${nextTierObj.tierName}</strong> ($${nextTierObj.toteRate.toFixed(2)}/tote/mo) for a total of <strong>${formatMoney(nextTierTotalCost)}/mo</strong>.
-            </p>
-          </div>`;
+        // Non-subscription service invoice (retrieval / valet / expansion)
+        // Clean out any misplaced storage subscription rows
+        lineItems = lineItems.filter(i => {
+          const desc = (i.description || i.name || '').toLowerCase();
+          return !(desc.includes('storage subscription') || (desc.includes('subscription (') && desc.includes('tier')));
+        });
+        if (lineItems.length === 0) {
+          if (surgeFee > 0) lineItems.push({ description: 'Priority / Surge Retrieval Fee', qty: 1, unit_price: surgeFee, amount: surgeFee });
+          if (deliveryFee > 0) lineItems.push({ description: 'Valet Doorstep Delivery Service Fee', qty: 1, unit_price: deliveryFee, amount: deliveryFee });
+        }
+        upsellBannerHtml = '';
       }
 
       const renderItemBreakdown = (item) => {
@@ -2083,7 +2156,7 @@
                 <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Billed To</span>
                 <p class="font-extrabold text-sm text-slate-900">${customerName}</p>
                 <p class="text-slate-600 font-mono text-[11px]">${customerEmail}</p>
-                <p class="text-slate-500 pt-1"><span class="font-semibold text-slate-700">Facility Hub:</span> ${facilityId}</p>
+                <p class="text-slate-500 pt-1"><span class="font-semibold text-slate-700">Facility Hub:</span> ${facilityDisplay}</p>
               </div>
               <div class="space-y-1">
                 <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Payment Information</span>

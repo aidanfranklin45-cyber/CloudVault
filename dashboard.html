@@ -4195,24 +4195,31 @@
                         }
 
                         const lineItems = [
-                            { description: `Staging & Storage Tote Retrieval (${toteCount} totes handled)`, qty: toteCount, unit_price: 0, amount: 0 }
+                            { description: `Staging Tote Retrieval (${toteCount} tote${toteCount > 1 ? 's' : ''})`, qty: toteCount, unit_price: 0, amount: 0 }
                         ];
                         if (deliveryFee > 0) {
                             lineItems.push({ description: `Valet Doorstep Delivery Service Fee`, qty: 1, unit_price: deliveryFee, amount: deliveryFee });
                         }
-                        lineItems.push({ description: `Surge Slot Tier Fee: ${surgeTierLabel}`, qty: 1, unit_price: surgeFee, amount: surgeFee });
+                        if (surgeFee > 0) {
+                            lineItems.push({ description: `Surge Slot Tier Fee: ${surgeTierLabel}`, qty: 1, unit_price: surgeFee, amount: surgeFee });
+                        }
+
+                        const userFac = (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility)) ||
+                                        (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
+                                        'facility_seattle_north';
+                        const userZip = (currentProfile && currentProfile.zip_code) || (currentUserProfile && currentUserProfile.zip_code) || null;
 
                         await window.CloudVaultBilling.createInvoiceRecord({
                             uid: currentUser.id,
                             customer_name: currentUser.user_metadata?.name || currentUser.email.split('@')[0],
                             customer_email: currentUser.email,
-                            facility_id: (currentProfile && currentProfile.assigned_facility) || 'facility_seattle_north',
+                            facility_id: userFac,
+                            zip_code: userZip,
                             invoice_type: invoiceType,
                             payment_status: 'paid',
                             subtotal: 0,
                             delivery_fee: deliveryFee,
                             surge_fee: surgeFee,
-                            total_amount: deliveryFee + surgeFee,
                             payment_method: 'card',
                             line_items: lineItems,
                             notes: `Access retrieval request for ${toteCount} totes (${retrievalLogisticsType === 'valet_delivery' ? 'Valet Delivery' : 'Self-Service Staging'}). Target Date: ${targetDate || 'Standard'}.`
