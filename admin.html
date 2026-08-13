@@ -4151,9 +4151,13 @@
                 const searchInput = document.getElementById('facmap-search-input');
                 if (searchInput) searchInput.value = '';
 
+                // Immediate instantaneous blueprint render (0ms latency)
                 updateFacilityMapTargetBadge();
-                await populateFacilityMapSelector();
-                await loadFacilityMapData(currentFac);
+                renderFacilityMap();
+
+                // Background sync of live facility specs & inventory occupancy
+                populateFacilityMapSelector();
+                loadFacilityMapData(currentFac);
 
                 if (typeof lucide !== 'undefined' && lucide.createIcons) {
                     try { lucide.createIcons(); } catch(e) {}
@@ -4212,6 +4216,7 @@
             if (!newFacId) return;
             window.facMapState.activeFacilityId = newFacId;
             window.facMapState.selectedAisle = 'ALL';
+            renderFacilityMap();
             await loadFacilityMapData(newFacId);
         }
 
@@ -4241,17 +4246,6 @@
         }
 
         async function loadFacilityMapData(facilityId) {
-            const container = document.getElementById('facmap-canvas-container');
-            if (container) {
-                container.innerHTML = `
-                    <div class="flex flex-col items-center justify-center py-16 space-y-3">
-                        <i data-lucide="loader" class="w-8 h-8 text-indigo-400 animate-spin"></i>
-                        <p class="text-sm font-mono text-gray-400">Loading dynamic facility blueprint &amp; shelf occupancy...</p>
-                    </div>
-                `;
-                if (typeof lucide !== 'undefined') lucide.createIcons();
-            }
-
             let targetFacId = facilityId || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
             if (!targetFacId || targetFacId === 'null' || targetFacId === 'undefined') {
                 targetFacId = document.getElementById('global-facility-select')?.value || 'facility_seattle_north';
@@ -4312,15 +4306,7 @@
                 renderFacilityMap();
             } catch (err) {
                 console.error('[FacilityMap] Failed to load facility layout data:', err);
-                if (container) {
-                    container.innerHTML = `
-                        <div class="p-6 bg-red-950/40 border border-red-500/40 rounded-2xl text-center space-y-2">
-                            <p class="text-red-300 font-bold">Failed to load facility blueprint.</p>
-                            <p class="text-xs text-gray-400 font-mono">${escapeHtml(err.message || 'Unknown error')}</p>
-                            <button onclick="loadFacilityMapData('${escapeHtml(targetFacId)}')" class="mt-2 px-4 py-1.5 bg-red-600/30 hover:bg-red-600 text-white rounded-xl text-xs font-mono font-bold transition">Retry</button>
-                        </div>
-                    `;
-                }
+                renderFacilityMap();
             }
         }
 
