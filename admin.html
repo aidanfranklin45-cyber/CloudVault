@@ -3354,14 +3354,11 @@
                     });
                 }
 
-                // Helper to compute deterministic staging room number per customer
-                function getAssignedRoom(uid, totalRooms = 2) {
+                // Helper to compute deterministic staging room number per customer request schedule
+                function getAssignedRoom(seedKey, totalRooms = 2) {
                     let hash = 0;
-                    const str = uid || 'default';
-                    for (let i = 0; i < str.length; i++) {
-                        hash = ((hash << 5) - hash) + str.charCodeAt(i);
-                        hash |= 0;
-                    }
+                    const str = String(seedKey || 'default');
+                    for (let i = 0; i < str.length; i++) hash += str.charCodeAt(i);
                     return (Math.abs(hash) % (totalRooms || 2)) + 1;
                 }
 
@@ -3652,26 +3649,64 @@
                 const customerItems = (allItems || []).filter(i => i.status === 'staged');
                 document.getElementById('wtab-customer-count').textContent = customerItems.length;
                 const bodyCustomer = document.getElementById('wbody-customer');
-                const customerGrouped = groupTotesByCustomer(customerItems);
+                // Group staged totes by unique schedule card window (uid :: target_date :: time_slot :: request_id)
+                const stagedCardGroups = {};
+                (customerItems || []).forEach(tote => {
+                    let matchedReq = (manifests || []).find(r => {
+                        if (r.uid !== tote.uid) return false;
+                        const requested = r.requested_items || r.requested_tote_codes || r.totes || [];
+                        return Array.isArray(requested) && (
+                            requested.includes(tote.id) || 
+                            requested.includes(tote.tote_code) || 
+                            requested.includes(tote.barcode) || 
+                            requested.includes(tote.label)
+                        );
+                    });
 
-                if (customerItems.length === 0) {
+                    if (!matchedReq) {
+                        matchedReq = (manifests || []).find(r => r.uid === tote.uid);
+                    }
+
+                    const dateKey = matchedReq?.target_date ? matchedReq.target_date.split('T')[0] : 'unscheduled';
+                    const slotKey = matchedReq?.time_slot || '09:00 AM - 12:00 PM';
+                    const reqIdKey = matchedReq?.id || 'default';
+                    const groupKey = `${tote.uid}::${dateKey}::${slotKey}::${reqIdKey}`;
+
+                    if (!stagedCardGroups[groupKey]) {
+                        stagedCardGroups[groupKey] = {
+                            uid: tote.uid,
+                            req: matchedReq,
+                            target_date: dateKey,
+                            time_slot: slotKey,
+                            pin: matchedReq?.pin || pinByUid[tote.uid] || '—',
+                            totes: []
+                        };
+                    }
+                    stagedCardGroups[groupKey].totes.push(tote);
+                });
+
+                if (Object.keys(stagedCardGroups).length === 0) {
                     bodyCustomer.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
                         <i data-lucide="door-open" class="w-8 h-8 text-blue-500 mx-auto"></i>
                         <p class="text-sm text-gray-300 font-bold">Staging Rooms Empty</p>
                         <p class="text-xs text-gray-500 font-mono">No self-serve totes currently waiting for customer pickup.</p>
                     </div>`;
                 } else {
-                    bodyCustomer.innerHTML = Object.entries(customerGrouped).map(([uid, totes]) => {
+                    bodyCustomer.innerHTML = Object.entries(stagedCardGroups).map(([groupKey, group]) => {
+                        const { uid, target_date, time_slot, pin, totes } = group;
                         const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0, 8)}`;
                         const firstCode = totes[0].tote_code;
 
-                        const reqManifest = manifestByUidAndType[`${uid}_staging`] || manifestByUid[uid];
-                        const reqDate = reqManifest?.target_date ? new Date(reqManifest.target_date.split('T')[0] + 'T12:00:00') : new Date();
+                        const reqDate = (target_date && target_date !== 'unscheduled') 
+                            ? new Date(target_date + 'T12:00:00') 
+                            : new Date();
                         const dateStr = reqDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
-                        const slotStr = reqManifest?.time_slot || '09:00 AM - 12:00 PM';
+                        const slotStr = time_slot;
 
                         const numRooms = currentLoadedFac?.num_staging_rooms || 2;
-                        const assignedRoomNum = getAssignedRoom(uid, numRooms);
+                        // Seed room calculation with groupKey so distinct schedule windows get non-conflicting staging rooms
+                        const assignedRoomNum = getAssignedRoom(groupKey, numRooms);
+                        const toteIdsJson = JSON.stringify(totes.map(t => t.id)).replace(/"/g, '&quot;');
 
                         return `
                             <div class="bg-gray-950 border-2 border-blue-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-blue-500/60 transition">
@@ -3687,7 +3722,7 @@
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
                                         <span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="door-open" class="w-3.5 h-3.5"></i> Staging Room #${assignedRoomNum}</span>
-                                        <span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 px-3 py-1 rounded-xl border border-blue-500/30">PIN: ${pinByUid[uid] || '—'}</span>
+                                        <span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 px-3 py-1 rounded-xl border border-blue-500/30">PIN: ${pin}</span>
                                     </div>
                                 </div>
 
@@ -3708,7 +3743,7 @@
                                 <!-- Industrial Action Buttons (Batch + Single Hand-Off) -->
                                 <div class="grid grid-cols-1 ${totes.length > 1 ? 'sm:grid-cols-2' : ''} gap-3">
                                     ${totes.length > 1 ? `
-                                    <button onclick="batchHandOffCustomerTotes('${uid}', '${customerName.replace(/'/g, "\\'")}', 'with-customer')" class="w-full min-h-[60px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                    <button onclick="batchHandOffCustomerTotes('${uid}', '${customerName.replace(/'/g, "\\'")}', 'with-customer', ${toteIdsJson})" class="w-full min-h-[60px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                         <i data-lucide="check-check" class="w-6 h-6"></i>
                                         <span>BATCH CHECK-OUT ALL ${totes.length} TOTES →</span>
                                     </button>
@@ -3896,30 +3931,52 @@
             }
         }
 
-        // Batch Check Out / Hand Off All Staged Totes to a Customer in Room #X
-        async function batchHandOffCustomerTotes(customerUid, customerName, targetStatus = 'with-customer') {
-            if (!confirm(`Batch check-out ALL staged totes for ${customerName} to customer?`)) return;
+        // Batch Check Out / Hand Off Staged Totes for a specific Schedule Card / Request
+        async function batchHandOffCustomerTotes(customerUid, customerName, targetStatus = 'with-customer', toteIds = null) {
+            const countLabel = (Array.isArray(toteIds) && toteIds.length > 0) ? `${toteIds.length}` : 'ALL';
+            if (!confirm(`Batch check-out ${countLabel} staged tote(s) for ${customerName} to customer?`)) return;
 
             try {
-                // Update all staged totes for this customer to with-customer
-                const { data: updatedTotes, error: updateErr } = await supabase.from('inventory')
+                let query = supabase.from('inventory')
                     .update({
                         status: targetStatus,
                         location_code: 'CUSTOMER-PREMISES',
                         location_type: 'with_customer',
                         last_scanned_at: new Date().toISOString()
-                    })
-                    .eq('uid', customerUid)
-                    .in('status', ['staged', 'pending-stage', 'pending-dispatch', 'out-for-delivery'])
-                    .select();
+                    });
 
+                if (Array.isArray(toteIds) && toteIds.length > 0) {
+                    query = query.in('id', toteIds);
+                } else {
+                    query = query.eq('uid', customerUid).in('status', ['staged', 'pending-stage', 'pending-dispatch', 'out-for-delivery']);
+                }
+
+                const { data: updatedTotes, error: updateErr } = await query.select();
                 if (updateErr) throw updateErr;
 
-                // Mark pending access requests as completed
-                await supabase.from('access_requests')
-                    .update({ status: 'completed' })
-                    .eq('uid', customerUid)
-                    .neq('status', 'cancelled');
+                // Mark matching access request as completed
+                if (Array.isArray(toteIds) && toteIds.length > 0) {
+                    const { data: reqs } = await supabase.from('access_requests')
+                        .select('*')
+                        .eq('uid', customerUid)
+                        .neq('status', 'completed')
+                        .neq('status', 'cancelled');
+                    
+                    if (reqs && reqs.length > 0) {
+                        for (const r of reqs) {
+                            const reqItems = r.requested_items || r.requested_tote_codes || [];
+                            const hasMatch = reqItems.some(item => toteIds.includes(item));
+                            if (hasMatch) {
+                                await supabase.from('access_requests').update({ status: 'completed' }).eq('id', r.id);
+                            }
+                        }
+                    }
+                } else {
+                    await supabase.from('access_requests')
+                        .update({ status: 'completed' })
+                        .eq('uid', customerUid)
+                        .neq('status', 'cancelled');
+                }
 
                 const count = (updatedTotes || []).length || 1;
                 triggerScanFeedbackOverlay(true, `Batch Hand-Off Success! Checked out ${count} tote(s) to ${customerName}.`);
