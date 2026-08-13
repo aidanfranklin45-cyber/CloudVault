@@ -3379,15 +3379,48 @@
                     return (Math.abs(hash) % (totalRooms || 2)) + 1;
                 }
 
-                // Group totes by Customer UID helper
+                // Group totes by Customer UID helper (Facility owns unallocated / worker-created stock)
                 function groupTotesByCustomer(items) {
                     const groups = {};
                     (items || []).forEach(item => {
-                        const key = item.uid || 'unassigned';
+                        const firstUser = item.users;
+                        const userName = (firstUser?.name || '').toLowerCase();
+                        const userRole = firstUser?.role || '';
+                        const isWorkerOrStaff = userRole === 'warehouse_worker' || userRole === 'warehouse_manager' || userName.includes('worker');
+                        const key = (!item.uid || item.uid === 'unassigned' || !firstUser || isWorkerOrStaff) 
+                            ? `facility_${queryFacilityId}` 
+                            : item.uid;
                         if (!groups[key]) groups[key] = [];
                         groups[key].push(item);
                     });
                     return groups;
+                }
+
+                // Helper to resolve whether a group of totes is facility-owned or customer-owned
+                function resolveToteOwner(uid, totes) {
+                    const firstUser = totes && totes[0] ? totes[0].users : null;
+                    const userName = firstUser?.name || '';
+                    const userRole = firstUser?.role || '';
+                    const isWorkerOrStaff = userRole === 'warehouse_worker' || userRole === 'warehouse_manager' || userName.toLowerCase().includes('worker');
+                    const isFacilityOwned = !uid || uid.startsWith('facility_') || uid === 'unassigned' || !firstUser || isWorkerOrStaff;
+
+                    if (isFacilityOwned) {
+                        const facName = currentLoadedFac?.name || 'Yakima Fulfillment Center';
+                        return {
+                            name: `${facName} (Facility Stock)`,
+                            subtitle: `Facility Inventory Asset • ${totes.length} Tote(s) to Activate`,
+                            initials: '🏢',
+                            isFacility: true
+                        };
+                    }
+
+                    const name = userName || `Customer ${uid.substring(0, 8)}`;
+                    return {
+                        name: name,
+                        subtitle: `UID: ${uid.substring(0, 8)} • ${totes.length} Tote(s) to Activate`,
+                        initials: name.substring(0, 2).toUpperCase(),
+                        isFacility: false
+                    };
                 }
 
                 // Fulfillment type badge helper
@@ -3431,7 +3464,8 @@
                     </div>`;
                 } else {
                     bodyActivate.innerHTML = Object.entries(activateGrouped).map(([uid, totes]) => {
-                        const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0, 8)}`;
+                        const owner = resolveToteOwner(uid, totes);
+                        const customerName = owner.name;
                         const firstCode = totes[0].tote_code;
                         const allCodesStr = totes.map(t => t.tote_code).join(', ');
                         return `
@@ -3439,11 +3473,14 @@
                                 <div class="flex items-center justify-between border-b border-gray-850 pb-3">
                                     <div class="flex items-center space-x-3">
                                         <div class="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-sm border border-emerald-500/30 font-mono">
-                                            ${customerName.substring(0, 2).toUpperCase()}
+                                            ${owner.initials}
                                         </div>
                                         <div>
-                                            <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
-                                            <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0, 8)} &bull; ${totes.length} Tote(s) to Activate</p>
+                                            <div class="flex items-center gap-2">
+                                                <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
+                                                ${owner.isFacility ? `<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>` : ''}
+                                            </div>
+                                            <p class="text-[11px] font-mono text-gray-400">${owner.subtitle}</p>
                                         </div>
                                     </div>
                                     <button onclick="openPrintLabelModal('${allCodesStr}')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
@@ -3557,7 +3594,8 @@
                         const uid = group.uid;
                         const totes = group.totes;
                         const isValet = group.destType === 'valet_delivery';
-                        const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0, 8)}`;
+                        const owner = resolveToteOwner(uid, totes);
+                        const customerName = owner.name;
                         const pin = pinByUid[uid] || '—';
                         const firstCode = totes[0].tote_code;
 
@@ -3610,14 +3648,15 @@
                                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-850 pb-3">
                                     <div class="flex items-center space-x-3">
                                         <div class="w-10 h-10 rounded-2xl ${isValet ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'} font-bold flex items-center justify-center text-sm border font-mono">
-                                            ${customerName.substring(0, 2).toUpperCase()}
+                                            ${owner.initials}
                                         </div>
                                         <div>
                                             <h4 class="text-sm font-extrabold text-white flex items-center gap-2 flex-wrap">
                                                 ${customerName}
+                                                ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
                                                 ${isValet ? '<span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 VALET DELIVERY</span>' : '<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE STAGING</span>'}
                                             </h4>
-                                            <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0, 8)} &bull; ${totes.length} Tote(s)</p>
+                                            <p class="text-[11px] font-mono text-gray-400">${owner.subtitle}</p>
                                         </div>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
@@ -3715,7 +3754,8 @@
 
                     bodyCustomer.innerHTML = Object.entries(stagedCardGroups).map(([groupKey, group]) => {
                         const { uid, target_date, time_slot, pin, totes } = group;
-                        const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0, 8)}`;
+                        const owner = resolveToteOwner(uid, totes);
+                        const customerName = owner.name;
                         const firstCode = totes[0].tote_code;
 
                         const reqDate = (target_date && target_date !== 'unscheduled') 
@@ -3742,11 +3782,14 @@
                                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-850 pb-3">
                                     <div class="flex items-center space-x-3">
                                         <div class="w-10 h-10 rounded-2xl bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center text-sm border border-blue-500/30 font-mono">
-                                            ${customerName.substring(0, 2).toUpperCase()}
+                                            ${owner.initials}
                                         </div>
                                         <div>
-                                            <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
-                                            <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0, 8)} &bull; ${totes.length} Staged Tote(s)</p>
+                                            <div class="flex items-center gap-2">
+                                                <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
+                                                ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
+                                            </div>
+                                            <p class="text-[11px] font-mono text-gray-400">${owner.isFacility ? owner.subtitle : `UID: ${uid.substring(0, 8)} • ${totes.length} Staged Tote(s)`}</p>
                                         </div>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
@@ -3802,7 +3845,8 @@
                         </div>`;
                     } else {
                         bodyDispatch.innerHTML = Object.entries(dispatchGrouped).map(([uid, totes]) => {
-                            const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0, 8)}`;
+                            const owner = resolveToteOwner(uid, totes);
+                            const customerName = owner.name;
                             const firstCode = totes[0].tote_code;
 
                             const reqManifest = manifestByUidAndType[`${uid}_valet_delivery`] || manifestByUid[uid];
@@ -3815,11 +3859,14 @@
                                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-850 pb-3">
                                         <div class="flex items-center space-x-3">
                                             <div class="w-10 h-10 rounded-2xl bg-orange-500/20 text-orange-400 font-bold flex items-center justify-center text-sm border border-orange-500/30 font-mono">
-                                                ${customerName.substring(0, 2).toUpperCase()}
+                                                ${owner.initials}
                                             </div>
                                             <div>
-                                                <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
-                                                <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0, 8)} &bull; ${totes.length} Tote(s) Out for Delivery</p>
+                                                <div class="flex items-center gap-2">
+                                                    <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
+                                                    ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
+                                                </div>
+                                                <p class="text-[11px] font-mono text-gray-400">${owner.isFacility ? owner.subtitle : `UID: ${uid.substring(0, 8)} • ${totes.length} Tote(s) Out for Delivery`}</p>
                                             </div>
                                         </div>
                                         <div class="flex flex-wrap items-center gap-2">
@@ -3865,7 +3912,8 @@
                     </div>`;
                 } else {
                     bodyReturned.innerHTML = Object.entries(returnedGrouped).map(([uid, totes]) => {
-                        const customerName = totes[0]?.users?.name || `Customer ${uid.substring(0, 8)}`;
+                        const owner = resolveToteOwner(uid, totes);
+                        const customerName = owner.name;
                         const firstCode = totes[0].tote_code;
                         const ft = typeByUid[uid] || 'staging';
                         const isValet = ft === 'valet_delivery';
@@ -3876,11 +3924,14 @@
                                 <div class="flex items-center justify-between border-b border-gray-850 pb-3">
                                     <div class="flex items-center space-x-3">
                                         <div class="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-400 font-bold flex items-center justify-center text-sm border border-purple-500/30 font-mono">
-                                            ${customerName.substring(0, 2).toUpperCase()}
+                                            ${owner.initials}
                                         </div>
                                         <div>
-                                            <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
-                                            <p class="text-[11px] font-mono text-gray-400">UID: ${uid.substring(0, 8)} &bull; ${totes.length} Tote(s) Out &bull; ${returnNote}</p>
+                                            <div class="flex items-center gap-2">
+                                                <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
+                                                ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
+                                            </div>
+                                            <p class="text-[11px] font-mono text-gray-400">${owner.isFacility ? owner.subtitle : `UID: ${uid.substring(0, 8)} • ${totes.length} Tote(s) Out • ${returnNote}`}</p>
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-2">
