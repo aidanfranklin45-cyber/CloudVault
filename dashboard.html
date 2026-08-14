@@ -1601,8 +1601,14 @@
 
             // Helper to get exact Room Number and PIN from request data or fallback
             const resolveRoomAndPin = (req) => {
-                const room = (req && (req.assigned_room || req.room_number || req.staging_room_number)) || getAssignedRoom(currentUser ? currentUser.id : null, 3);
-                const pin = (req && (req.pin || req.access_pin || req.pin_code || req.access_code)) || (currentProfile && currentProfile.onboarding_pin) || (currentUser && currentUser.onboarding_pin) || '1517';
+                let room = (req && req.assigned_room) ? Number(req.assigned_room) : null;
+                if (!room && req && (req.room_number || req.staging_room_number)) {
+                    room = Number(req.room_number || req.staging_room_number);
+                }
+                if (!room) {
+                    room = 1;
+                }
+                const pin = (req && (req.pin || req.access_pin || req.pin_code || req.access_code)) || (currentProfile && currentProfile.onboarding_pin) || (currentUser && currentUser.onboarding_pin) || '9588';
                 return { room, pin };
             };
 
@@ -2118,7 +2124,7 @@
                     reservedAtStr = reqDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 }
 
-                const roomNum = getAssignedRoom(req.uid || (currentUser && currentUser.id));
+                const roomNum = (req && req.assigned_room) ? Number(req.assigned_room) : ((req && (req.room_number || req.staging_room_number)) || 1);
 
                 const isValet = req.fulfillment_type === 'valet_delivery';
                 const typeBadge = isValet 

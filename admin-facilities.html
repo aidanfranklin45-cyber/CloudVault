@@ -1925,9 +1925,12 @@
                                     customer_phone: r.users?.phone || '',
                                     fulfillment_type: r.fulfillment_type || 'staging',
                                     status: r.status,
+                                    target_date: r.target_date,
                                     pin: r.pin || '—',
+                                    assigned_room: r.assigned_room ? Number(r.assigned_room) : null,
                                     time_slot: r.time_slot || '09:00 AM - 12:00 PM',
-                                    tote_count: (r.requested_items || []).length || 1
+                                    tote_count: (r.requested_items || []).length || (r.requested_tote_codes || []).length || 1,
+                                    is_currently_staged: r.status === 'staged'
                                 }))
                             };
                         }
@@ -1946,9 +1949,10 @@
                         let html = '';
                         for (let r = 1; r <= numRooms; r++) {
                             const roomRes = reservations.filter(res => {
-                                const groupKey = `${res.uid}::${res.target_date || 'unscheduled'}::${res.time_slot || '09:00 AM - 12:00 PM'}::${res.id || 'default'}`;
-                                const assigned = typeof getAssignedRoom === 'function' ? getAssignedRoom(groupKey, numRooms) : ((res.id ? res.id.charCodeAt(0) : 1) % numRooms + 1);
-                                return assigned === r || (r === 1 && res.is_currently_staged);
+                                const assigned = (res.assigned_room != null && res.assigned_room !== undefined)
+                                    ? Number(res.assigned_room)
+                                    : 1;
+                                return assigned === r;
                             });
                             const isOccupied = roomRes.length > 0;
 

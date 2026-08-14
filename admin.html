@@ -1162,7 +1162,20 @@
                                             <i data-lucide="scan-line" class="w-4 h-4 animate-pulse"></i>
                                         </div>
                                     </div>
-                                    <p class="text-[10px] text-gray-500 mt-1">Scan or type tote barcode, or input shelf/bay location (e.g. <span class="text-indigo-400 font-mono">V-A01-S01</span>) to lock destination.</p>
+                                    <p class="text-[10px] text-gray-500 mt-1">Scan or type tote barcode, or scan room tag (e.g. <span class="text-blue-400 font-mono">ROOM-1</span>) or shelf (<span class="text-indigo-400 font-mono">V-A01-S01</span>) to lock target.</p>
+                                    
+                                    <!-- Dedicated Staging Target Lock Selector -->
+                                    <div class="flex items-center gap-2 mt-2 pt-1 border-t border-gray-850/60">
+                                        <label class="text-[10px] font-bold uppercase tracking-wider text-gray-400 whitespace-nowrap flex items-center gap-1">
+                                            <i data-lucide="door-open" class="w-3 h-3 text-blue-400"></i> Target Room:
+                                        </label>
+                                        <select id="staging-target-room-selector" onchange="if(this.value){setTargetLocationLock(this.value);}else{clearTargetLocationLock();}" class="bg-gray-950 border border-gray-800 text-xs text-blue-300 font-mono rounded-lg px-2.5 py-1.5 focus:border-blue-500 outline-none cursor-pointer flex-1">
+                                            <option value="">🎯 Auto / Scan Room Barcode</option>
+                                            <option value="ROOM-1">🚪 Staging Room #1 (ROOM-1)</option>
+                                            <option value="ROOM-2">🚪 Staging Room #2 (ROOM-2)</option>
+                                            <option value="ROOM-3">🚪 Staging Room #3 (ROOM-3)</option>
+                                        </select>
+                                    </div>
                                 </div>              </div>
 
                                 <!-- Target Location Lock Banner -->
@@ -3700,6 +3713,7 @@
                                 surgeTier: req.surge_tier,
                                 surgeFee: req.surge_fee,
                                 pin: req.pin || pinByUid[req.uid] || '1517',
+                                assignedRoom: req.assigned_room ? Number(req.assigned_room) : null,
                                 status: req.status,
                                 totes: matchingTotes
                             });
@@ -3726,19 +3740,24 @@
 
                         Object.entries(unlinkedMap).forEach(([key, grp]) => {
                             const owner = resolveToteOwner(grp.uid, grp.totes);
+                            const userReq = (allRequests || []).find(r => r.uid === grp.uid && r.status !== 'completed' && r.status !== 'cancelled');
+                            const userAssignedRoom = userReq && userReq.assigned_room ? Number(userReq.assigned_room) : null;
+                            const userPin = userReq && userReq.pin ? userReq.pin : (pinByUid[grp.uid] || '1517');
+
                             jobs.push({
                                 jobId: `unlinked_${key}`,
                                 isRequest: false,
-                                request: null,
+                                request: userReq || null,
                                 uid: grp.uid,
                                 owner: owner,
                                 customerName: owner.name,
                                 fulfillmentType: grp.fulfillmentType,
-                                targetDate: null,
-                                timeSlot: null,
-                                surgeTier: null,
-                                surgeFee: null,
-                                pin: pinByUid[grp.uid] || '1517',
+                                targetDate: userReq?.target_date || null,
+                                timeSlot: userReq?.time_slot || null,
+                                surgeTier: userReq?.surge_tier || null,
+                                surgeFee: userReq?.surge_fee || null,
+                                pin: userPin,
+                                assignedRoom: userAssignedRoom,
                                 status: grp.totes[0]?.status,
                                 totes: grp.totes
                             });
@@ -3878,7 +3897,12 @@
                         const isSameDay = job.surgeTier === 'same_day_surge';
 
                         const numRooms = Number(currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 3);
-                        const assignedRoomNum = getAssignedRoom(job.jobId || uid, numRooms);
+                        let assignedRoomNum = job.assignedRoom;
+                        if (!assignedRoomNum && window.activeTargetLocationCode && window.activeTargetLocationCode.startsWith('ROOM-')) {
+                            const match = window.activeTargetLocationCode.match(/ROOM-?(\d+)/i);
+                            if (match) assignedRoomNum = parseInt(match[1], 10);
+                        }
+                        if (!assignedRoomNum) assignedRoomNum = 1;
 
                         const isIntakeProcessingTote = totes.some(t => !t.activated || (t.location_code && t.location_code.startsWith('INTAKE')) || (t.status === 'pending-stage' && !t.activated));
 
@@ -3953,7 +3977,7 @@
                                             </div>
                                             <div class="flex items-center gap-1.5">
                                                 <button onclick="openReportMissingModal('${t.tote_code}', '${customerName.replace(/'/g, "\\'")}', '${uid}', '${job.jobId}')" class="text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold px-2 py-1.5 rounded-xl border border-rose-500/30 transition cursor-pointer" title="Report Missing">⚠️</button>
-                                                <button onclick="document.getElementById('scan-barcode').value='${t.tote_code}';simulateScan('${expectedScanStatus}')" class="bg-gray-800 hover:bg-gray-700 text-amber-300 hover:text-white border border-amber-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
+                                                <button onclick="executeVaultPullToStaging('${t.tote_code}', ${assignedRoomNum}, '${expectedScanStatus}', '${job.jobId}')" class="bg-gray-800 hover:bg-gray-700 text-amber-300 hover:text-white border border-amber-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
                                                     <i data-lucide="${actionIcon}" class="w-3 h-3"></i> Pull
                                                 </button>
                                             </div>
@@ -3962,7 +3986,7 @@
                                 </div>
 
                                 <!-- Individual Tote Scan & Dynamic Action Button -->
-                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('${expectedScanStatus}')" class="w-full min-h-[60px] bg-gradient-to-r ${actionGradient} text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                <button onclick="executeVaultPullToStaging('${firstCode}', ${assignedRoomNum}, '${expectedScanStatus}', '${job.jobId}')" class="w-full min-h-[60px] bg-gradient-to-r ${actionGradient} text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                     <i data-lucide="${actionIcon}" class="w-6 h-6"></i>
                                     <span>${actionLabel}</span>
                                 </button>
@@ -3984,11 +4008,8 @@
                         <p class="text-xs text-gray-500 font-mono">No self-serve totes currently waiting for customer pickup.</p>
                     </div>`;
                 } else {
-                    const numRooms = Number(currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 3);
-                    const usedRoomNums = new Set();
-
                     bodyCustomer.innerHTML = stageJobs.map(job => {
-                        const { uid, targetDate, timeSlot, pin, totes, customerName, owner, jobId } = job;
+                        const { uid, targetDate, timeSlot, pin, totes, customerName, owner, jobId, assignedRoom } = job;
                         const firstCode = totes[0].tote_code;
 
                         const reqDate = (targetDate && targetDate !== 'unscheduled') 
@@ -3997,16 +4018,7 @@
                         const dateStr = reqDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
                         const slotStr = timeSlot || '09:00 AM - 12:00 PM';
 
-                        let assignedRoomNum = getAssignedRoom(jobId || uid, numRooms);
-                        if (usedRoomNums.has(assignedRoomNum) && usedRoomNums.size < numRooms) {
-                            for (let r = 1; r <= numRooms; r++) {
-                                if (!usedRoomNums.has(r)) {
-                                    assignedRoomNum = r;
-                                    break;
-                                }
-                            }
-                        }
-                        usedRoomNums.add(assignedRoomNum);
+                        const assignedRoomNum = assignedRoom || 1;
                         const toteIdsJson = JSON.stringify(totes.map(t => t.id)).replace(/"/g, '&quot;');
 
                         return `
@@ -4483,7 +4495,19 @@
                         reason: `Locker bay ${b} exceeds room capacity (Max 20 bays per room).`
                     };
                 }
-                return { isValid: true, normalizedCode: `ROOM-${r}-BAY-${String(b).padStart(2, '0')}`, zoneType: 'STAGING' };
+                return { isValid: true, normalizedCode: `ROOM-${r}-BAY-${String(b).padStart(2, '0')}`, zoneType: 'STAGING', roomNumber: r };
+            }
+
+            const roomOnlyMatch = cleanCode.match(/^(?:STAGING-)?(?:ROOM|STAGE|LOCKER)-?(\d+)$/i) || cleanCode.match(/^ROOM\s*(\d+)$/i);
+            if (roomOnlyMatch) {
+                const r = parseInt(roomOnlyMatch[1], 10);
+                if (r > stagingRooms) {
+                    return {
+                        isValid: false,
+                        reason: `Staging Room #${r} exceeds facility staging configuration (Max ${stagingRooms} Rooms configured).`
+                    };
+                }
+                return { isValid: true, normalizedCode: `ROOM-${r}`, zoneType: 'STAGING', roomNumber: r };
             }
 
             return {
@@ -4515,6 +4539,17 @@
             const display = document.getElementById('target-location-code-display');
             if (display) display.textContent = window.activeTargetLocationCode;
             if (banner) banner.classList.remove('hidden');
+
+            const roomSel = document.getElementById('staging-target-room-selector');
+            if (roomSel) {
+                if (window.activeTargetLocationCode && window.activeTargetLocationCode.startsWith('ROOM-')) {
+                    const match = window.activeTargetLocationCode.match(/ROOM-(\d+)/i);
+                    roomSel.value = match ? `ROOM-${match[1]}` : '';
+                } else {
+                    roomSel.value = '';
+                }
+            }
+
             if (typeof lucide !== 'undefined') lucide.createIcons();
             return true;
         }
@@ -4523,6 +4558,8 @@
             window.activeTargetLocationCode = null;
             const banner = document.getElementById('target-location-banner');
             if (banner) banner.classList.add('hidden');
+            const roomSel = document.getElementById('staging-target-room-selector');
+            if (roomSel) roomSel.value = '';
             const barcodeInput = document.getElementById('scan-barcode');
             if (barcodeInput) barcodeInput.focus();
         }
@@ -5569,6 +5606,23 @@
                 }
                 if (barcodeInput) barcodeInput.focus();
             }
+        }
+
+        // Vault Pull to Staging helper with Target Room assignment
+        async function executeVaultPullToStaging(toteCode, targetRoomNum, expectedStatus, jobId) {
+            const targetStagingLoc = (window.activeTargetLocationCode && window.activeTargetLocationCode.startsWith('ROOM-'))
+                ? window.activeTargetLocationCode
+                : `ROOM-${targetRoomNum || 1}`;
+            
+            const prevLock = window.activeTargetLocationCode;
+            window.activeTargetLocationCode = targetStagingLoc;
+            
+            const barcodeInput = document.getElementById('scan-barcode');
+            if (barcodeInput) barcodeInput.value = toteCode;
+            
+            await simulateScan(expectedStatus);
+            
+            if (!prevLock) window.activeTargetLocationCode = null;
         }
 
         // Missing Tote Reporting Flow
