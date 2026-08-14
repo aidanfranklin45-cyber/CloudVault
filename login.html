@@ -26,72 +26,72 @@
 <body class="antialiased min-h-screen flex flex-col">
 
     <!-- Header -->
-    <header class="bg-white shadow-sm">
+    <header class="bg-white shadow-sm border-b border-gray-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <a href="index.html" class="text-2xl font-bold tracking-tighter text-blue-600 flex items-center gap-2">
+            <a href="index.html" class="text-2xl font-bold tracking-tighter text-blue-700 flex items-center gap-2">
                 <img src="logo.png" alt="CloudVault Logo" class="w-8 h-8 object-contain rounded">
                 <span>CloudVault</span>
             </a>
-            <a href="index.html" class="text-sm font-semibold text-gray-500 hover:text-gray-900">← Back to Home</a>
+            <a href="index.html" class="text-sm font-bold text-gray-700 hover:text-gray-950 transition">← Back to Home</a>
         </div>
     </header>
 
     <main class="flex-grow flex items-center justify-center px-4 py-16 fade-in">
-        <div class="bg-white p-8 sm:p-10 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
+        <div class="bg-white p-8 sm:p-10 rounded-2xl shadow-xl w-full max-w-md border border-gray-200">
             
             <!-- Notice Banner (Inactivity Auto-Logout) -->
-            <div id="auth-notice" class="hidden mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs font-semibold text-center leading-relaxed">
+            <div id="auth-notice" class="hidden mb-6 p-4 rounded-xl bg-amber-50 border border-amber-400 text-amber-900 text-xs font-bold text-center leading-relaxed">
                 🔒 You were automatically signed out after 30 minutes of inactivity for security.
             </div>
 
             <div class="text-center mb-8">
-                <h1 id="auth-title" class="text-2xl font-bold text-gray-900">Welcome Back</h1>
-                <p id="auth-subtitle" class="text-gray-500 text-sm mt-2">Sign in to access your vault.</p>
+                <h1 id="auth-title" class="text-3xl font-extrabold text-gray-950 tracking-tight">Welcome Back</h1>
+                <p id="auth-subtitle" class="text-gray-700 text-sm font-medium mt-2">Sign in to access your vault.</p>
             </div>
 
             <!-- Auth Form -->
             <div class="space-y-4">
                 <!-- Name field (sign-up only) -->
                 <div id="name-field" class="hidden">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Full Name</label>
-                    <input type="text" id="auth-name" placeholder="Jane Doe" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium">
+                    <label class="block text-sm font-bold text-gray-900 mb-2">Full Name</label>
+                    <input type="text" id="auth-name" placeholder="Jane Doe" class="w-full px-4 py-3 border border-gray-400 rounded-xl font-semibold text-gray-950 placeholder-gray-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200">
                 </div>
 
                 <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Email</label>
-                    <input type="email" id="auth-email" placeholder="jane@example.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium">
+                    <label class="block text-sm font-bold text-gray-900 mb-2">Email Address</label>
+                    <input type="email" id="auth-email" placeholder="jane@example.com" class="w-full px-4 py-3 border border-gray-400 rounded-xl font-semibold text-gray-950 placeholder-gray-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200">
                 </div>
 
                 <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Password</label>
-                    <input type="password" id="auth-password" placeholder="••••••••" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium">
+                    <label class="block text-sm font-bold text-gray-900 mb-2">Password</label>
+                    <input type="password" id="auth-password" placeholder="••••••••" class="w-full px-4 py-3 border border-gray-400 rounded-xl font-semibold text-gray-950 placeholder-gray-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200">
                 </div>
 
                 <!-- Remember Me Checkbox -->
                 <div id="remember-me-field" class="flex items-center justify-between pt-1">
-                    <label class="flex items-center text-xs font-semibold text-gray-600 cursor-pointer select-none">
-                        <input type="checkbox" id="auth-remember-me" class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 mr-2 cursor-pointer">
+                    <label class="flex items-center text-xs font-bold text-gray-800 cursor-pointer select-none">
+                        <input type="checkbox" id="auth-remember-me" class="w-4 h-4 text-blue-600 rounded border-gray-400 focus:ring-blue-500 mr-2 cursor-pointer">
                         Remember me on this device
                     </label>
                 </div>
 
                 <!-- Phone field (sign-up only) -->
                 <div id="phone-field" class="hidden">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Phone</label>
-                    <input type="tel" id="auth-phone" placeholder="(800) 256-8382" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium">
+                    <label class="block text-sm font-bold text-gray-900 mb-2">Phone Number</label>
+                    <input type="tel" id="auth-phone" placeholder="(800) 256-8382" class="w-full px-4 py-3 border border-gray-400 rounded-xl font-semibold text-gray-950 placeholder-gray-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200">
                 </div>
 
-                <p id="auth-error" class="text-red-500 text-sm font-medium hidden"></p>
+                <p id="auth-error" class="text-red-600 text-sm font-bold hidden"></p>
 
-                <button id="auth-submit" onclick="handleAuth()" class="w-full bg-blue-600 text-white px-4 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition mt-4">
+                <button id="auth-submit" onclick="handleAuth()" class="w-full bg-blue-600 text-white px-4 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 shadow-md hover:shadow-lg transition mt-4">
                     Sign In
                 </button>
             </div>
 
             <div class="mt-6 text-center">
-                <p class="text-sm text-gray-500">
+                <p class="text-sm font-medium text-gray-700">
                     <span id="toggle-text">Don't have an account?</span>
-                    <button onclick="toggleMode()" class="text-blue-600 font-semibold hover:underline ml-1" id="toggle-btn">Sign Up</button>
+                    <button onclick="toggleMode()" class="text-blue-700 font-bold hover:underline ml-1" id="toggle-btn">Sign Up</button>
                 </p>
             </div>
         </div>

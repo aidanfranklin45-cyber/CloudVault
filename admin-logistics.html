@@ -25,10 +25,22 @@
             background-color: #060913;
         }
         .glass-panel {
-            background: rgba(13, 18, 30, 0.85);
+            background: rgba(13, 18, 30, 0.92);
             backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
         }
+
+        /* High-Contrast Readability Overrides */
+        .text-gray-500 { color: #94a3b8 !important; }
+        .text-gray-400 { color: #cbd5e1 !important; }
+        .text-gray-600 { color: #cbd5e1 !important; }
+        .border-gray-800 { border-color: #334155 !important; }
+        .border-gray-850 { border-color: #334155 !important; }
+        .border-gray-900 { border-color: #1e293b !important; }
+        table th { color: #f8fafc !important; font-weight: 800 !important; }
+        table td { color: #f1f5f9 !important; }
+        input, select, textarea { color: #ffffff !important; }
+        input::placeholder { color: #94a3b8 !important; }
     </style>
 </head>
 <body class="flex flex-col min-h-full">

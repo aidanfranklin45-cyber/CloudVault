@@ -134,16 +134,28 @@
         }
 
         .glass-card {
-            background: rgba(17, 24, 39, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.07);
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.25);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .glass-card:hover {
-            border-color: rgba(59, 130, 246, 0.4);
-            box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.5);
+            box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.25);
             transform: translateY(-2px);
         }
+
+        /* High-Contrast Readability Overrides */
+        .text-gray-500 { color: #94a3b8 !important; }
+        .text-gray-400 { color: #cbd5e1 !important; }
+        .text-gray-600 { color: #cbd5e1 !important; }
+        .border-gray-800 { border-color: #334155 !important; }
+        .border-gray-850 { border-color: #334155 !important; }
+        .border-gray-900 { border-color: #1e293b !important; }
+        table th { color: #f8fafc !important; font-weight: 800 !important; letter-spacing: 0.05em; }
+        table td { color: #f1f5f9 !important; }
+        input, select, textarea { color: #ffffff !important; }
+        input::placeholder { color: #94a3b8 !important; }
 
         /* Custom scrollbar */
         ::-webkit-scrollbar {
@@ -8427,12 +8439,78 @@
                 const qrContainer = document.getElementById('badge-qr-container');
                 qrContainer.innerHTML = `<div id="modal-live-qr" class="bg-white p-3 rounded-2xl shadow-xl border-4 border-cyan-500/50 inline-block"></div>`;
                 
+        async function generateAndIssueBadge() {
+            if (!activeBadgeTarget) return;
+
+            const issueBtn = document.getElementById('badge-issue-btn');
+            const originalText = issueBtn.textContent;
+            issueBtn.disabled = true;
+            issueBtn.textContent = 'Securing Token...';
+
+            try {
+                // 1. Generate high-entropy token (CV-AUTH-XXXX)
+                const rawToken = generateBadgeToken();
+                const tokenHash = await hashBadgeToken(rawToken);
+
+                // 2. Call RPC to store hash and activate badge
+                const { data, error } = await supabase.rpc('issue_employee_badge', {
+                    p_user_id: activeBadgeTarget.userId,
+                    p_token_hash: tokenHash,
+                    p_badge_label: `${activeBadgeTarget.userName} Primary Badge`
+                });
+
+                if (error) throw error;
+
+                activeBadgeTarget.currentToken = rawToken;
+                activeBadgeTarget.badgeId = data.badge_id;
+
+                // 3. Render 2D QR Matrix & 1D Barcode inside high-contrast badge card mockup
+                const qrContainer = document.getElementById('badge-qr-container');
+                qrContainer.innerHTML = `
+                    <div class="w-full bg-slate-900 border-2 border-cyan-400/60 rounded-2xl p-4 shadow-2xl space-y-3">
+                        <div class="flex items-center justify-between border-b border-cyan-500/30 pb-2">
+                            <span class="text-xs font-black text-cyan-300 tracking-wider uppercase flex items-center gap-1.5">
+                                ⚡ CLOUDVAULT ID
+                            </span>
+                            <span class="text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400 px-2 py-0.5 rounded">
+                                AUTHORIZED 2D PASS
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="space-y-1">
+                                <p class="text-base font-extrabold text-white uppercase">${activeBadgeTarget.userName}</p>
+                                <p class="text-xs font-bold text-cyan-200 uppercase">${activeBadgeTarget.userRole.replace('_', ' ')}</p>
+                                <p class="text-[10px] font-mono text-gray-300">FACILITY: <span class="text-white font-bold">${(activeBadgeTarget.facilityId || 'SEA-NORTH').replace('facility_', '').toUpperCase()}</span></p>
+                            </div>
+                            <div class="bg-white p-2 rounded-xl border-2 border-cyan-400 shadow-md shrink-0 flex items-center justify-center">
+                                <div id="modal-live-qr"></div>
+                            </div>
+                        </div>
+                        <div class="bg-white px-2 py-1.5 rounded-lg border border-gray-300 flex items-center justify-center">
+                            <svg id="modal-live-barcode" class="w-full max-h-9"></svg>
+                        </div>
+                    </div>
+                `;
+                
                 new QRCode(document.getElementById('modal-live-qr'), {
                     text: rawToken,
-                    width: 140,
-                    height: 140,
+                    width: 100,
+                    height: 100,
                     correctLevel: 0
                 });
+
+                if (typeof JsBarcode === 'function') {
+                    try {
+                        JsBarcode('#modal-live-barcode', rawToken, {
+                            format: "CODE128",
+                            width: 1.2,
+                            height: 28,
+                            fontSize: 10,
+                            displayValue: false,
+                            margin: 2
+                        });
+                    } catch (e) {}
+                }
 
                 // 4. Update Token String display
                 const tokenBox = document.getElementById('badge-token-box');
@@ -8442,13 +8520,13 @@
 
                 // 5. Update Status Pill & Buttons
                 const statusEl = document.getElementById('badge-modal-status');
-                statusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full text-xs font-mono font-bold animate-pulse"><i data-lucide="shield-check" class="w-3.5 h-3.5"></i> NEW BADGE ACTIVE</span>`;
+                statusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-emerald-300 bg-emerald-500/20 border border-emerald-400 px-3 py-1 rounded-full text-xs font-mono font-extrabold animate-pulse"><i data-lucide="shield-check" class="w-4 h-4"></i> NEW BADGE ACTIVE</span>`;
                 
                 document.getElementById('badge-revoke-btn').classList.remove('hidden');
                 document.getElementById('badge-print-btn').classList.remove('hidden');
                 issueBtn.textContent = 'Re-Issue New Badge Token';
 
-                showBadgeScanToast(`✓ Badge generated for ${activeBadgeTarget.userName}`, 'success');
+                showBadgeScanToast(`✓ 2D Badge generated for ${activeBadgeTarget.userName}`, 'success');
                 loadManagerFacilityData();
             } catch (err) {
                 console.error("Badge issuance error:", err);
@@ -8489,8 +8567,7 @@
 
             let tokenToPrint = activeBadgeTarget.currentToken;
             if (!tokenToPrint) {
-                // If printing without newly generated token, prompt to re-issue
-                if (confirm("To print a physical badge with an encoded QR matrix, a verified token must be active. Generate and print now?")) {
+                if (confirm("To print a physical badge with encoded 2D barcode matrix, a verified token must be generated. Generate and print now?")) {
                     generateAndIssueBadge().then(() => {
                         setTimeout(() => triggerPhysicalBadgePrint(), 300);
                     });
@@ -8526,6 +8603,7 @@
                 <html>
                 <head>
                     <title>CloudVault Employee Badge - ${emp.userName}</title>
+                    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
                     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
                     <style>
                         @page { size: 3.375in 2.125in; margin: 0; }
@@ -8533,7 +8611,7 @@
                             margin: 0;
                             padding: 0;
                             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                            background: #0f172a;
+                            background: #000000;
                             color: #ffffff;
                             -webkit-print-color-adjust: exact;
                             print-color-adjust: exact;
@@ -8545,11 +8623,11 @@
                         .badge-card {
                             width: 3.375in;
                             height: 2.125in;
-                            background: linear-gradient(135deg, #0b0f19 0%, #1e293b 100%);
-                            border-radius: 12px;
-                            border: 2px solid #38bdf8;
+                            background: #090d16;
+                            border-radius: 10px;
+                            border: 2.5px solid #00f2ff;
                             box-sizing: border-box;
-                            padding: 12px 14px;
+                            padding: 10px 12px;
                             position: relative;
                             display: flex;
                             flex-direction: column;
@@ -8560,25 +8638,21 @@
                             display: flex;
                             justify-content: space-between;
                             align-items: center;
-                            border-bottom: 1.5px solid rgba(56, 189, 248, 0.4);
-                            padding-bottom: 6px;
+                            border-bottom: 2px solid #00f2ff;
+                            padding-bottom: 4px;
                         }
                         .brand {
                             font-size: 11px;
                             font-weight: 900;
                             letter-spacing: 1.5px;
-                            color: #38bdf8;
+                            color: #00f2ff;
                             text-transform: uppercase;
-                            display: flex;
-                            align-items: center;
-                            gap: 4px;
                         }
                         .clearance-pill {
-                            font-size: 7px;
-                            font-weight: 800;
-                            background: rgba(16, 185, 129, 0.2);
-                            color: #34d399;
-                            border: 1px solid #10b981;
+                            font-size: 7.5px;
+                            font-weight: 900;
+                            background: #10b981;
+                            color: #000000;
                             padding: 2px 6px;
                             border-radius: 4px;
                             text-transform: uppercase;
@@ -8588,24 +8662,24 @@
                             display: flex;
                             align-items: center;
                             justify-content: space-between;
-                            gap: 10px;
-                            margin-top: 4px;
+                            gap: 8px;
+                            margin-top: 2px;
                         }
                         .emp-info {
                             flex: 1;
                         }
                         .emp-name {
                             font-size: 13px;
-                            font-weight: 800;
+                            font-weight: 900;
                             color: #ffffff;
                             margin: 0;
-                            line-height: 1.2;
+                            line-height: 1.1;
                             text-transform: uppercase;
                         }
                         .emp-role {
-                            font-size: 8px;
-                            font-weight: 800;
-                            color: #94a3b8;
+                            font-size: 8.5px;
+                            font-weight: 900;
+                            color: #38bdf8;
                             text-transform: uppercase;
                             letter-spacing: 0.8px;
                             margin-top: 2px;
@@ -8613,19 +8687,35 @@
                         .emp-meta {
                             font-size: 7px;
                             font-family: monospace;
-                            color: #64748b;
-                            margin-top: 4px;
+                            color: #e2e8f0;
+                            margin-top: 3px;
                             line-height: 1.3;
+                        }
+                        .emp-meta b {
+                            color: #ffffff;
                         }
                         .qr-wrap {
                             background: #ffffff;
-                            padding: 4px;
-                            border-radius: 8px;
-                            border: 1.5px solid #38bdf8;
+                            padding: 3px;
+                            border-radius: 6px;
+                            border: 2px solid #00f2ff;
                             display: flex;
                             align-items: center;
                             justify-content: center;
                             flex-shrink: 0;
+                        }
+                        .barcode-wrap {
+                            background: #ffffff;
+                            padding: 2px 4px;
+                            border-radius: 4px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            margin-top: 2px;
+                        }
+                        .barcode-svg {
+                            width: 100%;
+                            height: 20px;
                         }
                         .badge-footer {
                             display: flex;
@@ -8633,9 +8723,10 @@
                             align-items: center;
                             font-size: 6.5px;
                             font-family: monospace;
-                            color: #64748b;
-                            border-top: 1px dashed rgba(255,255,255,0.15);
-                            padding-top: 4px;
+                            font-weight: 700;
+                            color: #94a3b8;
+                            border-top: 1px dashed rgba(255,255,255,0.3);
+                            padding-top: 2px;
                         }
                     </style>
                 </head>
@@ -8643,7 +8734,7 @@
                     <div class="badge-card">
                         <div class="badge-header">
                             <div class="brand">⚡ CLOUDVAULT</div>
-                            <div class="clearance-pill">AUTHORIZED PERSONNEL</div>
+                            <div class="clearance-pill">AUTHORIZED 2D PASS</div>
                         </div>
                         <div class="badge-body">
                             <div class="emp-info">
@@ -8659,9 +8750,12 @@
                                 <div id="print-qr" data-code="${token}"></div>
                             </div>
                         </div>
+                        <div class="barcode-wrap">
+                            <svg id="print-barcode"></svg>
+                        </div>
                         <div class="badge-footer">
                             <span>SCAN TO ACCESS TERMINAL</span>
-                            <span>${token.substring(0, 16)}...</span>
+                            <span>${token}</span>
                         </div>
                     </div>
                 </body>
@@ -8675,54 +8769,64 @@
 
             const win = iframe.contentWindow;
             const printCheck = setInterval(() => {
-                if (typeof win.QRCode === 'function') {
+                if (typeof win.QRCode === 'function' && typeof win.JsBarcode === 'function') {
                     clearInterval(printCheck);
                     const qrEl = win.document.getElementById('print-qr');
                     if (qrEl) {
                         new win.QRCode(qrEl, {
                             text: token,
-                            width: 68,
-                            height: 68,
+                            width: 64,
+                            height: 64,
                             correctLevel: 0
                         });
                     }
+                    try {
+                        win.JsBarcode(win.document.getElementById('print-barcode'), token, {
+                            format: "CODE128",
+                            width: 1.1,
+                            height: 18,
+                            displayValue: false,
+                            margin: 0
+                        });
+                    } catch (e) {}
+
                     setTimeout(() => {
                         win.focus();
                         win.print();
-                    }, 50);
+                    }, 80);
                 }
-            }, 10);
+            }, 15);
         }
     </script>
 
     <!-- Employee 2D Barcode Badge Issuance & Management Modal -->
     <div id="employee-badge-modal"
-        class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
         <div
-            class="glass-panel max-w-lg w-full p-6 rounded-3xl border border-indigo-500/30 shadow-[0_0_50px_rgba(99,102,241,0.2)] space-y-6 relative overflow-hidden bg-gray-950">
-            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
-                <div class="flex items-center space-x-2">
-                    <div class="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
-                        <i data-lucide="qr-code" class="w-4 h-4"></i>
+            class="glass-panel max-w-lg w-full p-6 rounded-3xl border-2 border-indigo-500/50 shadow-[0_0_50px_rgba(99,102,241,0.3)] space-y-5 relative overflow-hidden bg-gray-950">
+            <div class="flex items-center justify-between border-b border-gray-750 pb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400 flex items-center justify-center text-indigo-300">
+                        <i data-lucide="qr-code" class="w-5 h-5"></i>
                     </div>
                     <div>
-                        <h3 class="font-bold text-white text-base">Employee 2D Barcode Badge ID</h3>
-                        <p class="text-[10px] text-gray-400 font-mono">Silent hardware scan-to-login credential management</p>
+                        <h3 class="font-extrabold text-white text-base">Employee 2D Barcode Badge ID</h3>
+                        <p class="text-xs text-gray-300 font-mono">Silent hardware scan-to-login credential management</p>
                     </div>
                 </div>
-                <button onclick="closeEmployeeBadgeModal()" class="text-gray-400 hover:text-white p-1 transition">
+                <button onclick="closeEmployeeBadgeModal()" class="text-gray-300 hover:text-white p-1 transition">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
 
             <!-- Employee Info Header Card -->
-            <div class="bg-gray-900/60 p-4 rounded-2xl border border-gray-800 flex items-center justify-between">
-                <div class="space-y-0.5">
+            <div class="bg-gray-900 p-4 rounded-2xl border border-gray-700 flex items-center justify-between">
+                <div class="space-y-1">
                     <div class="flex items-center gap-2">
-                        <h4 class="text-sm font-bold text-white" id="badge-staff-name">—</h4>
-                        <span class="text-[9px] uppercase font-bold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" id="badge-staff-role">—</span>
+                        <h4 class="text-base font-extrabold text-white" id="badge-staff-name">—</h4>
+                        <span class="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-400" id="badge-staff-role">—</span>
                     </div>
-                    <p class="text-[11px] text-gray-400 font-mono">Assigned Facility: <span id="badge-staff-facility" class="text-cyan-300 font-bold">—</span></p>
+                    <p class="text-xs text-gray-300 font-mono">Assigned Facility: <span id="badge-staff-facility" class="text-cyan-300 font-bold">—</span></p>
                 </div>
                 <div id="badge-modal-status">
                     <!-- Status pill injected here -->
@@ -8730,35 +8834,35 @@
             </div>
 
             <!-- QR Preview Matrix Container -->
-            <div class="bg-gray-900/30 rounded-2xl border border-gray-850 p-6 flex flex-col items-center justify-center min-h-[190px]" id="badge-qr-container">
+            <div class="bg-gray-900/60 rounded-2xl border border-gray-700 p-5 flex flex-col items-center justify-center min-h-[190px]" id="badge-qr-container">
                 <!-- Live QR or prompt injected here -->
             </div>
 
             <!-- Raw Token Preview Box -->
-            <div id="badge-token-box" class="hidden bg-black/50 p-3 rounded-xl border border-cyan-500/30 text-center space-y-1">
-                <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">High-Entropy Encoded Token</p>
-                <p class="text-xs font-mono font-bold text-cyan-300 tracking-wider select-all" id="badge-token-display">—</p>
+            <div id="badge-token-box" class="hidden bg-black/80 p-3 rounded-xl border border-cyan-400 text-center space-y-1">
+                <p class="text-[10px] text-gray-300 uppercase font-extrabold tracking-wider">High-Entropy Encoded Token</p>
+                <p class="text-xs font-mono font-black text-cyan-300 tracking-wider select-all" id="badge-token-display">—</p>
             </div>
 
             <!-- Modal Action Buttons -->
-            <div class="space-y-2.5 pt-2 border-t border-gray-800">
+            <div class="space-y-3 pt-2 border-t border-gray-750">
                 <div class="grid grid-cols-2 gap-3">
                     <button type="button" id="badge-issue-btn" onclick="generateAndIssueBadge()"
-                        class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl text-xs transition shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-1.5">
+                        class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-3 rounded-xl text-xs transition shadow-lg shadow-indigo-600/40 flex items-center justify-center gap-1.5">
                         <i data-lucide="sparkles" class="w-4 h-4"></i> Generate & Issue Badge
                     </button>
                     <button type="button" id="badge-print-btn" onclick="printEmployeeBadgeCard()"
-                        class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-xl text-xs transition shadow-lg shadow-cyan-600/30 flex items-center justify-center gap-1.5">
+                        class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold py-3 rounded-xl text-xs transition shadow-lg shadow-cyan-600/40 flex items-center justify-center gap-1.5">
                         <i data-lucide="printer" class="w-4 h-4"></i> Print Badge ID Card
                     </button>
                 </div>
                 <div class="flex items-center justify-between pt-1">
                     <button type="button" id="badge-revoke-btn" onclick="handleRevokeBadge()"
-                        class="text-red-400 hover:text-red-300 text-xs font-bold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-red-500/10">
-                        <i data-lucide="shield-off" class="w-3.5 h-3.5"></i> Revoke Active Badge
+                        class="text-red-400 hover:text-red-300 text-xs font-extrabold transition flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-red-500/10 border border-transparent hover:border-red-500/30">
+                        <i data-lucide="shield-off" class="w-4 h-4"></i> Revoke Active Badge
                     </button>
                     <button type="button" onclick="closeEmployeeBadgeModal()"
-                        class="bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold px-4 py-2 rounded-xl text-xs transition">
+                        class="bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold px-4 py-2 rounded-xl text-xs transition border border-gray-700">
                         Close
                     </button>
                 </div>
