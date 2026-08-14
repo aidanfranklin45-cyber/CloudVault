@@ -66,8 +66,16 @@ ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS tier1_rate NUMERIC(10,2) 
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS tier2_rate NUMERIC(10,2) DEFAULT 3.50;
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS tier3_rate NUMERIC(10,2) DEFAULT 2.00;
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS tier4_rate NUMERIC(10,2) DEFAULT 1.00;
-ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS valet_base NUMERIC(10,2) DEFAULT 15.00;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS valet_base NUMERIC(10,2) DEFAULT 17.00;
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS valet_tote_adder NUMERIC(10,2) DEFAULT 1.00;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS next_day_surge_fee NUMERIC(10,2) DEFAULT 9.99;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS next_day_peak_surge_fee NUMERIC(10,2) DEFAULT 14.99;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS same_day_surge_fee NUMERIC(10,2) DEFAULT 19.99;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS same_day_peak_surge_fee NUMERIC(10,2) DEFAULT 24.99;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS evening_peak_slot_fee NUMERIC(10,2) DEFAULT 4.99;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS next_day_promo_free BOOLEAN DEFAULT false;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS max_scheduling_days_out INTEGER DEFAULT 30;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS min_lead_time_days INTEGER DEFAULT 0;
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS staging_config JSONB DEFAULT '{"allowed_days": [1,2,3,4,5,6,0], "allowed_slots": ["09:00 AM - 12:00 PM", "12:00 PM - 03:00 PM", "03:00 PM - 06:00 PM"]}'::jsonb;
 
 -- Users table (extends auth.users)

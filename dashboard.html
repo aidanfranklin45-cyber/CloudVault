@@ -1344,7 +1344,19 @@
         let currentUserColor = 'blue';
         let selectedItems = new Set();
         let currentInventory = [];
-        let systemPricing = { valet_base: 15.00, valet_tote_adder: 1.00 };
+        let systemPricing = { valet_base: 17.00, valet_tote_adder: 1.00 };
+        let activeFacilityPricing = {
+            valet_base: 17.00,
+            valet_tote_adder: 1.00,
+            next_day_surge_fee: 9.99,
+            next_day_peak_surge_fee: 14.99,
+            same_day_surge_fee: 19.99,
+            same_day_peak_surge_fee: 24.99,
+            evening_peak_slot_fee: 4.99,
+            next_day_promo_free: false,
+            max_scheduling_days_out: 30,
+            min_lead_time_days: 0
+        };
         let retrievalLogisticsType = 'staging';
         let unsubscribeInventory = null;
         let unsubscribeUsers = null;
@@ -2825,13 +2837,12 @@
             document.getElementById('user-avatar').textContent = initials;
 
             try {
-                const { data: pricing } = await supabase.from('settings').select('valet_base, valet_tote_adder').eq('id', 'pricing').single();
-                if (pricing) {
-                    systemPricing.valet_base = Number(pricing.valet_base);
-                    systemPricing.valet_tote_adder = Number(pricing.valet_tote_adder);
-                }
+                const userFac = (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
+                                (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility)) ||
+                                'facility_seattle_north';
+                await loadAssignedFacilityPricing(userFac);
             } catch (err) {
-                console.warn('Could not fetch pricing, using defaults.', err);
+                console.warn('Could not fetch facility pricing, using defaults.', err);
             }
 
             if (isPastCutoff()) {
@@ -3728,9 +3739,36 @@
         }
 
         // ============================================================
-        // Staging Reservation Calendar & Surge Demand Pricing Engine
+        // Staging Reservation Calendar & Dynamic Facility Pricing Engine
         // ============================================================
         let selectedReservationSurge = { fee: 0.00, tier: 'standard' };
+
+        async function loadAssignedFacilityPricing(facilityId) {
+            const facId = facilityId || (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility)) ||
+                          (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
+                          'facility_seattle_north';
+            try {
+                const { data: fac } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
+                if (fac) {
+                    activeFacilityPricing = {
+                        valet_base: (fac.valet_base !== null && fac.valet_base !== undefined) ? Number(fac.valet_base) : 17.00,
+                        valet_tote_adder: (fac.valet_tote_adder !== null && fac.valet_tote_adder !== undefined) ? Number(fac.valet_tote_adder) : 1.00,
+                        next_day_surge_fee: (fac.next_day_surge_fee !== null && fac.next_day_surge_fee !== undefined) ? Number(fac.next_day_surge_fee) : 9.99,
+                        next_day_peak_surge_fee: (fac.next_day_peak_surge_fee !== null && fac.next_day_peak_surge_fee !== undefined) ? Number(fac.next_day_peak_surge_fee) : 14.99,
+                        same_day_surge_fee: (fac.same_day_surge_fee !== null && fac.same_day_surge_fee !== undefined) ? Number(fac.same_day_surge_fee) : 19.99,
+                        same_day_peak_surge_fee: (fac.same_day_peak_surge_fee !== null && fac.same_day_peak_surge_fee !== undefined) ? Number(fac.same_day_peak_surge_fee) : 24.99,
+                        evening_peak_slot_fee: (fac.evening_peak_slot_fee !== null && fac.evening_peak_slot_fee !== undefined) ? Number(fac.evening_peak_slot_fee) : 4.99,
+                        next_day_promo_free: Boolean(fac.next_day_promo_free),
+                        max_scheduling_days_out: fac.max_scheduling_days_out || 30,
+                        min_lead_time_days: (fac.min_lead_time_days !== null && fac.min_lead_time_days !== undefined) ? fac.min_lead_time_days : 0
+                    };
+                    systemPricing.valet_base = activeFacilityPricing.valet_base;
+                    systemPricing.valet_tote_adder = activeFacilityPricing.valet_tote_adder;
+                }
+            } catch (e) {
+                console.warn('Facility pricing lookup notice:', e);
+            }
+        }
 
         function calculateSurgeFee(targetDateStr, slotStr) {
             if (!targetDateStr) return { fee: 0.00, tier: 'standard', desc: 'Standard Access Reserved. Scheduled in advance.' };
@@ -3741,23 +3779,37 @@
             const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
             const isPeakSlot = slotStr && slotStr.includes('03:00 PM');
 
+            const p = activeFacilityPricing || {};
+            const nextDayFree = Boolean(p.next_day_promo_free) || (p.next_day_surge_fee === 0);
+
             if (diffDays <= 0) {
+                const sameDayFee = isPeakSlot ? (p.same_day_peak_surge_fee || 24.99) : (p.same_day_surge_fee || 19.99);
                 return {
-                    fee: isPeakSlot ? 24.99 : 19.99,
+                    fee: sameDayFee,
                     tier: 'same_day_surge',
                     title: 'Same-Day Express Staging Access',
                     desc: 'High demand same-day priority handling fee applied.'
                 };
             } else if (diffDays === 1) {
-                return {
-                    fee: isPeakSlot ? 14.99 : 9.99,
-                    tier: 'next_day_surge',
-                    title: 'Next-Day Fast Access',
-                    desc: 'Next-day expedited staging slot reserved.'
-                };
+                if (nextDayFree) {
+                    return {
+                        fee: 0.00,
+                        tier: 'next_day_promo',
+                        title: 'Next-Day Fast Access (Included Promo)',
+                        desc: 'Next-day retrieval complimentary courtesy of facility promotion.'
+                    };
+                } else {
+                    const nextDayFee = isPeakSlot ? (p.next_day_peak_surge_fee || 14.99) : (p.next_day_surge_fee || 9.99);
+                    return {
+                        fee: nextDayFee,
+                        tier: 'next_day_surge',
+                        title: 'Next-Day Fast Access',
+                        desc: 'Next-day expedited staging slot reserved.'
+                    };
+                }
             } else if (isPeakSlot) {
                 return {
-                    fee: 4.99,
+                    fee: p.evening_peak_slot_fee !== undefined ? p.evening_peak_slot_fee : 4.99,
                     tier: 'peak_time_surge',
                     title: 'Evening Peak Slot Demand',
                     desc: 'High traffic evening staging window requested.'
@@ -3767,7 +3819,7 @@
                     fee: 0.00,
                     tier: 'standard',
                     title: 'Standard Access Reserved',
-                    desc: 'Scheduled 48+ hours in advance. No surge fees apply.'
+                    desc: 'Scheduled in advance. No surge fees apply.'
                 };
             }
         }
@@ -3785,12 +3837,15 @@
             const descEl = document.getElementById('surge-banner-desc');
             const amountEl = document.getElementById('surge-fee-amount');
 
-            if (amountEl) amountEl.textContent = `$${calc.fee.toFixed(2)}`;
+            if (amountEl) amountEl.textContent = calc.tier === 'next_day_promo' ? 'FREE ($0.00)' : `$${calc.fee.toFixed(2)}`;
             if (titleEl) titleEl.textContent = calc.title;
             if (descEl) descEl.textContent = calc.desc;
 
             if (badge) {
-                if (calc.fee > 0) {
+                if (calc.tier === 'next_day_promo') {
+                    badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 uppercase";
+                    badge.textContent = "🎉 Next-Day Promo ($0)";
+                } else if (calc.fee > 0) {
                     badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 uppercase";
                     badge.textContent = `Surge +$${calc.fee.toFixed(2)}`;
                 } else {
@@ -3835,19 +3890,30 @@
             return false;
         }
 
-        // Helper: returns earliest valid selectable date (advances to tomorrow if all slots today are past 3 PM cutoff)
+        // Helper: returns earliest valid selectable date (advances to tomorrow if all slots today are past 3 PM cutoff or lead-time requires it)
         function getEarliestValidDate() {
             const now = new Date();
-            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const minLead = (activeFacilityPricing && activeFacilityPricing.min_lead_time_days !== undefined) 
+                ? activeFacilityPricing.min_lead_time_days 
+                : 0;
             const currentHour = now.getHours();
             
-            // If current time is 3 PM (15:00) or later, all operational windows today are locked or past cutoff.
-            // Automatically advance earliest selectable date to tomorrow!
-            if (currentHour >= 15) {
-                const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-                return `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+            let advanceDays = minLead;
+            if (minLead === 0 && currentHour >= 15) {
+                advanceDays = 1;
             }
-            return todayStr;
+            
+            const earliest = new Date(now.getTime() + advanceDays * 24 * 60 * 60 * 1000);
+            return `${earliest.getFullYear()}-${String(earliest.getMonth() + 1).padStart(2, '0')}-${String(earliest.getDate()).padStart(2, '0')}`;
+        }
+
+        function getMaxSchedulingDate() {
+            const now = new Date();
+            const maxDays = (activeFacilityPricing && activeFacilityPricing.max_scheduling_days_out) 
+                ? activeFacilityPricing.max_scheduling_days_out 
+                : 30;
+            const maxDate = new Date(now.getTime() + maxDays * 24 * 60 * 60 * 1000);
+            return `${maxDate.getFullYear()}-${String(maxDate.getMonth() + 1).padStart(2, '0')}-${String(maxDate.getDate()).padStart(2, '0')}`;
         }
 
         // Upcoming Available Slot Helper: calculates the next available valid time slot for a target date
@@ -3998,9 +4064,12 @@
         async function handleReservationDateChange() {
             const dateInput = document.getElementById('retrieval-target-date');
             const earliestValid = getEarliestValidDate();
+            const maxValid = getMaxSchedulingDate();
             if (dateInput) {
                 dateInput.min = earliestValid;
+                dateInput.max = maxValid;
                 if (!dateInput.value || dateInput.value < earliestValid) dateInput.value = earliestValid;
+                if (dateInput.value > maxValid) dateInput.value = maxValid;
                 const profile = currentUser ? await getCachedUserProfile(currentUser.id) : null;
                 const facId = profile?.assigned_facility_id || 'facility_seattle_north';
                 await checkSlotAvailability(facId, dateInput.value, 'retrieval-time-slot');
@@ -4015,9 +4084,12 @@
         async function handleFulfillmentDateChange() {
             const dateInput = document.getElementById('fulfillment-target-date');
             const earliestValid = getEarliestValidDate();
+            const maxValid = getMaxSchedulingDate();
             if (dateInput) {
                 dateInput.min = earliestValid;
+                dateInput.max = maxValid;
                 if (!dateInput.value || dateInput.value < earliestValid) dateInput.value = earliestValid;
+                if (dateInput.value > maxValid) dateInput.value = maxValid;
                 const profile = currentUser ? await getCachedUserProfile(currentUser.id) : null;
                 const facId = profile?.assigned_facility_id || 'facility_seattle_north';
                 await checkSlotAvailability(facId, dateInput.value, 'fulfillment-time-slot');
@@ -4032,27 +4104,34 @@
         // ============================================================
         // STAGING REQUEST: Call Postgres RPC
         // ============================================================
-        function requestRetrieval() {
+        async function requestRetrieval() {
             if (selectedItems.size === 0) return;
             
+            const userFac = (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
+                            (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility)) ||
+                            'facility_seattle_north';
+            await loadAssignedFacilityPricing(userFac);
+
             // Populate modal counts and pricing
             const count = selectedItems.size;
             document.getElementById('retrieval-tote-count').textContent = count;
             
-            const valetFee = systemPricing.valet_base + (count * systemPricing.valet_tote_adder);
+            const valetFee = activeFacilityPricing.valet_base + (count * activeFacilityPricing.valet_tote_adder);
             document.getElementById('retrieval-valet-fee-label').textContent = `$${valetFee.toFixed(2)}`;
             
-            // Set default date to earliest valid retrieval date (tomorrow if past 3 PM cutoff)
+            // Set default date to earliest valid retrieval date bounded by max scheduling horizon
             const earliestDate = getEarliestValidDate();
+            const maxDate = getMaxSchedulingDate();
             const dateInput = document.getElementById('retrieval-target-date');
             if (dateInput) {
                 dateInput.min = earliestDate;
+                dateInput.max = maxDate;
                 dateInput.value = earliestDate;
             }
 
             // Reset to default logistics & trigger availability + surge check immediately
             selectRetrievalLogistics('staging');
-            handleReservationDateChange();
+            await handleReservationDateChange();
             document.getElementById('retrieval-modal').classList.remove('hidden');
         }
 
@@ -4213,17 +4292,11 @@
                     try {
                         const toteCount = selectedItems.size;
                         const deliveryFee = retrievalLogisticsType === 'valet_delivery'
-                            ? (systemPricing.valet_base + (toteCount * systemPricing.valet_tote_adder))
+                            ? (activeFacilityPricing.valet_base + (toteCount * activeFacilityPricing.valet_tote_adder))
                             : 0;
                         const surgeFee = selectedReservationSurge ? Number(selectedReservationSurge.fee || 0) : 0;
+                        const isNextDayPromo = selectedReservationSurge && selectedReservationSurge.tier === 'next_day_promo';
                         const invoiceType = retrievalLogisticsType === 'valet_delivery' ? 'valet_delivery' : 'surge_delivery';
-
-                        let surgeTierLabel = 'Standard ($0)';
-                        if (surgeFee >= 15 || (selectedReservationSurge && selectedReservationSurge.tier === 'same_day_surge')) {
-                            surgeTierLabel = 'Rush ($15)';
-                        } else if (surgeFee > 0 || (selectedReservationSurge && (selectedReservationSurge.tier === 'next_day_surge' || selectedReservationSurge.tier === 'peak_time_surge'))) {
-                            surgeTierLabel = 'Priority ($5)';
-                        }
 
                         const lineItems = [
                             { description: `Staging Tote Retrieval (${toteCount} tote${toteCount > 1 ? 's' : ''})`, qty: toteCount, unit_price: 0, amount: 0 }
@@ -4231,8 +4304,10 @@
                         if (deliveryFee > 0) {
                             lineItems.push({ description: `Valet Doorstep Delivery Service Fee`, qty: 1, unit_price: deliveryFee, amount: deliveryFee });
                         }
-                        if (surgeFee > 0) {
-                            lineItems.push({ description: `Surge Slot Tier Fee: ${surgeTierLabel}`, qty: 1, unit_price: surgeFee, amount: surgeFee });
+                        if (isNextDayPromo) {
+                            lineItems.push({ description: `Next-Day Fast Access (Facility Promotional Waiver)`, qty: 1, unit_price: 0, amount: 0 });
+                        } else if (surgeFee > 0) {
+                            lineItems.push({ description: `Expedited Staging Access (${selectedReservationSurge.title || 'Surge Tier'})`, qty: 1, unit_price: surgeFee, amount: surgeFee });
                         }
 
                         const userFac = (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility)) ||
@@ -4253,7 +4328,7 @@
                             surge_fee: surgeFee,
                             payment_method: 'card',
                             line_items: lineItems,
-                            notes: `Access retrieval request for ${toteCount} totes (${retrievalLogisticsType === 'valet_delivery' ? 'Valet Delivery' : 'Self-Service Staging'}). Target Date: ${targetDate || 'Standard'}.`
+                            notes: `Access retrieval request for ${toteCount} totes (${retrievalLogisticsType === 'valet_delivery' ? 'Valet Delivery' : 'Self-Service Staging'}). Target Date: ${targetDate || 'Standard'}.${isNextDayPromo ? ' (Free Next-Day Promo Applied)' : ''}`
                         });
                     } catch (invErr) {
                         console.warn('[CloudVault Billing] Access request invoice creation notice:', invErr);
