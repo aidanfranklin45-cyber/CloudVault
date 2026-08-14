@@ -2047,7 +2047,7 @@
       let resolvedFacId = invoiceObj.facility_id || userSub?.facility_id || userObj?.assigned_facility_id || null;
       if (sb && targetUid) {
         try {
-          const { data: uData } = await sb.from('users').select('assigned_facility_id, active_zone, zip_code, city, state').eq('id', targetUid).maybeSingle();
+          const { data: uData } = await sb.from('users').select('id, name, email, active_zone, assigned_facility_id').eq('id', targetUid).maybeSingle();
           if (uData && uData.assigned_facility_id) {
             resolvedFacId = uData.assigned_facility_id;
           }
@@ -2069,8 +2069,8 @@
       }
 
       // Check customer profile context for regional hints (e.g. ZIPs: 972xx -> Portland, 989xx -> Yakima, 981xx -> Seattle)
-      const userZip = String(userObj?.zip_code || userObj?.active_zone || invoiceObj.zip_code || (userObj?.address ? String(userObj.address).match(/\b\d{5}\b/)?.[0] : '') || '').trim();
-      const contextStr = `${invoiceObj.customer_name || ''} ${invoiceObj.customerEmail || ''} ${invoiceObj.notes || ''} ${userObj?.name || ''} ${userObj?.city || ''} ${userObj?.state || ''} ${userZip}`.toLowerCase();
+      const userZip = String(userObj?.active_zone || invoiceObj.zip_code || (userObj?.address ? String(userObj.address).match(/\b\d{5}\b/)?.[0] : '') || '').trim();
+      const contextStr = `${invoiceObj.customer_name || ''} ${invoiceObj.customerEmail || ''} ${invoiceObj.notes || ''} ${userObj?.name || ''} ${userZip}`.toLowerCase();
       
       if (!resolvedFacId || resolvedFacId === 'facility_seattle_north') {
         if (contextStr.includes('portland') || contextStr.includes('pdx') || userZip.startsWith('972')) {
@@ -2251,12 +2251,6 @@
           targetTierCount = 10; // Current: Tier 1 Standard (1-9 totes). Next Tier: Tier 2 Preferred (10 totes)
         }
 
-        const formatMoney = (val) => {
-          const n = Number(val) || 0;
-          if (n < 0) return `-$${Math.abs(n).toFixed(2)}`;
-          return `$${n.toFixed(2)}`;
-        };
-
         const additionalTotesNeeded = Math.max(1, targetTierCount - activeToteCount);
         const nextTierObj = await this.resolveCustomerPricing(targetUid, targetFacId, targetTierCount);
         const nextTierTotalCost = targetTierCount * nextTierObj.toteRate;
@@ -2309,9 +2303,60 @@
           const desc = (i.description || i.name || '').toLowerCase();
           return !(desc.includes('storage subscription') || (desc.includes('subscription (') && desc.includes('tier')));
         });
+
+        // Check if line items has an un-itemized lump sum valet delivery fee (e.g. $17.00) or missing breakdown
+        const valetLumpIndex = lineItems.findIndex(i => {
+          const d = (i.description || '').toLowerCase();
+          return (d.includes('valet doorstep delivery') || d.includes('valet delivery')) && !d.includes('base service') && !d.includes('handling');
+        });
+
+        if (valetLumpIndex !== -1 || (deliveryFee > 0 && !lineItems.some(i => (i.description || '').toLowerCase().includes('base service')))) {
+          const totalValet = deliveryFee > 0 ? deliveryFee : Number(lineItems[valetLumpIndex]?.amount || 17);
+          const baseFee = 15.00;
+          const adderTotal = Math.max(0, totalValet - baseFee);
+          const adderPerTote = 1.00;
+          const inferredToteCount = adderTotal > 0 ? Math.round(adderTotal / adderPerTote) : 1;
+
+          if (valetLumpIndex !== -1) {
+            lineItems.splice(valetLumpIndex, 1);
+          }
+
+          // Rename or format the tote retrieval line item
+          const stagingIndex = lineItems.findIndex(i => (i.description || '').toLowerCase().includes('retrieval') || (i.description || '').toLowerCase().includes('staging'));
+          if (stagingIndex !== -1) {
+            lineItems[stagingIndex].description = `Deep Storage Vault Retrieval & Prep (${inferredToteCount} tote${inferredToteCount > 1 ? 's' : ''})`;
+            lineItems[stagingIndex].qty = inferredToteCount;
+            lineItems[stagingIndex].unit_price = 0;
+            lineItems[stagingIndex].amount = 0;
+          } else {
+            lineItems.unshift({
+              description: `Deep Storage Vault Retrieval & Prep (${inferredToteCount} tote${inferredToteCount > 1 ? 's' : ''})`,
+              qty: inferredToteCount,
+              unit_price: 0,
+              amount: 0
+            });
+          }
+
+          lineItems.push({
+            description: `Valet Doorstep Delivery Base Service`,
+            qty: 1,
+            unit_price: baseFee,
+            amount: baseFee
+          });
+
+          if (adderTotal > 0) {
+            lineItems.push({
+              description: `Valet Tote Handling Surcharge ($${adderPerTote.toFixed(2)}/tote)`,
+              qty: inferredToteCount,
+              unit_price: adderPerTote,
+              amount: adderTotal
+            });
+          }
+        }
+
         if (lineItems.length === 0) {
           if (surgeFee > 0) lineItems.push({ description: 'Priority / Surge Retrieval Fee', qty: 1, unit_price: surgeFee, amount: surgeFee });
-          if (deliveryFee > 0) lineItems.push({ description: 'Valet Doorstep Delivery Service Fee', qty: 1, unit_price: deliveryFee, amount: deliveryFee });
+          if (deliveryFee > 0) lineItems.push({ description: 'Valet Doorstep Delivery Base Service', qty: 1, unit_price: deliveryFee, amount: deliveryFee });
         }
         upsellBannerHtml = '';
       }
@@ -2324,6 +2369,14 @@
         if (isSubscriptionInvoice && (desc.includes('subscription') || desc.includes('storage') || invType === 'initial_reservation')) {
           badges.push(`📦 ${activeToteCount} Active Storage Tote${activeToteCount !== 1 ? 's' : ''}`);
           badges.push(`📊 ${currentTier.tierName} (${formatMoney(effectiveRate)}/tote/mo)`);
+        } else if (desc.includes('retrieval') || desc.includes('vault') || desc.includes('staging')) {
+          badges.push('📦 Deep Storage Vault Pull');
+          badges.push('✓ Complimentary Retrieval');
+        } else if (desc.includes('base service')) {
+          badges.push('🚚 White-Glove Doorstep Valet');
+          badges.push('📍 Real-Time Live Driver Tracking');
+        } else if (desc.includes('handling') || desc.includes('surcharge') || desc.includes('adder')) {
+          badges.push('🏷️ Multi-Tote Logistics Handling');
         } else if (desc.includes('valet') || desc.includes('delivery') || invType === 'valet_delivery') {
           badges.push('🚚 White-Glove Doorstep Valet');
           badges.push('📍 Real-Time Live Driver Tracking');
