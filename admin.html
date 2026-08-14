@@ -5457,60 +5457,52 @@
                             userActiveTotesMap[uId].push(t.tote_code);
                         }
                     }
-                });
-
-                const activeValetUserMap = {};
+                // Build discrete delivery stops per active scheduled order/request
+                const stops = [];
+                const handledTotes = new Set();
 
                 (requests || []).forEach(r => {
                     if (r.facility_id === queryFacilityId || r.users?.assigned_facility_id === queryFacilityId) {
                         const uId = r.uid || (r.users ? r.users.id : null);
                         if (uId) {
-                            if (!activeValetUserMap[uId]) {
-                                activeValetUserMap[uId] = {
-                                    uid: uId,
-                                    users: r.users,
-                                    target_date: r.target_date,
-                                    time_slot: r.time_slot || '09:00 AM - 12:00 PM',
-                                    requested_items: []
-                                };
-                            }
-                            // Ground truth: If user has physical totes actively in transit/pending dispatch, use those directly
-                            if (userActiveTotesMap[uId] && userActiveTotesMap[uId].length > 0) {
-                                activeValetUserMap[uId].requested_items = [...userActiveTotesMap[uId]];
-                            } else {
-                                const items = r.requested_items || r.requested_tote_codes || [];
-                                items.forEach(it => {
-                                    if (!activeValetUserMap[uId].requested_items.includes(it)) {
-                                        activeValetUserMap[uId].requested_items.push(it);
-                                    }
-                                });
-                            }
-                        }
-                    }
-                });
+                            const rawItems = r.requested_items || r.requested_tote_codes || [];
+                            // Resolve actual tote codes
+                            const items = rawItems.map(it => {
+                                const matched = (activeValetTotes || []).find(t => t.id === it || t.tote_code === it);
+                                return matched ? matched.tote_code : it;
+                            });
+                            items.forEach(c => handledTotes.add(c));
 
-                (activeValetTotes || []).forEach(t => {
-                    const uId = t.uid;
-                    const u = valetUsersMap[uId];
-                    if (uId) {
-                        if (!activeValetUserMap[uId]) {
-                            activeValetUserMap[uId] = {
+                            stops.push({
+                                id: r.id,
                                 uid: uId,
-                                users: u || { name: `Customer ${uId.substring(0, 6)}` },
-                                target_date: new Date().toISOString().split('T')[0],
-                                time_slot: t.status === 'out-for-delivery' ? '09:00 AM - 12:00 PM (En Route)' : '09:00 AM - 12:00 PM',
-                                requested_items: []
-                            };
-                        }
-                        if (userActiveTotesMap[uId] && userActiveTotesMap[uId].length > 0) {
-                            activeValetUserMap[uId].requested_items = [...userActiveTotesMap[uId]];
-                        } else if (!activeValetUserMap[uId].requested_items.includes(t.tote_code)) {
-                            activeValetUserMap[uId].requested_items.push(t.tote_code);
+                                users: r.users || valetUsersMap[uId] || { name: `Customer ${uId.substring(0, 6)}` },
+                                target_date: r.target_date,
+                                time_slot: r.time_slot || '09:00 AM - 12:00 PM',
+                                status: r.status,
+                                requested_items: items.length > 0 ? items : (userActiveTotesMap[uId] || [])
+                            });
                         }
                     }
                 });
 
-                const stops = Object.values(activeValetUserMap);
+                // Add unlinked active transit totes as separate stops
+                (activeValetTotes || []).forEach(t => {
+                    if (!handledTotes.has(t.tote_code)) {
+                        handledTotes.add(t.tote_code);
+                        const uId = t.uid;
+                        const u = valetUsersMap[uId];
+                        stops.push({
+                            id: `transit_${t.tote_code}`,
+                            uid: uId,
+                            users: u || { name: `Customer ${uId ? uId.substring(0, 6) : 'Valet'}` },
+                            target_date: new Date().toISOString().split('T')[0],
+                            time_slot: t.status === 'out-for-delivery' ? '09:00 AM - 12:00 PM (En Route)' : '09:00 AM - 12:00 PM',
+                            status: t.status,
+                            requested_items: [t.tote_code]
+                        });
+                    }
+                });
 
                 const stopsListEl = document.getElementById('delivery-stops-list');
                 const countBadge = document.getElementById('map-stops-count');
@@ -5560,9 +5552,10 @@
                 }
 
                 if (mapIframe) {
+                    const hubAddress = [fac?.address, fac?.city, fac?.state, fac?.zip].filter(Boolean).join(', ') || [fac?.city, fac?.state].filter(Boolean).join(', ') || hubName;
                     const zips = stops.map(s => s.users?.zip || s.users?.active_zone).filter(Boolean);
-                    const mapQuery = encodeURIComponent(`${activeCity} ${zips.slice(0, 3).join(' ')}`.trim());
-                    const targetSrc = `https://maps.google.com/maps?q=${mapQuery}&t=&z=12&ie=UTF8&iwloc=&output=embed`;
+                    const mapQuery = zips.length > 0 ? `${hubAddress}` : hubAddress;
+                    const targetSrc = `https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=&z=13&ie=UTF8&iwloc=&output=embed`;
                     if (mapIframe.getAttribute('src') !== targetSrc && mapIframe.src !== targetSrc) {
                         mapIframe.src = targetSrc;
                     }
