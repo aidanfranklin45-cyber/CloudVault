@@ -302,7 +302,8 @@ ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS vehicle_info TEXT DE
 ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS driver_lat NUMERIC(10,6) DEFAULT NULL;
 ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS driver_lng NUMERIC(10,6) DEFAULT NULL;
 ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS estimated_arrival_at TIMESTAMPTZ DEFAULT NULL;
-ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS tracking_status TEXT DEFAULT 'pending';
+-- NOTE: All request and tracking states are unified under the single 'status' column:
+-- 'pending' | 'approved' | 'staged' | 'out-for-delivery' | 'arrived' | 'with-customer' | 'returned-to-vault' | 'completed' | 'missing-tote'
 
 -- Staging Reservations
 CREATE TABLE public.staging_reservations (
