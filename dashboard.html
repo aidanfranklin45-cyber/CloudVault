@@ -4976,7 +4976,7 @@
                     }
                 }
 
-                // If invoices table has data, display rich printable invoice records
+                // Display official invoice records
                 if (invoices && invoices.length > 0) {
                     window.userLoadedInvoices = invoices;
                     if (countEl) countEl.textContent = `${invoices.length} Record${invoices.length !== 1 ? 's' : ''}`;
@@ -5053,165 +5053,14 @@
                     return;
                 }
 
-                // Fallback to charges table if invoices is empty
-                const { data: charges, error } = await supabase
-                    .from('charges')
-                    .select('*')
-                    .eq('uid', currentUser.id)
-                    .order('charged_at', { ascending: false });
-
-                if (error) console.warn('Error fetching charges fallback:', error);
-
-                if ((!charges || charges.length === 0) && currentSubscription) {
-                    try {
-                        const toteCount = Number(currentSubscription.total_totes || currentSubscription.tote_count || 1);
-                        const toteRate = Number(currentSubscription.tote_rate || 3.50);
-                        const storageAmt = Number(currentSubscription.recurring_storage || (toteCount * toteRate));
-                        const valetFee = Number(currentSubscription.valet_fee || 0);
-                        const total = Number(currentSubscription.first_month_total || (storageAmt + valetFee));
-                        const createdAt = currentSubscription.created_at || new Date().toISOString();
-
-                        if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
-                            const synthRes = await window.CloudVaultBilling.createInvoiceRecord({
-                                uid: currentUser.id,
-                                customer_name: currentUser.user_metadata?.name || currentUser.email.split('@')[0],
-                                customer_email: currentUser.email,
-                                facility_id: currentSubscription.facility_id || 'facility_seattle_north',
-                                invoice_type: 'subscription',
-                                payment_status: 'paid',
-                                subtotal: storageAmt,
-                                delivery_fee: valetFee,
-                                total_amount: total,
-                                payment_method: 'card',
-                                notes: 'Initial subscription signup invoice receipt',
-                                line_items: [
-                                    {
-                                        description: `CloudVault Storage Subscription (${toteCount} totes @ $${toteRate.toFixed(2)}/mo)`,
-                                        qty: toteCount,
-                                        unit_price: toteRate,
-                                        amount: storageAmt
-                                    }
-                                ],
-                                created_at: createdAt,
-                                paid_at: createdAt
-                            });
-                            if (synthRes.success && synthRes.data) {
-                                invoices = [synthRes.data];
-                            }
-                        }
-                    } catch (e) {
-                        console.warn('Notice generating subscription invoice receipt:', e);
-                    }
-                }
-
-                if (invoices && invoices.length > 0) {
-                    window.userLoadedInvoices = invoices;
-                    if (countEl) countEl.textContent = `${invoices.length} Record${invoices.length !== 1 ? 's' : ''}`;
-                    listEl.innerHTML = invoices.map(inv => {
-                        const d = new Date(inv.created_at || Date.now());
-                        const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-                        const rawStatus = (inv.payment_status || 'paid').toLowerCase();
-                        const invNum = inv.invoice_number || 'INV-2026-0000';
-                        const typeLabel = (inv.invoice_type || 'subscription').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-
-                        const dueDateStr = window.StripeBillingIntegration 
-                            ? window.StripeBillingIntegration.formatDueDate(inv) 
-                            : 'Due: Aug 15, 2026';
-
-                        const isOverdue = window.StripeBillingIntegration 
-                            ? window.StripeBillingIntegration.isOverdue(inv) 
-                            : (rawStatus === 'overdue');
-
-                        let badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
-                        let statusText = rawStatus.toUpperCase();
-
-                        if (isOverdue || rawStatus === 'overdue') {
-                            badgeClass = 'bg-red-600 text-white border-red-700 font-black animate-pulse';
-                            statusText = 'OVERDUE';
-                        } else if (rawStatus === 'pending' || rawStatus === 'unpaid') {
-                            badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
-                            statusText = 'UNPAID';
-                        } else if (rawStatus === 'refunded') {
-                            badgeClass = 'bg-rose-100 text-rose-800 border-rose-200';
-                        }
-
-                        const payButtonHtml = (isOverdue || rawStatus === 'overdue' || rawStatus === 'pending' || rawStatus === 'unpaid')
-                            ? `<button onclick="window.StripeBillingIntegration.triggerStripePayment('${invNum}')" class="text-[10px] bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded-lg border border-red-700 shadow-md transition flex items-center gap-1 cursor-pointer">💳 Pay Invoice Now</button>`
-                            : '';
-
-                        return `
-                            <div class="p-4 flex justify-between items-center bg-white hover:bg-gray-50/90 transition border-b border-gray-100 last:border-0">
-                                <div class="space-y-1.5">
-                                    <div class="flex items-center gap-2 flex-wrap">
-                                        <span class="text-xs font-extrabold text-gray-900">${escapeHtml(typeLabel)}</span>
-                                        <span class="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border ${badgeClass}">
-                                            ${statusText}
-                                        </span>
-                                        <span class="text-[10px] font-semibold text-gray-600 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full">
-                                            ${dueDateStr}
-                                        </span>
-                                    </div>
-                                    <p class="text-[10px] text-gray-500 font-mono">Issued: ${dateStr} • ${invNum}</p>
-                                </div>
-                                <div class="text-right space-y-1.5 flex flex-col items-end">
-                                    <span class="text-sm font-black text-gray-900 block">$${(() => {
-                                        const sub = Number(inv.subtotal || 0);
-                                        const del = Number(inv.delivery_fee || 0);
-                                        const srg = Number(inv.surge_fee || 0);
-                                        const tx = Number(inv.tax || 0);
-                                        const dsc = Number(inv.discount || 0);
-                                        const calculatedTotal = Math.max(0, sub + del + srg + tx - dsc);
-                                        const invTot = Number(inv.total_amount || 0);
-                                        const finalAmt = (tx > 0 && Math.abs(invTot - (sub + del + srg - dsc)) < 0.01) ? calculatedTotal : (invTot > 0 ? invTot : calculatedTotal);
-                                        return finalAmt.toFixed(2);
-                                    })()}</span>
-                                    <div class="flex items-center gap-1.5">
-                                        ${payButtonHtml}
-                                        <button onclick="printUserInvoiceRecord('${invNum}')" class="text-[10px] bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold px-2.5 py-1 rounded-lg border border-blue-200/80 transition flex items-center gap-1 cursor-pointer">
-                                            <svg class="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-                                            <span>Print Official Receipt</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>`;
-                    }).join('');
-                    checkOverdueStatus();
-                    return;
-                }
-
-                if (!charges || charges.length === 0) {
-                    if (countEl) countEl.textContent = '0 Records';
-                    listEl.innerHTML = `
-                        <div class="p-6 text-center text-xs text-gray-400 space-y-1">
-                            <p class="font-bold text-gray-500">No Billing Receipts Yet</p>
-                            <p>Monthly subscription invoices will appear here after billing run.</p>
-                        </div>`;
-                    checkOverdueStatus();
-                    return;
-                }
-
-                if (countEl) countEl.textContent = `${charges.length} Invoice${charges.length !== 1 ? 's' : ''}`;
-                listEl.innerHTML = charges.map(ch => {
-                    const d = new Date(ch.charged_at);
-                    const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-                    const isSuccess = (ch.status || 'success') === 'success';
-                    return `
-                        <div class="p-3.5 sm:p-4 flex justify-between items-center bg-white hover:bg-gray-50/80 transition">
-                            <div class="space-y-0.5">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs font-bold text-gray-900">${escapeHtml(ch.charge_type || 'Monthly Storage Subscription')}</span>
-                                    <span class="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isSuccess ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-red-100 text-red-700 border border-red-200'}">
-                                        ${isSuccess ? 'Paid' : 'Failed'}
-                                    </span>
-                                </div>
-                                <p class="text-[10px] text-gray-400 font-mono">${dateStr} • Charge ID #${ch.id.substring(0, 8)}</p>
-                            </div>
-                            <div class="text-right space-y-1">
-                                <span class="text-sm font-bold text-gray-900 block">$${Number(ch.amount).toFixed(2)}</span>
-                                <button onclick="showToast('Receipt downloaded for #${ch.id.substring(0, 8)}!')" class="text-[10px] text-blue-600 font-bold hover:underline">Receipt PDF</button>
-                            </div>
-                        </div>`;
-                }).join('');
+                // Clean empty state when no invoices exist yet
+                if (countEl) countEl.textContent = '0 Records';
+                listEl.innerHTML = `
+                    <div class="p-6 text-center text-xs text-gray-400 space-y-1">
+                        <p class="font-bold text-gray-500">No Billing Receipts Yet</p>
+                        <p>Monthly subscription invoices and delivery receipts will appear here.</p>
+                    </div>`;
+                checkOverdueStatus();
             } catch (err) {
                 console.error("Failed to load invoice history:", err);
                 listEl.innerHTML = `<div class="p-4 text-center text-xs text-red-500">Failed to load invoices.</div>`;

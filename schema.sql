@@ -413,6 +413,8 @@ CREATE INDEX IF NOT EXISTS idx_invoices_customer_email ON public.invoices(custom
 CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON public.invoices(invoice_number);
 CREATE INDEX IF NOT EXISTS idx_invoices_payment_status ON public.invoices(payment_status);
 CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON public.invoices(created_at);
+CREATE INDEX IF NOT EXISTS idx_invoices_uid_created ON public.invoices(uid, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_invoices_email_created ON public.invoices(customer_email, created_at DESC);
 
 -- System Metadata / Financials (Singleton row)
 CREATE TABLE public.metadata (
