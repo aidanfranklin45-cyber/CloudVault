@@ -2471,6 +2471,65 @@
         `;
       }).join('');
 
+      const resolveInvoiceTypeLabel = (inv) => {
+        if (!inv) return 'Service Invoice';
+        const rawType = (inv.invoice_type || inv.invoiceType || inv.charge_type || '').toLowerCase().replace(/[\s-]/g, '_');
+        const delFee = Number(inv.delivery_fee || inv.deliveryFee || 0);
+        const surgeFee = Number(inv.surge_fee || inv.surgeFee || 0);
+        const subtotal = Number(inv.subtotal || 0);
+        const notes = (inv.notes || '').toLowerCase();
+        
+        let lineItems = inv.line_items || inv.lineItems || [];
+        if (typeof lineItems === 'string') {
+          try { lineItems = JSON.parse(lineItems); } catch (e) { lineItems = []; }
+        }
+        const hasValetLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('valet'));
+        const hasStagingLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('staging') || (li.description || '').toLowerCase().includes('self-service'));
+        const hasStorageLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('storage') || (li.description || '').toLowerCase().includes('subscription'));
+
+        if (rawType === 'unreturned_tote_fee' || rawType === 'missing_tote_fee' || rawType === 'missing_tote' || notes.includes('missing tote') || notes.includes('unreturned')) {
+          return 'Missing Container Replacement Fee';
+        }
+        if (rawType === 'unlaunched_deposit' || notes.includes('deposit')) {
+          return 'Pre-Launch Deposit';
+        }
+        if (rawType === 'refund') {
+          return 'Account Refund';
+        }
+        if (rawType === 'initial_reservation') {
+          return 'Initial Plan Reservation';
+        }
+        if (rawType === 'subscription_expansion' || rawType === 'subscription_modification') {
+          return 'Plan Modification';
+        }
+
+        const isValet = rawType.includes('valet') || delFee > 0 || hasValetLine || notes.includes('valet');
+        const isStaging = rawType.includes('staging') || hasStagingLine || notes.includes('staging') || notes.includes('self-service');
+        const hasSurge = surgeFee > 0 || rawType.includes('surge') || rawType.includes('expedited') || notes.includes('surge') || notes.includes('same_day') || notes.includes('expedited');
+
+        if (isValet) {
+          return hasSurge ? 'Expedited Valet Delivery' : 'Valet Delivery';
+        }
+        if (isStaging) {
+          return hasSurge ? 'Expedited Staging Access' : 'Self-Service Staging';
+        }
+
+        if (rawType === 'surge_delivery') {
+          if (delFee > 0 || notes.includes('valet')) {
+            return 'Expedited Valet Delivery';
+          }
+          return 'Expedited Staging Access';
+        }
+
+        if (rawType === 'subscription' || rawType === 'monthly_subscription' || hasStorageLine || subtotal > 0) {
+          return 'Monthly Storage Plan';
+        }
+
+        return rawType ? rawType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Service Invoice';
+      };
+
+      const resolvedInvoiceTypeTitle = resolveInvoiceTypeLabel(invoiceObj);
+
       modalEl.innerHTML = `
         <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-auto border border-slate-200/80 overflow-hidden text-slate-800 my-8">
           <!-- Top Gradient Accent Bar -->
@@ -2486,6 +2545,7 @@
                   <div>
                     <h1 class="text-2xl font-black text-slate-900 tracking-tight leading-none">CloudVault</h1>
                     <span class="text-[9px] font-extrabold text-blue-600 uppercase tracking-[0.2em] block mt-1">Storage &amp; Logistics Solutions</span>
+                    <span class="text-xs font-bold font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full inline-block mt-2">${resolvedInvoiceTypeTitle}</span>
                   </div>
                 </div>
                 <p class="text-[11px] text-slate-500 font-mono">CloudVault Storage Inc. &bull; support@cloudvault.io</p>

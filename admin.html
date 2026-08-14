@@ -7265,18 +7265,83 @@
 
                 window.currentCustomerInvoices = invoices;
 
-                const getTypeBadge = (typeStr) => {
-                    const t = (typeStr || 'subscription').toLowerCase().replace(/[\s-]/g, '_');
-                    if (t.includes('initial') || t.includes('reservation')) {
-                        return `<span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">Initial Reservation</span>`;
-                    } else if (t.includes('valet') || t.includes('delivery')) {
-                        return `<span class="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">Valet Delivery</span>`;
-                    } else if (t.includes('unlaunched') || t.includes('deposit')) {
-                        return `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">Unlaunched Deposit</span>`;
+                // Helper to resolve accurate, human-readable charge type names
+                function resolveInvoiceTypeLabel(inv) {
+                    if (!inv) return 'Service Invoice';
+                    const rawType = (inv.invoice_type || inv.invoiceType || inv.charge_type || '').toLowerCase().replace(/[\s-]/g, '_');
+                    const delFee = Number(inv.delivery_fee || inv.deliveryFee || 0);
+                    const surgeFee = Number(inv.surge_fee || inv.surgeFee || 0);
+                    const subtotal = Number(inv.subtotal || 0);
+                    const notes = (inv.notes || '').toLowerCase();
+                    
+                    let lineItems = inv.line_items || inv.lineItems || [];
+                    if (typeof lineItems === 'string') {
+                        try { lineItems = JSON.parse(lineItems); } catch (e) { lineItems = []; }
+                    }
+                    const hasValetLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('valet'));
+                    const hasStagingLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('staging') || (li.description || '').toLowerCase().includes('self-service'));
+                    const hasStorageLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('storage') || (li.description || '').toLowerCase().includes('subscription'));
+
+                    if (rawType === 'unreturned_tote_fee' || rawType === 'missing_tote_fee' || rawType === 'missing_tote' || notes.includes('missing tote') || notes.includes('unreturned')) {
+                        return 'Missing Container Replacement Fee';
+                    }
+                    if (rawType === 'unlaunched_deposit' || notes.includes('deposit')) {
+                        return 'Pre-Launch Deposit';
+                    }
+                    if (rawType === 'refund') {
+                        return 'Account Refund';
+                    }
+                    if (rawType === 'initial_reservation') {
+                        return 'Initial Plan Reservation';
+                    }
+                    if (rawType === 'subscription_expansion' || rawType === 'subscription_modification') {
+                        return 'Plan Modification';
+                    }
+
+                    const isValet = rawType.includes('valet') || delFee > 0 || hasValetLine || notes.includes('valet');
+                    const isStaging = rawType.includes('staging') || hasStagingLine || notes.includes('staging') || notes.includes('self-service');
+                    const hasSurge = surgeFee > 0 || rawType.includes('surge') || rawType.includes('expedited') || notes.includes('surge') || notes.includes('same_day') || notes.includes('expedited');
+
+                    if (isValet) {
+                        return hasSurge ? 'Expedited Valet Delivery' : 'Valet Delivery';
+                    }
+                    if (isStaging) {
+                        return hasSurge ? 'Expedited Staging Access' : 'Self-Service Staging';
+                    }
+
+                    if (rawType === 'surge_delivery') {
+                        if (delFee > 0 || notes.includes('valet')) {
+                            return 'Expedited Valet Delivery';
+                        }
+                        return 'Expedited Staging Access';
+                    }
+
+                    if (rawType === 'subscription' || rawType === 'monthly_subscription' || hasStorageLine || subtotal > 0) {
+                        return 'Monthly Storage Plan';
+                    }
+
+                    return rawType ? rawType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Service Invoice';
+                }
+
+                const getTypeBadge = (inv) => {
+                    const label = resolveInvoiceTypeLabel(inv);
+                    const t = label.toLowerCase();
+                    if (t.includes('initial')) {
+                        return `<span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">${label}</span>`;
+                    } else if (t.includes('expedited')) {
+                        return `<span class="bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">⚡ ${label}</span>`;
+                    } else if (t.includes('valet')) {
+                        return `<span class="bg-orange-500/10 text-orange-400 border border-orange-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">🚚 ${label}</span>`;
+                    } else if (t.includes('staging') || t.includes('self-service')) {
+                        return `<span class="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">🚪 ${label}</span>`;
+                    } else if (t.includes('missing') || t.includes('unreturned')) {
+                        return `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">⚠️ ${label}</span>`;
+                    } else if (t.includes('deposit')) {
+                        return `<span class="bg-teal-500/10 text-teal-400 border border-teal-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">${label}</span>`;
                     } else if (t.includes('refund')) {
-                        return `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">Refund</span>`;
+                        return `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">💸 ${label}</span>`;
                     } else {
-                        return `<span class="bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">Recurring Subscription</span>`;
+                        return `<span class="bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase">📦 ${label}</span>`;
                     }
                 };
 
@@ -7353,7 +7418,7 @@
                                             <div>#${escapeHtml(invNum)}</div>
                                         </td>
                                         <td class="py-3.5 px-4 text-gray-400 font-mono text-[11px]">${dateStr}</td>
-                                        <td class="py-3.5 px-4">${getTypeBadge(invTypeRaw)}</td>
+                                        <td class="py-3.5 px-4">${getTypeBadge(inv)}</td>
                                         <td class="py-3.5 px-4">${feesBreakdown}</td>
                                         <td class="py-3.5 px-4">${getStatusBadge(rawStatus)}</td>
                                         <td class="py-3.5 px-4 text-right">${totalFormatted}</td>

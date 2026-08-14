@@ -4409,12 +4409,14 @@
                         const valetBase = Number(activeFacilityPricing.valet_base != null ? activeFacilityPricing.valet_base : 15.00);
                         const valetAdder = Number(activeFacilityPricing.valet_tote_adder != null ? activeFacilityPricing.valet_tote_adder : 1.00);
                         const valetAdderTotal = toteCount * valetAdder;
-                        const deliveryFee = retrievalLogisticsType === 'valet_delivery'
-                            ? (valetBase + valetAdderTotal)
-                            : 0;
                         const surgeFee = selectedReservationSurge ? Number(selectedReservationSurge.fee || 0) : 0;
                         const isNextDayPromo = selectedReservationSurge && selectedReservationSurge.tier === 'next_day_promo';
-                        const invoiceType = retrievalLogisticsType === 'valet_delivery' ? 'valet_delivery' : 'surge_delivery';
+                        let invoiceType = 'self_service_staging';
+                        if (retrievalLogisticsType === 'valet_delivery') {
+                            invoiceType = surgeFee > 0 ? 'expedited_valet_delivery' : 'valet_delivery';
+                        } else {
+                            invoiceType = surgeFee > 0 ? 'expedited_staging_access' : 'self_service_staging';
+                        }
 
                         const lineItems = [];
                         if (retrievalLogisticsType === 'valet_delivery') {
@@ -4981,6 +4983,64 @@
                     }
                 }
 
+                // Helper to resolve accurate, human-readable charge type names
+                function resolveInvoiceTypeLabel(inv) {
+                    if (!inv) return 'Service Invoice';
+                    const rawType = (inv.invoice_type || inv.invoiceType || inv.charge_type || '').toLowerCase().replace(/[\s-]/g, '_');
+                    const delFee = Number(inv.delivery_fee || inv.deliveryFee || 0);
+                    const surgeFee = Number(inv.surge_fee || inv.surgeFee || 0);
+                    const subtotal = Number(inv.subtotal || 0);
+                    const notes = (inv.notes || '').toLowerCase();
+                    
+                    let lineItems = inv.line_items || inv.lineItems || [];
+                    if (typeof lineItems === 'string') {
+                        try { lineItems = JSON.parse(lineItems); } catch (e) { lineItems = []; }
+                    }
+                    const hasValetLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('valet'));
+                    const hasStagingLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('staging') || (li.description || '').toLowerCase().includes('self-service'));
+                    const hasStorageLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('storage') || (li.description || '').toLowerCase().includes('subscription'));
+
+                    if (rawType === 'unreturned_tote_fee' || rawType === 'missing_tote_fee' || rawType === 'missing_tote' || notes.includes('missing tote') || notes.includes('unreturned')) {
+                        return 'Missing Container Replacement Fee';
+                    }
+                    if (rawType === 'unlaunched_deposit' || notes.includes('deposit')) {
+                        return 'Pre-Launch Deposit';
+                    }
+                    if (rawType === 'refund') {
+                        return 'Account Refund';
+                    }
+                    if (rawType === 'initial_reservation') {
+                        return 'Initial Plan Reservation';
+                    }
+                    if (rawType === 'subscription_expansion' || rawType === 'subscription_modification') {
+                        return 'Plan Modification';
+                    }
+
+                    const isValet = rawType.includes('valet') || delFee > 0 || hasValetLine || notes.includes('valet');
+                    const isStaging = rawType.includes('staging') || hasStagingLine || notes.includes('staging') || notes.includes('self-service');
+                    const hasSurge = surgeFee > 0 || rawType.includes('surge') || rawType.includes('expedited') || notes.includes('surge') || notes.includes('same_day') || notes.includes('expedited');
+
+                    if (isValet) {
+                        return hasSurge ? 'Expedited Valet Delivery' : 'Valet Delivery';
+                    }
+                    if (isStaging) {
+                        return hasSurge ? 'Expedited Staging Access' : 'Self-Service Staging';
+                    }
+
+                    if (rawType === 'surge_delivery') {
+                        if (delFee > 0 || notes.includes('valet')) {
+                            return 'Expedited Valet Delivery';
+                        }
+                        return 'Expedited Staging Access';
+                    }
+
+                    if (rawType === 'subscription' || rawType === 'monthly_subscription' || hasStorageLine || subtotal > 0) {
+                        return 'Monthly Storage Plan';
+                    }
+
+                    return rawType ? rawType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Service Invoice';
+                }
+
                 // Display official invoice records
                 if (invoices && invoices.length > 0) {
                     window.userLoadedInvoices = invoices;
@@ -4991,7 +5051,7 @@
                         const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
                         const rawStatus = (inv.payment_status || 'paid').toLowerCase();
                         const invNum = inv.invoice_number || 'INV-2026-0000';
-                        const typeLabel = (inv.invoice_type || 'subscription').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                        const typeLabel = resolveInvoiceTypeLabel(inv);
 
                         const dueDateStr = window.StripeBillingIntegration 
                             ? window.StripeBillingIntegration.formatDueDate(inv) 
