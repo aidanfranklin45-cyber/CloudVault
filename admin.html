@@ -2370,7 +2370,17 @@
                 }
 
                 const tempAuthClient = clientFactory(supabaseUrl, supabaseKey, {
-                    auth: { persistSession: false, autoRefreshToken: false }
+                    auth: {
+                        persistSession: false,
+                        autoRefreshToken: false,
+                        detectSessionInUrl: false,
+                        storageKey: 'cv_emp_reg_session',
+                        storage: {
+                            getItem: () => null,
+                            setItem: () => {},
+                            removeItem: () => {}
+                        }
+                    }
                 });
 
                 // 2. Register user in Supabase Auth with metadata
