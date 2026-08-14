@@ -1974,6 +1974,7 @@
                             if (activeView) activeView.classList.remove('hidden');
                         }
 
+                        const TOTES_PER_SHELF = 3;
                         const { count: totalLocations } = await supabase.from('warehouse_locations')
                             .select('*', { count: 'exact', head: true })
                             .eq('facility_id', facilityId)
@@ -1985,7 +1986,8 @@
                             .eq('status', 'stored');
 
                         const storedCount = (storedTotes || []).length;
-                        const maxCap = totalLocations > 0 ? totalLocations : (currentLoadedFac?.tote_capacity || 2000);
+                        // 100 shelf locations * 3 totes per shelf = 300 totes max capacity
+                        const maxCap = totalLocations > 0 ? (totalLocations * TOTES_PER_SHELF) : (currentLoadedFac?.tote_capacity || 300);
                         const percent = Math.min(100, Math.round((storedCount / maxCap) * 100));
 
                         const badgeEl = document.getElementById('telemetry-capacity-badge');
@@ -1997,7 +1999,7 @@
                         const barEl = document.getElementById('telemetry-occupancy-bar');
                         if (barEl) barEl.style.width = `${percent}%`;
 
-                        // Query warehouse_locations for Vault locations to extract actual aisles dynamically
+                        // Query warehouse_locations for Vault locations to extract actual aisles & bays dynamically
                         const { data: vaultLocs } = await supabase.from('warehouse_locations')
                             .select('identifier, is_occupied')
                             .eq('facility_id', facilityId)
@@ -2006,49 +2008,138 @@
                         const matrixEl = document.getElementById('vault-racks-matrix');
                         if (matrixEl) {
                             if (vaultLocs && vaultLocs.length > 0) {
-                                matrixEl.className = "grid grid-cols-2 md:grid-cols-4 gap-3";
+                                matrixEl.className = "space-y-4";
                                 const aisleMap = {};
                                 vaultLocs.forEach(loc => {
-                                    const code = loc.identifier || '';
-                                    let aisleKey = 'V-A01';
-                                    if (code.includes('-')) {
+                                    const code = (loc.identifier || '').toUpperCase();
+                                    let aisleKey = 'A1';
+                                    let bayKey = 'B01';
+                                    let shelfKey = 'S1';
+                                    const m = code.match(/^(?:V-)?(A\d+)-(B\d+)-(S\d+)$/i);
+                                    if (m) {
+                                        aisleKey = m[1].toUpperCase();
+                                        bayKey = m[2].toUpperCase();
+                                        shelfKey = m[3].toUpperCase();
+                                    } else if (code.includes('-')) {
                                         const parts = code.split('-');
                                         aisleKey = parts[0];
-                                    } else if (/^A\d+/i.test(code)) {
-                                        const match = code.match(/^(A\d+)/i);
-                                        aisleKey = match ? match[1] : 'V-A01';
+                                        bayKey = parts[1] || 'B01';
                                     }
-                                    if (!aisleMap[aisleKey]) aisleMap[aisleKey] = { total: 0, occupied: 0 };
-                                    aisleMap[aisleKey].total += 1;
+
+                                    if (!aisleMap[aisleKey]) {
+                                        aisleMap[aisleKey] = {
+                                            totalShelves: 0,
+                                            occupiedTotes: 0,
+                                            bays: {}
+                                        };
+                                    }
+                                    aisleMap[aisleKey].totalShelves += 1;
+
+                                    if (!aisleMap[aisleKey].bays[bayKey]) {
+                                        aisleMap[aisleKey].bays[bayKey] = {
+                                            totalShelves: 0,
+                                            occupiedTotes: 0,
+                                            fullCode: `${aisleKey}-${bayKey}`
+                                        };
+                                    }
+                                    aisleMap[aisleKey].bays[bayKey].totalShelves += 1;
                                 });
 
                                 (storedTotes || []).forEach(t => {
-                                    const code = t.location_code || '';
-                                    if (code) {
+                                    const code = (t.location_code || '').toUpperCase();
+                                    const m = code.match(/^(?:V-)?(A\d+)-(B\d+)-(S\d+)$/i);
+                                    if (m) {
+                                        const a = m[1].toUpperCase();
+                                        const b = m[2].toUpperCase();
+                                        if (aisleMap[a]) {
+                                            aisleMap[a].occupiedTotes += 1;
+                                            if (aisleMap[a].bays[b]) {
+                                                aisleMap[a].bays[b].occupiedTotes += 1;
+                                            }
+                                        }
+                                    } else if (code.includes('-')) {
                                         const parts = code.split('-');
-                                        const aisleKey = parts[0] || 'V-A01';
-                                        if (aisleMap[aisleKey]) {
-                                            aisleMap[aisleKey].occupied += 1;
+                                        const a = parts[0];
+                                        const b = parts[1];
+                                        if (aisleMap[a]) {
+                                            aisleMap[a].occupiedTotes += 1;
+                                            if (b && aisleMap[a].bays[b]) {
+                                                aisleMap[a].bays[b].occupiedTotes += 1;
+                                            }
                                         }
                                     }
                                 });
 
                                 const aisleKeys = Object.keys(aisleMap);
-                                matrixEl.innerHTML = aisleKeys.map(aisle => {
-                                    const aisleTotal = aisleMap[aisle].total;
-                                    const aisleOccupied = Math.min(aisleTotal, aisleMap[aisle].occupied);
-                                    const aislePct = aisleTotal > 0 ? Math.round((aisleOccupied / aisleTotal) * 100) : 0;
-
-                                    return `
-                                <div class="bg-gray-950 p-3 rounded-2xl border border-gray-800 space-y-1.5">
-                                    <span class="text-xs font-black text-cyan-400 font-mono">${aisle}</span>
-                                    <div class="w-full h-1.5 bg-gray-900 rounded-full overflow-hidden">
-                                        <div class="h-full bg-cyan-500 rounded-full" style="width: ${aislePct}%;"></div>
+                                matrixEl.innerHTML = `
+                                    <div class="flex items-center justify-between pb-1">
+                                        <span class="text-[11px] text-gray-400 font-mono">Click any aisle to view or collapse all bays</span>
+                                        <button type="button" onclick="toggleAllBaysView()" id="btn-toggle-all-bays"
+                                            class="text-[10px] font-mono font-bold text-cyan-300 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 px-2.5 py-1 rounded-lg transition cursor-pointer">
+                                            ▼ Expand All Bays
+                                        </button>
                                     </div>
-                                    <span class="text-[9px] font-mono text-gray-500">${aisleOccupied}/${aisleTotal} (${aislePct}%)</span>
-                                </div>
-                            `;
-                                }).join('');
+                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                                        ${aisleKeys.map(aisle => {
+                                            const data = aisleMap[aisle];
+                                            const aisleCap = data.totalShelves * TOTES_PER_SHELF;
+                                            const aisleOccupied = Math.min(aisleCap, data.occupiedTotes);
+                                            const aislePct = aisleCap > 0 ? Math.round((aisleOccupied / aisleCap) * 100) : 0;
+                                            const bayKeys = Object.keys(data.bays);
+
+                                            return `
+                                                <div class="bg-gray-950/90 rounded-2xl border border-gray-800 p-3.5 space-y-3 shadow-md hover:border-cyan-500/40 transition">
+                                                    <!-- Aisle Header -->
+                                                    <div onclick="toggleAisleBays('${aisle}')" class="flex items-center justify-between cursor-pointer group">
+                                                        <div class="flex items-center space-x-2">
+                                                            <span class="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-300 font-mono font-black flex items-center justify-center text-xs border border-cyan-500/40 group-hover:bg-cyan-500/30 transition">
+                                                                ${aisle}
+                                                            </span>
+                                                            <div>
+                                                                <h5 class="text-xs font-black text-white font-mono group-hover:text-cyan-300 transition">Aisle ${aisle}</h5>
+                                                                <p class="text-[10px] text-gray-400 font-mono">${bayKeys.length} Bays • ${data.totalShelves} Shelves</p>
+                                                            </div>
+                                                        </div>
+                                                        <div class="text-right">
+                                                            <span class="text-xs font-black font-mono text-cyan-300">${aisleOccupied} / ${aisleCap}</span>
+                                                            <span class="text-[9px] block font-mono ${aislePct >= 80 ? 'text-amber-400 font-bold' : 'text-emerald-400'}">${aislePct}% Full</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Aisle Progress Bar -->
+                                                    <div class="w-full h-2 bg-gray-900 rounded-full overflow-hidden border border-gray-800">
+                                                        <div class="h-full ${aislePct >= 80 ? 'bg-gradient-to-r from-amber-500 to-rose-500' : 'bg-gradient-to-r from-cyan-500 to-blue-500'} rounded-full transition-all duration-300" style="width: ${aislePct}%;"></div>
+                                                    </div>
+
+                                                    <!-- Bays Grid (Accordion) -->
+                                                    <div id="aisle-bays-${aisle}" class="aisle-bays-panel space-y-1.5 pt-2 border-t border-gray-850">
+                                                        <div class="grid grid-cols-2 gap-1.5">
+                                                            ${bayKeys.map(bKey => {
+                                                                const bData = data.bays[bKey];
+                                                                const bCap = bData.totalShelves * TOTES_PER_SHELF;
+                                                                const bOccupied = Math.min(bCap, bData.occupiedTotes);
+                                                                const bPct = bCap > 0 ? Math.round((bOccupied / bCap) * 100) : 0;
+                                                                const isFull = bOccupied >= bCap;
+
+                                                                return `
+                                                                    <div class="bg-gray-900/80 p-2 rounded-xl border border-gray-800 space-y-1 hover:border-indigo-400/40 transition">
+                                                                        <div class="flex justify-between items-center text-[10px] font-mono">
+                                                                            <span class="font-bold text-gray-300">${bKey}</span>
+                                                                            <span class="font-extrabold ${isFull ? 'text-rose-400' : bOccupied > 0 ? 'text-cyan-300' : 'text-gray-500'}">${bOccupied}/${bCap}</span>
+                                                                        </div>
+                                                                        <div class="w-full h-1 bg-gray-950 rounded-full overflow-hidden">
+                                                                            <div class="h-full ${isFull ? 'bg-rose-500' : 'bg-cyan-400'} rounded-full" style="width: ${bPct}%;"></div>
+                                                                        </div>
+                                                                    </div>
+                                                                `;
+                                                            }).join('')}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                `;
                             } else {
                                 matrixEl.className = "col-span-full";
                                 matrixEl.innerHTML = `
@@ -2067,6 +2158,33 @@
                     } catch (e) {
                         console.error("Telemetry error:", e);
                     }
+                }
+
+                window.toggleAisleBays = function(aisleKey) {
+                    const el = document.getElementById(`aisle-bays-${aisleKey}`);
+                    if (el) {
+                        el.classList.toggle('hidden');
+                    }
+                };
+
+                window.toggleAllBaysView = function() {
+                    const panels = document.querySelectorAll('.aisle-bays-panel');
+                    const btn = document.getElementById('btn-toggle-all-bays');
+                    if (!panels || panels.length === 0) return;
+
+                    const anyHidden = Array.from(panels).some(p => p.classList.contains('hidden'));
+                    panels.forEach(p => {
+                        if (anyHidden) {
+                            p.classList.remove('hidden');
+                        } else {
+                            p.classList.add('hidden');
+                        }
+                    });
+
+                    if (btn) {
+                        btn.textContent = anyHidden ? '▲ Collapse Bays' : '▼ Expand All Bays';
+                    }
+                };
                 }
 
                 // ===== SECTION 3: EXECUTIVE P&L UNIT ECONOMICS =====
