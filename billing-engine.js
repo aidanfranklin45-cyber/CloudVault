@@ -300,7 +300,8 @@
               .maybeSingle();
             if (saZip && saZip.tax_rate != null) {
               taxRate = Number(saZip.tax_rate);
-              taxLabel = saZip.tax_label || `${saZip.city || 'Local'} Sales Tax (${(taxRate * 100).toFixed(2)}%)`;
+              const loc = [saZip.city, saZip.state].filter(Boolean).join(', ');
+              taxLabel = saZip.tax_label || `${loc || 'Local'} Sales Tax (${(taxRate * 100).toFixed(2)}%)`;
             }
           }
 
@@ -312,7 +313,8 @@
               .limit(1);
             if (saFac && saFac[0] && saFac[0].tax_rate != null) {
               taxRate = Number(saFac[0].tax_rate);
-              taxLabel = saFac[0].tax_label || `${saFac[0].city || 'Regional'} Sales Tax (${(taxRate * 100).toFixed(2)}%)`;
+              const loc = [saFac[0].city, saFac[0].state].filter(Boolean).join(', ');
+              taxLabel = saFac[0].tax_label || `${loc || 'Regional'} Sales Tax (${(taxRate * 100).toFixed(2)}%)`;
             }
           }
 
@@ -328,22 +330,11 @@
         }
       }
 
+      // No hardcoded fallbacks — service_areas table is the sole source of truth.
+      // If no rate is configured for this ZIP / facility, tax is $0.00.
       if (taxRate == null) {
-        const facKey = String(facilityId || '').toLowerCase();
-        const zipKey = String(zipCode || '').trim();
-        if (facKey.includes('yakima') || zipKey.startsWith('989')) {
-          taxRate = 0.083; // 8.3% Yakima WA sales tax
-          taxLabel = 'WA State & Yakima Local Sales Tax (8.30%)';
-        } else if (facKey.includes('portland') || zipKey.startsWith('972')) {
-          taxRate = 0.00; // Oregon 0% sales tax
-          taxLabel = 'Oregon State Sales Tax (0.00%)';
-        } else if (facKey.includes('seattle') || zipKey.startsWith('981')) {
-          taxRate = 0.1035; // 10.35% Seattle WA sales tax
-          taxLabel = 'WA State & Seattle Local Sales Tax (10.35%)';
-        } else {
-          taxRate = 0.086; // WA statewide default 8.6%
-          taxLabel = 'WA State Sales Tax (8.60%)';
-        }
+        taxRate = 0.00;
+        taxLabel = 'Sales Tax (Not Configured)';
       }
 
       return { taxRate, taxLabel };
@@ -2181,7 +2172,8 @@
               .maybeSingle();
             if (saZip && saZip.tax_rate != null) {
               dbTaxRate = Number(saZip.tax_rate);
-              dbTaxLabel = saZip.tax_label || `${saZip.city || 'Local'} Sales Tax (${(dbTaxRate * 100).toFixed(2)}%)`;
+              const loc = [saZip.city, saZip.state].filter(Boolean).join(', ');
+              dbTaxLabel = saZip.tax_label || `${loc || 'Local'} Sales Tax (${(dbTaxRate * 100).toFixed(2)}%)`;
             }
           }
 
@@ -2195,7 +2187,8 @@
               .limit(1);
             if (saFac && saFac[0] && saFac[0].tax_rate != null && saFac[0].facility_id === targetFacId) {
               dbTaxRate = Number(saFac[0].tax_rate);
-              dbTaxLabel = saFac[0].tax_label || `${saFac[0].city || 'Regional'} Sales Tax (${(dbTaxRate * 100).toFixed(2)}%)`;
+              const loc = [saFac[0].city, saFac[0].state].filter(Boolean).join(', ');
+              dbTaxLabel = saFac[0].tax_label || `${loc || 'Regional'} Sales Tax (${(dbTaxRate * 100).toFixed(2)}%)`;
             }
           }
 
@@ -2212,25 +2205,10 @@
         }
       }
 
-      // Resolve dynamic rate from database or facility territory
-      let taxRate = dbTaxRate != null ? dbTaxRate : (facKey.includes('portland') || userZip.startsWith('972') ? 0.00 : 0.0860);
-      let taxRegionLabel = dbTaxLabel || (facKey.includes('portland') || userZip.startsWith('972') ? 'Oregon (0.00%)' : 'WA State (8.60%)');
-
-      if (dbTaxRate == null) {
-        if (facKey.includes('portland') || facKey.includes('pdx') || userZip.startsWith('972')) {
-          taxRate = 0.0000;
-          taxRegionLabel = 'Oregon (0.00%)';
-        } else if (facKey.includes('yakima') || userZip.startsWith('989')) {
-          taxRate = 0.0830;
-          taxRegionLabel = 'Yakima, WA (8.30%)';
-        } else if (facKey.includes('seattle') || userZip.startsWith('981')) {
-          taxRate = 0.1035;
-          taxRegionLabel = 'Seattle, WA (10.35%)';
-        } else {
-          taxRate = 0.0860;
-          taxRegionLabel = 'WA State (8.60%)';
-        }
-      }
+      // service_areas table is the sole source of truth for tax rates.
+      // No hardcoded city/ZIP fallbacks — if not configured, tax is $0.00.
+      const taxRate = dbTaxRate != null ? dbTaxRate : 0.00;
+      const taxRegionLabel = dbTaxLabel || (dbTaxRate === 0 ? 'Tax-Exempt Region (0.00%)' : 'Not Configured');
 
       const taxableBase = Math.max(0, subtotal + deliveryFee + surgeFee);
       if ((!tax || tax === 0) && taxableBase > 0 && taxRate > 0) {
