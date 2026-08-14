@@ -9819,78 +9819,119 @@
                 </div>
 
             </div>
-    <!-- Shelf & Location Master Telemetry Modal -->
+    <!-- Shelf & Bay Master Telemetry & Configuration Modal -->
     <div id="shelf-location-master-modal"
-        class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
         <div
-            class="glass-panel max-w-3xl w-full p-6 sm:p-8 rounded-3xl border border-cyan-500/40 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto relative">
-            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+            class="glass-panel max-w-4xl w-full p-6 sm:p-8 rounded-3xl border-2 border-cyan-500/50 shadow-[0_0_50px_rgba(6,182,212,0.25)] space-y-6 max-h-[92vh] overflow-y-auto relative bg-gray-950">
+            <div class="flex items-center justify-between border-b border-gray-750 pb-4">
                 <div class="flex items-center space-x-3">
                     <div
-                        class="w-12 h-12 rounded-2xl bg-cyan-500/20 text-cyan-400 font-black flex items-center justify-center text-lg border border-cyan-500/30 font-mono">
+                        class="w-12 h-12 rounded-2xl bg-cyan-500/20 text-cyan-300 font-black flex items-center justify-center text-lg border-2 border-cyan-400 font-mono shadow-sm">
                         <i data-lucide="map-pin" class="w-6 h-6"></i>
                     </div>
                     <div>
                         <div class="flex items-center gap-2">
-                            <h3 id="slm-identifier-display" class="font-black text-white text-xl font-mono">A2-B12-S1</h3>
+                            <h3 id="slm-identifier-display" class="font-black text-white text-2xl font-mono tracking-tight">A2-B12-S1</h3>
                             <span id="slm-zone-badge"
-                                class="bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase font-mono">VAULT RACK</span>
+                                class="bg-cyan-500/20 text-cyan-300 border border-cyan-400 text-xs font-black px-3 py-1 rounded-full uppercase font-mono">VAULT RACK</span>
                         </div>
-                        <p id="slm-subtitle" class="text-xs text-gray-400 mt-0.5 font-mono">Facility: Yakima Fulfillment Center</p>
+                        <p id="slm-subtitle" class="text-xs text-gray-300 mt-0.5 font-mono">Facility: Seattle Fulfillment Hub • Shelf Location Coordinate</p>
                     </div>
                 </div>
                 <button onclick="closeShelfLocationMasterModal()"
-                    class="text-gray-400 hover:text-white p-2 rounded-xl bg-gray-900 border border-gray-800 transition"><i
+                    class="text-gray-300 hover:text-white p-2 rounded-xl bg-gray-900 border border-gray-700 transition"><i
                         data-lucide="x" class="w-5 h-5"></i></button>
             </div>
 
             <!-- Occupancy & Capacity Telemetry Bar -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-950/80 border border-gray-850 p-4 rounded-2xl shadow-inner font-mono">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-900/90 border-2 border-gray-750 p-4 rounded-2xl shadow-inner font-mono">
                 <div>
-                    <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Slotted Totes</span>
-                    <span id="slm-stat-totes" class="text-base font-black text-cyan-300 font-mono">0 / 4</span>
+                    <span class="text-[10px] text-gray-300 font-extrabold uppercase tracking-wider block">Slotted Totes</span>
+                    <span id="slm-stat-totes" class="text-lg font-black text-cyan-300 font-mono">0 / 4</span>
                 </div>
                 <div>
-                    <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Occupancy Rate</span>
-                    <span id="slm-stat-occupancy" class="text-base font-black text-emerald-400 font-mono">0%</span>
+                    <span class="text-[10px] text-gray-300 font-extrabold uppercase tracking-wider block">Occupancy Rate</span>
+                    <span id="slm-stat-occupancy" class="text-lg font-black text-emerald-400 font-mono">0%</span>
                 </div>
                 <div>
-                    <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Stored Items</span>
-                    <span id="slm-stat-products" class="text-base font-black text-indigo-300 font-mono">0 Items</span>
+                    <span class="text-[10px] text-gray-300 font-extrabold uppercase tracking-wider block">Stored Containers</span>
+                    <span id="slm-stat-products" class="text-lg font-black text-indigo-300 font-mono">0 Totes</span>
                 </div>
                 <div>
-                    <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Shelf Status</span>
-                    <span id="slm-stat-status" class="text-base font-black text-emerald-400 font-mono">ACTIVE</span>
+                    <span class="text-[10px] text-gray-300 font-extrabold uppercase tracking-wider block">Operational Status</span>
+                    <span id="slm-stat-status" class="text-lg font-black text-emerald-400 font-mono">ACTIVE</span>
                 </div>
             </div>
 
-            <!-- Slotted Totes & Stored Products Section -->
-            <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <h4 class="text-xs font-black uppercase text-gray-400 tracking-wider flex items-center gap-2">
-                        <i data-lucide="layers" class="w-4 h-4 text-cyan-400"></i> Slotted Totes &amp; Stored Products on Shelf
-                    </h4>
-                    <button onclick="openSlotToteToCurrentShelfModal()"
-                        class="bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
-                        <i data-lucide="plus" class="w-3.5 h-3.5 text-cyan-400"></i>
-                        <span>➕ Slot Tote Here</span>
+            <!-- Bay & Shelf Configuration & Quick-Slot Bar -->
+            <div class="bg-gray-900 p-4 rounded-2xl border border-cyan-500/30 space-y-3">
+                <div class="flex items-center justify-between border-b border-gray-750 pb-2">
+                    <span class="text-xs font-black text-cyan-300 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                        ⚙️ Bay &amp; Shelf Configuration
+                    </span>
+                    <span class="text-[10px] text-gray-400 font-mono">Real-time capacity and routing control</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                    <div class="sm:col-span-4">
+                        <label class="block text-[10px] font-extrabold uppercase text-gray-300 mb-1">Operational State</label>
+                        <select id="slm-config-status-select"
+                            class="w-full bg-gray-950 border border-gray-700 rounded-xl px-3 py-2.5 text-xs font-extrabold text-white outline-none focus:border-cyan-400">
+                            <option value="ACTIVE">● Active (Standard Operations)</option>
+                            <option value="MAINTENANCE">⚠️ Under Maintenance / Inspection</option>
+                            <option value="RESERVED">🔒 Reserved (Priority Staging)</option>
+                            <option value="LOCKED">🚫 Locked / Out of Service</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-3">
+                        <label class="block text-[10px] font-extrabold uppercase text-gray-300 mb-1">Max Capacity (Totes)</label>
+                        <input type="number" id="slm-config-capacity-input" value="4" min="1" max="50"
+                            class="w-full bg-gray-950 border border-gray-700 rounded-xl px-3 py-2.5 text-xs font-mono font-black text-cyan-300 outline-none focus:border-cyan-400">
+                    </div>
+                    <div class="sm:col-span-5 flex gap-2">
+                        <button onclick="saveBayConfiguration()"
+                            class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs py-2.5 rounded-xl transition shadow-md shadow-cyan-600/30 flex items-center justify-center gap-1.5 cursor-pointer">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i> Save Configuration
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick-Slot Tote Form -->
+                <form onsubmit="handleQuickSlotToteSubmit(event)" class="pt-2 border-t border-gray-750 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <div class="relative flex-1">
+                        <i data-lucide="scan" class="w-4 h-4 text-cyan-400 absolute left-3.5 top-3 pointer-events-none"></i>
+                        <input type="text" id="slm-quick-slot-input" placeholder="Scan or enter tote code (e.g. CV-SEA-7DPK) to slot directly here..."
+                            class="w-full bg-gray-950 border border-gray-700 rounded-xl pl-10 pr-3 py-2.5 text-xs font-mono font-bold text-white placeholder:text-gray-400 outline-none focus:border-cyan-400 transition">
+                    </div>
+                    <button type="submit"
+                        class="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer shrink-0">
+                        <i data-lucide="plus" class="w-4 h-4"></i> Slot Tote Here
                     </button>
+                </form>
+            </div>
+
+            <!-- Slotted Totes & Stored Products Section -->
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-black uppercase text-gray-300 tracking-wider flex items-center gap-2">
+                        <i data-lucide="layers" class="w-4 h-4 text-cyan-400"></i> Slotted Totes &amp; Customer Ownership Roster
+                    </h4>
                 </div>
 
                 <div id="slm-totes-list" class="space-y-3">
-                    <!-- Populated dynamically with tote product cards -->
+                    <!-- Populated dynamically with tote product and owner cards -->
                 </div>
             </div>
 
             <!-- Action Bar Footer -->
-            <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-800">
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-750">
                 <button onclick="triggerPrintCurrentShelfBarcode()"
-                    class="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer">
+                    class="bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-400/40 text-xs font-extrabold px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-sm">
                     <i data-lucide="printer" class="w-4 h-4 text-blue-400"></i>
-                    <span>🖨️ Print Shelf Location Barcode Sheet</span>
+                    <span>🖨️ Print Shelf &amp; Bay Location Barcode Tag</span>
                 </button>
                 <button onclick="closeShelfLocationMasterModal()"
-                    class="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-gray-400 font-bold text-xs rounded-xl border border-gray-800 transition">
+                    class="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 font-extrabold text-xs rounded-xl border border-gray-700 transition">
                     Close Telemetry
                 </button>
             </div>
