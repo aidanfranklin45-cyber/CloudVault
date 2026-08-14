@@ -765,9 +765,9 @@
                 <!-- Interactive Staging Room Reservation Calendar -->
                 <div class="mt-6 pt-4 border-t border-gray-150 space-y-4">
                     <div class="flex items-center justify-between">
-                        <label class="block text-xs font-extrabold uppercase text-gray-800 tracking-wider flex items-center gap-1.5">
+                        <label id="retrieval-calendar-label" class="block text-xs font-extrabold uppercase text-gray-800 tracking-wider flex items-center gap-1.5">
                             <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                            Reserve Staging Slot Date
+                            <span id="retrieval-calendar-title">Reserve Staging Slot Date</span>
                         </label>
                         <span id="surge-badge" class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase">Standard Rate ($0)</span>
                     </div>
@@ -775,11 +775,11 @@
                     <!-- Date & Time Slot Inputs -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <span class="text-[11px] font-bold text-gray-500 block mb-1">Target Retrieval Date:</span>
+                            <span id="retrieval-date-label" class="text-[11px] font-bold text-gray-500 block mb-1">Target Retrieval Date:</span>
                             <input type="date" id="retrieval-target-date" onchange="handleReservationDateChange()" class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
                         </div>
                         <div>
-                            <span class="text-[11px] font-bold text-gray-500 block mb-1">Staging Time Window:</span>
+                            <span id="retrieval-slot-label" class="text-[11px] font-bold text-gray-500 block mb-1">Staging Time Window:</span>
                             <select id="retrieval-time-slot" onchange="handleReservationSlotChange()" class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
                                 <option value="09:00 AM - 12:00 PM">Morning (9 AM - 12 PM)</option>
                                 <option value="12:00 PM - 03:00 PM">Afternoon (12 PM - 3 PM)</option>
@@ -3832,25 +3832,77 @@
             const calc = calculateSurgeFee(dateInput.value, slotInput.value);
             selectedReservationSurge = calc;
 
+            const isValet = retrievalLogisticsType === 'valet_delivery';
+            const toteCount = selectedItems.size || 1;
+            const valetBase = (activeFacilityPricing && activeFacilityPricing.valet_base !== undefined) ? activeFacilityPricing.valet_base : 17.00;
+            const valetAdder = (activeFacilityPricing && activeFacilityPricing.valet_tote_adder !== undefined) ? activeFacilityPricing.valet_tote_adder : 1.00;
+            const valetFee = isValet ? (valetBase + (toteCount * valetAdder)) : 0;
+            const surgeFee = calc.tier === 'next_day_promo' ? 0.00 : Number(calc.fee || 0);
+            const totalFee = valetFee + surgeFee;
+
             const badge = document.getElementById('surge-badge');
             const titleEl = document.getElementById('surge-banner-title');
             const descEl = document.getElementById('surge-banner-desc');
             const amountEl = document.getElementById('surge-fee-amount');
+            const confirmBtn = document.getElementById('confirm-retrieval-btn');
 
-            if (amountEl) amountEl.textContent = calc.tier === 'next_day_promo' ? 'FREE ($0.00)' : `$${calc.fee.toFixed(2)}`;
-            if (titleEl) titleEl.textContent = calc.title;
-            if (descEl) descEl.textContent = calc.desc;
-
-            if (badge) {
+            if (isValet) {
                 if (calc.tier === 'next_day_promo') {
-                    badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 uppercase";
-                    badge.textContent = "🎉 Next-Day Promo ($0)";
-                } else if (calc.fee > 0) {
-                    badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 uppercase";
-                    badge.textContent = `Surge +$${calc.fee.toFixed(2)}`;
+                    if (titleEl) titleEl.textContent = "Valet Doorstep Delivery (Next-Day Promo)";
+                    if (descEl) descEl.textContent = `$${valetFee.toFixed(2)} Valet delivery fee. Next-day access fee waived courtesy of facility promo.`;
+                    if (amountEl) amountEl.textContent = `$${totalFee.toFixed(2)}`;
+                    if (badge) {
+                        badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 uppercase";
+                        badge.textContent = `Valet Total: $${totalFee.toFixed(2)}`;
+                    }
+                } else if (surgeFee > 0) {
+                    if (titleEl) titleEl.textContent = `Valet Delivery + ${calc.title}`;
+                    if (descEl) descEl.textContent = `$${valetFee.toFixed(2)} Delivery + $${surgeFee.toFixed(2)} ${calc.desc.toLowerCase()}`;
+                    if (amountEl) amountEl.textContent = `$${totalFee.toFixed(2)}`;
+                    if (badge) {
+                        badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 uppercase";
+                        badge.textContent = `Total: $${totalFee.toFixed(2)}`;
+                    }
                 } else {
-                    badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase";
-                    badge.textContent = "Standard Rate ($0)";
+                    if (titleEl) titleEl.textContent = "Valet Doorstep Delivery";
+                    if (descEl) descEl.textContent = `$${valetFee.toFixed(2)} Delivery fee. Scheduled in advance (No surge fees).`;
+                    if (amountEl) amountEl.textContent = `$${totalFee.toFixed(2)}`;
+                    if (badge) {
+                        badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 uppercase";
+                        badge.textContent = `Valet Delivery ($${totalFee.toFixed(2)})`;
+                    }
+                }
+
+                if (confirmBtn) confirmBtn.textContent = `Confirm Valet Delivery ($${totalFee.toFixed(2)})`;
+            } else {
+                // Self-Service Pickup Staging
+                if (calc.tier === 'next_day_promo') {
+                    if (titleEl) titleEl.textContent = "Next-Day Fast Access (Included Promo)";
+                    if (descEl) descEl.textContent = "Next-day retrieval complimentary courtesy of facility promotion.";
+                    if (amountEl) amountEl.textContent = "FREE ($0.00)";
+                    if (badge) {
+                        badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 uppercase";
+                        badge.textContent = "🎉 Next-Day Promo ($0)";
+                    }
+                    if (confirmBtn) confirmBtn.textContent = "Confirm Self-Service Pickup (Included)";
+                } else if (surgeFee > 0) {
+                    if (titleEl) titleEl.textContent = calc.title;
+                    if (descEl) descEl.textContent = calc.desc;
+                    if (amountEl) amountEl.textContent = `$${surgeFee.toFixed(2)}`;
+                    if (badge) {
+                        badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 uppercase";
+                        badge.textContent = `Surge +$${surgeFee.toFixed(2)}`;
+                    }
+                    if (confirmBtn) confirmBtn.textContent = `Confirm Self-Service Pickup ($${surgeFee.toFixed(2)})`;
+                } else {
+                    if (titleEl) titleEl.textContent = "Standard Access Reserved";
+                    if (descEl) descEl.textContent = "Scheduled in advance. Included with membership.";
+                    if (amountEl) amountEl.textContent = "$0.00";
+                    if (badge) {
+                        badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase";
+                        badge.textContent = "Standard Rate ($0)";
+                    }
+                    if (confirmBtn) confirmBtn.textContent = "Confirm Self-Service Pickup (Included)";
                 }
             }
         }
@@ -4148,6 +4200,9 @@
             const valetDot = document.getElementById('retrieval-dot-valet');
             const termsBox = document.getElementById('retrieval-valet-terms');
             const valetNotesContainer = document.getElementById('valet-notes-container');
+            const calTitle = document.getElementById('retrieval-calendar-title');
+            const dateLabel = document.getElementById('retrieval-date-label');
+            const slotLabel = document.getElementById('retrieval-slot-label');
 
             if (type === 'staging') {
                 stagingOpt.classList.replace('border-gray-200', 'border-blue-500');
@@ -4164,6 +4219,10 @@
                 
                 termsBox.classList.add('hidden');
                 if (valetNotesContainer) valetNotesContainer.classList.add('hidden');
+
+                if (calTitle) calTitle.textContent = "Reserve Staging Slot Date";
+                if (dateLabel) dateLabel.textContent = "Target Pickup Date:";
+                if (slotLabel) slotLabel.textContent = "Staging Time Window:";
             } else {
                 valetOpt.classList.replace('border-gray-200', 'border-blue-500');
                 valetOpt.classList.replace('bg-white', 'bg-blue-50');
@@ -4179,7 +4238,13 @@
                 
                 termsBox.classList.remove('hidden');
                 if (valetNotesContainer) valetNotesContainer.classList.remove('hidden');
+
+                if (calTitle) calTitle.textContent = "Schedule Valet Doorstep Delivery";
+                if (dateLabel) dateLabel.textContent = "Target Delivery Date:";
+                if (slotLabel) slotLabel.textContent = "Valet Delivery Window:";
             }
+
+            updateReservationSurgeUI();
         }
 
         async function confirmRetrieval() {
