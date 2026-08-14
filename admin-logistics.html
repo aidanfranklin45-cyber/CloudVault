@@ -390,6 +390,8 @@
 
         let allCustomersRoster = [];
         let allZonesList = [];
+        let cachedFacilitiesMap = {};
+        let lastLoadedMapQuery = '';
 
         function escapeHtml(str) {
             if (!str) return '';
@@ -444,41 +446,47 @@
                 if (error) throw error;
 
                 if (facs && facs.length > 0) {
+                    cachedFacilitiesMap = {};
+                    facs.forEach(f => { cachedFacilitiesMap[f.id] = f; });
+
+                    const matchedFac = facs.find(f => f.id === savedFacility);
+                    const activeFacId = matchedFac ? matchedFac.id : facs[0].id;
+
                     if (globalSel) {
                         globalSel.innerHTML = facs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
-                        const matchedFac = facs.find(f => f.id === savedFacility);
-                        const activeFacId = matchedFac ? matchedFac.id : facs[0].id;
                         globalSel.value = activeFacId;
-                        await onGlobalFacilityChange(activeFacId);
                     }
                     if (relocateTargetSel) {
                         relocateTargetSel.innerHTML = '<option value="">-- Select Target Destination Facility --</option>' + 
                             facs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
                     }
+
+                    await onGlobalFacilityChange(activeFacId);
                 } else {
-                    const msg = "Logistics Initialization Error: No active facilities found in Supabase database.";
-                    alert(msg);
-                    throw new Error(msg);
+                    const msg = "Logistics Initialization Error: No active facilities found in database.";
+                    console.warn(msg);
                 }
             } catch (e) {
                 console.error("Failed to load logistics facilities:", e);
-                alert("Logistics Error: " + (e.message || "Failed to load facility data"));
             }
         }
 
+        let _rosterLoading = false;
         async function loadCustomerRelocationRoster() {
+            if (_rosterLoading) return;
+            // Only load roster if user has manager or executive clearance
+            const roleVal = document.getElementById('role-select')?.value || activeRole;
+            if (roleVal === 'worker' && actualUserRole === 'warehouse_worker') return;
+
+            _rosterLoading = true;
             try {
-                const { data: users, error } = await supabase
-                    .from('users')
-                    .select('id, name, email, role, assigned_facility_id, active_zone')
-                    .eq('role', 'customer')
-                    .order('name');
+                const [usersRes, zonesRes] = await Promise.all([
+                    supabase.from('users').select('id, name, email, role, assigned_facility_id, active_zone').eq('role', 'customer').order('name'),
+                    supabase.from('operational_zones').select('*')
+                ]);
 
-                if (error) throw error;
-                allCustomersRoster = users || [];
-
-                const { data: zones } = await supabase.from('operational_zones').select('*');
-                allZonesList = zones || [];
+                allCustomersRoster = usersRes.data || [];
+                allZonesList = zonesRes.data || [];
 
                 // Close search results dropdown on outside click
                 document.addEventListener('click', (e) => {
@@ -490,6 +498,8 @@
                 });
             } catch (e) {
                 console.error("Failed to load customer relocation roster:", e);
+            } finally {
+                _rosterLoading = false;
             }
         }
 
@@ -691,6 +701,7 @@
         }
 
         async function onGlobalFacilityChange(facId) {
+            if (!facId) return;
             localStorage.setItem('cloudvault_selected_facility', facId);
             const iframe = document.getElementById('worker-logistics-map-iframe');
             const label = document.getElementById('map-hub-label');
@@ -699,57 +710,73 @@
             const stopsListEl = document.getElementById('delivery-stops-list');
 
             try {
-                const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', facId).single();
-                if (error || !fac) {
-                    const msg = `Logistics Error: Facility record '${facId}' not found in Supabase.`;
-                    alert(msg);
-                    throw new Error(msg);
+                // Use in-memory cached facility record if available, fallback to single query
+                let fac = cachedFacilitiesMap[facId];
+                if (!fac) {
+                    const { data: fetchedFac } = await supabase.from('facilities').select('*').eq('id', facId).single();
+                    if (fetchedFac) {
+                        fac = fetchedFac;
+                        cachedFacilitiesMap[facId] = fetchedFac;
+                    }
+                }
+
+                if (!fac) {
+                    console.warn(`Facility ${facId} not found`);
+                    return;
                 }
 
                 if (label) label.textContent = fac.name || 'Logistics Hub';
                 const activeCity = [fac.city, fac.state].filter(Boolean).join(', ') || fac.name;
 
-                // Query active valet delivery access requests and active inventory totes for this facility
-                const { data: requests } = await supabase.from('access_requests')
-                    .select('*, users!uid(id, name, active_zone, assigned_facility_id)')
-                    .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%')
-                    .neq('status', 'completed')
-                    .neq('status', 'cancelled');
+                // Concurrent parallel fetch of active valet requests & active inventory totes for this facility
+                const [reqRes, totesRes] = await Promise.all([
+                    supabase.from('access_requests')
+                        .select('*, users!uid(id, name, active_zone, assigned_facility_id)')
+                        .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%')
+                        .not('status', 'in', '("completed","cancelled","returned-to-vault")'),
+                    supabase.from('inventory')
+                        .select('uid, tote_code, status, facility_id')
+                        .eq('facility_id', facId)
+                        .in('status', ['pending-dispatch', 'out-for-delivery'])
+                ]);
 
-                const { data: activeValetTotes } = await supabase.from('inventory')
-                    .select('uid, tote_code, status, facility_id')
-                    .eq('facility_id', facId)
-                    .in('status', ['pending-dispatch', 'out-for-delivery']);
+                const requests = reqRes.data || [];
+                const activeValetTotes = totesRes.data || [];
 
-                const valetUids = Array.from(new Set((activeValetTotes || []).map(t => t.uid).filter(Boolean)));
-                let valetUsersMap = {};
-                if (valetUids.length > 0) {
+                // Filter requests belonging to this facility or user assigned to this facility
+                const relevantRequests = requests.filter(r => r.facility_id === facId || r.users?.assigned_facility_id === facId);
+
+                // Check if any active tote UIDs lack user profiles from the join
+                const missingUids = activeValetTotes
+                    .map(t => t.uid)
+                    .filter(uid => uid && !relevantRequests.some(r => r.uid === uid && r.users));
+
+                let extraUsersMap = {};
+                if (missingUids.length > 0) {
                     const { data: uData } = await supabase.from('users')
                         .select('id, name, active_zone, assigned_facility_id')
-                        .in('id', valetUids);
-                    (uData || []).forEach(u => { valetUsersMap[u.id] = u; });
+                        .in('id', Array.from(new Set(missingUids)));
+                    (uData || []).forEach(u => { extraUsersMap[u.id] = u; });
                 }
 
                 const activeValetUserMap = {};
 
-                (requests || []).forEach(r => {
-                    if (r.facility_id === facId || r.users?.assigned_facility_id === facId) {
-                        const uId = r.uid || (r.users ? r.users.id : null);
-                        if (uId) {
-                            activeValetUserMap[uId] = {
-                                name: r.users?.name || `Customer ${uId.substring(0, 6)}`,
-                                zip: r.users?.zip || r.users?.active_zone || 'Local Zone',
-                                slot: r.time_slot || '09:00 AM - 12:00 PM',
-                                status: r.status,
-                                toteCount: (r.requested_items || r.requested_tote_codes || []).length || 1
-                            };
-                        }
+                relevantRequests.forEach(r => {
+                    const uId = r.uid || (r.users ? r.users.id : null);
+                    if (uId) {
+                        activeValetUserMap[uId] = {
+                            name: r.users?.name || `Customer ${uId.substring(0, 6)}`,
+                            zip: r.users?.zip || r.users?.active_zone || 'Local Zone',
+                            slot: r.time_slot || '09:00 AM - 12:00 PM',
+                            status: r.status,
+                            toteCount: (r.requested_items || r.requested_tote_codes || []).length || 1
+                        };
                     }
                 });
 
-                (activeValetTotes || []).forEach(t => {
+                activeValetTotes.forEach(t => {
                     const uId = t.uid;
-                    const u = valetUsersMap[uId];
+                    const u = extraUsersMap[uId];
                     if (uId && !activeValetUserMap[uId]) {
                         activeValetUserMap[uId] = {
                             name: u?.name || `Customer ${uId.substring(0, 6)}`,
@@ -768,21 +795,21 @@
                 if (stopsCountEl) stopsCountEl.textContent = `${stops.length} Active Valet Stops`;
 
                 if (telemetryStopsEl) {
-                    const zips = stops.map(s => s.users?.zip || s.users?.active_zone).filter(Boolean);
+                    const zips = stops.map(s => s.zip).filter(Boolean);
                     telemetryStopsEl.textContent = zips.length > 0 
                         ? `Waypoints: ${activeCity} (ZIPs ${Array.from(new Set(zips)).join(', ')})` 
                         : `Hub Station: ${activeCity} (Stationary Intake Mode)`;
                 }
 
                 if (stopsListEl) {
-                    if (stops.length === 0) {
+                    if (relevantRequests.length === 0) {
                         stopsListEl.innerHTML = `
                             <div class="bg-gray-900/50 p-4 rounded-2xl border border-gray-850 text-center space-y-1">
                                 <p class="text-xs text-gray-400 font-bold">No Valet Deliveries Scheduled for ${fac.name}</p>
                                 <p class="text-[10px] text-gray-500 font-mono">Hub operating in stationary intake mode in ${activeCity}.</p>
                             </div>`;
                     } else {
-                        stopsListEl.innerHTML = (requests || []).map((r, idx) => {
+                        stopsListEl.innerHTML = relevantRequests.map((r, idx) => {
                             const name = r.users?.name || `Customer ${(r.uid || '').substring(0, 6)}`;
                             const zip = r.users?.zip || r.users?.active_zone || 'Local Zone';
                             const slot = r.time_slot || '09:00 AM - 12:00 PM';
@@ -840,17 +867,21 @@
                     }
                 }
 
+                // Non-blocking deferred map update
                 if (iframe) {
-                    const zips = stops.map(s => s.users?.zip || s.users?.active_zone).filter(Boolean);
-                    const mapQuery = encodeURIComponent(`${activeCity} ${zips.slice(0, 3).join(' ')}`.trim());
-                    iframe.src = `https://maps.google.com/maps?q=${mapQuery}&t=&z=12&ie=UTF8&iwloc=&output=embed`;
+                    const zips = stops.map(s => s.zip).filter(Boolean);
+                    const mapQuery = `${activeCity} ${zips.slice(0, 3).join(' ')}`.trim();
+                    if (mapQuery !== lastLoadedMapQuery) {
+                        lastLoadedMapQuery = mapQuery;
+                        setTimeout(() => {
+                            iframe.src = `https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=&z=12&ie=UTF8&iwloc=&output=embed`;
+                        }, 50);
+                    }
                 }
 
                 lucide.createIcons();
             } catch (err) {
                 console.error("onGlobalFacilityChange failure:", err);
-                alert(`Logistics Facility Error: ${err.message || 'Facility lookup failed'}`);
-                throw err;
             }
         }
 
@@ -873,7 +904,8 @@
 
                 if (error) throw error;
                 alert(`Driver ${driverName} assigned & en route! (ETA: ${etaMin} min)`);
-                onGlobalFacilityChange(activeFacilityId);
+                const curFacId = document.getElementById('global-facility-select')?.value || localStorage.getItem('cloudvault_selected_facility');
+                if (curFacId) onGlobalFacilityChange(curFacId);
             } catch (e) {
                 alert("Failed to assign driver: " + e.message);
             }
@@ -887,7 +919,8 @@
                 }).eq('id', reqId);
                 if (error) throw error;
                 alert(`Valet status updated to ${status.toUpperCase()}`);
-                onGlobalFacilityChange(activeFacilityId);
+                const curFacId = document.getElementById('global-facility-select')?.value || localStorage.getItem('cloudvault_selected_facility');
+                if (curFacId) onGlobalFacilityChange(curFacId);
             } catch (e) {
                 alert("Update failed: " + e.message);
             }
