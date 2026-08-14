@@ -3807,10 +3807,27 @@
                     };
                     systemPricing.valet_base = activeFacilityPricing.valet_base;
                     systemPricing.valet_tote_adder = activeFacilityPricing.valet_tote_adder;
+                    // Populate time slot pickers from DB config
+                    populatePickupWindowSelects(fac.pickup_windows);
                 }
             } catch (e) {
                 console.warn('Facility pricing lookup notice:', e);
             }
+        }
+
+        // Populate all time-slot <select> elements from facilities.pickup_windows
+        function populatePickupWindowSelects(windows) {
+            const defaults = [
+                { value: '09:00 AM - 12:00 PM', label: 'Morning (9 AM - 12 PM)' },
+                { value: '12:00 PM - 03:00 PM', label: 'Afternoon (12 PM - 3 PM)' },
+                { value: '03:00 PM - 06:00 PM', label: 'Evening Peak (3 PM - 6 PM)' }
+            ];
+            const slots = (Array.isArray(windows) && windows.length > 0) ? windows : defaults;
+            const optionsHtml = slots.map(s => `<option value="${s.value}">${s.label}</option>`).join('');
+            ['fulfillment-time-slot', 'retrieval-time-slot'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = optionsHtml;
+            });
         }
 
         function calculateSurgeFee(targetDateStr, slotStr) {

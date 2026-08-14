@@ -364,8 +364,7 @@
             <!-- Daily 6:00 PM Cutoff SLA Countdown Widget -->
             <div class="flex items-center space-x-3 bg-blue-950/40 border border-blue-500/20 px-3 py-1 rounded-xl">
                 <i data-lucide="clock" class="w-4 h-4 text-blue-400"></i>
-                <span class="text-gray-400 font-medium text-[11px] uppercase tracking-wider">Staging Cutoff SLA (6:00
-                    PM):</span>
+                <span class="text-gray-400 font-medium text-[11px] uppercase tracking-wider">Staging Cutoff SLA (<span id="cutoff-time-label">6:00 PM</span>):</span>
                 <span id="cutoff-countdown-clock" class="font-bold text-blue-300 tracking-wider text-xs">--h --m
                     --s</span>
                 <span id="cutoff-sla-status"
@@ -6562,15 +6561,37 @@
             }
         }
 
-        // ── Operational Telemetry & Feature 3: Live 6:00 PM SLA Cutoff Countdown ──
-        function startCutoffCountdown() {
+        // ── Operational Telemetry & Feature 3: Live SLA Cutoff Countdown ──
+        async function startCutoffCountdown() {
+            // Resolve cutoff time from current facility, fallback to 18:00
+            let cutoffHour = 18, cutoffMin = 0;
+            try {
+                const facId = window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+                if (facId) {
+                    const { data: fac } = await supabase.from('facilities')
+                        .select('staging_cutoff_time')
+                        .eq('id', facId)
+                        .maybeSingle();
+                    if (fac && fac.staging_cutoff_time) {
+                        const parts = fac.staging_cutoff_time.split(':');
+                        cutoffHour = parseInt(parts[0], 10);
+                        cutoffMin = parseInt(parts[1] || '0', 10);
+                        const labelEl = document.getElementById('cutoff-time-label');
+                        if (labelEl) {
+                            const d = new Date(); d.setHours(cutoffHour, cutoffMin, 0, 0);
+                            labelEl.textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                        }
+                    }
+                }
+            } catch(e) { /* use default 18:00 */ }
+
             function updateClock() {
                 const now = new Date();
                 const cutoff = new Date();
-                cutoff.setHours(18, 0, 0, 0); // 6:00 PM local time
+                cutoff.setHours(cutoffHour, cutoffMin, 0, 0);
 
                 if (now > cutoff) {
-                    cutoff.setDate(cutoff.getDate() + 1); // Target next day's 6:00 PM cutoff
+                    cutoff.setDate(cutoff.getDate() + 1); // Target next day's cutoff
                 }
 
                 const diffMs = cutoff - now;
