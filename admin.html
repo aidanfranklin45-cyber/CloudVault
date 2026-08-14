@@ -1498,6 +1498,38 @@
                 .replace(/'/g, '&#039;');
         }
 
+        function applyActiveEmployeeContext(profile) {
+            if (!profile || !profile.role || profile.role === 'customer') {
+                window.location.href = 'dashboard.html';
+                return;
+            }
+            actualUserRole = profile.role;
+            actualUserName = profile.name || profile.email || 'Staff Member';
+            actualAssignedFacilityId = profile.assigned_facility_id || null;
+            activeRole = profile.role === 'warehouse_worker' ? 'worker' : profile.role === 'warehouse_manager' ? 'manager' : 'executive';
+
+            const roleSel = document.getElementById('role-select');
+            if (roleSel) roleSel.value = activeRole;
+            lockRoleDropdown(true);
+
+            const devBar = document.getElementById('dev-role-bar');
+            if (devBar) {
+                if (actualUserRole === 'executive') {
+                    devBar.classList.remove('hidden');
+                } else {
+                    devBar.classList.add('hidden');
+                }
+            }
+
+            if (actualAssignedFacilityId) {
+                const facSel = document.getElementById('manager-facility-select');
+                if (facSel) facSel.value = actualAssignedFacilityId;
+                lockFacilityDropdown(actualUserRole !== 'executive');
+            }
+
+            switchRoleView();
+        }
+
         // Initialize dashboard UI
         window.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
@@ -1509,41 +1541,24 @@
                             const user = session.user;
                             const profile = await getCachedUserProfile(user.id);
                             if (profile && profile.role) {
-                                if (profile.role === 'customer') {
-                                    window.location.href = 'dashboard.html';
-                                    return;
-                                }
-                                actualUserRole = profile.role;
-                                actualUserName = profile.name || user.email;
-                                actualAssignedFacilityId = profile.assigned_facility_id || null;
-                                activeRole = profile.role === 'warehouse_worker' ? 'worker' : profile.role === 'warehouse_manager' ? 'manager' : 'executive';
-
-                                const roleSel = document.getElementById('role-select');
-                                if (roleSel) roleSel.value = activeRole;
-                                lockRoleDropdown(true);
-
-                                const devBar = document.getElementById('dev-role-bar');
-                                if (devBar) {
-                                    if (actualUserRole === 'executive') {
-                                        devBar.classList.remove('hidden');
-                                    } else {
-                                        devBar.classList.add('hidden');
-                                    }
-                                }
-
-                                if (actualAssignedFacilityId) {
-                                    const facSel = document.getElementById('manager-facility-select');
-                                    if (facSel) facSel.value = actualAssignedFacilityId;
-                                    lockFacilityDropdown(actualUserRole !== 'executive');
-                                }
-
-                                switchRoleView();
+                                applyActiveEmployeeContext(profile);
                             }
                             refreshDashboard();
                         } else {
-                            actualUserRole = null;
-                            actualUserName = null;
-                            window.location.href = "login.html";
+                            // Check if logged in via verified 2D badge token
+                            let badgeUser = null;
+                            try {
+                                badgeUser = JSON.parse(localStorage.getItem('cv_active_badge_user'));
+                            } catch (e) {}
+
+                            if (badgeUser && badgeUser.role && badgeUser.role !== 'customer') {
+                                applyActiveEmployeeContext(badgeUser);
+                                refreshDashboard();
+                            } else {
+                                actualUserRole = null;
+                                actualUserName = null;
+                                window.location.href = "login.html";
+                            }
                         }
                     });
                 } else {
@@ -2555,15 +2570,31 @@
                     });
                 }
 
-                // Render dynamic employee details for active facility with 2040 market transfer capabilities
+                // Render dynamic employee details for active facility with 2D badge issuance & transfer capabilities
                 const { data: employees } = await supabase.from('users')
                     .select('*')
                     .eq('assigned_facility_id', facilityId)
                     .neq('role', 'customer');
+
+                const { data: badges } = await supabase.from('employee_badges')
+                    .select('*')
+                    .eq('is_active', true);
+
+                const badgeMap = {};
+                if (badges && badges.length > 0) {
+                    badges.forEach(b => { badgeMap[b.user_id] = b; });
+                }
+
                 const rosterEl = document.getElementById('roster-list');
                 rosterEl.innerHTML = "";
                 if (employees && employees.length > 0) {
                     employees.forEach(emp => {
+                        const empBadge = badgeMap[emp.id];
+                        const hasBadge = !!empBadge;
+                        const badgeStatusHtml = hasBadge 
+                            ? `<span class="text-[9px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded font-mono font-bold flex items-center gap-1" title="Badge Active (Issued ${new Date(empBadge.issued_at).toLocaleDateString()})"><i data-lucide="shield-check" class="w-3 h-3"></i> BADGE ACTIVE</span>`
+                            : `<span class="text-[9px] text-gray-500 bg-gray-900 border border-gray-800 px-2 py-0.5 rounded font-mono">NO BADGE</span>`;
+
                         const div = document.createElement('div');
                         div.className = "bg-gray-900/40 p-3.5 border border-gray-850 rounded-2xl flex items-center justify-between hover:border-cyan-500/30 transition";
                         div.innerHTML = `
@@ -2576,10 +2607,16 @@
                                         ${emp.name}
                                         <span class="text-[9px] text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded font-mono border border-cyan-500/20">${(emp.assigned_facility_id || 'unassigned').replace('facility_', '')}</span>
                                     </h5>
-                                    <p class="text-[10px] text-gray-400 font-semibold uppercase mt-0.5">${emp.role.replace('_', ' ')}</p>
+                                    <div class="flex items-center gap-2 mt-0.5">
+                                        <p class="text-[10px] text-gray-400 font-semibold uppercase">${emp.role.replace('_', ' ')}</p>
+                                        ${badgeStatusHtml}
+                                    </div>
                                 </div>
                             </div>
                             <div class="flex items-center space-x-2">
+                                <button onclick="openEmployeeBadgeModal('${emp.id}', '${emp.name.replace(/'/g, "\\'")}', '${emp.role}', '${emp.assigned_facility_id || ''}', ${hasBadge ? `'${empBadge.id}'` : 'null'})" class="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold px-2.5 py-1 rounded-lg transition flex items-center gap-1" title="Generate or print physical 2D barcode ID badge">
+                                    <i data-lucide="qr-code" class="w-3 h-3"></i> ${hasBadge ? 'Manage Badge' : 'Issue Badge'}
+                                </button>
                                 <button onclick="openStaffTransferModal('${emp.id}', '${emp.name.replace(/'/g, "\\'")}', '${emp.assigned_facility_id || ''}', '${emp.role}')" class="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold px-2.5 py-1 rounded-lg transition flex items-center gap-1" title="Transfer personnel to any active market/facility">
                                     <i data-lucide="arrow-left-right" class="w-3 h-3"></i> Transfer Market
                                 </button>
@@ -2740,34 +2777,31 @@
             if (e.key === 'Escape') dismissScanOverlay();
         });
 
-        // Global Hardware Laser Barcode Scanner Listener
-        let scannerBuffer = "";
-        let lastKeyTime = Date.now();
-
-        window.addEventListener('keydown', (e) => {
-            const workerView = document.getElementById('view-worker');
-            if (!workerView || workerView.classList.contains('hidden')) return;
-
-            const currentTime = Date.now();
-            const timeDiff = currentTime - lastKeyTime;
-            lastKeyTime = currentTime;
-
-            if (e.key === 'Enter') {
-                if (scannerBuffer.length > 3) {
-                    e.preventDefault();
+        // Unified Global Hardware 2D Barcode / QR Scanner Listener
+        // Automatically handles CV-AUTH- badge scans (shift-switching) & CV- tote scans seamlessly
+        initGlobalBadgeScanner({
+            onBadgeScanStart: (code) => {
+                showBadgeScanToast('Scanning badge ID...', 'info');
+            },
+            onBadgeSuccess: (user) => {
+                applyActiveEmployeeContext(user);
+                playSuccessSound();
+                showBadgeScanToast(`✓ Shift Switched: ${user.name} (${user.role.replace('_', ' ')})`, 'success');
+                refreshDashboard();
+            },
+            onBadgeError: (err) => {
+                playErrorSound();
+                showBadgeScanToast(err || 'Badge verification rejected.', 'error');
+            },
+            onToteScan: (toteCode) => {
+                const workerView = document.getElementById('view-worker');
+                if (workerView && !workerView.classList.contains('hidden')) {
                     const input = document.getElementById('scan-barcode');
                     if (input) {
                         input.removeAttribute('readonly');
-                        input.value = scannerBuffer.trim();
+                        input.value = toteCode.trim();
                     }
                     simulateScan();
-                    scannerBuffer = "";
-                }
-            } else if (e.key && e.key.length === 1) {
-                if (timeDiff > 100) {
-                    scannerBuffer = e.key;
-                } else {
-                    scannerBuffer += e.key;
                 }
             }
         });
@@ -8295,7 +8329,442 @@
                 }
             }, 10);
         }
+
+        // =========================================================================
+        // Employee 2D Barcode Badge Management & Issuance Engine
+        // =========================================================================
+        let activeBadgeTarget = null;
+
+        async function openEmployeeBadgeModal(userId, userName, userRole, facilityId, badgeId) {
+            activeBadgeTarget = {
+                userId,
+                userName,
+                userRole,
+                facilityId: facilityId || 'unassigned',
+                badgeId: badgeId || null,
+                currentToken: null
+            };
+
+            document.getElementById('badge-staff-name').textContent = userName;
+            document.getElementById('badge-staff-role').textContent = userRole.replace('_', ' ');
+            document.getElementById('badge-staff-facility').textContent = (facilityId || 'unassigned').replace('facility_', '').toUpperCase();
+
+            const statusEl = document.getElementById('badge-modal-status');
+            const tokenBox = document.getElementById('badge-token-box');
+            const qrPreview = document.getElementById('badge-qr-container');
+            const revokeBtn = document.getElementById('badge-revoke-btn');
+            const printBtn = document.getElementById('badge-print-btn');
+            const issueBtn = document.getElementById('badge-issue-btn');
+
+            qrPreview.innerHTML = '';
+            tokenBox.classList.add('hidden');
+
+            if (badgeId) {
+                statusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full text-xs font-mono font-bold"><i data-lucide="shield-check" class="w-3.5 h-3.5"></i> ACTIVE BADGE ON FILE</span>`;
+                revokeBtn.classList.remove('hidden');
+                printBtn.classList.remove('hidden');
+                issueBtn.textContent = 'Re-Issue New Badge Token';
+                
+                // Show QR code placeholder for active badge
+                qrPreview.innerHTML = `
+                    <div class="text-center p-6 space-y-2">
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 flex items-center justify-center mx-auto">
+                            <i data-lucide="shield" class="w-6 h-6"></i>
+                        </div>
+                        <p class="text-xs text-gray-300 font-semibold">Active Credential Enrolled</p>
+                        <p class="text-[10px] text-gray-500 font-mono">To print or regenerate, click Re-Issue or Print Badge below.</p>
+                    </div>
+                `;
+            } else {
+                statusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full text-xs font-mono font-bold"><i data-lucide="alert-circle" class="w-3.5 h-3.5"></i> NO ACTIVE BADGE</span>`;
+                revokeBtn.classList.add('hidden');
+                printBtn.classList.add('hidden');
+                issueBtn.textContent = 'Generate & Issue Badge';
+
+                qrPreview.innerHTML = `
+                    <div class="text-center p-6 space-y-2 text-gray-500">
+                        <i data-lucide="qr-code" class="w-10 h-10 mx-auto text-gray-600"></i>
+                        <p class="text-xs font-mono">Click "Generate & Issue Badge" to enroll physical 2D barcode credentials.</p>
+                    </div>
+                `;
+            }
+
+            document.getElementById('employee-badge-modal').classList.remove('hidden');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function closeEmployeeBadgeModal() {
+            document.getElementById('employee-badge-modal').classList.add('hidden');
+            activeBadgeTarget = null;
+        }
+
+        async function generateAndIssueBadge() {
+            if (!activeBadgeTarget) return;
+
+            const issueBtn = document.getElementById('badge-issue-btn');
+            const originalText = issueBtn.textContent;
+            issueBtn.disabled = true;
+            issueBtn.textContent = 'Securing Token...';
+
+            try {
+                // 1. Generate high-entropy token (CV-AUTH-XXXX)
+                const rawToken = generateBadgeToken();
+                const tokenHash = await hashBadgeToken(rawToken);
+
+                // 2. Call RPC to store hash and activate badge
+                const { data, error } = await supabase.rpc('issue_employee_badge', {
+                    p_user_id: activeBadgeTarget.userId,
+                    p_token_hash: tokenHash,
+                    p_badge_label: `${activeBadgeTarget.userName} Primary Badge`
+                });
+
+                if (error) throw error;
+
+                activeBadgeTarget.currentToken = rawToken;
+                activeBadgeTarget.badgeId = data.badge_id;
+
+                // 3. Render 2D QR Code inside preview
+                const qrContainer = document.getElementById('badge-qr-container');
+                qrContainer.innerHTML = `<div id="modal-live-qr" class="bg-white p-3 rounded-2xl shadow-xl border-4 border-cyan-500/50 inline-block"></div>`;
+                
+                new QRCode(document.getElementById('modal-live-qr'), {
+                    text: rawToken,
+                    width: 140,
+                    height: 140,
+                    correctLevel: 0
+                });
+
+                // 4. Update Token String display
+                const tokenBox = document.getElementById('badge-token-box');
+                const tokenText = document.getElementById('badge-token-display');
+                tokenText.textContent = rawToken;
+                tokenBox.classList.remove('hidden');
+
+                // 5. Update Status Pill & Buttons
+                const statusEl = document.getElementById('badge-modal-status');
+                statusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full text-xs font-mono font-bold animate-pulse"><i data-lucide="shield-check" class="w-3.5 h-3.5"></i> NEW BADGE ACTIVE</span>`;
+                
+                document.getElementById('badge-revoke-btn').classList.remove('hidden');
+                document.getElementById('badge-print-btn').classList.remove('hidden');
+                issueBtn.textContent = 'Re-Issue New Badge Token';
+
+                showBadgeScanToast(`✓ Badge generated for ${activeBadgeTarget.userName}`, 'success');
+                loadManagerFacilityData();
+            } catch (err) {
+                console.error("Badge issuance error:", err);
+                alert("Failed to issue badge: " + (err.message || err));
+            } finally {
+                issueBtn.disabled = false;
+                if (window.lucide) lucide.createIcons();
+            }
+        }
+
+        async function handleRevokeBadge() {
+            if (!activeBadgeTarget || !activeBadgeTarget.badgeId) {
+                alert("No active badge to revoke.");
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to immediately revoke physical badge credentials for ${activeBadgeTarget.userName}? They will be unable to scan-to-login.`)) {
+                return;
+            }
+
+            try {
+                const { error } = await supabase.rpc('revoke_employee_badge', {
+                    p_badge_id: activeBadgeTarget.badgeId
+                });
+
+                if (error) throw error;
+
+                showBadgeScanToast(`✓ Badge revoked for ${activeBadgeTarget.userName}`, 'error');
+                closeEmployeeBadgeModal();
+                loadManagerFacilityData();
+            } catch (err) {
+                alert("Revocation failed: " + (err.message || err));
+            }
+        }
+
+        function printEmployeeBadgeCard() {
+            if (!activeBadgeTarget) return;
+
+            let tokenToPrint = activeBadgeTarget.currentToken;
+            if (!tokenToPrint) {
+                // If printing without newly generated token, prompt to re-issue
+                if (confirm("To print a physical badge with an encoded QR matrix, a verified token must be active. Generate and print now?")) {
+                    generateAndIssueBadge().then(() => {
+                        setTimeout(() => triggerPhysicalBadgePrint(), 300);
+                    });
+                }
+                return;
+            }
+
+            triggerPhysicalBadgePrint();
+        }
+
+        function triggerPhysicalBadgePrint() {
+            const emp = activeBadgeTarget;
+            const token = emp.currentToken;
+            const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+            const facilityCode = (emp.facilityId || 'SEA-NORTH').replace('facility_', '').toUpperCase();
+
+            let iframe = document.getElementById('print-label-iframe');
+            if (!iframe) {
+                iframe = document.createElement('iframe');
+                iframe.id = 'print-label-iframe';
+                iframe.style.position = 'fixed';
+                iframe.style.right = '0';
+                iframe.style.bottom = '0';
+                iframe.style.width = '0';
+                iframe.style.height = '0';
+                iframe.style.border = '0';
+                iframe.style.visibility = 'hidden';
+                document.body.appendChild(iframe);
+            }
+
+            const printHTML = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>CloudVault Employee Badge - ${emp.userName}</title>
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+                    <style>
+                        @page { size: 3.375in 2.125in; margin: 0; }
+                        body {
+                            margin: 0;
+                            padding: 0;
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                            background: #0f172a;
+                            color: #ffffff;
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            height: 100vh;
+                        }
+                        .badge-card {
+                            width: 3.375in;
+                            height: 2.125in;
+                            background: linear-gradient(135deg, #0b0f19 0%, #1e293b 100%);
+                            border-radius: 12px;
+                            border: 2px solid #38bdf8;
+                            box-sizing: border-box;
+                            padding: 12px 14px;
+                            position: relative;
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: space-between;
+                            overflow: hidden;
+                        }
+                        .badge-header {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            border-bottom: 1.5px solid rgba(56, 189, 248, 0.4);
+                            padding-bottom: 6px;
+                        }
+                        .brand {
+                            font-size: 11px;
+                            font-weight: 900;
+                            letter-spacing: 1.5px;
+                            color: #38bdf8;
+                            text-transform: uppercase;
+                            display: flex;
+                            align-items: center;
+                            gap: 4px;
+                        }
+                        .clearance-pill {
+                            font-size: 7px;
+                            font-weight: 800;
+                            background: rgba(16, 185, 129, 0.2);
+                            color: #34d399;
+                            border: 1px solid #10b981;
+                            padding: 2px 6px;
+                            border-radius: 4px;
+                            text-transform: uppercase;
+                            letter-spacing: 0.5px;
+                        }
+                        .badge-body {
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+                            gap: 10px;
+                            margin-top: 4px;
+                        }
+                        .emp-info {
+                            flex: 1;
+                        }
+                        .emp-name {
+                            font-size: 13px;
+                            font-weight: 800;
+                            color: #ffffff;
+                            margin: 0;
+                            line-height: 1.2;
+                            text-transform: uppercase;
+                        }
+                        .emp-role {
+                            font-size: 8px;
+                            font-weight: 800;
+                            color: #94a3b8;
+                            text-transform: uppercase;
+                            letter-spacing: 0.8px;
+                            margin-top: 2px;
+                        }
+                        .emp-meta {
+                            font-size: 7px;
+                            font-family: monospace;
+                            color: #64748b;
+                            margin-top: 4px;
+                            line-height: 1.3;
+                        }
+                        .qr-wrap {
+                            background: #ffffff;
+                            padding: 4px;
+                            border-radius: 8px;
+                            border: 1.5px solid #38bdf8;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            flex-shrink: 0;
+                        }
+                        .badge-footer {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            font-size: 6.5px;
+                            font-family: monospace;
+                            color: #64748b;
+                            border-top: 1px dashed rgba(255,255,255,0.15);
+                            padding-top: 4px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="badge-card">
+                        <div class="badge-header">
+                            <div class="brand">⚡ CLOUDVAULT</div>
+                            <div class="clearance-pill">AUTHORIZED PERSONNEL</div>
+                        </div>
+                        <div class="badge-body">
+                            <div class="emp-info">
+                                <div class="emp-name">${emp.userName}</div>
+                                <div class="emp-role">${emp.userRole.replace('_', ' ')}</div>
+                                <div class="emp-meta">
+                                    FACILITY: <b>${facilityCode}</b><br>
+                                    ISSUED: <b>${todayStr}</b><br>
+                                    UID: <b>${emp.userId.substring(0, 8)}...</b>
+                                </div>
+                            </div>
+                            <div class="qr-wrap">
+                                <div id="print-qr" data-code="${token}"></div>
+                            </div>
+                        </div>
+                        <div class="badge-footer">
+                            <span>SCAN TO ACCESS TERMINAL</span>
+                            <span>${token.substring(0, 16)}...</span>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const doc = iframe.contentWindow.document;
+            doc.open();
+            doc.write(printHTML);
+            doc.close();
+
+            const win = iframe.contentWindow;
+            const printCheck = setInterval(() => {
+                if (typeof win.QRCode === 'function') {
+                    clearInterval(printCheck);
+                    const qrEl = win.document.getElementById('print-qr');
+                    if (qrEl) {
+                        new win.QRCode(qrEl, {
+                            text: token,
+                            width: 68,
+                            height: 68,
+                            correctLevel: 0
+                        });
+                    }
+                    setTimeout(() => {
+                        win.focus();
+                        win.print();
+                    }, 50);
+                }
+            }, 10);
+        }
     </script>
+
+    <!-- Employee 2D Barcode Badge Issuance & Management Modal -->
+    <div id="employee-badge-modal"
+        class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div
+            class="glass-panel max-w-lg w-full p-6 rounded-3xl border border-indigo-500/30 shadow-[0_0_50px_rgba(99,102,241,0.2)] space-y-6 relative overflow-hidden bg-gray-950">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+                        <i data-lucide="qr-code" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-white text-base">Employee 2D Barcode Badge ID</h3>
+                        <p class="text-[10px] text-gray-400 font-mono">Silent hardware scan-to-login credential management</p>
+                    </div>
+                </div>
+                <button onclick="closeEmployeeBadgeModal()" class="text-gray-400 hover:text-white p-1 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Employee Info Header Card -->
+            <div class="bg-gray-900/60 p-4 rounded-2xl border border-gray-800 flex items-center justify-between">
+                <div class="space-y-0.5">
+                    <div class="flex items-center gap-2">
+                        <h4 class="text-sm font-bold text-white" id="badge-staff-name">—</h4>
+                        <span class="text-[9px] uppercase font-bold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" id="badge-staff-role">—</span>
+                    </div>
+                    <p class="text-[11px] text-gray-400 font-mono">Assigned Facility: <span id="badge-staff-facility" class="text-cyan-300 font-bold">—</span></p>
+                </div>
+                <div id="badge-modal-status">
+                    <!-- Status pill injected here -->
+                </div>
+            </div>
+
+            <!-- QR Preview Matrix Container -->
+            <div class="bg-gray-900/30 rounded-2xl border border-gray-850 p-6 flex flex-col items-center justify-center min-h-[190px]" id="badge-qr-container">
+                <!-- Live QR or prompt injected here -->
+            </div>
+
+            <!-- Raw Token Preview Box -->
+            <div id="badge-token-box" class="hidden bg-black/50 p-3 rounded-xl border border-cyan-500/30 text-center space-y-1">
+                <p class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">High-Entropy Encoded Token</p>
+                <p class="text-xs font-mono font-bold text-cyan-300 tracking-wider select-all" id="badge-token-display">—</p>
+            </div>
+
+            <!-- Modal Action Buttons -->
+            <div class="space-y-2.5 pt-2 border-t border-gray-800">
+                <div class="grid grid-cols-2 gap-3">
+                    <button type="button" id="badge-issue-btn" onclick="generateAndIssueBadge()"
+                        class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl text-xs transition shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-1.5">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i> Generate & Issue Badge
+                    </button>
+                    <button type="button" id="badge-print-btn" onclick="printEmployeeBadgeCard()"
+                        class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-xl text-xs transition shadow-lg shadow-cyan-600/30 flex items-center justify-center gap-1.5">
+                        <i data-lucide="printer" class="w-4 h-4"></i> Print Badge ID Card
+                    </button>
+                </div>
+                <div class="flex items-center justify-between pt-1">
+                    <button type="button" id="badge-revoke-btn" onclick="handleRevokeBadge()"
+                        class="text-red-400 hover:text-red-300 text-xs font-bold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-red-500/10">
+                        <i data-lucide="shield-off" class="w-3.5 h-3.5"></i> Revoke Active Badge
+                    </button>
+                    <button type="button" onclick="closeEmployeeBadgeModal()"
+                        class="bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold px-4 py-2 rounded-xl text-xs transition">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Feature 4: Staff Reassignment & Market Transfer Modal -->
     <div id="staff-transfer-modal"

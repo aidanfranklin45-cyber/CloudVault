@@ -172,3 +172,186 @@ function getTierRate(toteCount) {
 function getValetFee(toteCount) {
     return 15.00 + (toteCount * 1.00);
 }
+
+// =========================================================================
+// 2D Barcode Badge Authentication & Global Scanner Engine
+// =========================================================================
+
+// Compute SHA-256 hash of a badge token string (lowercase hex format)
+async function hashBadgeToken(token) {
+    if (!token || typeof token !== 'string') return '';
+    const cleanToken = token.trim();
+    const encoder = new TextEncoder();
+    const data = encoder.encode(cleanToken);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Generate high-entropy 2D QR/Barcode badge token
+function generateBadgeToken() {
+    const randomBytes = new Uint8Array(16);
+    crypto.getRandomValues(randomBytes);
+    const hex = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    return `CV-AUTH-${hex}`;
+}
+
+// Authenticate an employee badge token against Supabase RPC
+async function authenticateEmployeeBadge(token) {
+    try {
+        if (!token || !token.trim().startsWith('CV-AUTH-')) {
+            throw new Error('Invalid badge format. Expected CV-AUTH- prefix.');
+        }
+        const tokenHash = await hashBadgeToken(token.trim());
+        const { data, error } = await window.supabase.rpc('verify_employee_badge_login', {
+            p_token_hash: tokenHash
+        });
+
+        if (error) throw error;
+        if (!data || !data.success || !data.user) {
+            throw new Error('Badge verification failed.');
+        }
+
+        // Cache the verified employee profile
+        const user = data.user;
+        const cacheKey = `cv_user_${user.id}`;
+        const cacheTimeKey = `cv_user_ts_${user.id}`;
+        localStorage.setItem(cacheKey, JSON.stringify(user));
+        localStorage.setItem(cacheTimeKey, String(Date.now()));
+        localStorage.setItem('cv_active_badge_user', JSON.stringify(user));
+
+        return { success: true, user: user, badgeId: data.badge_id };
+    } catch (err) {
+        console.error('Badge authentication error:', err);
+        return { success: false, error: err.message || 'Authentication failed' };
+    }
+}
+
+// Global Hardware 2D Barcode HID Scanner Listener
+// Passively listens for rapid burst keystrokes (<50ms per key) and handles CV-AUTH- badges silently
+function initGlobalBadgeScanner(options = {}) {
+    let keyBuffer = [];
+    let activeInputPreValue = null;
+    let burstDetected = false;
+    const BURST_THRESHOLD_MS = 60; // Hardware scanners emit keystrokes well under 50ms
+
+    window.addEventListener('keydown', async (e) => {
+        const now = Date.now();
+        const activeEl = document.activeElement;
+        const isInputElement = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+
+        if (keyBuffer.length === 0 && isInputElement) {
+            activeInputPreValue = activeEl.value;
+        }
+
+        if (e.key === 'Enter') {
+            if (keyBuffer.length >= 6) {
+                // Calculate average inter-keystroke interval
+                let intervals = [];
+                for (let i = 1; i < keyBuffer.length; i++) {
+                    intervals.push(keyBuffer[i].time - keyBuffer[i - 1].time);
+                }
+                const avgInterval = intervals.length ? intervals.reduce((a, b) => a + b, 0) / intervals.length : 0;
+                const scannedString = keyBuffer.map(k => k.char).join('').trim();
+
+                // If fast burst or matches CloudVault prefixes
+                const isAuthScan = scannedString.startsWith('CV-AUTH-');
+                const isToteScan = scannedString.startsWith('CV-');
+                const isBurst = avgInterval < BURST_THRESHOLD_MS || isAuthScan || isToteScan;
+
+                if (isBurst) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // Sanitize any input element that might have received scanner characters
+                    if (isInputElement && activeEl) {
+                        if (activeInputPreValue !== null) {
+                            activeEl.value = activeInputPreValue;
+                        } else {
+                            // Strip scanned string if pre-value was null
+                            activeEl.value = activeEl.value.replace(scannedString, '').trim();
+                        }
+                    }
+
+                    keyBuffer = [];
+                    activeInputPreValue = null;
+
+                    // Handle Employee Auth Badge Scan
+                    if (isAuthScan) {
+                        if (typeof options.onBadgeScanStart === 'function') {
+                            options.onBadgeScanStart(scannedString);
+                        }
+
+                        const authResult = await authenticateEmployeeBadge(scannedString);
+                        if (authResult.success) {
+                            if (typeof options.onBadgeSuccess === 'function') {
+                                options.onBadgeSuccess(authResult.user, authResult);
+                            } else {
+                                // Default redirect / toast behavior
+                                showBadgeScanToast(`Welcome, ${authResult.user.name}! Verified badge.`, 'success');
+                                setTimeout(() => {
+                                    window.location.href = 'admin.html';
+                                }, 600);
+                            }
+                        } else {
+                            if (typeof options.onBadgeError === 'function') {
+                                options.onBadgeError(authResult.error);
+                            } else {
+                                showBadgeScanToast(authResult.error || 'Invalid or revoked employee badge.', 'error');
+                            }
+                        }
+                        return;
+                    }
+
+                    // Handle Tote Barcode Scan if callback provided (e.g. on admin warehouse view)
+                    if (typeof options.onToteScan === 'function') {
+                        options.onToteScan(scannedString);
+                    }
+                    return;
+                }
+            }
+            // Reset buffer if not a valid burst
+            keyBuffer = [];
+            activeInputPreValue = null;
+        } else if (e.key && e.key.length === 1) {
+            // If pause between keystrokes is too long for a scanner burst, reset buffer
+            if (keyBuffer.length > 0) {
+                const lastTime = keyBuffer[keyBuffer.length - 1].time;
+                if (now - lastTime > BURST_THRESHOLD_MS * 2.5 && !burstDetected) {
+                    keyBuffer = [];
+                    if (isInputElement) activeInputPreValue = activeEl.value;
+                }
+            }
+            keyBuffer.push({ char: e.key, time: now });
+        }
+    }, true); // Capture phase to intercept before form submit or input handlers
+}
+
+// Unobtrusive Toast for Badge Scan Feedback
+function showBadgeScanToast(message, type = 'info') {
+    let toast = document.getElementById('cv-badge-scan-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'cv-badge-scan-toast';
+        toast.className = 'fixed bottom-6 right-6 z-50 px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 font-sans text-sm font-semibold transition-all duration-300 transform translate-y-12 opacity-0 pointer-events-none';
+        document.body.appendChild(toast);
+    }
+
+    if (type === 'success') {
+        toast.className = 'fixed bottom-6 right-6 z-50 px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 font-sans text-sm font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 backdrop-blur-md transition-all duration-300 transform translate-y-0 opacity-100';
+        toast.innerHTML = `<span class="w-3 h-3 rounded-full bg-emerald-400 animate-ping"></span> <span>${message}</span>`;
+    } else if (type === 'error') {
+        toast.className = 'fixed bottom-6 right-6 z-50 px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 font-sans text-sm font-bold bg-red-950/90 text-red-300 border border-red-500/40 backdrop-blur-md transition-all duration-300 transform translate-y-0 opacity-100';
+        toast.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-red-400"></span> <span>${message}</span>`;
+    } else {
+        toast.className = 'fixed bottom-6 right-6 z-50 px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 font-sans text-sm font-bold bg-gray-900/90 text-cyan-300 border border-cyan-500/40 backdrop-blur-md transition-all duration-300 transform translate-y-0 opacity-100';
+        toast.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span> <span>${message}</span>`;
+    }
+
+    clearTimeout(window.badgeToastTimer);
+    window.badgeToastTimer = setTimeout(() => {
+        if (toast) {
+            toast.classList.add('translate-y-12', 'opacity-0');
+        }
+    }, 4000);
+}

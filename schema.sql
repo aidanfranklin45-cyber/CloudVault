@@ -2875,3 +2875,249 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- pg_cron schedule statement
 SELECT cron.schedule('daily-autopay-job', '0 0 * * *', $$SELECT public.run_daily_autopay_billing();$$);
+
+-- ============================================================
+-- 31. Employee Badges & Silent Scan-to-Login System
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.employee_badges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    badge_label TEXT DEFAULT 'Standard Employee Badge',
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    issued_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    revoked_at TIMESTAMPTZ,
+    last_scanned_at TIMESTAMPTZ,
+    created_by UUID REFERENCES public.users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_employee_badges_token_hash ON public.employee_badges(token_hash);
+CREATE INDEX IF NOT EXISTS idx_employee_badges_user_id ON public.employee_badges(user_id);
+CREATE INDEX IF NOT EXISTS idx_employee_badges_active ON public.employee_badges(is_active);
+
+ALTER TABLE public.employee_badges ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Staff can view employee badges" ON public.employee_badges;
+CREATE POLICY "Staff can view employee badges" ON public.employee_badges
+    FOR SELECT USING (
+        public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive')
+        OR auth.uid() = user_id
+    );
+
+DROP POLICY IF EXISTS "Managers and executives can manage employee badges" ON public.employee_badges;
+CREATE POLICY "Managers and executives can manage employee badges" ON public.employee_badges
+    FOR ALL USING (
+        public.get_user_role() IN ('warehouse_manager', 'executive')
+    ) WITH CHECK (
+        public.get_user_role() IN ('warehouse_manager', 'executive')
+    );
+
+-- Verify Token Hash & Return User Profile (Strict Employee Boundary)
+CREATE OR REPLACE FUNCTION public.verify_employee_badge_login(p_token_hash TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_badge RECORD;
+    v_user RECORD;
+BEGIN
+    IF p_token_hash IS NULL OR length(trim(p_token_hash)) = 0 THEN
+        RAISE EXCEPTION 'Invalid token hash provided';
+    END IF;
+
+    -- Lookup active badge
+    SELECT b.id, b.user_id, b.is_active, b.revoked_at
+    INTO v_badge
+    FROM public.employee_badges b
+    WHERE b.token_hash = p_token_hash
+      AND b.is_active = true
+      AND b.revoked_at IS NULL
+    LIMIT 1;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Invalid or revoked employee badge token';
+    END IF;
+
+    -- Fetch user profile and strictly enforce non-customer role boundary
+    SELECT u.id, u.email, u.name, u.role, u.assigned_facility_id, u.active_zone
+    INTO v_user
+    FROM public.users u
+    WHERE u.id = v_badge.user_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Associated user profile not found';
+    END IF;
+
+    -- Block customer role completely
+    IF v_user.role = 'customer'::public.user_role OR v_user.role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
+        RAISE EXCEPTION 'Access Denied: Badge authentication is restricted strictly to authorized internal staff';
+    END IF;
+
+    -- Update last scanned timestamp on badge
+    UPDATE public.employee_badges
+    SET last_scanned_at = now()
+    WHERE id = v_badge.id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'user', jsonb_build_object(
+            'id', v_user.id,
+            'email', v_user.email,
+            'name', v_user.name,
+            'role', v_user.role,
+            'assigned_facility_id', v_user.assigned_facility_id,
+            'active_zone', v_user.active_zone
+        ),
+        'badge_id', v_badge.id,
+        'scanned_at', now()
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.verify_employee_badge_login(TEXT) TO anon, authenticated, service_role;
+
+-- Issue Badge (Strict Non-Customer Check & Automatic Superseding)
+CREATE OR REPLACE FUNCTION public.issue_employee_badge(
+    p_user_id UUID,
+    p_token_hash TEXT,
+    p_badge_label TEXT DEFAULT 'Standard Employee Badge'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_user RECORD;
+    v_new_badge_id UUID;
+BEGIN
+    IF p_token_hash IS NULL OR length(trim(p_token_hash)) = 0 THEN
+        RAISE EXCEPTION 'Token hash is required';
+    END IF;
+
+    -- Verify target user exists and is internal employee
+    SELECT id, email, name, role, assigned_facility_id
+    INTO v_user
+    FROM public.users
+    WHERE id = p_user_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'User not found';
+    END IF;
+
+    IF v_user.role = 'customer'::public.user_role THEN
+        RAISE EXCEPTION 'Badge issuance forbidden: Badges cannot be issued to customer accounts.';
+    END IF;
+
+    -- Deactivate any existing active badges for this employee
+    UPDATE public.employee_badges
+    SET is_active = false,
+        revoked_at = now()
+    WHERE user_id = p_user_id
+      AND is_active = true;
+
+    -- Insert new badge
+    INSERT INTO public.employee_badges (
+        user_id,
+        token_hash,
+        badge_label,
+        is_active,
+        issued_at,
+        created_by
+    ) VALUES (
+        p_user_id,
+        p_token_hash,
+        COALESCE(p_badge_label, 'Standard Employee Badge'),
+        true,
+        now(),
+        auth.uid()
+    )
+    RETURNING id INTO v_new_badge_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'badge_id', v_new_badge_id,
+        'user_id', p_user_id,
+        'user_name', v_user.name,
+        'user_role', v_user.role,
+        'badge_label', COALESCE(p_badge_label, 'Standard Employee Badge'),
+        'issued_at', now()
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.issue_employee_badge(UUID, TEXT, TEXT) TO anon, authenticated, service_role;
+
+-- Revoke Badge
+CREATE OR REPLACE FUNCTION public.revoke_employee_badge(p_badge_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_badge RECORD;
+BEGIN
+    SELECT id, user_id, is_active
+    INTO v_badge
+    FROM public.employee_badges
+    WHERE id = p_badge_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Badge not found';
+    END IF;
+
+    UPDATE public.employee_badges
+    SET is_active = false,
+        revoked_at = now()
+    WHERE id = p_badge_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'badge_id', p_badge_id,
+        'revoked_at', now()
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.revoke_employee_badge(UUID) TO anon, authenticated, service_role;
+
+-- Get Badges
+CREATE OR REPLACE FUNCTION public.get_employee_badges(p_facility_id TEXT DEFAULT NULL)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_results JSONB;
+BEGIN
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'badge_id', b.id,
+            'user_id', u.id,
+            'user_name', u.name,
+            'user_email', u.email,
+            'user_role', u.role,
+            'assigned_facility_id', u.assigned_facility_id,
+            'badge_label', b.badge_label,
+            'is_active', b.is_active,
+            'issued_at', b.issued_at,
+            'revoked_at', b.revoked_at,
+            'last_scanned_at', b.last_scanned_at
+        ) ORDER BY b.issued_at DESC
+    )
+    INTO v_results
+    FROM public.employee_badges b
+    JOIN public.users u ON u.id = b.user_id
+    WHERE (p_facility_id IS NULL OR u.assigned_facility_id = p_facility_id);
+
+    RETURN COALESCE(v_results, '[]'::jsonb);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_employee_badges(TEXT) TO anon, authenticated, service_role;
+

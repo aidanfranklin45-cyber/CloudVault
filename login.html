@@ -205,6 +205,22 @@
             let x = e.target.value.replace(/\D/g, '').match(/(\d{0,3})(\d{0,3})(\d{0,4})/);
             e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : '');
         });
+
+        // Initialize Passive Hardware 2D Barcode Scanner Listener for Employee Badges
+        initGlobalBadgeScanner({
+            onBadgeScanStart: (code) => {
+                showBadgeScanToast('Scanning badge...', 'info');
+            },
+            onBadgeSuccess: (user) => {
+                showBadgeScanToast(`✓ Welcome, ${user.name || 'Staff'}! Authenticating shift...`, 'success');
+                setTimeout(() => {
+                    window.location.href = 'admin.html';
+                }, 400);
+            },
+            onBadgeError: (err) => {
+                showBadgeScanToast(err || 'Badge verification rejected.', 'error');
+            }
+        });
     </script>
 </body>
 </html>
