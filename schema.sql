@@ -3123,3 +3123,312 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.get_employee_badges(TEXT) TO anon, authenticated, service_role;
 
+-- =========================================================================
+-- MACHINE LEARNING & RETRIEVAL PROPENSITY TELEMETRY
+-- =========================================================================
+
+CREATE TABLE IF NOT EXISTS public.tote_retrieval_analytics (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    -- Entity Identifiers
+    tote_id UUID REFERENCES public.inventory(id) ON DELETE SET NULL,
+    tote_code TEXT NOT NULL,
+    user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    facility_id TEXT REFERENCES public.facilities(id) ON DELETE SET NULL,
+    
+    -- Customer Demographics & Behavioral Propensity
+    customer_name TEXT,
+    customer_email TEXT,
+    customer_plan_tier TEXT,
+    customer_logistics_pref TEXT DEFAULT 'self_service',
+    customer_account_age_days NUMERIC(10,2) DEFAULT 0,
+    customer_total_totes_held INTEGER DEFAULT 1,
+    customer_cumulative_retrievals INTEGER DEFAULT 1,
+    customer_retrievals_last_30d INTEGER DEFAULT 1,
+    customer_propensity_score NUMERIC(6,4) DEFAULT 0.0000,
+    
+    -- Tote Content NLP & Categorization Features
+    tote_label TEXT,
+    tote_category TEXT,
+    tote_tags TEXT[] DEFAULT '{}'::text[],
+    has_contents_photo BOOLEAN DEFAULT false,
+    tote_cumulative_retrievals INTEGER DEFAULT 1,
+    tote_age_days NUMERIC(10,2) DEFAULT 0,
+    dwell_time_days NUMERIC(10,2) DEFAULT 0,
+    
+    -- Physical Origin & Spatial Slotting Features
+    origin_location_code TEXT,
+    origin_zone_type TEXT DEFAULT 'VAULT',
+    origin_aisle TEXT,
+    origin_bay TEXT,
+    origin_shelf_level INTEGER,
+    origin_shelf_code TEXT,
+    
+    -- Retrieval Channel & Staging Destination
+    retrieval_channel TEXT DEFAULT 'valet_delivery',
+    dest_staging_code TEXT,
+    dest_room TEXT,
+    dest_bay TEXT,
+    access_request_id UUID REFERENCES public.access_requests(id) ON DELETE SET NULL,
+    staging_reservation_id UUID DEFAULT NULL,
+    
+    -- Temporal & Seasonality Features for ML
+    retrieved_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    retrieval_year INTEGER,
+    retrieval_month INTEGER,
+    retrieval_day_of_week INTEGER,
+    retrieval_hour_of_day INTEGER,
+    is_weekend BOOLEAN DEFAULT false,
+    is_holiday_season BOOLEAN DEFAULT false,
+    
+    -- Operational Performance
+    pulled_by_worker_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    pull_duration_seconds NUMERIC(10,2) DEFAULT NULL,
+    
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
+-- Performance & ML Query Indexes
+CREATE INDEX IF NOT EXISTS idx_retrieval_analytics_user_id ON public.tote_retrieval_analytics(user_id);
+CREATE INDEX IF NOT EXISTS idx_retrieval_analytics_tote_id ON public.tote_retrieval_analytics(tote_id);
+CREATE INDEX IF NOT EXISTS idx_retrieval_analytics_facility_id ON public.tote_retrieval_analytics(facility_id);
+CREATE INDEX IF NOT EXISTS idx_retrieval_analytics_retrieved_at ON public.tote_retrieval_analytics(retrieved_at DESC);
+CREATE INDEX IF NOT EXISTS idx_retrieval_analytics_origin_shelf ON public.tote_retrieval_analytics(origin_shelf_level);
+CREATE INDEX IF NOT EXISTS idx_retrieval_analytics_tote_category ON public.tote_retrieval_analytics(tote_category);
+CREATE INDEX IF NOT EXISTS idx_retrieval_analytics_channel ON public.tote_retrieval_analytics(retrieval_channel);
+
+-- Enable RLS
+ALTER TABLE public.tote_retrieval_analytics ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Admins and warehouse staff have full access to retrieval telemetry" ON public.tote_retrieval_analytics;
+    CREATE POLICY "Admins and warehouse staff have full access to retrieval telemetry"
+    ON public.tote_retrieval_analytics
+    FOR ALL
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.users 
+            WHERE id = auth.uid() 
+            AND role IN ('warehouse_worker', 'warehouse_manager', 'executive')
+        )
+    );
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Customers can view their own tote retrieval analytics" ON public.tote_retrieval_analytics;
+    CREATE POLICY "Customers can view their own tote retrieval analytics"
+    ON public.tote_retrieval_analytics
+    FOR SELECT
+    TO authenticated
+    USING (user_id = auth.uid());
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+-- Automated Telemetry Ingestion Function
+CREATE OR REPLACE FUNCTION public.record_tote_retrieval_telemetry(
+    p_tote_id UUID,
+    p_retrieval_channel TEXT DEFAULT 'valet_delivery',
+    p_worker_id UUID DEFAULT NULL,
+    p_dest_code TEXT DEFAULT NULL,
+    p_access_req_id UUID DEFAULT NULL,
+    p_staging_res_id UUID DEFAULT NULL
+) RETURNS UUID SECURITY DEFINER AS $$
+DECLARE
+    v_tote RECORD;
+    v_user RECORD;
+    v_now TIMESTAMPTZ := now();
+    v_origin_loc TEXT;
+    v_origin_zone TEXT := 'VAULT';
+    v_origin_aisle TEXT := NULL;
+    v_origin_bay TEXT := NULL;
+    v_origin_shelf_lvl INTEGER := NULL;
+    v_origin_shelf_code TEXT := NULL;
+    v_dest_room TEXT := NULL;
+    v_dest_bay TEXT := NULL;
+    
+    v_customer_cumul_retrievals INTEGER := 1;
+    v_customer_last_30d INTEGER := 1;
+    v_customer_account_age_days NUMERIC(10,2) := 0;
+    v_customer_totes_held INTEGER := 1;
+    v_customer_propensity NUMERIC(6,4) := 0.0000;
+    
+    v_tote_cumul_retrievals INTEGER := 1;
+    v_tote_age_days NUMERIC(10,2) := 0;
+    v_dwell_time_days NUMERIC(10,2) := 0;
+    
+    v_year INTEGER;
+    v_month INTEGER;
+    v_dow INTEGER;
+    v_hour INTEGER;
+    v_is_weekend BOOLEAN;
+    v_is_holiday BOOLEAN;
+    
+    v_tote_tags TEXT[] := '{}'::text[];
+    v_new_id UUID;
+BEGIN
+    SELECT * INTO v_tote FROM public.inventory WHERE id = p_tote_id;
+    IF v_tote IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    IF v_tote.uid IS NOT NULL THEN
+        SELECT * INTO v_user FROM public.users WHERE id = v_tote.uid;
+    END IF;
+
+    -- Temporal Decomposition
+    v_year := EXTRACT(YEAR FROM v_now)::INTEGER;
+    v_month := EXTRACT(MONTH FROM v_now)::INTEGER;
+    v_dow := EXTRACT(DOW FROM v_now)::INTEGER;
+    v_hour := EXTRACT(HOUR FROM v_now)::INTEGER;
+    v_is_weekend := (v_dow IN (0, 6));
+    v_is_holiday := (v_month IN (11, 12, 1));
+
+    -- Origin Coordinates Parsing
+    v_origin_loc := COALESCE(v_tote.location_code, 'VAULT');
+    IF v_origin_loc ~* '^(?:V-)?(A\d+)-?(B\d+)?-?(S\d+)?' THEN
+        v_origin_aisle := (regexp_matches(v_origin_loc, '^(?:V-)?(A\d+)', 'i'))[1];
+        v_origin_bay := (regexp_matches(v_origin_loc, '-(B\d+)', 'i'))[1];
+        v_origin_shelf_code := (regexp_matches(v_origin_loc, '-(S\d+)', 'i'))[1];
+        IF v_origin_shelf_code IS NOT NULL THEN
+            v_origin_shelf_lvl := substring(v_origin_shelf_code from '\d+')::INTEGER;
+        END IF;
+    END IF;
+
+    -- Destination Parsing
+    IF p_dest_code IS NOT NULL THEN
+        IF p_dest_code ~* '^(ROOM-\d+)' THEN
+            v_dest_room := (regexp_matches(p_dest_code, '^(ROOM-\d+)', 'i'))[1];
+            v_dest_bay := (regexp_matches(p_dest_code, '-(BAY-\d+)', 'i'))[1];
+        END IF;
+    END IF;
+
+    -- Customer Propensity
+    IF v_user IS NOT NULL THEN
+        v_customer_account_age_days := GREATEST(0, ROUND(EXTRACT(EPOCH FROM (v_now - v_user.created_at)) / 86400.0, 2));
+        v_customer_totes_held := COALESCE(v_user.active_totes_held, 1);
+        
+        SELECT COUNT(*) + 1 INTO v_customer_cumul_retrievals
+        FROM public.tote_retrieval_analytics
+        WHERE user_id = v_user.id;
+        
+        SELECT COUNT(*) + 1 INTO v_customer_last_30d
+        FROM public.tote_retrieval_analytics
+        WHERE user_id = v_user.id AND retrieved_at >= (v_now - INTERVAL '30 days');
+
+        IF v_customer_totes_held > 0 AND v_customer_account_age_days > 0 THEN
+            v_customer_propensity := ROUND((v_customer_cumul_retrievals::NUMERIC / v_customer_totes_held::NUMERIC) * (30.0 / GREATEST(30.0, v_customer_account_age_days)), 4);
+        END IF;
+    END IF;
+
+    -- Tote Level Metrics
+    v_tote_age_days := GREATEST(0, ROUND(EXTRACT(EPOCH FROM (v_now - v_tote.created_at)) / 86400.0, 2));
+    IF v_tote.last_scanned_at IS NOT NULL THEN
+        v_dwell_time_days := GREATEST(0, ROUND(EXTRACT(EPOCH FROM (v_now - v_tote.last_scanned_at)) / 86400.0, 2));
+    ELSE
+        v_dwell_time_days := v_tote_age_days;
+    END IF;
+
+    SELECT COUNT(*) + 1 INTO v_tote_cumul_retrievals
+    FROM public.tote_retrieval_analytics
+    WHERE tote_id = v_tote.id;
+
+    IF v_tote.label IS NOT NULL THEN
+        SELECT array_agg(m[1]) INTO v_tote_tags
+        FROM regexp_matches(v_tote.label, '#([A-Za-z0-9_]+)', 'g') AS m;
+    END IF;
+    IF v_tote_tags IS NULL THEN
+        v_tote_tags := '{}'::text[];
+    END IF;
+
+    INSERT INTO public.tote_retrieval_analytics (
+        tote_id,
+        tote_code,
+        user_id,
+        facility_id,
+        customer_name,
+        customer_email,
+        customer_plan_tier,
+        customer_logistics_pref,
+        customer_account_age_days,
+        customer_total_totes_held,
+        customer_cumulative_retrievals,
+        customer_retrievals_last_30d,
+        customer_propensity_score,
+        tote_label,
+        tote_category,
+        tote_tags,
+        has_contents_photo,
+        tote_cumulative_retrievals,
+        tote_age_days,
+        dwell_time_days,
+        origin_location_code,
+        origin_zone_type,
+        origin_aisle,
+        origin_bay,
+        origin_shelf_level,
+        origin_shelf_code,
+        retrieval_channel,
+        dest_staging_code,
+        dest_room,
+        dest_bay,
+        access_request_id,
+        staging_reservation_id,
+        pulled_by_worker_id,
+        retrieved_at,
+        retrieval_year,
+        retrieval_month,
+        retrieval_day_of_week,
+        retrieval_hour_of_day,
+        is_weekend,
+        is_holiday_season
+    ) VALUES (
+        v_tote.id,
+        v_tote.tote_code,
+        v_tote.uid,
+        v_tote.facility_id,
+        v_user.name,
+        v_user.email,
+        COALESCE(v_user.onboarding_status, 'standard'),
+        COALESCE(v_user.logistics_preference, 'self_service'),
+        v_customer_account_age_days,
+        v_customer_totes_held,
+        v_customer_cumul_retrievals,
+        v_customer_last_30d,
+        v_customer_propensity,
+        v_tote.label,
+        COALESCE(v_tote.category, 'General Storage'),
+        v_tote_tags,
+        (v_tote.image_url IS NOT NULL AND v_tote.image_url <> ''),
+        v_tote_cumul_retrievals,
+        v_tote_age_days,
+        v_dwell_time_days,
+        v_origin_loc,
+        v_origin_zone,
+        v_origin_aisle,
+        v_origin_bay,
+        v_origin_shelf_lvl,
+        v_origin_shelf_code,
+        p_retrieval_channel,
+        p_dest_code,
+        v_dest_room,
+        v_dest_bay,
+        p_access_req_id,
+        p_staging_res_id,
+        p_worker_id,
+        v_now,
+        v_year,
+        v_month,
+        v_dow,
+        v_hour,
+        v_is_weekend,
+        v_is_holiday
+    ) RETURNING id INTO v_new_id;
+
+    RETURN v_new_id;
+END;
+$$ LANGUAGE plpgsql;
+
+
