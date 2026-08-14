@@ -957,6 +957,39 @@
                         </table>
                     </div>
                 </div>
+            <!-- Missing Totes & Exception Investigation Hub -->
+            <div class="glass-panel p-6 rounded-3xl space-y-6 border border-red-500/30">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-gray-850 pb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="p-2.5 bg-red-500/20 text-red-400 rounded-2xl border border-red-500/30 font-bold">
+                            ⚠️
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-white text-lg flex items-center gap-2">
+                                Missing Totes &amp; Exception Investigation Hub
+                                <span id="missing-totes-count-badge" class="text-xs font-mono font-bold bg-red-500/20 text-red-300 border border-red-500/40 px-2.5 py-0.5 rounded-full">0 Open</span>
+                            </h3>
+                            <p class="text-xs text-gray-400 font-mono">Review exceptions, re-shelve to bay, bill replacement fee, or decommission</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="text-[10px] font-mono text-gray-400 uppercase border-b border-gray-800">
+                                <th class="pb-3">Tote Code</th>
+                                <th class="pb-3">Customer / Owner</th>
+                                <th class="pb-3">Reported Reason</th>
+                                <th class="pb-3">Notes &amp; Timestamp</th>
+                                <th class="pb-3 text-right">Investigation Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-850" id="missing-totes-table-body">
+                            <tr><td colspan="5" class="py-4 text-center text-xs text-gray-500">No unresolved missing totes for this facility.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- Employee Activity Monitoring (Restricted to assigned facility) -->
@@ -2685,8 +2718,128 @@
                     logEl.innerHTML = `<div class="text-xs text-gray-500 text-center py-4">No recent activity logs.</div>`;
                 }
 
+                // Load Missing Totes Hub
+                loadMissingTotesTable(facilityId);
+
             } catch (err) {
                 console.error("Supabase manager metrics loading failed:", err);
+            }
+        }
+
+        // Missing Totes Investigation Hub Handlers
+        async function loadMissingTotesTable(facilityId = null) {
+            const tableBody = document.getElementById('missing-totes-table-body');
+            const countBadge = document.getElementById('missing-totes-count-badge');
+            if (!tableBody) return;
+
+            try {
+                let query = supabase.from('inventory')
+                    .select('*, users!uid(name, email)')
+                    .eq('status', 'missing-tote');
+                
+                if (facilityId) {
+                    query = query.or(`facility_id.eq.${facilityId},facility_id.is.null`);
+                }
+
+                const { data: missingItems, error } = await query;
+                if (error) throw error;
+
+                const openMissing = (missingItems || []).filter(i => !i.missing_resolution || i.missing_resolution === 'unresolved');
+                if (countBadge) countBadge.textContent = `${openMissing.length} Open`;
+
+                if (openMissing.length === 0) {
+                    tableBody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-xs text-gray-500 font-mono">✅ No unresolved missing tote exceptions for this facility.</td></tr>`;
+                    return;
+                }
+
+                tableBody.innerHTML = openMissing.map(tote => {
+                    const customerName = tote.users?.name || (tote.uid ? `Customer ${tote.uid.substring(0, 8)}` : 'Facility Stock');
+                    const reason = tote.missing_reason || 'Missing in Transit / Not Returned';
+                    const notes = tote.missing_notes || 'No staff notes provided.';
+                    const reportedDate = tote.missing_reported_at ? new Date(tote.missing_reported_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently Reported';
+
+                    return `
+                        <tr class="hover:bg-gray-900/40 border-b border-gray-850 transition">
+                            <td class="py-3.5 font-mono font-bold text-xs text-amber-400">
+                                ${tote.tote_code}
+                                <span class="block text-[9px] text-gray-500 font-sans">${tote.label ? escapeHtml(tote.label) : 'Standard 64L Tote'}</span>
+                            </td>
+                            <td class="py-3.5 text-xs text-white">
+                                <span class="font-bold">${customerName}</span>
+                                <span class="block text-[10px] text-gray-500 font-mono">${tote.users?.email || (tote.uid ? tote.uid.substring(0, 8) : 'Facility Stock')}</span>
+                            </td>
+                            <td class="py-3.5 text-xs text-rose-300 font-semibold">
+                                <span class="bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded text-[10px] uppercase font-bold">${reason}</span>
+                            </td>
+                            <td class="py-3.5 text-xs text-gray-400">
+                                <p class="line-clamp-2">${notes}</p>
+                                <span class="text-[10px] text-gray-500 font-mono">${reportedDate}</span>
+                            </td>
+                            <td class="py-3.5 text-right space-x-1.5 whitespace-nowrap">
+                                <button onclick="resolveMissingTote('${tote.id}', 'reshelve', '${tote.tote_code}')" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition cursor-pointer" title="Re-Shelve Tote to Vault Bay">
+                                    📦 Re-Shelve
+                                </button>
+                                <button onclick="resolveMissingTote('${tote.id}', 'charge', '${tote.tote_code}')" class="bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/30 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition cursor-pointer" title="Bill $25 Replacement Fee to Customer">
+                                    💳 Bill $25 Fee
+                                </button>
+                                <button onclick="resolveMissingTote('${tote.id}', 'decommission', '${tote.tote_code}')" class="bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition cursor-pointer" title="Write Off / Decommission Tote">
+                                    🗑️ Write Off
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            } catch (err) {
+                console.error("Failed to load missing totes:", err);
+            }
+        }
+
+        async function resolveMissingTote(toteId, action, toteCode) {
+            try {
+                if (action === 'reshelve') {
+                    const shelf = prompt(`Enter Vault Shelf / Bay location to re-shelve ${toteCode} (e.g. A1-B02-S1):`, 'A1-B01-S1');
+                    if (!shelf) return;
+                    const { error } = await supabase.from('inventory')
+                        .update({
+                            status: 'stored',
+                            location_code: shelf.trim().toUpperCase(),
+                            location_type: 'vault',
+                            missing_resolution: 'reshelved'
+                        })
+                        .eq('id', toteId);
+                    if (error) throw error;
+                    showToast(`Tote ${toteCode} re-shelved to ${shelf}.`);
+                } else if (action === 'charge') {
+                    if (!confirm(`Are you sure you want to assess a $25.00 missing container replacement fee for ${toteCode}?`)) return;
+                    const { error } = await supabase.rpc('charge_missing_tote', {
+                        p_tote_id: toteId,
+                        p_fee: 25.00,
+                        p_reason: 'Missing Container Replacement Fee ($25.00)'
+                    });
+                    if (error) {
+                        await supabase.from('inventory').update({ missing_resolution: 'billed_customer' }).eq('id', toteId);
+                    } else {
+                        await supabase.from('inventory').update({ missing_resolution: 'billed_customer' }).eq('id', toteId);
+                    }
+                    showToast(`$25.00 Replacement Fee billed for tote ${toteCode}.`);
+                } else if (action === 'decommission') {
+                    if (!confirm(`Decommission tote ${toteCode} and mark as written off?`)) return;
+                    const { error } = await supabase.from('inventory')
+                        .update({
+                            status: 'decommissioned',
+                            missing_resolution: 'written_off'
+                        })
+                        .eq('id', toteId);
+                    if (error) throw error;
+                    showToast(`Tote ${toteCode} decommissioned and written off.`);
+                }
+                const facId = window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+                loadMissingTotesTable(facId);
+                loadWorkerQueues();
+            } catch (err) {
+                console.error("Resolution failed:", err);
+                showToast(`Failed to resolve missing tote: ${err.message}`, true);
             }
         }
 
@@ -3328,14 +3481,19 @@
                 const combinedItems = [...(facRes.data || []), ...(nullRes.data || [])];
                 const allItems = Array.from(new Map(combinedItems.map(item => [item.id, item])).values());
 
-                // Fetch access requests for PIN + reservation + fulfillment type data
+                // Fetch access requests for all active fulfillment jobs
                 const [facManifestsRes, nullManifestsRes] = await Promise.all([
-                    supabase.from('access_requests').select('uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type').eq('facility_id', queryFacilityId).eq('status', 'pending'),
-                    supabase.from('access_requests').select('uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type').is('facility_id', null).eq('status', 'pending')
+                    supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, created_at, requested_at')
+                        .eq('facility_id', queryFacilityId)
+                        .not('status', 'in', '("completed","cancelled","returned-to-vault")'),
+                    supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, created_at, requested_at')
+                        .is('facility_id', null)
+                        .not('status', 'in', '("completed","cancelled","returned-to-vault")')
                 ]);
 
-                const combinedManifests = [...(facManifestsRes.data || []), ...(nullManifestsRes.data || [])];
-                const manifests = Array.from(new Map(combinedManifests.map(m => [(m.uid || '') + '-' + (m.request_type || ''), m])).values());
+                const rawManifests = [...(facManifestsRes.data || []), ...(nullManifestsRes.data || [])];
+                const allRequests = Array.from(new Map(rawManifests.map(m => [m.id, m])).values());
+                const manifests = allRequests;
 
                 // Attach Supabase Realtime listeners for instant queue sync without manual refresh
                 if (!window.hasSetupAdminRealtime) {
@@ -3503,12 +3661,92 @@
                 });
 
                 // Fulfillment type badge helper
-                function fulfillmentBadge(uid) {
-                    const ft = typeByUid[uid];
-                    if (ft === 'valet_delivery') {
+                function fulfillmentBadge(fType) {
+                    if (fType === 'valet_delivery' || fType === 'valet') {
                         return `<span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 VALET</span>`;
                     }
                     return `<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE</span>`;
+                }
+
+                // Universal AccessRequest-based job grouping helper
+                function buildRequestJobGroups(items, requests, defaultFulfillment = 'staging') {
+                    const jobs = [];
+                    const handledToteIds = new Set();
+
+                    // 1. Map items to distinct active access requests
+                    (requests || []).forEach(req => {
+                        const rawItems = req.requested_items || req.requested_tote_codes || [];
+                        const reqIdentifiers = new Set(rawItems);
+                        
+                        let matchingTotes = (items || []).filter(t => 
+                            reqIdentifiers.has(t.id) ||
+                            reqIdentifiers.has(t.tote_code) ||
+                            reqIdentifiers.has(t.barcode) ||
+                            reqIdentifiers.has(t.label)
+                        );
+
+                        if (matchingTotes.length > 0) {
+                            matchingTotes.forEach(t => handledToteIds.add(t.id));
+                            const owner = resolveToteOwner(req.uid, matchingTotes);
+                            jobs.push({
+                                jobId: req.id,
+                                isRequest: true,
+                                request: req,
+                                uid: req.uid,
+                                owner: owner,
+                                customerName: owner.name,
+                                fulfillmentType: req.fulfillment_type || req.request_type || defaultFulfillment,
+                                targetDate: req.target_date,
+                                timeSlot: req.time_slot || '09:00 AM - 12:00 PM',
+                                surgeTier: req.surge_tier,
+                                surgeFee: req.surge_fee,
+                                pin: req.pin || pinByUid[req.uid] || '1517',
+                                status: req.status,
+                                totes: matchingTotes
+                            });
+                        }
+                    });
+
+                    // 2. Map orphan/unlinked totes by UID and fulfillment channel
+                    const unhandledItems = (items || []).filter(t => !handledToteIds.has(t.id));
+                    if (unhandledItems.length > 0) {
+                        const unlinkedMap = {};
+                        unhandledItems.forEach(t => {
+                            const isValet = t.status === 'out-for-delivery' || t.status === 'pending-dispatch';
+                            const fType = isValet ? 'valet_delivery' : defaultFulfillment;
+                            const key = `${t.uid || 'unassigned'}_${fType}`;
+                            if (!unlinkedMap[key]) {
+                                unlinkedMap[key] = {
+                                    uid: t.uid,
+                                    fulfillmentType: fType,
+                                    totes: []
+                                };
+                            }
+                            unlinkedMap[key].totes.push(t);
+                        });
+
+                        Object.entries(unlinkedMap).forEach(([key, grp]) => {
+                            const owner = resolveToteOwner(grp.uid, grp.totes);
+                            jobs.push({
+                                jobId: `unlinked_${key}`,
+                                isRequest: false,
+                                request: null,
+                                uid: grp.uid,
+                                owner: owner,
+                                customerName: owner.name,
+                                fulfillmentType: grp.fulfillmentType,
+                                targetDate: null,
+                                timeSlot: null,
+                                surgeTier: null,
+                                surgeFee: null,
+                                pin: pinByUid[grp.uid] || '1517',
+                                status: grp.totes[0]?.status,
+                                totes: grp.totes
+                            });
+                        });
+                    }
+
+                    return jobs;
                 }
 
                 // ── Tab 1: NEW INTAKE CARDS ──
@@ -3589,17 +3827,12 @@
                 const pullItems = (allItems || []).filter(i => i.status === 'pending-stage' || i.status === 'pending-dispatch');
 
                 function isValetItem(i) {
-                    const manifest = manifestByUid[i.uid];
-                    const sub = subByUid[i.uid];
-                    return (manifest && (
-                        manifest.fulfillment_type === 'valet_delivery' ||
-                        manifest.request_type === 'valet_delivery' ||
-                        manifest.fulfillment_type === 'valet_pickup' ||
-                        manifest.request_type === 'valet_pickup'
-                    )) || (sub && (
-                        sub.logistics_type === 'valet_pickup' ||
-                        sub.logistics_type === 'valet_delivery'
-                    )) || i.status === 'pending-dispatch' || i.status === 'out-for-delivery';
+                    const req = allRequests.find(r => {
+                        const raw = r.requested_items || r.requested_tote_codes || [];
+                        return raw.includes(i.id) || raw.includes(i.tote_code);
+                    });
+                    if (req) return req.fulfillment_type === 'valet_delivery' || req.request_type === 'valet_delivery';
+                    return i.status === 'pending-dispatch' || i.status === 'out-for-delivery';
                 }
 
                 const stagingItems = pullItems.filter(i => !isValetItem(i));
@@ -3616,77 +3849,37 @@
                 document.getElementById('wtab-stage-count').textContent = pullItems.length;
                 const bodyStage = document.getElementById('wbody-stage');
 
-                function groupPullItemsByUidAndDest(items) {
-                    const groups = {};
-                    (items || []).forEach(item => {
-                        const manifest = manifestByUid[item.uid];
-                        const sub = subByUid[item.uid];
-                        const isValetRequest = (manifest && (
-                            manifest.fulfillment_type === 'valet_delivery' ||
-                            manifest.request_type === 'valet_delivery' ||
-                            manifest.fulfillment_type === 'valet_pickup' ||
-                            manifest.request_type === 'valet_pickup'
-                        )) || (sub && (
-                            sub.logistics_type === 'valet_pickup' ||
-                            sub.logistics_type === 'valet_delivery'
-                        )) || item.status === 'pending-dispatch' || item.status === 'out-for-delivery';
-                        const destType = isValetRequest ? 'valet_delivery' : 'staging';
-                        const key = `${item.uid}_${destType}`;
-                        if (!groups[key]) {
-                            groups[key] = {
-                                uid: item.uid,
-                                destType: destType,
-                                totes: []
-                            };
-                        }
-                        groups[key].totes.push(item);
-                    });
-                    return groups;
-                }
+                const pullJobs = buildRequestJobGroups(filteredPullItems, allRequests, 'staging');
 
-                const pullGrouped = groupPullItemsByUidAndDest(filteredPullItems);
-
-                if (Object.keys(pullGrouped).length === 0) {
+                if (pullJobs.length === 0) {
                     bodyStage.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
                         <i data-lucide="archive" class="w-8 h-8 text-amber-500 mx-auto"></i>
                         <p class="text-sm text-gray-300 font-bold">No Retrieval Requests Pending</p>
                         <p class="text-xs text-gray-500 font-mono">Vault storage is operating normally.</p>
                     </div>`;
                 } else {
-                    const sortedPullGroups = Object.values(pullGrouped).sort((a, b) => {
-                        const getSortKey = (group) => {
-                            const manifestKey = `${group.uid}_${group.destType}`;
-                            const reqManifest = manifestByUidAndType[manifestKey] || manifestByUid[group.uid];
-                            const tDate = reqManifest?.target_date || '9999-12-31';
-                            let slotScore = '4';
-                            const slotStr = reqManifest?.time_slot || '';
-                            if (slotStr.includes('09:00')) slotScore = '1';
-                            else if (slotStr.includes('12:00')) slotScore = '2';
-                            else if (slotStr.includes('03:00') || slotStr.includes('15:00')) slotScore = '3';
-                            return `${tDate}_${slotScore}`;
-                        };
-                        return getSortKey(a).localeCompare(getSortKey(b));
+                    const sortedPullJobs = pullJobs.sort((a, b) => {
+                        const tDateA = a.targetDate || '9999-12-31';
+                        const tDateB = b.targetDate || '9999-12-31';
+                        return tDateA.localeCompare(tDateB);
                     });
 
-                    bodyStage.innerHTML = sortedPullGroups.map(group => {
-                        const uid = group.uid;
-                        const totes = group.totes;
-                        const isValet = group.destType === 'valet_delivery';
-                        const owner = resolveToteOwner(uid, totes);
-                        const customerName = owner.name;
-                        const pin = pinByUid[uid] || '—';
+                    bodyStage.innerHTML = sortedPullJobs.map(job => {
+                        const uid = job.uid;
+                        const totes = job.totes;
+                        const isValet = job.fulfillmentType === 'valet_delivery';
+                        const owner = job.owner;
+                        const customerName = job.customerName;
+                        const pin = job.pin;
                         const firstCode = totes[0].tote_code;
 
-                        const manifestKey = `${uid}_${group.destType}`;
-                        const reqManifest = manifestByUidAndType[manifestKey] || manifestByUid[uid];
-
-                        const reqDate = reqManifest?.target_date ? new Date(reqManifest.target_date.split('T')[0] + 'T12:00:00') : new Date();
+                        const reqDate = job.targetDate ? new Date(job.targetDate.split('T')[0] + 'T12:00:00') : new Date();
                         const dateStr = reqDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
-                        const slotStr = reqManifest?.time_slot || '09:00 AM - 12:00 PM';
-                        const isSameDay = reqManifest?.surge_tier === 'same_day_surge';
+                        const slotStr = job.timeSlot;
+                        const isSameDay = job.surgeTier === 'same_day_surge';
 
                         const numRooms = Number(currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 3);
-                        const assignedRoomNum = getAssignedRoom(uid, numRooms);
+                        const assignedRoomNum = getAssignedRoom(job.jobId || uid, numRooms);
 
                         const isIntakeProcessingTote = totes.some(t => !t.activated || (t.location_code && t.location_code.startsWith('INTAKE')) || (t.status === 'pending-stage' && !t.activated));
 
@@ -3719,7 +3912,6 @@
 
                         const actionIcon = isValet ? 'truck' : (isIntakeProcessingTote ? 'zap' : 'archive-restore');
                         const expectedScanStatus = isValet ? 'pending-dispatch' : 'pending-stage';
-                        const defaultTargetLocation = isValet ? 'DISPATCH-BAY-1' : `STAGE-BAY-A${assignedRoomNum}`;
 
                         return `
                             <div class="border-2 ${borderColor} rounded-3xl p-5 shadow-xl space-y-4 hover:border-amber-500/60 transition">
@@ -3734,7 +3926,7 @@
                                                 ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
                                                 ${isValet ? '<span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 VALET DELIVERY</span>' : '<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE STAGING</span>'}
                                             </h4>
-                                            <p class="text-[11px] font-mono text-gray-400">${owner.subtitle}</p>
+                                            <p class="text-[11px] font-mono text-gray-400">Order ID: ${job.jobId.substring(0, 8)} • ${totes.length} Tote(s) in Order</p>
                                         </div>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
@@ -3751,10 +3943,6 @@
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => {
-                                        const isValetItem = t.status === 'pending-dispatch';
-                                        const originPrefix = isIntakeProcessingTote ? 'Intake Processing' : 'Vault Storage';
-                                        const sLabel = isValetItem ? `${originPrefix} &bull; Pending Driver Load` : `${originPrefix} &bull; Pending Staging`;
-                                        const sColor = isValetItem ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20';
                                         const itemLabel = t.label ? ` &bull; ${escapeHtml(t.label)}` : '';
                                         const rawLoc = resolveStructuredToteLocation(t, isIntakeProcessingTote);
                                         const locTag = ` 📍 ${rawLoc}`;
@@ -3764,9 +3952,12 @@
                                                 <span class="text-cyan-400 text-[10px] bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20 ml-1 font-mono">${locTag}</span>
                                                 <span class="text-[11px] text-gray-400 font-sans font-medium">${itemLabel}</span>
                                             </div>
-                                            <button onclick="document.getElementById('scan-barcode').value='${t.tote_code}';simulateScan('${expectedScanStatus}')" class="bg-gray-800 hover:bg-gray-700 text-amber-300 hover:text-white border border-amber-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
-                                                <i data-lucide="${actionIcon}" class="w-3 h-3"></i> Scan (${t.tote_code})
-                                            </button>
+                                            <div class="flex items-center gap-1.5">
+                                                <button onclick="openReportMissingModal('${t.tote_code}', '${customerName.replace(/'/g, "\\'")}', '${uid}', '${job.jobId}')" class="text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold px-2 py-1.5 rounded-xl border border-rose-500/30 transition cursor-pointer" title="Report Missing">⚠️</button>
+                                                <button onclick="document.getElementById('scan-barcode').value='${t.tote_code}';simulateScan('${expectedScanStatus}')" class="bg-gray-800 hover:bg-gray-700 text-amber-300 hover:text-white border border-amber-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
+                                                    <i data-lucide="${actionIcon}" class="w-3 h-3"></i> Pull
+                                                </button>
+                                            </div>
                                         </div>`;
                                     }).join('')}
                                 </div>
@@ -3781,46 +3972,13 @@
                 }
 
                 // ── Tab 3: IN STAGING ROOM CARDS (Self-Serve only — staged) ──
-                const customerItems = (allItems || []).filter(i => i.status === 'staged');
-                document.getElementById('wtab-customer-count').textContent = customerItems.length;
+                const stagedItems = (allItems || []).filter(i => i.status === 'staged');
+                document.getElementById('wtab-customer-count').textContent = stagedItems.length;
                 const bodyCustomer = document.getElementById('wbody-customer');
-                // Group staged totes by unique schedule card window (uid :: target_date :: time_slot :: request_id)
-                const stagedCardGroups = {};
-                (customerItems || []).forEach(tote => {
-                    let matchedReq = (manifests || []).find(r => {
-                        if (r.uid !== tote.uid) return false;
-                        const requested = r.requested_items || r.requested_tote_codes || r.totes || [];
-                        return Array.isArray(requested) && (
-                            requested.includes(tote.id) || 
-                            requested.includes(tote.tote_code) || 
-                            requested.includes(tote.barcode) || 
-                            requested.includes(tote.label)
-                        );
-                    });
 
-                    if (!matchedReq) {
-                        matchedReq = (manifests || []).find(r => r.uid === tote.uid);
-                    }
+                const stageJobs = buildRequestJobGroups(stagedItems, allRequests.filter(r => r.fulfillment_type !== 'valet_delivery' && r.request_type !== 'valet_delivery'), 'staging');
 
-                    const dateKey = matchedReq?.target_date ? matchedReq.target_date.split('T')[0] : 'unscheduled';
-                    const slotKey = matchedReq?.time_slot || '09:00 AM - 12:00 PM';
-                    const reqIdKey = matchedReq?.id || 'default';
-                    const groupKey = `${tote.uid}::${dateKey}::${slotKey}::${reqIdKey}`;
-
-                    if (!stagedCardGroups[groupKey]) {
-                        stagedCardGroups[groupKey] = {
-                            uid: tote.uid,
-                            req: matchedReq,
-                            target_date: dateKey,
-                            time_slot: slotKey,
-                            pin: matchedReq?.pin || pinByUid[tote.uid] || '—',
-                            totes: []
-                        };
-                    }
-                    stagedCardGroups[groupKey].totes.push(tote);
-                });
-
-                if (Object.keys(stagedCardGroups).length === 0) {
+                if (stageJobs.length === 0) {
                     bodyCustomer.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
                         <i data-lucide="door-open" class="w-8 h-8 text-blue-500 mx-auto"></i>
                         <p class="text-sm text-gray-300 font-bold">Staging Rooms Empty</p>
@@ -3830,20 +3988,17 @@
                     const numRooms = Number(currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 3);
                     const usedRoomNums = new Set();
 
-                    bodyCustomer.innerHTML = Object.entries(stagedCardGroups).map(([groupKey, group]) => {
-                        const { uid, target_date, time_slot, pin, totes } = group;
-                        const owner = resolveToteOwner(uid, totes);
-                        const customerName = owner.name;
+                    bodyCustomer.innerHTML = stageJobs.map(job => {
+                        const { uid, targetDate, timeSlot, pin, totes, customerName, owner, jobId } = job;
                         const firstCode = totes[0].tote_code;
 
-                        const reqDate = (target_date && target_date !== 'unscheduled') 
-                            ? new Date(target_date + 'T12:00:00') 
+                        const reqDate = (targetDate && targetDate !== 'unscheduled') 
+                            ? new Date(targetDate.split('T')[0] + 'T12:00:00') 
                             : new Date();
                         const dateStr = reqDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
-                        const slotStr = time_slot;
+                        const slotStr = timeSlot || '09:00 AM - 12:00 PM';
 
-                        // Seed room calculation with groupKey, and fall back to next vacant room if candidate room is occupied by another card
-                        let assignedRoomNum = getAssignedRoom(groupKey, numRooms);
+                        let assignedRoomNum = getAssignedRoom(jobId || uid, numRooms);
                         if (usedRoomNums.has(assignedRoomNum) && usedRoomNums.size < numRooms) {
                             for (let r = 1; r <= numRooms; r++) {
                                 if (!usedRoomNums.has(r)) {
@@ -3866,8 +4021,9 @@
                                             <div class="flex items-center gap-2">
                                                 <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
                                                 ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
+                                                <span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE</span>
                                             </div>
-                                            <p class="text-[11px] font-mono text-gray-400">${owner.isFacility ? owner.subtitle : `UID: ${uid.substring(0, 8)} • ${totes.length} Staged Tote(s)`}</p>
+                                            <p class="text-[11px] font-mono text-gray-400">Order ID: ${jobId.substring(0, 8)} • ${totes.length} Staged Tote(s)</p>
                                         </div>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
@@ -3886,7 +4042,10 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                         <span class="text-white font-bold">${t.tote_code}</span>
-                                        <span class="text-blue-400 text-[10px] bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 font-sans">Ready in Room #${assignedRoomNum}</span>
+                                        <div class="flex items-center gap-2">
+                                            <button onclick="openReportMissingModal('${t.tote_code}', '${customerName.replace(/'/g, "\\'")}', '${uid}', '${jobId}')" class="text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-rose-500/30 transition cursor-pointer" title="Report Missing">⚠️</button>
+                                            <span class="text-blue-400 text-[10px] bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 font-sans">Ready in Room #${assignedRoomNum}</span>
+                                        </div>
                                     </div>`).join('')}
                                 </div>
 
@@ -3912,25 +4071,25 @@
                 const dispatchCount = document.getElementById('wtab-dispatch-count');
                 if (dispatchCount) dispatchCount.textContent = dispatchItems.length;
                 const bodyDispatch = document.getElementById('wbody-dispatch');
-                const dispatchGrouped = groupTotesByCustomer(dispatchItems);
+
+                const dispatchJobs = buildRequestJobGroups(dispatchItems, allRequests.filter(r => r.fulfillment_type === 'valet_delivery' || r.request_type === 'valet_delivery'), 'valet_delivery');
 
                 if (bodyDispatch) {
-                    if (dispatchItems.length === 0) {
+                    if (dispatchJobs.length === 0) {
                         bodyDispatch.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
                             <i data-lucide="truck" class="w-8 h-8 text-orange-500 mx-auto"></i>
                             <p class="text-sm text-gray-300 font-bold">No Deliveries In Transit</p>
                             <p class="text-xs text-gray-500 font-mono">No valet totes are currently out for delivery.</p>
                         </div>`;
                     } else {
-                        bodyDispatch.innerHTML = Object.entries(dispatchGrouped).map(([uid, totes]) => {
-                            const owner = resolveToteOwner(uid, totes);
-                            const customerName = owner.name;
+                        bodyDispatch.innerHTML = dispatchJobs.map(job => {
+                            const { uid, targetDate, timeSlot, totes, customerName, owner, jobId, request } = job;
                             const firstCode = totes[0].tote_code;
 
-                            const reqManifest = manifestByUidAndType[`${uid}_valet_delivery`] || manifestByUid[uid];
-                            const reqDate = reqManifest?.target_date ? new Date(reqManifest.target_date.split('T')[0] + 'T12:00:00') : new Date();
+                            const reqDate = targetDate ? new Date(targetDate.split('T')[0] + 'T12:00:00') : new Date();
                             const dateStr = reqDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
-                            const slotStr = reqManifest?.time_slot || '09:00 AM - 12:00 PM';
+                            const slotStr = timeSlot || '09:00 AM - 12:00 PM';
+                            const driver = request?.driver_name || 'Active Fleet Driver';
 
                             return `
                                 <div class="bg-gray-950 border-2 border-orange-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-orange-500/60 transition">
@@ -3943,8 +4102,9 @@
                                                 <div class="flex items-center gap-2">
                                                     <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
                                                     ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
+                                                    <span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 VALET DELIVERY</span>
                                                 </div>
-                                                <p class="text-[11px] font-mono text-gray-400">${owner.isFacility ? owner.subtitle : `UID: ${uid.substring(0, 8)} • ${totes.length} Tote(s) Out for Delivery`}</p>
+                                                <p class="text-[11px] font-mono text-gray-400">Order ID: ${jobId.substring(0, 8)} • ${totes.length} Tote(s) Out on Van • ${driver}</p>
                                             </div>
                                         </div>
                                         <div class="flex flex-wrap items-center gap-2">
@@ -3962,7 +4122,10 @@
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                         ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                             <span class="text-white font-bold">${t.tote_code}</span>
-                                            <span class="text-orange-400 text-[10px] bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20 font-sans">Out for Delivery</span>
+                                            <div class="flex items-center gap-2">
+                                                <button onclick="openReportMissingModal('${t.tote_code}', '${customerName.replace(/'/g, "\\'")}', '${uid}', '${jobId}')" class="text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-rose-500/30 transition cursor-pointer" title="Report Missing">⚠️</button>
+                                                <span class="text-orange-400 text-[10px] bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20 font-sans">Out for Delivery</span>
+                                            </div>
                                         </div>`).join('')}
                                     </div>
 
@@ -3976,27 +4139,28 @@
                     }
                 }
 
-                // ── Tab 5: WITH CUSTOMER CARDS ──
+                // ── Tab 5: WITH CUSTOMER CARDS (Separated by AccessRequest: Self-Serve vs Valet) ──
                 const returnedItems = (allItems || []).filter(i => i.status === 'with-customer');
                 document.getElementById('wtab-returned-count').textContent = returnedItems.length;
                 const bodyReturned = document.getElementById('wbody-returned');
-                const returnedGrouped = groupTotesByCustomer(returnedItems);
 
-                if (returnedItems.length === 0) {
+                const returnedJobs = buildRequestJobGroups(returnedItems, allRequests, 'staging');
+
+                if (returnedJobs.length === 0) {
                     bodyReturned.innerHTML = `<div class="bg-gray-900/40 p-8 rounded-3xl border border-gray-850 text-center space-y-2">
                         <i data-lucide="package-check" class="w-8 h-8 text-purple-500 mx-auto"></i>
                         <p class="text-sm text-gray-300 font-bold">No Totes Out With Customers</p>
                         <p class="text-xs text-gray-500 font-mono">All totes are stored inside vault.</p>
                     </div>`;
                 } else {
-                    bodyReturned.innerHTML = Object.entries(returnedGrouped).map(([uid, totes]) => {
-                        const owner = resolveToteOwner(uid, totes);
-                        const customerName = owner.name;
+                    bodyReturned.innerHTML = returnedJobs.map(job => {
+                        const { uid, totes, customerName, owner, jobId, fulfillmentType } = job;
                         const firstCode = totes[0].tote_code;
-                        const ft = typeByUid[uid] || 'staging';
-                        const isValet = ft === 'valet_delivery';
+                        const isValet = fulfillmentType === 'valet_delivery';
                         const returnLabel = isValet ? 'DRIVER PICKED UP — RETURN TO VAULT' : 'SCAN RETURN BACK TO VAULT';
-                        const returnNote = isValet ? 'Driver picks up on next route' : 'Customer returns at facility';
+                        const returnNote = isValet ? 'Driver will pick up / returned via delivery van' : 'Customer returns at facility locker/room';
+                        const orderLabel = job.isRequest ? `Order ID: ${jobId.substring(0, 8)}` : 'Checked Out Items';
+
                         return `
                             <div class="bg-gray-950 border-2 border-purple-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-purple-500/60 transition">
                                 <div class="flex items-center justify-between border-b border-gray-850 pb-3">
@@ -4009,11 +4173,11 @@
                                                 <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
                                                 ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
                                             </div>
-                                            <p class="text-[11px] font-mono text-gray-400">${owner.isFacility ? owner.subtitle : `UID: ${uid.substring(0, 8)} • ${totes.length} Tote(s) Out • ${returnNote}`}</p>
+                                            <p class="text-[11px] font-mono text-gray-400">${orderLabel} • ${totes.length} Tote(s) Out • ${returnNote}</p>
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        ${fulfillmentBadge(uid)}
+                                        ${fulfillmentBadge(fulfillmentType)}
                                         <span class="text-xs font-mono font-bold text-purple-400 bg-purple-500/10 px-3 py-1 rounded-xl border border-purple-500/30">With Customer</span>
                                     </div>
                                 </div>
@@ -4021,7 +4185,10 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                         <span class="text-white font-bold">${t.tote_code}</span>
-                                        <span class="text-purple-400 text-[10px] bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 font-sans">Return Pending</span>
+                                        <div class="flex items-center gap-2">
+                                            <button onclick="openReportMissingModal('${t.tote_code}', '${customerName.replace(/'/g, "\\'")}', '${uid}', '${jobId}')" class="text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-rose-500/30 transition cursor-pointer" title="Report Missing">⚠️</button>
+                                            <span class="text-purple-400 text-[10px] bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 font-sans">Return Pending</span>
+                                        </div>
                                     </div>`).join('')}
                                 </div>
 
@@ -5402,6 +5569,61 @@
                     `;
                 }
                 if (barcodeInput) barcodeInput.focus();
+            }
+        }
+
+        // Missing Tote Reporting Flow
+        function openReportMissingModal(toteCode, customerName = '', uid = '', jobId = '') {
+            const modal = document.getElementById('report-missing-modal');
+            if (!modal) return;
+            document.getElementById('rm-tote-code').textContent = toteCode;
+            document.getElementById('rm-tote-input').value = toteCode;
+            document.getElementById('rm-customer-name').textContent = customerName || 'Customer';
+            document.getElementById('rm-uid-input').value = uid;
+            document.getElementById('rm-job-input').value = jobId;
+            document.getElementById('rm-notes').value = '';
+            document.getElementById('rm-reason').selectedIndex = 0;
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function closeReportMissingModal() {
+            const modal = document.getElementById('report-missing-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.style.display = 'none';
+            }
+        }
+
+        async function submitMissingReport() {
+            const toteCode = document.getElementById('rm-tote-input').value;
+            const reason = document.getElementById('rm-reason').value;
+            const notes = document.getElementById('rm-notes').value;
+            if (!toteCode) return;
+
+            try {
+                const currentUser = (await supabase.auth.getUser())?.data?.user;
+                const { error } = await supabase.from('inventory')
+                    .update({
+                        status: 'missing-tote',
+                        location_type: 'missing',
+                        missing_reason: reason,
+                        missing_notes: notes,
+                        missing_reported_at: new Date().toISOString(),
+                        missing_reported_by: currentUser ? currentUser.id : null,
+                        missing_resolution: 'unresolved'
+                    })
+                    .eq('tote_code', toteCode);
+
+                if (error) throw error;
+
+                showToast(`Tote ${toteCode} reported as missing (${reason}). Manager notified.`);
+                closeReportMissingModal();
+                loadWorkerQueues();
+            } catch (err) {
+                console.error("Failed to report missing tote:", err);
+                showToast(`Error reporting missing tote: ${err.message}`, true);
             }
         }
 
@@ -10203,6 +10425,67 @@
                         Done / Close
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Missing Tote Modal -->
+    <div id="report-missing-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-gray-950 border border-red-500/40 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-2xl bg-red-500/20 text-red-400 font-bold flex items-center justify-center text-lg border border-red-500/30">
+                        ⚠️
+                    </div>
+                    <div>
+                        <h3 class="text-base font-extrabold text-white">Report Tote as Missing</h3>
+                        <p class="text-xs text-gray-400 font-mono">Flag tote for managerial exception review</p>
+                    </div>
+                </div>
+                <button onclick="closeReportMissingModal()" class="text-gray-400 hover:text-white p-2 rounded-xl bg-gray-900 border border-gray-800 transition">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-xs">
+                <div class="bg-gray-900/80 p-3.5 rounded-2xl border border-gray-800 space-y-1">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400 font-mono">Tote Code:</span>
+                        <span id="rm-tote-code" class="font-mono font-black text-amber-400 text-sm">—</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400 font-mono">Customer:</span>
+                        <span id="rm-customer-name" class="font-bold text-white">—</span>
+                    </div>
+                </div>
+
+                <input type="hidden" id="rm-tote-input">
+                <input type="hidden" id="rm-uid-input">
+                <input type="hidden" id="rm-job-input">
+
+                <div>
+                    <label class="block font-bold uppercase text-gray-400 mb-1.5 font-mono text-[10px]">Reason for Exception *</label>
+                    <select id="rm-reason" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5 text-xs text-white focus:border-red-500 outline-none">
+                        <option value="Customer Did Not Return Tote">Customer Did Not Return Tote</option>
+                        <option value="Damaged / Destroyed in Transit">Damaged / Destroyed in Transit</option>
+                        <option value="Not Found in Storage Bay During Pull">Not Found in Storage Bay During Pull</option>
+                        <option value="Misplaced During Warehouse Intake">Misplaced During Warehouse Intake</option>
+                        <option value="Unaccounted During Vehicle Return">Unaccounted During Vehicle Return</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-bold uppercase text-gray-400 mb-1.5 font-mono text-[10px]">Staff Operational Notes</label>
+                    <textarea id="rm-notes" rows="3" placeholder="Provide any context, customer communications, or driver notes..." class="w-full bg-gray-900 border border-gray-800 rounded-xl p-3 text-xs text-white placeholder-gray-600 focus:border-red-500 outline-none resize-none"></textarea>
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-2 border-t border-gray-800">
+                <button type="button" onclick="closeReportMissingModal()" class="w-1/2 bg-gray-900 hover:bg-gray-800 text-gray-300 font-bold py-3 rounded-xl text-xs transition">Cancel</button>
+                <button type="button" onclick="submitMissingReport()" class="w-1/2 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl text-xs transition shadow-lg shadow-red-600/30 flex items-center justify-center gap-1.5 cursor-pointer">
+                    <span>⚠️ Submit Report</span>
+                </button>
             </div>
         </div>
     </div>
