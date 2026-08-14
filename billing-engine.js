@@ -403,17 +403,9 @@
         const taxableBase = Math.max(0, subtotal + deliveryFee + surgeFee);
         const taxAmount = resolvedTaxRate != null ? Math.round(taxableBase * resolvedTaxRate * 100) / 100 : (Number(params.tax) || 0.00);
         
-        // Ensure Sales Tax line item is present if taxAmount > 0
-        const hasTaxItem = lineItems.some(i => (i.description || '').toLowerCase().includes('tax') || i.tax_rate != null);
-        if (!hasTaxItem && resolvedTaxRate != null && taxAmount > 0) {
-          lineItems.push({
-            description: resolvedTaxLabel || `Sales Tax (${(resolvedTaxRate * 100).toFixed(2)}%)`,
-            qty: 1,
-            unit_price: taxAmount,
-            amount: taxAmount,
-            tax_rate: resolvedTaxRate
-          });
-        }
+        // Tax is shown only in the financial summary totals section, NOT as a line item
+        // Strip any legacy tax line items that may exist in old records
+        lineItems = lineItems.filter(i => !((i.description || '').toLowerCase().includes('sales tax') || (i.description || '').toLowerCase().includes('state tax') || i.tax_rate != null));
 
         const computedTotal = Math.round((taxableBase + taxAmount - discount) * 100) / 100;
         let totalAmount = computedTotal;
@@ -2193,14 +2185,15 @@
             }
           }
 
-          // 2. Query service_areas by facility_id
+          // 2. Query service_areas by facility_id — only if it's a *primary* row for this facility
+          // (avoid picking up another facility's zone for cross-city customers)
           if (dbTaxRate == null && targetFacId) {
             const { data: saFac } = await sb.from('service_areas')
-              .select('tax_rate, tax_label, city, state')
+              .select('tax_rate, tax_label, city, state, facility_id')
               .eq('facility_id', targetFacId)
               .not('tax_rate', 'is', null)
               .limit(1);
-            if (saFac && saFac[0] && saFac[0].tax_rate != null) {
+            if (saFac && saFac[0] && saFac[0].tax_rate != null && saFac[0].facility_id === targetFacId) {
               dbTaxRate = Number(saFac[0].tax_rate);
               dbTaxLabel = saFac[0].tax_label || `${saFac[0].city || 'Regional'} Sales Tax (${(dbTaxRate * 100).toFixed(2)}%)`;
             }
@@ -2473,7 +2466,13 @@
         `;
       };
 
-      const lineItemsRowsHtml = lineItems.map((item, idx) => {
+      // Exclude any tax line items from the line items table — tax belongs in the totals section only
+      const filteredLineItems = lineItems.filter(item => {
+        const d = (item.description || item.name || '').toLowerCase();
+        return !(d.includes('sales tax') || d.includes('state tax') || item.tax_rate != null);
+      });
+
+      const lineItemsRowsHtml = filteredLineItems.map((item, idx) => {
         const desc = item.description || item.name || 'Storage / Service Charge';
         const qty = Number(item.qty || item.quantity || 1);
         const rate = Number(item.unit_price || item.unitPrice || item.rate || item.amount || 0);
