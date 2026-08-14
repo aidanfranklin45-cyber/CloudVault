@@ -2045,14 +2045,20 @@
       
       // Cross-reference user's inventory & access requests to accurately resolve true home facility
       let resolvedFacId = invoiceObj.facility_id || userSub?.facility_id || userObj?.assigned_facility_id || null;
-      if (sb && targetUid && (!resolvedFacId || resolvedFacId === 'facility_seattle_north')) {
+      if (sb && targetUid) {
         try {
-          const { data: invTotes } = await sb.from('inventory').select('facility_id').eq('uid', targetUid).limit(1);
-          if (invTotes && invTotes[0] && invTotes[0].facility_id) {
-            resolvedFacId = invTotes[0].facility_id;
+          const { data: uData } = await sb.from('users').select('assigned_facility_id, active_zone, zip_code, city, state').eq('id', targetUid).maybeSingle();
+          if (uData && uData.assigned_facility_id) {
+            resolvedFacId = uData.assigned_facility_id;
           }
-          if (!resolvedFacId || resolvedFacId === 'facility_seattle_north') {
-            const { data: arData } = await sb.from('access_requests').select('facility_id').eq('uid', targetUid).order('requested_at', { ascending: false }).limit(1);
+          if (!resolvedFacId) {
+            const { data: invTotes } = await sb.from('inventory').select('facility_id').eq('uid', targetUid).limit(1);
+            if (invTotes && invTotes[0] && invTotes[0].facility_id) {
+              resolvedFacId = invTotes[0].facility_id;
+            }
+          }
+          if (!resolvedFacId) {
+            const { data: arData } = await sb.from('access_requests').select('facility_id').eq('uid', targetUid).order('created_at', { ascending: false }).limit(1);
             if (arData && arData[0] && arData[0].facility_id) {
               resolvedFacId = arData[0].facility_id;
             }
@@ -2062,24 +2068,28 @@
         }
       }
 
-      // Check customer profile context for regional hints (e.g. Lola / Yakima / 98908 / 98942)
-      const contextStr = `${invoiceObj.customer_name || ''} ${invoiceObj.customerEmail || ''} ${invoiceObj.notes || ''} ${userObj?.name || ''} ${userObj?.city || ''} ${userObj?.zip_code || ''}`.toLowerCase();
+      // Check customer profile context for regional hints (e.g. ZIPs: 972xx -> Portland, 989xx -> Yakima, 981xx -> Seattle)
+      const userZip = String(userObj?.zip_code || userObj?.active_zone || invoiceObj.zip_code || (userObj?.address ? String(userObj.address).match(/\b\d{5}\b/)?.[0] : '') || '').trim();
+      const contextStr = `${invoiceObj.customer_name || ''} ${invoiceObj.customerEmail || ''} ${invoiceObj.notes || ''} ${userObj?.name || ''} ${userObj?.city || ''} ${userObj?.state || ''} ${userZip}`.toLowerCase();
+      
       if (!resolvedFacId || resolvedFacId === 'facility_seattle_north') {
-        if (contextStr.includes('yakima') || contextStr.includes('98908') || contextStr.includes('98942') || contextStr.includes('98901') || contextStr.includes('lola')) {
-          resolvedFacId = 'facility_yakima';
-        } else if (contextStr.includes('portland') || contextStr.includes('pdx') || contextStr.includes('97201') || contextStr.includes('97202')) {
+        if (contextStr.includes('portland') || contextStr.includes('pdx') || userZip.startsWith('972')) {
           resolvedFacId = 'facility_portland_central';
+        } else if (contextStr.includes('yakima') || userZip.startsWith('989')) {
+          resolvedFacId = 'facility_yakima';
+        } else if (contextStr.includes('seattle') || userZip.startsWith('981')) {
+          resolvedFacId = 'facility_seattle_north';
         }
       }
-      const targetFacId = resolvedFacId || 'facility_yakima';
+      const targetFacId = resolvedFacId || 'facility_portland_central';
 
-      let facilityDisplay = 'CloudVault Central Hub';
+      let facilityDisplay = 'Portland Central Hub (facility_portland_central)';
       const facKey = String(targetFacId).toLowerCase();
-      if (facKey.includes('yakima') || contextStr.includes('yakima') || contextStr.includes('lola')) {
-        facilityDisplay = 'Yakima Hub (facility_yakima)';
-      } else if (facKey.includes('portland')) {
+      if (facKey.includes('portland') || contextStr.includes('portland') || userZip.startsWith('972')) {
         facilityDisplay = 'Portland Central Hub (facility_portland_central)';
-      } else if (facKey.includes('seattle')) {
+      } else if (facKey.includes('yakima') || contextStr.includes('yakima') || userZip.startsWith('989')) {
+        facilityDisplay = 'Yakima Hub (facility_yakima)';
+      } else if (facKey.includes('seattle') || contextStr.includes('seattle') || userZip.startsWith('981')) {
         facilityDisplay = 'Seattle North Hub (facility_seattle_north)';
       } else {
         facilityDisplay = `${targetFacId.replace(/facility_/g, '').replace(/_/g, ' ').toUpperCase()} (${targetFacId})`;
@@ -2097,7 +2107,7 @@
 
       if (sb) {
         try {
-          const custZip = userObj?.zip_code || invoiceObj.zip_code || (userObj?.address ? String(userObj.address).match(/\b\d{5}\b/)?.[0] : null);
+          const custZip = userZip || null;
           
           // 1. Direct query against public.service_areas table for customer's ZIP
           if (custZip) {
@@ -2138,19 +2148,19 @@
       }
 
       // Resolve dynamic rate from database or facility territory
-      let taxRate = dbTaxRate != null ? dbTaxRate : 0.0830;
-      let taxRegionLabel = dbTaxLabel || 'Yakima, WA (8.30%)';
+      let taxRate = dbTaxRate != null ? dbTaxRate : (facKey.includes('portland') || userZip.startsWith('972') ? 0.00 : 0.0860);
+      let taxRegionLabel = dbTaxLabel || (facKey.includes('portland') || userZip.startsWith('972') ? 'Oregon (0.00%)' : 'WA State (8.60%)');
 
       if (dbTaxRate == null) {
-        if (facKey.includes('yakima') || contextStr.includes('yakima') || contextStr.includes('lola')) {
-          taxRate = 0.0830;
-          taxRegionLabel = 'Yakima, WA (8.30%)';
-        } else if (facKey.includes('seattle')) {
-          taxRate = 0.1035;
-          taxRegionLabel = 'Seattle, WA (10.35%)';
-        } else if (facKey.includes('portland') || facKey.includes('pdx')) {
+        if (facKey.includes('portland') || facKey.includes('pdx') || userZip.startsWith('972')) {
           taxRate = 0.0000;
           taxRegionLabel = 'Oregon (0.00%)';
+        } else if (facKey.includes('yakima') || userZip.startsWith('989')) {
+          taxRate = 0.0830;
+          taxRegionLabel = 'Yakima, WA (8.30%)';
+        } else if (facKey.includes('seattle') || userZip.startsWith('981')) {
+          taxRate = 0.1035;
+          taxRegionLabel = 'Seattle, WA (10.35%)';
         } else {
           taxRate = 0.0860;
           taxRegionLabel = 'WA State (8.60%)';
@@ -2449,7 +2459,11 @@
                 <div class="flex justify-between text-slate-600">
                   <span>Sales Tax (${taxRegionLabel})</span>
                   <span class="font-bold text-slate-900 font-mono">${formatMoney(tax)}</span>
-                </div>` : ''}
+                </div>` : (taxRegionLabel && (taxRegionLabel.includes('0.00%') || taxRegionLabel.includes('Oregon') || taxRegionLabel.includes('0%')) ? `
+                <div class="flex justify-between text-slate-600">
+                  <span>Sales Tax (${taxRegionLabel})</span>
+                  <span class="font-bold text-slate-500 font-mono">$0.00</span>
+                </div>` : '')}
                 ${discount > 0 ? `
                 <div class="flex justify-between text-emerald-600 font-medium">
                   <span>Discount Applied</span>

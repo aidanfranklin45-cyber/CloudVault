@@ -2865,6 +2865,9 @@
                 
                 if (profileData) {
                     sessionStorage.setItem(`cv_user_${currentUser.id}`, JSON.stringify(profileData));
+                    if (profileData.assigned_facility_id || profileData.assigned_facility) {
+                        loadAssignedFacilityPricing(profileData.assigned_facility_id || profileData.assigned_facility);
+                    }
                     if (profileData.name) {
                         const pi = profileData.name.split(' ').map(s => s[0]).join('').toUpperCase().slice(0, 2);
                         document.getElementById('user-avatar').textContent = pi;
@@ -4353,8 +4356,18 @@
                 if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
                     try {
                         const toteCount = selectedItems.size;
+                        const userFac = (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility)) ||
+                                        (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
+                                        'facility_portland_central';
+                        const userZip = (currentProfile && (currentProfile.zip_code || currentProfile.active_zone)) ||
+                                        (currentUserProfile && (currentUserProfile.zip_code || currentUserProfile.active_zone)) ||
+                                        '97201';
+
+                        const valetBase = Number(activeFacilityPricing.valet_base != null ? activeFacilityPricing.valet_base : 15.00);
+                        const valetAdder = Number(activeFacilityPricing.valet_tote_adder != null ? activeFacilityPricing.valet_tote_adder : 1.00);
+                        const valetAdderTotal = toteCount * valetAdder;
                         const deliveryFee = retrievalLogisticsType === 'valet_delivery'
-                            ? (activeFacilityPricing.valet_base + (toteCount * activeFacilityPricing.valet_tote_adder))
+                            ? (valetBase + valetAdderTotal)
                             : 0;
                         const surgeFee = selectedReservationSurge ? Number(selectedReservationSurge.fee || 0) : 0;
                         const isNextDayPromo = selectedReservationSurge && selectedReservationSurge.tier === 'next_day_promo';
@@ -4363,8 +4376,21 @@
                         const lineItems = [
                             { description: `Staging Tote Retrieval (${toteCount} tote${toteCount > 1 ? 's' : ''})`, qty: toteCount, unit_price: 0, amount: 0 }
                         ];
-                        if (deliveryFee > 0) {
-                            lineItems.push({ description: `Valet Doorstep Delivery Service Fee`, qty: 1, unit_price: deliveryFee, amount: deliveryFee });
+                        if (retrievalLogisticsType === 'valet_delivery') {
+                            lineItems.push({
+                                description: `Valet Doorstep Delivery Base Service`,
+                                qty: 1,
+                                unit_price: valetBase,
+                                amount: valetBase
+                            });
+                            if (valetAdderTotal > 0) {
+                                lineItems.push({
+                                    description: `Valet Tote Handling Surcharge ($${valetAdder.toFixed(2)}/tote)`,
+                                    qty: toteCount,
+                                    unit_price: valetAdder,
+                                    amount: valetAdderTotal
+                                });
+                            }
                         }
                         if (isNextDayPromo) {
                             lineItems.push({ description: `Next-Day Fast Access (Facility Promotional Waiver)`, qty: 1, unit_price: 0, amount: 0 });
@@ -4372,14 +4398,9 @@
                             lineItems.push({ description: `Expedited Staging Access (${selectedReservationSurge.title || 'Surge Tier'})`, qty: 1, unit_price: surgeFee, amount: surgeFee });
                         }
 
-                        const userFac = (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility)) ||
-                                        (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
-                                        'facility_seattle_north';
-                        const userZip = (currentProfile && currentProfile.zip_code) || (currentUserProfile && currentUserProfile.zip_code) || null;
-
                         await window.CloudVaultBilling.createInvoiceRecord({
                             uid: currentUser.id,
-                            customer_name: currentUser.user_metadata?.name || currentUser.email.split('@')[0],
+                            customer_name: currentUser.user_metadata?.name || (currentProfile && currentProfile.name) || currentUser.email.split('@')[0],
                             customer_email: currentUser.email,
                             facility_id: userFac,
                             zip_code: userZip,
