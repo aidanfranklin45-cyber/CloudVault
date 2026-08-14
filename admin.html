@@ -5447,6 +5447,18 @@
                     (uData || []).forEach(u => { valetUsersMap[u.id] = u; });
                 }
 
+                // Map active physical totes currently in transit/pending dispatch by user
+                const userActiveTotesMap = {};
+                (activeValetTotes || []).forEach(t => {
+                    const uId = t.uid;
+                    if (uId) {
+                        if (!userActiveTotesMap[uId]) userActiveTotesMap[uId] = [];
+                        if (!userActiveTotesMap[uId].includes(t.tote_code)) {
+                            userActiveTotesMap[uId].push(t.tote_code);
+                        }
+                    }
+                });
+
                 const activeValetUserMap = {};
 
                 (requests || []).forEach(r => {
@@ -5462,12 +5474,17 @@
                                     requested_items: []
                                 };
                             }
-                            const items = r.requested_items || r.requested_tote_codes || [];
-                            items.forEach(it => {
-                                if (!activeValetUserMap[uId].requested_items.includes(it)) {
-                                    activeValetUserMap[uId].requested_items.push(it);
-                                }
-                            });
+                            // Ground truth: If user has physical totes actively in transit/pending dispatch, use those directly
+                            if (userActiveTotesMap[uId] && userActiveTotesMap[uId].length > 0) {
+                                activeValetUserMap[uId].requested_items = [...userActiveTotesMap[uId]];
+                            } else {
+                                const items = r.requested_items || r.requested_tote_codes || [];
+                                items.forEach(it => {
+                                    if (!activeValetUserMap[uId].requested_items.includes(it)) {
+                                        activeValetUserMap[uId].requested_items.push(it);
+                                    }
+                                });
+                            }
                         }
                     }
                 });
@@ -5485,7 +5502,9 @@
                                 requested_items: []
                             };
                         }
-                        if (!activeValetUserMap[uId].requested_items.includes(t.tote_code)) {
+                        if (userActiveTotesMap[uId] && userActiveTotesMap[uId].length > 0) {
+                            activeValetUserMap[uId].requested_items = [...userActiveTotesMap[uId]];
+                        } else if (!activeValetUserMap[uId].requested_items.includes(t.tote_code)) {
                             activeValetUserMap[uId].requested_items.push(t.tote_code);
                         }
                     }
