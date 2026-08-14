@@ -627,27 +627,53 @@
       const surgeFee = Number(req.surge_fee || 0);
       const subtotal = Number(req.subtotal || 0);
       const grandTotal = subtotal + valetFee + surgeFee;
-      const invType = isValet ? 'valet_delivery' : (req.request_type || 'access_request');
-      const createdAt = req.requested_at || req.created_at || new Date().toISOString();
-
       const lineItems = [];
-      lineItems.push({
-        description: `Staging Tote Retrieval (${toteCount} tote${toteCount > 1 ? 's' : ''})`,
-        qty: toteCount,
-        unit_price: subtotal > 0 ? (subtotal / toteCount) : 0,
-        amount: subtotal
-      });
-      if (valetFee > 0) {
+      if (isValet) {
+        let valetBase = 15.00;
+        let valetAdder = 1.00;
+        const facId = req.facility_id || userObj.assigned_facility_id;
+        if (sb && facId) {
+          try {
+            const { data: fac } = await sb.from('facilities')
+              .select('valet_base, valet_tote_adder')
+              .eq('id', facId)
+              .maybeSingle();
+            if (fac) {
+              valetBase = Number(fac.valet_base) || 15.00;
+              valetAdder = Number(fac.valet_tote_adder) || 1.00;
+            }
+          } catch (e) {
+            console.warn('[CloudVaultBilling] Error fetching facility valet rates:', e.message);
+          }
+        }
+        const adderTotal = toteCount * valetAdder;
         lineItems.push({
-          description: 'Valet Doorstep Delivery Service Fee',
+          description: 'Valet Base Fee',
           qty: 1,
-          unit_price: valetFee,
-          amount: valetFee
+          unit_price: valetBase,
+          amount: valetBase
         });
+        if (adderTotal > 0) {
+          lineItems.push({
+            description: `Per Tote Valet Fee ($${valetAdder.toFixed(2)}/tote)`,
+            qty: toteCount,
+            unit_price: valetAdder,
+            amount: adderTotal
+          });
+        }
+      } else {
+        if (subtotal > 0) {
+          lineItems.push({
+            description: `Self-Service Staging Access (${toteCount} tote${toteCount > 1 ? 's' : ''})`,
+            qty: toteCount,
+            unit_price: subtotal / toteCount,
+            amount: subtotal
+          });
+        }
       }
       if (surgeFee > 0) {
         lineItems.push({
-          description: `Priority / Surge Slot Fee (${req.surge_tier || 'rush'})`,
+          description: `Expedited Staging Access (${req.surge_tier || 'rush'})`,
           qty: 1,
           unit_price: surgeFee,
           amount: surgeFee
@@ -2344,19 +2370,27 @@
         }
       } else {
         // Non-subscription service invoice (retrieval / valet / expansion)
-        // Clean out any misplaced storage subscription rows
+        // Clean out any misplaced storage subscription rows and $0 retrieval placeholder rows
         lineItems = lineItems.filter(i => {
           const desc = (i.description || i.name || '').toLowerCase();
-          return !(desc.includes('storage subscription') || (desc.includes('subscription (') && desc.includes('tier')));
+          const amt = Number(i.amount || 0);
+          const unit = Number(i.unit_price || i.unitPrice || 0);
+          if (desc.includes('storage subscription') || (desc.includes('subscription (') && desc.includes('tier'))) {
+            return false;
+          }
+          if ((desc.includes('retrieval') || desc.includes('staging') || desc.includes('vault')) && amt === 0 && unit === 0) {
+            return false;
+          }
+          return true;
         });
 
-        // Check if line items has an un-itemized lump sum valet delivery fee (e.g. $17.00) or missing breakdown
+        // Check if line items has an un-itemized lump sum valet delivery fee (e.g. $17.00) or needs normalization
         const valetLumpIndex = lineItems.findIndex(i => {
           const d = (i.description || '').toLowerCase();
-          return (d.includes('valet doorstep delivery') || d.includes('valet delivery')) && !d.includes('base service') && !d.includes('handling');
+          return (d.includes('valet doorstep delivery') || d.includes('valet delivery')) && !d.includes('base fee') && !d.includes('base service') && !d.includes('per tote');
         });
 
-        if (valetLumpIndex !== -1 || (deliveryFee > 0 && !lineItems.some(i => (i.description || '').toLowerCase().includes('base service')))) {
+        if (valetLumpIndex !== -1 || (deliveryFee > 0 && !lineItems.some(i => (i.description || '').toLowerCase().includes('base')))) {
           const totalValet = deliveryFee > 0 ? deliveryFee : Number(lineItems[valetLumpIndex]?.amount || 17);
           const baseFee = 15.00;
           const adderTotal = Math.max(0, totalValet - baseFee);
@@ -2367,24 +2401,8 @@
             lineItems.splice(valetLumpIndex, 1);
           }
 
-          // Rename or format the tote retrieval line item
-          const stagingIndex = lineItems.findIndex(i => (i.description || '').toLowerCase().includes('retrieval') || (i.description || '').toLowerCase().includes('staging'));
-          if (stagingIndex !== -1) {
-            lineItems[stagingIndex].description = `Deep Storage Vault Retrieval & Prep (${inferredToteCount} tote${inferredToteCount > 1 ? 's' : ''})`;
-            lineItems[stagingIndex].qty = inferredToteCount;
-            lineItems[stagingIndex].unit_price = 0;
-            lineItems[stagingIndex].amount = 0;
-          } else {
-            lineItems.unshift({
-              description: `Deep Storage Vault Retrieval & Prep (${inferredToteCount} tote${inferredToteCount > 1 ? 's' : ''})`,
-              qty: inferredToteCount,
-              unit_price: 0,
-              amount: 0
-            });
-          }
-
           lineItems.push({
-            description: `Valet Doorstep Delivery Base Service`,
+            description: `Valet Base Fee`,
             qty: 1,
             unit_price: baseFee,
             amount: baseFee
@@ -2392,17 +2410,28 @@
 
           if (adderTotal > 0) {
             lineItems.push({
-              description: `Valet Tote Handling Surcharge ($${adderPerTote.toFixed(2)}/tote)`,
+              description: `Per Tote Valet Fee ($${adderPerTote.toFixed(2)}/tote)`,
               qty: inferredToteCount,
               unit_price: adderPerTote,
               amount: adderTotal
             });
           }
+        } else {
+          // Normalize existing valet line item descriptions
+          lineItems.forEach(it => {
+            const d = (it.description || '').toLowerCase();
+            if (d.includes('base service') || d.includes('doorstep delivery base')) {
+              it.description = 'Valet Base Fee';
+            } else if (d.includes('handling surcharge') || d.includes('tote handling')) {
+              const uRate = Number(it.unit_price || it.unitPrice || 1.00);
+              it.description = `Per Tote Valet Fee ($${uRate.toFixed(2)}/tote)`;
+            }
+          });
         }
 
         if (lineItems.length === 0) {
-          if (surgeFee > 0) lineItems.push({ description: 'Priority / Surge Retrieval Fee', qty: 1, unit_price: surgeFee, amount: surgeFee });
-          if (deliveryFee > 0) lineItems.push({ description: 'Valet Doorstep Delivery Base Service', qty: 1, unit_price: deliveryFee, amount: deliveryFee });
+          if (surgeFee > 0) lineItems.push({ description: 'Expedited Staging Access', qty: 1, unit_price: surgeFee, amount: surgeFee });
+          if (deliveryFee > 0) lineItems.push({ description: 'Valet Base Fee', qty: 1, unit_price: deliveryFee, amount: deliveryFee });
         }
         upsellBannerHtml = '';
       }
@@ -2415,18 +2444,15 @@
         if (isSubscriptionInvoice && (desc.includes('subscription') || desc.includes('storage') || invType === 'initial_reservation')) {
           badges.push(`📦 ${activeToteCount} Active Storage Tote${activeToteCount !== 1 ? 's' : ''}`);
           badges.push(`📊 ${currentTier.tierName} (${formatMoney(effectiveRate)}/tote/mo)`);
-        } else if (desc.includes('retrieval') || desc.includes('vault') || desc.includes('staging')) {
-          badges.push('📦 Deep Storage Vault Pull');
-          badges.push('✓ Complimentary Retrieval');
-        } else if (desc.includes('base service')) {
+        } else if (desc.includes('base fee') || desc.includes('base service')) {
           badges.push('🚚 White-Glove Doorstep Valet');
           badges.push('📍 Real-Time Live Driver Tracking');
-        } else if (desc.includes('handling') || desc.includes('surcharge') || desc.includes('adder')) {
-          badges.push('🏷️ Multi-Tote Logistics Handling');
+        } else if (desc.includes('per tote valet') || desc.includes('tote valet') || desc.includes('handling') || desc.includes('adder') || desc.includes('surcharge')) {
+          badges.push('🏷️ Valet Tote Unit Handling Cost');
         } else if (desc.includes('valet') || desc.includes('delivery') || invType === 'valet_delivery') {
           badges.push('🚚 White-Glove Doorstep Valet');
           badges.push('📍 Real-Time Live Driver Tracking');
-        } else if (desc.includes('surge') || desc.includes('priority')) {
+        } else if (desc.includes('surge') || desc.includes('priority') || desc.includes('expedited')) {
           badges.push('⚡ Expedited Rush Queue Dispatch');
         } else if (desc.includes('unreturned') || desc.includes('tote fee')) {
           badges.push('📦 Industrial Stackable Tote Replacement');

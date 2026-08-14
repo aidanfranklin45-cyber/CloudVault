@@ -4416,24 +4416,29 @@
                         const isNextDayPromo = selectedReservationSurge && selectedReservationSurge.tier === 'next_day_promo';
                         const invoiceType = retrievalLogisticsType === 'valet_delivery' ? 'valet_delivery' : 'surge_delivery';
 
-                        const lineItems = [
-                            { description: `Staging Tote Retrieval (${toteCount} tote${toteCount > 1 ? 's' : ''})`, qty: toteCount, unit_price: 0, amount: 0 }
-                        ];
+                        const lineItems = [];
                         if (retrievalLogisticsType === 'valet_delivery') {
                             lineItems.push({
-                                description: `Valet Doorstep Delivery Base Service`,
+                                description: `Valet Base Fee`,
                                 qty: 1,
                                 unit_price: valetBase,
                                 amount: valetBase
                             });
                             if (valetAdderTotal > 0) {
                                 lineItems.push({
-                                    description: `Valet Tote Handling Surcharge ($${valetAdder.toFixed(2)}/tote)`,
+                                    description: `Per Tote Valet Fee ($${valetAdder.toFixed(2)}/tote)`,
                                     qty: toteCount,
                                     unit_price: valetAdder,
                                     amount: valetAdderTotal
                                 });
                             }
+                        } else if (deliveryFee > 0) {
+                            lineItems.push({
+                                description: `Self-Service Staging Fee`,
+                                qty: 1,
+                                unit_price: deliveryFee,
+                                amount: deliveryFee
+                            });
                         }
                         if (isNextDayPromo) {
                             lineItems.push({ description: `Next-Day Fast Access (Facility Promotional Waiver)`, qty: 1, unit_price: 0, amount: 0 });
