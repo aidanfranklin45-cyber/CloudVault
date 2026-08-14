@@ -1494,19 +1494,70 @@
 
                 async function loadWarehouseLocationCount(facilityId) {
                     const badge = document.getElementById('conf-total-locations-badge');
-                    if (!badge || !facilityId) return;
+                    if (!facilityId) return;
 
                     try {
-                        const { count, error } = await supabase
+                        const { data: locs, error } = await supabase
                             .from('warehouse_locations')
-                            .select('*', { count: 'exact', head: true })
+                            .select('zone_type, identifier')
                             .eq('facility_id', facilityId);
 
-                        if (!error && count !== null) {
-                            badge.textContent = `${count} Location${count === 1 ? '' : 's'}`;
+                        if (error) throw error;
+
+                        const locationList = locs || [];
+                        const totalCount = locationList.length;
+                        const vaultList = locationList.filter(l => l.zone_type === 'VAULT');
+                        const stagingList = locationList.filter(l => l.zone_type === 'STAGING');
+
+                        if (badge) {
+                            badge.textContent = `${totalCount} Locations (${vaultList.length} Vault + ${stagingList.length} Staging)`;
                         }
+
+                        // Dynamically extract actual max aisles, bays, and shelves for this facility
+                        if (vaultList.length > 0) {
+                            let maxAisle = 0, maxBay = 0, maxShelf = 0;
+                            vaultList.forEach(l => {
+                                const m = (l.identifier || '').match(/^A(\d+)-B(\d+)-S(\d+)$/i);
+                                if (m) {
+                                    maxAisle = Math.max(maxAisle, parseInt(m[1], 10));
+                                    maxBay = Math.max(maxBay, parseInt(m[2], 10));
+                                    maxShelf = Math.max(maxShelf, parseInt(m[3], 10));
+                                }
+                            });
+
+                            if (maxAisle > 0 && maxBay > 0 && maxShelf > 0) {
+                                const aisleInput = document.getElementById('conf-vault-aisles');
+                                const bayInput = document.getElementById('conf-vault-bays');
+                                const shelfInput = document.getElementById('conf-vault-shelves');
+
+                                if (aisleInput) aisleInput.value = maxAisle;
+                                if (bayInput) bayInput.value = maxBay;
+                                if (shelfInput) shelfInput.value = maxShelf;
+                            }
+                        }
+
+                        // Dynamically extract staging room ID and bay count
+                        if (stagingList.length > 0) {
+                            let roomId = 'ROOM-1';
+                            let maxStagingBay = stagingList.length;
+                            stagingList.forEach(l => {
+                                const m = (l.identifier || '').match(/^(ROOM-\d+)-BAY-(\d+)$/i);
+                                if (m) {
+                                    roomId = m[1];
+                                    maxStagingBay = Math.max(maxStagingBay, parseInt(m[2], 10));
+                                }
+                            });
+
+                            const roomInput = document.getElementById('conf-staging-room-id');
+                            const stagingBaysInput = document.getElementById('conf-staging-room-bays');
+                            if (roomInput) roomInput.value = roomId;
+                            if (stagingBaysInput) stagingBaysInput.value = maxStagingBay;
+                        }
+
+                        updateVaultPreviewText();
+                        updateStagingPreviewText();
                     } catch (e) {
-                        console.warn("Could not load location count:", e);
+                        console.warn("Could not load location count & layout:", e);
                     }
                 }
 
