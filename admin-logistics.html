@@ -82,6 +82,18 @@
                     <select id="global-facility-select" onchange="onGlobalFacilityChange(this.value)" class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
                     </select>
                 </div>
+
+                <!-- Role Impersonation Switcher -->
+                <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2"
+                    id="role-select-container">
+                    <label class="text-xs text-gray-400 font-medium">Clearance Role:</label>
+                    <select id="role-select" onchange="switchRole()"
+                        class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
+                        <option value="executive" class="bg-gray-950 text-white">Executive (Super Admin)</option>
+                        <option value="manager" class="bg-gray-950 text-white">Warehouse Manager</option>
+                        <option value="worker" class="bg-gray-950 text-white">Warehouse Worker</option>
+                    </select>
+                </div>
             </div>
 
         </div>
@@ -137,8 +149,8 @@
             </div>
         </div>
 
-        <!-- Customer Facility Relocation & Transfer Portal -->
-        <div class="glass-panel p-6 rounded-3xl space-y-6 border border-cyan-500/20 shadow-2xl">
+        <!-- Customer Facility Relocation & Transfer Portal (Manager & Executive Only) -->
+        <div id="customer-relocation-portal" class="hidden glass-panel p-6 rounded-3xl space-y-6 border border-cyan-500/20 shadow-2xl">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800 pb-4">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
@@ -252,27 +264,128 @@
     <script src="supabase-config.js"></script>
 
     <script>
+        let actualUserRole = null;
+        let actualUserName = null;
+        let activeRole = 'worker'; // 'worker', 'manager', 'executive'
+
+        function applyActiveEmployeeContext(profile) {
+            if (!profile || profile.role === 'customer') {
+                window.location.href = 'dashboard.html';
+                return;
+            }
+            actualUserRole = profile.role;
+            actualUserName = profile.name || profile.email || 'Staff Member';
+            activeRole = profile.role === 'warehouse_worker' ? 'worker' : profile.role === 'warehouse_manager' ? 'manager' : 'executive';
+
+            const roleSel = document.getElementById('role-select');
+            if (roleSel) {
+                roleSel.value = activeRole;
+                lockRoleDropdown(actualUserRole !== 'executive');
+            }
+
+            syncRoleRBACView();
+        }
+
+        function syncRoleRBACView() {
+            const roleVal = document.getElementById('role-select')?.value || activeRole;
+            const isManagerOrExecutive = (roleVal === 'manager' || roleVal === 'executive');
+            const isExecutive = (roleVal === 'executive');
+
+            // 1. Customer Facility Relocation Portal container (Strictly Manager & Executive Only)
+            const relocationPortal = document.getElementById('customer-relocation-portal');
+            if (relocationPortal) {
+                if (isManagerOrExecutive) {
+                    relocationPortal.classList.remove('hidden');
+                } else {
+                    relocationPortal.classList.add('hidden');
+                }
+            }
+
+            // 2. Navigation Tabs & Cards
+            const navFacilityConfig = document.getElementById('nav-facility-config');
+            const actionCardFacConfig = document.getElementById('action-card-fac-config');
+            if (navFacilityConfig) {
+                if (isExecutive) {
+                    navFacilityConfig.classList.remove('hidden');
+                } else {
+                    navFacilityConfig.classList.add('hidden');
+                }
+            }
+            if (actionCardFacConfig) {
+                if (isExecutive) {
+                    actionCardFacConfig.classList.remove('hidden');
+                } else {
+                    actionCardFacConfig.classList.add('hidden');
+                }
+            }
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function switchRole() {
+            const selectedVal = document.getElementById('role-select')?.value;
+            if (actualUserRole) {
+                if (actualUserRole === 'warehouse_worker' && selectedVal !== 'worker') {
+                    document.getElementById('role-select').value = 'worker';
+                    return;
+                }
+                if (actualUserRole === 'warehouse_manager' && selectedVal === 'executive') {
+                    document.getElementById('role-select').value = 'manager';
+                    return;
+                }
+            }
+            activeRole = selectedVal;
+            syncRoleRBACView();
+        }
+
+        function lockRoleDropdown(lock) {
+            const select = document.getElementById('role-select');
+            if (!select) return;
+            if (lock) {
+                if (actualUserRole === 'warehouse_worker') {
+                    Array.from(select.options).forEach(opt => {
+                        if (opt.value !== 'worker') opt.disabled = true;
+                    });
+                } else if (actualUserRole === 'warehouse_manager') {
+                    Array.from(select.options).forEach(opt => {
+                        if (opt.value === 'executive') opt.disabled = true;
+                    });
+                }
+            } else {
+                Array.from(select.options).forEach(opt => { opt.disabled = false; });
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
             try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session?.user) {
-                    const profile = await getCachedUserProfile(session.user.id);
-                    if (profile && profile.role) {
-                        const navFacilityConfig = document.getElementById('nav-facility-config');
-                        const navBiAnalytics = document.getElementById('nav-bi-analytics');
-                        const actionCardFacConfig = document.getElementById('action-card-fac-config');
-                        if (profile.role !== 'executive') {
-                            if (navFacilityConfig) navFacilityConfig.classList.add('hidden');
-                            if (actionCardFacConfig) actionCardFacConfig.classList.add('hidden');
+                if (typeof supabase !== 'undefined') {
+                    supabase.auth.onAuthStateChange(async (event, session) => {
+                        if (session && session.user) {
+                            const profile = await getCachedUserProfile(session.user.id);
+                            if (profile && profile.role) {
+                                applyActiveEmployeeContext(profile);
+                            }
+                        } else {
+                            let badgeUser = null;
+                            try {
+                                badgeUser = JSON.parse(localStorage.getItem('cv_active_badge_user'));
+                            } catch (e) {}
+
+                            if (badgeUser && badgeUser.role && badgeUser.role !== 'customer') {
+                                applyActiveEmployeeContext(badgeUser);
+                            } else {
+                                window.location.href = "login.html";
+                            }
                         }
-                    }
+                    });
                 }
             } catch (e) {
                 console.warn("Failed to evaluate role navbar visibility:", e);
             }
             await loadLogisticsFacilities();
             await loadCustomerRelocationRoster();
+            syncRoleRBACView();
         });
 
         let allCustomersRoster = [];
@@ -480,6 +593,12 @@
         }
 
         async function executeCustomerRelocation() {
+            const currentRole = document.getElementById('role-select')?.value || activeRole;
+            if (currentRole === 'worker' || actualUserRole === 'warehouse_worker') {
+                alert("Access Denied: Customer Facility Relocation is strictly restricted to Warehouse Managers and Executives.");
+                return;
+            }
+
             const userId = document.getElementById('relocate-selected-user-id')?.value;
             const targetSel = document.getElementById('relocate-target-facility-select');
             const newZip = document.getElementById('relocate-target-zip-input')?.value.trim();
