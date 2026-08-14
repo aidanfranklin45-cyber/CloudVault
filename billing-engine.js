@@ -286,9 +286,9 @@
         try {
           let custZip = zipCode;
           if (!custZip && uid) {
-            const { data: u } = await sb.from('users').select('zip_code, address, assigned_facility_id').eq('id', uid).maybeSingle();
+            const { data: u } = await sb.from('users').select('active_zone, assigned_facility_id').eq('id', uid).maybeSingle();
             if (u) {
-              custZip = u.zip_code || (u.address ? String(u.address).match(/\b\d{5}\b/)?.[0] : null);
+              custZip = u.active_zone || null;
               if (!facilityId && u.assigned_facility_id) facilityId = u.assigned_facility_id;
             }
           }
