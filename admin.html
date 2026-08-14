@@ -2626,7 +2626,7 @@
                                 </div>
                             </div>
                             <div class="flex items-center space-x-2">
-                                <button onclick="openEmployeeBadgeModal('${emp.id}', '${emp.name.replace(/'/g, "\\'")}', '${emp.role}', '${emp.assigned_facility_id || ''}', ${hasBadge ? `'${empBadge.id}'` : 'null'})" class="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold px-2.5 py-1 rounded-lg transition flex items-center gap-1" title="Generate or print physical 2D barcode ID badge">
+                                <button onclick="openEmployeeBadgeModal('${emp.id}', '${emp.name.replace(/'/g, "\\'")}', '${emp.role}', '${emp.assigned_facility_id || ''}', ${hasBadge ? `'${empBadge.id}'` : 'null'}, '${emp.created_at || ''}')" class="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold px-2.5 py-1 rounded-lg transition flex items-center gap-1" title="Generate or print physical 2D barcode ID badge">
                                     <i data-lucide="qr-code" class="w-3 h-3"></i> ${hasBadge ? 'Manage Badge' : 'Issue Badge'}
                                 </button>
                                 <button onclick="openStaffTransferModal('${emp.id}', '${emp.name.replace(/'/g, "\\'")}', '${emp.assigned_facility_id || ''}', '${emp.role}')" class="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold px-2.5 py-1 rounded-lg transition flex items-center gap-1" title="Transfer personnel to any active market/facility">
@@ -8557,19 +8557,25 @@
         // =========================================================================
         let activeBadgeTarget = null;
 
-        async function openEmployeeBadgeModal(userId, userName, userRole, facilityId, badgeId) {
+        async function openEmployeeBadgeModal(userId, userName, userRole, facilityId, badgeId, createdAt) {
+            const joinedDate = createdAt ? new Date(createdAt) : new Date();
+            const joinedDateStr = joinedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
             activeBadgeTarget = {
                 userId,
                 userName,
                 userRole,
                 facilityId: facilityId || 'unassigned',
                 badgeId: badgeId || null,
+                createdAt: createdAt || new Date().toISOString(),
+                joinedDateStr: joinedDateStr,
                 currentToken: null
             };
 
             document.getElementById('badge-staff-name').textContent = userName;
             document.getElementById('badge-staff-role').textContent = userRole.replace('_', ' ');
             document.getElementById('badge-staff-facility').textContent = (facilityId || 'unassigned').replace('facility_', '').toUpperCase();
+            document.getElementById('badge-staff-joined').textContent = joinedDateStr;
 
             const statusEl = document.getElementById('badge-modal-status');
             const tokenBox = document.getElementById('badge-token-box');
@@ -8594,7 +8600,7 @@
                             <i data-lucide="shield" class="w-6 h-6"></i>
                         </div>
                         <p class="text-xs text-gray-300 font-semibold">Active Credential Enrolled</p>
-                        <p class="text-[10px] text-gray-500 font-mono">To print or regenerate, click Re-Issue or Print Badge below.</p>
+                        <p class="text-[10px] text-gray-400 font-mono">To print or regenerate, click Re-Issue or Print Badge below.</p>
                     </div>
                 `;
             } else {
@@ -8604,8 +8610,8 @@
                 issueBtn.textContent = 'Generate & Issue Badge';
 
                 qrPreview.innerHTML = `
-                    <div class="text-center p-6 space-y-2 text-gray-500">
-                        <i data-lucide="qr-code" class="w-10 h-10 mx-auto text-gray-600"></i>
+                    <div class="text-center p-6 space-y-2 text-gray-400">
+                        <i data-lucide="qr-code" class="w-10 h-10 mx-auto text-gray-500"></i>
                         <p class="text-xs font-mono">Click "Generate & Issue Badge" to enroll physical 2D barcode credentials.</p>
                     </div>
                 `;
@@ -8650,8 +8656,9 @@
                 qrContainer.innerHTML = `
                     <div class="w-full bg-slate-900 border-2 border-cyan-400/60 rounded-2xl p-4 shadow-2xl space-y-3">
                         <div class="flex items-center justify-between border-b border-cyan-500/30 pb-2">
-                            <span class="text-xs font-black text-cyan-300 tracking-wider uppercase flex items-center gap-1.5">
-                                ⚡ CLOUDVAULT ID
+                            <span class="text-xs font-black text-cyan-300 tracking-wider uppercase flex items-center gap-2">
+                                <img src="logo.png" alt="CloudVault Logo" class="w-5 h-5 object-contain rounded">
+                                <span>CLOUDVAULT ID</span>
                             </span>
                             <span class="text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400 px-2 py-0.5 rounded">
                                 AUTHORIZED 2D PASS
@@ -8659,9 +8666,12 @@
                         </div>
                         <div class="flex items-center justify-between gap-4">
                             <div class="space-y-1">
-                                <p class="text-base font-extrabold text-white uppercase">${activeBadgeTarget.userName}</p>
+                                <p class="text-lg font-black text-white uppercase tracking-tight">${activeBadgeTarget.userName}</p>
                                 <p class="text-xs font-bold text-cyan-200 uppercase">${activeBadgeTarget.userRole.replace('_', ' ')}</p>
-                                <p class="text-[10px] font-mono text-gray-300">FACILITY: <span class="text-white font-bold">${(activeBadgeTarget.facilityId || 'SEA-NORTH').replace('facility_', '').toUpperCase()}</span></p>
+                                <div class="text-[10px] font-mono text-gray-300 space-y-0.5 pt-1">
+                                    <p>FACILITY: <span class="text-white font-bold">${(activeBadgeTarget.facilityId || 'SEA-NORTH').replace('facility_', '').toUpperCase()}</span></p>
+                                    <p>JOINED: <span class="text-cyan-300 font-bold">${activeBadgeTarget.joinedDateStr}</span></p>
+                                </div>
                             </div>
                             <div class="bg-white p-2 rounded-xl border-2 border-cyan-400 shadow-md shrink-0 flex items-center justify-center">
                                 <div id="modal-live-qr"></div>
@@ -8764,6 +8774,7 @@
             const token = emp.currentToken;
             const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
             const facilityCode = (emp.facilityId || 'SEA-NORTH').replace('facility_', '').toUpperCase();
+            const joinedStr = emp.joinedDateStr || 'Aug 2026';
 
             let iframe = document.getElementById('print-label-iframe');
             if (!iframe) {
@@ -8828,6 +8839,15 @@
                             letter-spacing: 1.5px;
                             color: #00f2ff;
                             text-transform: uppercase;
+                            display: flex;
+                            align-items: center;
+                            gap: 5px;
+                        }
+                        .brand img {
+                            width: 14px;
+                            height: 14px;
+                            object-fit: contain;
+                            border-radius: 3px;
                         }
                         .clearance-pill {
                             font-size: 7.5px;
@@ -8850,11 +8870,12 @@
                             flex: 1;
                         }
                         .emp-name {
-                            font-size: 13px;
+                            font-size: 15px;
                             font-weight: 900;
                             color: #ffffff;
                             margin: 0;
                             line-height: 1.1;
+                            letter-spacing: -0.2px;
                             text-transform: uppercase;
                         }
                         .emp-role {
@@ -8870,7 +8891,7 @@
                             font-family: monospace;
                             color: #e2e8f0;
                             margin-top: 3px;
-                            line-height: 1.3;
+                            line-height: 1.35;
                         }
                         .emp-meta b {
                             color: #ffffff;
@@ -8914,7 +8935,10 @@
                 <body>
                     <div class="badge-card">
                         <div class="badge-header">
-                            <div class="brand">⚡ CLOUDVAULT</div>
+                            <div class="brand">
+                                <img src="logo.png" alt="CloudVault">
+                                <span>CLOUDVAULT</span>
+                            </div>
                             <div class="clearance-pill">AUTHORIZED 2D PASS</div>
                         </div>
                         <div class="badge-body">
@@ -8923,6 +8947,7 @@
                                 <div class="emp-role">${emp.userRole.replace('_', ' ')}</div>
                                 <div class="emp-meta">
                                     FACILITY: <b>${facilityCode}</b><br>
+                                    JOINED: <b>${joinedStr}</b><br>
                                     ISSUED: <b>${todayStr}</b><br>
                                     UID: <b>${emp.userId.substring(0, 8)}...</b>
                                 </div>
@@ -8987,9 +9012,7 @@
             class="glass-panel max-w-lg w-full p-6 rounded-3xl border-2 border-indigo-500/50 shadow-[0_0_50px_rgba(99,102,241,0.3)] space-y-5 relative overflow-hidden bg-gray-950">
             <div class="flex items-center justify-between border-b border-gray-750 pb-4">
                 <div class="flex items-center space-x-3">
-                    <div class="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400 flex items-center justify-center text-indigo-300">
-                        <i data-lucide="qr-code" class="w-5 h-5"></i>
-                    </div>
+                    <img src="logo.png" alt="CloudVault Logo" class="w-9 h-9 object-contain rounded-xl border border-indigo-400/40 shadow-sm shadow-indigo-500/20">
                     <div>
                         <h3 class="font-extrabold text-white text-base">Employee 2D Barcode Badge ID</h3>
                         <p class="text-xs text-gray-300 font-mono">Silent hardware scan-to-login credential management</p>
@@ -9004,10 +9027,14 @@
             <div class="bg-gray-900 p-4 rounded-2xl border border-gray-700 flex items-center justify-between">
                 <div class="space-y-1">
                     <div class="flex items-center gap-2">
-                        <h4 class="text-base font-extrabold text-white" id="badge-staff-name">—</h4>
+                        <h4 class="text-lg font-black text-white uppercase tracking-tight" id="badge-staff-name">—</h4>
                         <span class="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-400" id="badge-staff-role">—</span>
                     </div>
-                    <p class="text-xs text-gray-300 font-mono">Assigned Facility: <span id="badge-staff-facility" class="text-cyan-300 font-bold">—</span></p>
+                    <div class="flex items-center gap-3 text-xs text-gray-300 font-mono">
+                        <p>Facility: <span id="badge-staff-facility" class="text-cyan-300 font-bold">—</span></p>
+                        <span>•</span>
+                        <p>Joined: <span id="badge-staff-joined" class="text-emerald-300 font-bold">—</span></p>
+                    </div>
                 </div>
                 <div id="badge-modal-status">
                     <!-- Status pill injected here -->
