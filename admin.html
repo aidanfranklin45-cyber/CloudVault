@@ -4138,14 +4138,203 @@
 
         let currentMasterTote = null;
         window.activeTargetLocationCode = null;
+        window._facLocationsCache = window._facLocationsCache || {};
 
-        function setTargetLocationLock(locCode) {
-            window.activeTargetLocationCode = locCode.toUpperCase().trim();
+        async function getFacilityLocationsList(facilityId) {
+            const targetFacId = facilityId || getSafeSavedFacilityId();
+            if (window._facLocationsCache && window._facLocationsCache[targetFacId] && (Date.now() - window._facLocationsCache[targetFacId].timestamp < 30000)) {
+                return window._facLocationsCache[targetFacId].locations;
+            }
+            try {
+                if (typeof supabase !== 'undefined') {
+                    const { data, error } = await supabase
+                        .from('warehouse_locations')
+                        .select('identifier, zone_type, is_occupied')
+                        .eq('facility_id', targetFacId);
+                    if (!error && data) {
+                        window._facLocationsCache[targetFacId] = { locations: data, timestamp: Date.now() };
+                        return data;
+                    }
+                }
+            } catch (e) {
+                console.warn('[FacilityLocationValidator] Locations fetch notice:', e);
+            }
+            return (window.facMapState && window.facMapState.locations) || [];
+        }
+
+        async function validateFacilityLocation(locCode, facilityId = null) {
+            if (!locCode) return { isValid: false, reason: 'Location code cannot be empty.' };
+            const cleanCode = locCode.toUpperCase().trim();
+            const targetFacId = facilityId || getSafeSavedFacilityId();
+
+            // 1. Standard operational dock & logistics staging hubs are always globally valid
+            const standardDocks = ['INTAKE-PROCESSING', 'INTAKE', 'LOGISTICS-STAGE', 'LOGISTICS', 'DROP-OFF-BUFFER', 'DROP-OFF'];
+            if (standardDocks.includes(cleanCode)) {
+                return { isValid: true, normalizedCode: cleanCode, zoneType: 'DOCK' };
+            }
+
+            // 2. Fetch existing locations from warehouse_locations table for this facility
+            const dbLocations = await getFacilityLocationsList(targetFacId);
+
+            if (dbLocations && dbLocations.length > 0) {
+                // Exact match
+                const match = dbLocations.find(l => {
+                    const id = (l.identifier || '').toUpperCase().trim();
+                    if (id === cleanCode) return true;
+                    // Normalized match (e.g. A1-B2-S1 with A1-B02-S1 or V-A01-S01)
+                    const normId = id.replace(/^(?:V-)?/, '').replace(/-B0*(\d+)/, '-B$1').replace(/-S0*(\d+)/, '-S$1');
+                    const normInput = cleanCode.replace(/^(?:V-)?/, '').replace(/-B0*(\d+)/, '-B$1').replace(/-S0*(\d+)/, '-S$1');
+                    return normId === normInput;
+                });
+
+                if (match) {
+                    return { isValid: true, normalizedCode: match.identifier || cleanCode, zoneType: match.zone_type || 'VAULT' };
+                }
+
+                // Parse coordinates for rich, specific worker feedback on why it failed
+                const vaultMatch = cleanCode.match(/^(?:V-)?(A\d+)-?(B\d+)?-?(S\d+)?/i);
+                if (vaultMatch) {
+                    const aisleReq = vaultMatch[1].toUpperCase();
+                    const bayReq = vaultMatch[2] ? vaultMatch[2].toUpperCase() : null;
+                    const shelfReq = vaultMatch[3] ? vaultMatch[3].toUpperCase() : null;
+                    const shelfNum = shelfReq ? parseInt(shelfReq.replace('S', ''), 10) : 0;
+
+                    const existingAisles = new Set();
+                    let maxBayNum = 0;
+                    let maxShelfNum = 0;
+
+                    dbLocations.forEach(l => {
+                        const id = (l.identifier || '').toUpperCase().trim();
+                        const m = id.match(/^(?:V-)?(A\d+)-?(B\d+)?-?(S\d+)?/i);
+                        if (m) {
+                            existingAisles.add(m[1].toUpperCase());
+                            if (m[2]) maxBayNum = Math.max(maxBayNum, parseInt(m[2].replace('B', ''), 10));
+                            if (m[3]) maxShelfNum = Math.max(maxShelfNum, parseInt(m[3].replace('S', ''), 10));
+                        }
+                    });
+
+                    if (shelfReq && shelfNum > maxShelfNum) {
+                        return {
+                            isValid: false,
+                            reason: `Shelf ${shelfReq} does not exist in this facility. Physical rack limit is S${maxShelfNum} (Facility has ${existingAisles.size} Aisles [${Array.from(existingAisles).sort().join(', ')}], max ${maxBayNum} Bays, and Shelves S1-S${maxShelfNum}).`
+                        };
+                    }
+                    if (!existingAisles.has(aisleReq)) {
+                        return {
+                            isValid: false,
+                            reason: `Aisle ${aisleReq} does not exist in this facility. Valid Aisles: ${Array.from(existingAisles).sort().join(', ')}.`
+                        };
+                    }
+                    if (bayReq && parseInt(bayReq.replace('B', ''), 10) > maxBayNum) {
+                        return {
+                            isValid: false,
+                            reason: `Bay ${bayReq} does not exist in this facility. Maximum bays per aisle is B${String(maxBayNum).padStart(2, '0')}.`
+                        };
+                    }
+                }
+
+                const roomMatch = cleanCode.match(/^(ROOM-\d+)(?:-BAY-(\d+))?/i);
+                if (roomMatch) {
+                    const reqRoom = roomMatch[1].toUpperCase();
+                    const existingRooms = new Set(dbLocations.filter(l => (l.zone_type || '').toUpperCase() === 'STAGING').map(l => (l.identifier || '').split('-BAY-')[0]));
+                    if (existingRooms.size > 0 && !existingRooms.has(reqRoom)) {
+                        return {
+                            isValid: false,
+                            reason: `Staging ${reqRoom} does not exist in this facility. Valid rooms: ${Array.from(existingRooms).join(', ')}.`
+                        };
+                    }
+                }
+
+                return {
+                    isValid: false,
+                    reason: `Location '${cleanCode}' does not exist in the active facility database (${targetFacId}).`
+                };
+            }
+
+            // 3. Fallback: Dynamic physical constraints if database rows have not yet been built
+            const fac = (window.facMapState && window.facMapState.facilityData) || {};
+            const maxAisles = 5;
+            const maxBays = 8;
+            const maxShelves = 4;
+            const stagingRooms = Number(fac.staging_rooms || fac.num_staging_rooms || 3);
+
+            const vaultMatch = cleanCode.match(/^(?:V-)?A(\d+)-?B(\d+)?-?S(\d+)?/i);
+            if (vaultMatch) {
+                const a = parseInt(vaultMatch[1], 10);
+                const b = vaultMatch[2] ? parseInt(vaultMatch[2], 10) : 1;
+                const s = vaultMatch[3] ? parseInt(vaultMatch[3], 10) : 1;
+
+                if (s > maxShelves) {
+                    return {
+                        isValid: false,
+                        reason: `Shelf S${s} does not exist in this warehouse. Physical vertical rack limit is S${maxShelves} (Shelves S1-S${maxShelves}).`
+                    };
+                }
+                if (a > maxAisles) {
+                    return {
+                        isValid: false,
+                        reason: `Aisle A${a} exceeds facility capacity (Configured for A1-A${maxAisles}).`
+                    };
+                }
+                if (b > maxBays) {
+                    return {
+                        isValid: false,
+                        reason: `Bay B${String(b).padStart(2, '0')} exceeds aisle capacity (Configured for B01-B${String(maxBays).padStart(2, '0')}).`
+                    };
+                }
+                return { isValid: true, normalizedCode: `A${a}-B${String(b).padStart(2, '0')}-S${s}`, zoneType: 'VAULT' };
+            }
+
+            const stagingMatch = cleanCode.match(/^ROOM-(\d+)-BAY-(\d+)/i);
+            if (stagingMatch) {
+                const r = parseInt(stagingMatch[1], 10);
+                const b = parseInt(stagingMatch[2], 10);
+                if (r > stagingRooms) {
+                    return {
+                        isValid: false,
+                        reason: `Staging Room ROOM-${r} exceeds facility staging configuration (Max ${stagingRooms} Rooms).`
+                    };
+                }
+                if (b > 20) {
+                    return {
+                        isValid: false,
+                        reason: `Locker bay ${b} exceeds room capacity (Max 20 bays per room).`
+                    };
+                }
+                return { isValid: true, normalizedCode: `ROOM-${r}-BAY-${String(b).padStart(2, '0')}`, zoneType: 'STAGING' };
+            }
+
+            return {
+                isValid: false,
+                reason: `Unrecognized location code format: '${cleanCode}'.`
+            };
+        }
+
+        async function setTargetLocationLock(locCode, silent = false) {
+            if (!locCode) return false;
+            const valRes = await validateFacilityLocation(locCode);
+            if (!valRes.isValid) {
+                if (!silent) {
+                    triggerScanFeedbackOverlay(false, `Location Rejected: ${valRes.reason}`, locCode);
+                    const terminalOutput = document.getElementById('terminal-output');
+                    if (terminalOutput) {
+                        terminalOutput.innerHTML = `
+                            <span class="text-rose-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400"></i> Invalid Target Location</span>
+                            <span class="text-[10px] font-mono text-rose-300 mt-1 font-semibold">${escapeHtml(valRes.reason)}</span>
+                        `;
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
+                    }
+                }
+                return false;
+            }
+
+            window.activeTargetLocationCode = valRes.normalizedCode || locCode.toUpperCase().trim();
             const banner = document.getElementById('target-location-banner');
             const display = document.getElementById('target-location-code-display');
             if (display) display.textContent = window.activeTargetLocationCode;
             if (banner) banner.classList.remove('hidden');
             if (typeof lucide !== 'undefined') lucide.createIcons();
+            return true;
         }
 
         function clearTargetLocationLock() {
@@ -4971,9 +5160,10 @@
             return s;
         }
 
-        function selectFacilityMapLocation(locCode) {
+        async function selectFacilityMapLocation(locCode) {
             if (!locCode) return;
-            setTargetLocationLock(locCode);
+            const success = await setTargetLocationLock(locCode);
+            if (!success) return;
             triggerScanFeedbackOverlay(true, `Target Location Set: ${window.activeTargetLocationCode}`, locCode);
 
             const terminalOutput = document.getElementById('terminal-output');
@@ -4987,14 +5177,14 @@
             closeFacilityMapModal();
         }
 
-        function lockManualCodeFromMap() {
+        async function lockManualCodeFromMap() {
             const input = document.getElementById('facmap-manual-input');
             const val = input ? input.value.trim() : '';
             if (!val) {
                 alert("Please enter a valid target location code (e.g. A1-B04-S2 or ROOM-1-BAY-01).");
                 return;
             }
-            selectFacilityMapLocation(val);
+            await selectFacilityMapLocation(val);
         }
 
         function sanitizeBarcodeAutofill(input) {
@@ -5046,13 +5236,15 @@
 
             // Check if scanned input is a Location Barcode (Shelf/Bay/Locker)
             if (isLocationBarcodeFormat(barcode)) {
-                setTargetLocationLock(barcode);
-                triggerScanFeedbackOverlay(true, `Target Location Locked: ${window.activeTargetLocationCode}`, barcode);
-                if (terminalOutput) {
-                    terminalOutput.innerHTML = `
-                        <span class="text-indigo-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="map-pin" class="w-4 h-4 text-indigo-400"></i> Location Locked!</span>
-                        <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">Target Bay: ${window.activeTargetLocationCode} &bull; Ready for Tote Scans</span>
-                    `;
+                const lockSuccess = await setTargetLocationLock(barcode);
+                if (lockSuccess) {
+                    triggerScanFeedbackOverlay(true, `Target Location Locked: ${window.activeTargetLocationCode}`, barcode);
+                    if (terminalOutput) {
+                        terminalOutput.innerHTML = `
+                            <span class="text-indigo-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="map-pin" class="w-4 h-4 text-indigo-400"></i> Location Locked!</span>
+                            <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">Target Bay: ${window.activeTargetLocationCode} &bull; Ready for Tote Scans</span>
+                        `;
+                    }
                 }
                 if (barcodeInput) {
                     barcodeInput.value = "";
@@ -5081,6 +5273,24 @@
             try {
                 let data, error;
                 const targetLoc = window.activeTargetLocationCode || null;
+
+                // Validate target location before performing operations requiring a valid bay/shelf
+                if (targetLoc) {
+                    const valTarget = await validateFacilityLocation(targetLoc);
+                    if (!valTarget.isValid) {
+                        clearTargetLocationLock();
+                        triggerScanFeedbackOverlay(false, `Target Location Error: ${valTarget.reason}`, targetLoc);
+                        if (terminalOutput) {
+                            terminalOutput.innerHTML = `
+                                <span class="text-rose-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400"></i> Invalid Target Location</span>
+                                <span class="text-[10px] text-rose-300 mt-1 font-mono">${escapeHtml(valTarget.reason)}</span>
+                            `;
+                            if (typeof lucide !== 'undefined') lucide.createIcons();
+                        }
+                        if (barcodeInput) barcodeInput.focus();
+                        return;
+                    }
+                }
 
                 // Inspect current tote status in local state or query to pick dedicated handler
                 const { data: checkTote } = await supabase.from('inventory').select('status').eq('tote_code', barcode).maybeSingle();
