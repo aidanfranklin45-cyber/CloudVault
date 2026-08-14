@@ -2362,9 +2362,14 @@
             try {
                 // 1. Create a non-persisted secondary Supabase client so current admin session is not lost
                 const supabaseUrl = window.SUPABASE_URL || 'https://xbxvebnrjryvksvtufqj.supabase.co';
-                const supabaseKey = window.SUPABASE_ANON_KEY || supabase.supabaseKey;
+                const supabaseKey = window.SUPABASE_ANON_KEY || 'sb_publishable_-cW5neaZRGmicOHaHw1n3g_laY5yFZQ';
 
-                const tempAuthClient = supabase.createClient(supabaseUrl, supabaseKey, {
+                const clientFactory = window.createSupabaseClient || (window.supabaseSDK && window.supabaseSDK.createClient);
+                if (typeof clientFactory !== 'function') {
+                    throw new Error("Supabase client factory is not available.");
+                }
+
+                const tempAuthClient = clientFactory(supabaseUrl, supabaseKey, {
                     auth: { persistSession: false, autoRefreshToken: false }
                 });
 
@@ -2390,7 +2395,8 @@
                         email: email,
                         name: name,
                         role: role,
-                        assigned_facility_id: facility
+                        assigned_facility_id: facility,
+                        onboarding_status: 'active'
                     }, { onConflict: 'id' });
 
                     if (dbErr) {
@@ -2403,7 +2409,7 @@
                 if (typeof loadLiveData === 'function') loadLiveData();
             } catch (err) {
                 console.error("Supabase employee creation failed:", err);
-                alert("Failed to create employee: " + err.message);
+                alert("Failed to create employee: " + (err.message || err));
             } finally {
                 if (submitBtn) {
                     submitBtn.disabled = false;

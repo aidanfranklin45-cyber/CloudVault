@@ -31,6 +31,9 @@ const customStorageEngine = {
 
 // Initialize Supabase Client
 const { createClient } = window.supabase;
+window.createSupabaseClient = createClient;
+window.supabaseSDK = { createClient };
+
 window.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
         storage: customStorageEngine,
