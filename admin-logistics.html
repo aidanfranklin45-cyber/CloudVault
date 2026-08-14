@@ -759,44 +759,44 @@
                     (uData || []).forEach(u => { extraUsersMap[u.id] = u; });
                 }
 
-                const activeValetUserMap = {};
+                const stops = [];
+                const handledTotes = new Set();
 
                 relevantRequests.forEach(r => {
                     const uId = r.uid || (r.users ? r.users.id : null);
                     if (uId) {
-                        activeValetUserMap[uId] = {
+                        const rawItems = r.requested_items || r.requested_tote_codes || [];
+                        rawItems.forEach(it => handledTotes.add(it));
+                        stops.push({
                             uid: uId,
                             id: r.id,
                             name: r.users?.name || `Customer ${uId.substring(0, 6)}`,
                             zip: r.users?.zip || r.users?.active_zone || 'Local Zone',
                             slot: r.time_slot || '09:00 AM - 12:00 PM',
                             status: r.status || 'out-for-delivery',
-                            toteCount: (r.requested_items || r.requested_tote_codes || []).length || 1,
+                            toteCount: rawItems.length || 1,
                             driver: r.driver_name ? `${r.driver_name} (${r.vehicle_info || 'Van'})` : 'No Driver Assigned'
-                        };
+                        });
                     }
                 });
 
                 activeValetTotes.forEach(t => {
-                    const uId = t.uid;
-                    const u = extraUsersMap[uId];
-                    if (uId && !activeValetUserMap[uId]) {
-                        activeValetUserMap[uId] = {
+                    if (!handledTotes.has(t.tote_code) && !handledTotes.has(t.id)) {
+                        handledTotes.add(t.tote_code);
+                        const uId = t.uid;
+                        const u = extraUsersMap[uId];
+                        stops.push({
                             uid: uId,
-                            id: null,
-                            name: u?.name || `Customer ${uId.substring(0, 6)}`,
+                            id: `transit_${t.tote_code}`,
+                            name: u?.name || `Customer ${uId ? uId.substring(0, 6) : 'Valet'}`,
                             zip: u?.zip || u?.active_zone || 'Local Zone',
-                            slot: t.status === 'out-for-delivery' ? '12:00 PM - 03:00 PM (En Route)' : 'Awaiting Vehicle Load',
+                            slot: t.status === 'out-for-delivery' ? '09:00 AM - 12:00 PM (En Route)' : 'Awaiting Vehicle Load',
                             status: t.status,
                             toteCount: 1,
                             driver: 'Active Fleet Driver'
-                        };
-                    } else if (uId && activeValetUserMap[uId]) {
-                        activeValetUserMap[uId].toteCount = Math.max(activeValetUserMap[uId].toteCount, 1);
+                        });
                     }
                 });
-
-                const stops = Object.values(activeValetUserMap);
 
                 if (stopsCountEl) stopsCountEl.textContent = `${stops.length} Active Valet Stops`;
 

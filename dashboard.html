@@ -1680,19 +1680,19 @@
                 }
             }
 
-            // ── 2. Stored Tote Retrieval Flow Cards (One card per distinct order) ──────
+            // ── 2. Stored Tote Retrieval Flow Cards (One discrete card per request) ──
             const handledRetrievalToteIds = new Set();
 
             if (retrievalReqs.length > 0) {
                 retrievalReqs.forEach(primaryReq => {
-                    const fulfillmentType = primaryReq.fulfillment_type || 'staging';
+                    const fulfillmentType = primaryReq.fulfillment_type || primaryReq.request_type || 'staging';
                     const { room: roomNum, pin } = resolveRoomAndPin(primaryReq);
 
                     const rawItems = primaryReq.requested_items || primaryReq.requested_tote_codes || primaryReq.totes || [];
                     const groupRequestedIdentifiers = new Set(rawItems);
 
                     // Filter current inventory to ONLY include totes belonging to this specific request
-                    const groupTotes = (currentInventory || []).filter(item => 
+                    let groupTotes = (currentInventory || []).filter(item => 
                         groupRequestedIdentifiers.has(item.id) ||
                         groupRequestedIdentifiers.has(item.tote_code) ||
                         groupRequestedIdentifiers.has(item.barcode) ||
@@ -1705,48 +1705,92 @@
                         return;
                     }
 
-                    const groupTotesToDisplay = groupTotes.length > 0 
-                        ? groupTotes 
-                        : (valetItems.length > 0 ? valetItems : (stagingRoomItems.length > 0 ? stagingRoomItems : currentInventory));
-
-                    let rawDate = primaryReq.target_date || new Date().toISOString().split('T')[0];
-                    let rawSlot = primaryReq.time_slot || null;
-                    if (!rawSlot || isSlotPastOrActive(rawDate, rawSlot)) {
-                        const upcoming = getUpcomingAvailableSlot(rawDate);
-                        rawDate = upcoming.targetDate;
-                        rawSlot = upcoming.timeSlot;
+                    // Strict tote isolation: if no matched tote objects in current inventory, synthesize from requested IDs
+                    if (groupTotes.length === 0 && rawItems.length > 0) {
+                        groupTotes = rawItems.map(it => ({
+                            id: it,
+                            tote_code: typeof it === 'string' ? it : (it.tote_code || 'Tote'),
+                            label: typeof it === 'string' ? it : (it.label || 'Requested Tote'),
+                            status: primaryReq.status === 'out-for-delivery' ? 'out-for-delivery' : (primaryReq.status === 'staged' ? 'staged' : 'stored'),
+                            location_code: 'VAULT'
+                        }));
                     }
-                    const dateStr = new Date(rawDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                    const groupTotesToDisplay = groupTotes.length > 0 ? groupTotes : currentInventory;
+
+                    // Preserve immutable scheduled target date and time slot as source of truth
+                    const rawDate = primaryReq.target_date || new Date().toISOString().split('T')[0];
+                    const rawSlot = primaryReq.time_slot || '09:00 AM - 12:00 PM';
+                    const dateObj = new Date(rawDate.includes('T') ? rawDate : (rawDate + 'T00:00:00'));
+                    const dateStr = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
                     const timeStr = rawSlot;
 
+                    const isOutForDelivery = groupTotesToDisplay.some(i => i.status === 'out-for-delivery') || primaryReq.status === 'out-for-delivery' || primaryReq.status === 'arrived';
+                    const isPendingDispatch = groupTotesToDisplay.some(i => i.status === 'pending-dispatch') || primaryReq.status === 'pending-dispatch' || primaryReq.status === 'dispatched';
+                    const isStagedReady = groupTotesToDisplay.some(i => i.status === 'staged') || primaryReq.status === 'staged' || primaryReq.status === 'ready';
+
                     if (fulfillmentType === 'valet_delivery' || primaryReq.request_type === 'valet_delivery') {
-                        const isOutForDelivery = groupTotesToDisplay.some(i => i.status === 'out-for-delivery') || primaryReq.status === 'out-for-delivery' || primaryReq.status === 'arrived';
-                        cards.push(buildFlowCard({
-                            flowType: 'retrieval-valet',
-                            icon: '🚚',
-                            title: 'Tote Retrieval — Valet Door Delivery',
-                            subtitle: isOutForDelivery ? `Driver en route to you • ${timeStr}` : `Est. delivery: ${dateStr} • ${timeStr}`,
-                            badgeText: isOutForDelivery ? 'OUT FOR DELIVERY' : 'DISPATCHED',
-                            badgeColor: isOutForDelivery ? 'orange' : 'blue',
-                            steps: [
-                                { label: '1. Vault & Intake Pull', sub: '✓ Pulled from deep storage', done: true },
-                                { label: '2. On Truck', sub: isOutForDelivery ? 'Driver en route to you' : 'Loading on van', done: false, active: true },
-                                { label: '3. With Customer', sub: isOutForDelivery ? 'Arriving soon' : dateStr, done: false, active: false },
-                                { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
-                            ],
-                            totes: groupTotesToDisplay,
-                            pinBlock: buildValetBlock(timeStr, dateStr, primaryReq),
-                        }));
+                        if (isOutForDelivery) {
+                            cards.push(buildFlowCard({
+                                flowType: 'retrieval-valet',
+                                icon: '🚚',
+                                title: 'Tote Retrieval — Valet Door Delivery',
+                                subtitle: `Driver en route • Scheduled window: ${dateStr} • ${timeStr}`,
+                                badgeText: 'OUT FOR DELIVERY',
+                                badgeColor: 'orange',
+                                steps: [
+                                    { label: '1. Vault Pull', sub: '✓ Pulled from deep storage', done: true, active: false },
+                                    { label: '2. On Truck', sub: 'Driver en route to you', done: false, active: true },
+                                    { label: '3. With Customer', sub: 'Arriving soon', done: false, active: false },
+                                    { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
+                                ],
+                                totes: groupTotesToDisplay,
+                                pinBlock: buildValetBlock(timeStr, dateStr, primaryReq),
+                            }));
+                        } else if (isPendingDispatch) {
+                            cards.push(buildFlowCard({
+                                flowType: 'retrieval-valet',
+                                icon: '🚚',
+                                title: 'Tote Retrieval — Valet Door Delivery',
+                                subtitle: `Prepped for dispatch • Scheduled: ${dateStr} • ${timeStr}`,
+                                badgeText: 'DISPATCH PENDING',
+                                badgeColor: 'blue',
+                                steps: [
+                                    { label: '1. Vault Pull', sub: '✓ Pulled from deep storage', done: true, active: false },
+                                    { label: '2. On Truck', sub: 'Loading on delivery van', done: false, active: true },
+                                    { label: '3. With Customer', sub: dateStr, done: false, active: false },
+                                    { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
+                                ],
+                                totes: groupTotesToDisplay,
+                                pinBlock: buildValetBlock(timeStr, dateStr, primaryReq),
+                            }));
+                        } else {
+                            // Order in vault awaiting pull
+                            cards.push(buildFlowCard({
+                                flowType: 'retrieval-valet',
+                                icon: '📦',
+                                title: 'Tote Retrieval — Valet Prep & Vault Pull',
+                                subtitle: `Scheduled retrieval • Window: ${dateStr} • ${timeStr}`,
+                                badgeText: 'VAULT PULL IN PROGRESS',
+                                badgeColor: 'amber',
+                                steps: [
+                                    { label: '1. Vault Storage', sub: 'Pulling from storage bay...', done: false, active: true },
+                                    { label: '2. Staging & Loading', sub: 'Awaiting truck loading...', done: false, active: false },
+                                    { label: '3. On Truck (Valet)', sub: `Dispatch window: ${timeStr}`, done: false, active: false },
+                                    { label: '4. With Customer', sub: dateStr, done: false, active: false },
+                                ],
+                                totes: groupTotesToDisplay,
+                                pinBlock: buildValetBlock(timeStr, dateStr, primaryReq),
+                            }));
+                        }
                     } else {
                         // Staging Room Retrieval
-                        const isStagedReady = groupTotesToDisplay.some(i => i.status === 'staged') || primaryReq.status === 'staged' || primaryReq.status === 'ready';
                         cards.push(buildFlowCard({
                             flowType: 'retrieval-staging',
                             icon: '🚪',
                             title: isStagedReady ? `Tote Retrieval — Staging Room #${roomNum} Pickup` : `Tote Retrieval — Vault Pull in Progress`,
                             subtitle: isStagedReady
                                 ? `Totes are ready • Staging Room #${roomNum} • PIN: ${pin}`
-                                : `Vault pull in progress • ${dateStr} • ${timeStr}`,
+                                : `Vault pull in progress • Window: ${dateStr} • ${timeStr}`,
                             badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'VAULT PULL IN PROGRESS',
                             badgeColor: isStagedReady ? 'emerald' : 'amber',
                             steps: [

@@ -5482,7 +5482,7 @@
                                 target_date: r.target_date,
                                 time_slot: r.time_slot || '09:00 AM - 12:00 PM',
                                 status: r.status,
-                                requested_items: items.length > 0 ? items : (userActiveTotesMap[uId] || [])
+                                requested_items: items.length > 0 ? items : ['Retrieval Tote']
                             });
                         }
                     }
