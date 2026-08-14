@@ -30,7 +30,7 @@ DROP TABLE IF EXISTS public.metadata CASCADE;
 -- 1. Custom Types (Created conditionally)
 -- ============================================================
 DO $$ BEGIN
-    CREATE TYPE public.user_role AS ENUM ('customer', 'warehouse_worker', 'warehouse_manager', 'executive');
+    CREATE TYPE public.user_role AS ENUM ('customer', 'warehouse_worker', 'warehouse_manager', 'executive', 'valet_driver');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;

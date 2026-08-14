@@ -3967,7 +3967,7 @@
                                     </div>
 
                                     <!-- Full-Width 60px Ergonomic Industrial Action Button -->
-                                    <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('out-for-delivery')" class="w-full min-h-[60px] bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-orange-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                    <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('with-customer')" class="w-full min-h-[60px] bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-orange-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                         <i data-lucide="package-check" class="w-6 h-6"></i>
                                         <span>CONFIRM DELIVERED TO CUSTOMER (${firstCode}) →</span>
                                     </button>
@@ -5427,41 +5427,20 @@
                 const activeCity = [fac.city, fac.state].filter(Boolean).join(', ') || fac.name;
                 const hubName = fac.name;
 
-                const { data: requests } = await supabase.from('access_requests')
+                const { data: rawRequests } = await supabase.from('access_requests')
                     .select('*, users!uid(id, name, active_zone, assigned_facility_id)')
-                    .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%')
-                    .neq('status', 'completed')
-                    .neq('status', 'cancelled');
+                    .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%');
+
+                const requests = (rawRequests || []).filter(r => 
+                    r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
+                );
 
                 const { data: activeValetTotes } = await supabase.from('inventory')
-                    .select('uid, tote_code, status, facility_id')
-                    .eq('facility_id', queryFacilityId)
-                    .in('status', ['pending-dispatch', 'out-for-delivery']);
+                    .select('id, uid, tote_code, label, status, facility_id')
+                    .eq('facility_id', queryFacilityId);
 
-                const valetUids = Array.from(new Set((activeValetTotes || []).map(t => t.uid).filter(Boolean)));
-                let valetUsersMap = {};
-                if (valetUids.length > 0) {
-                    const { data: uData } = await supabase.from('users')
-                        .select('id, name, active_zone, assigned_facility_id')
-                        .in('id', valetUids);
-                    (uData || []).forEach(u => { valetUsersMap[u.id] = u; });
-                }
-
-                // Map active physical totes currently in transit/pending dispatch by user
-                const userActiveTotesMap = {};
-                (activeValetTotes || []).forEach(t => {
-                    const uId = t.uid;
-                    if (uId) {
-                        if (!userActiveTotesMap[uId]) userActiveTotesMap[uId] = [];
-                        if (!userActiveTotesMap[uId].includes(t.tote_code)) {
-                            userActiveTotesMap[uId].push(t.tote_code);
-                        }
-                    }
-                });
-
-                // Build discrete delivery stops per active scheduled order/request
+                // Build discrete delivery stops strictly per active scheduled valet order
                 const stops = [];
-                const handledTotes = new Set();
 
                 (requests || []).forEach(r => {
                     if (r.facility_id === queryFacilityId || r.users?.assigned_facility_id === queryFacilityId) {
@@ -5473,36 +5452,17 @@
                                 const matched = (activeValetTotes || []).find(t => t.id === it || t.tote_code === it);
                                 return matched ? matched.tote_code : it;
                             });
-                            items.forEach(c => handledTotes.add(c));
 
                             stops.push({
                                 id: r.id,
                                 uid: uId,
-                                users: r.users || valetUsersMap[uId] || { name: `Customer ${uId.substring(0, 6)}` },
+                                users: r.users || { name: `Customer ${uId.substring(0, 6)}` },
                                 target_date: r.target_date,
                                 time_slot: r.time_slot || '09:00 AM - 12:00 PM',
                                 status: r.status,
-                                requested_items: items.length > 0 ? items : ['Retrieval Tote']
+                                requested_items: items.length > 0 ? items : ['1 Tote']
                             });
                         }
-                    }
-                });
-
-                // Add unlinked active transit totes as separate stops
-                (activeValetTotes || []).forEach(t => {
-                    if (!handledTotes.has(t.tote_code)) {
-                        handledTotes.add(t.tote_code);
-                        const uId = t.uid;
-                        const u = valetUsersMap[uId];
-                        stops.push({
-                            id: `transit_${t.tote_code}`,
-                            uid: uId,
-                            users: u || { name: `Customer ${uId ? uId.substring(0, 6) : 'Valet'}` },
-                            target_date: new Date().toISOString().split('T')[0],
-                            time_slot: t.status === 'out-for-delivery' ? '09:00 AM - 12:00 PM (En Route)' : '09:00 AM - 12:00 PM',
-                            status: t.status,
-                            requested_items: [t.tote_code]
-                        });
                     }
                 });
 
