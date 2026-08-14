@@ -1530,11 +1530,10 @@
                     .from('access_requests')
                     .select('*')
                     .eq('uid', uid)
-                    .not('status', 'in', '("completed","cancelled","returned-to-vault")')
                     .order('target_date', { ascending: true });
 
                 if (!error && data) {
-                    currentRequests = data;
+                    currentRequests = data.filter(r => r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault');
                 } else {
                     currentRequests = [];
                 }
@@ -1595,7 +1594,7 @@
                 r.request_type === 'intake' || r.request_type === 'activation' || r.request_type === 'new_tote_delivery' || r.request_type === 'new_totes'
             );
             const retrievalReqs = (currentRequests || []).filter(r => 
-                r.request_type === 'retrieval' || r.request_type === 'customer_retrieval' || r.request_type === 'tote_retrieval' || (!r.request_type && r.fulfillment_type)
+                !activationReqs.includes(r)
             );
 
             const cards = [];
