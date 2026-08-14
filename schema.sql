@@ -185,11 +185,13 @@ CREATE TABLE public.subscriptions (
     current_period_end TIMESTAMPTZ,
     last_billed_at TIMESTAMPTZ,
     next_billing_date TIMESTAMPTZ,
+    facility_id TEXT DEFAULT NULL,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
     last_updated TIMESTAMPTZ DEFAULT now()
 );
 
 -- Migration fallbacks for subscriptions
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS facility_id TEXT DEFAULT NULL;
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS has_price_lock BOOLEAN DEFAULT false;
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS price_lock_rates JSONB DEFAULT NULL;
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS last_billed_at TIMESTAMPTZ;

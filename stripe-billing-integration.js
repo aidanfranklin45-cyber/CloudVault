@@ -216,14 +216,25 @@
 
       try {
         // 1. Calculate Monthly Recurring Revenue (MRR) for active subscriptions
-        let subQuery = sb.from('subscriptions').select('*').eq('status', 'active');
+        let activeSubs = [];
         if (facilityId && facilityId !== 'all') {
-          subQuery = subQuery.eq('facility_id', facilityId);
+          const { data: directSubs, error: directErr } = await sb.from('subscriptions').select('*').eq('status', 'active').eq('facility_id', facilityId);
+          if (!directErr && directSubs && directSubs.length > 0) {
+            activeSubs = directSubs;
+          } else {
+            const { data: facUsers } = await sb.from('users').select('id').eq('assigned_facility_id', facilityId);
+            if (facUsers && facUsers.length > 0) {
+              const uids = facUsers.map(u => u.id);
+              const { data: uSubs } = await sb.from('subscriptions').select('*').in('uid', uids).eq('status', 'active');
+              activeSubs = uSubs || [];
+            }
+          }
+        } else {
+          const { data: allSubs } = await sb.from('subscriptions').select('*').eq('status', 'active');
+          activeSubs = allSubs || [];
         }
 
-        const { data: activeSubs } = await subQuery;
         let totalMRR = 0;
-
         if (activeSubs && activeSubs.length > 0) {
           activeSubs.forEach(sub => {
             const toteCount = Number(sub.tote_count || sub.total_totes || 0);
@@ -233,21 +244,6 @@
             const monthly = Number(sub.monthly_total || (storage + valet));
             totalMRR += monthly > 0 ? monthly : storage;
           });
-        } else if (facilityId && facilityId !== 'all') {
-          // Fallback check: find users assigned to this facility
-          const { data: facUsers } = await sb.from('users').select('id').eq('assigned_facility_id', facilityId);
-          if (facUsers && facUsers.length > 0) {
-            const uids = facUsers.map(u => u.id);
-            const { data: uSubs } = await sb.from('subscriptions').select('*').in('uid', uids).eq('status', 'active');
-            (uSubs || []).forEach(sub => {
-              const toteCount = Number(sub.tote_count || sub.total_totes || 0);
-              const toteRate = Number(sub.tote_rate || 0);
-              const storage = Number(sub.recurring_storage || (toteCount * toteRate) || 0);
-              const valet = Number(sub.valet_fee || 0);
-              const monthly = Number(sub.monthly_total || (storage + valet));
-              totalMRR += monthly > 0 ? monthly : storage;
-            });
-          }
         }
 
         const mrrEl = document.getElementById('telemetry-mrr');
