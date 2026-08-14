@@ -8435,35 +8435,6 @@
                 activeBadgeTarget.currentToken = rawToken;
                 activeBadgeTarget.badgeId = data.badge_id;
 
-                // 3. Render 2D QR Code inside preview
-                const qrContainer = document.getElementById('badge-qr-container');
-                qrContainer.innerHTML = `<div id="modal-live-qr" class="bg-white p-3 rounded-2xl shadow-xl border-4 border-cyan-500/50 inline-block"></div>`;
-                
-        async function generateAndIssueBadge() {
-            if (!activeBadgeTarget) return;
-
-            const issueBtn = document.getElementById('badge-issue-btn');
-            const originalText = issueBtn.textContent;
-            issueBtn.disabled = true;
-            issueBtn.textContent = 'Securing Token...';
-
-            try {
-                // 1. Generate high-entropy token (CV-AUTH-XXXX)
-                const rawToken = generateBadgeToken();
-                const tokenHash = await hashBadgeToken(rawToken);
-
-                // 2. Call RPC to store hash and activate badge
-                const { data, error } = await supabase.rpc('issue_employee_badge', {
-                    p_user_id: activeBadgeTarget.userId,
-                    p_token_hash: tokenHash,
-                    p_badge_label: `${activeBadgeTarget.userName} Primary Badge`
-                });
-
-                if (error) throw error;
-
-                activeBadgeTarget.currentToken = rawToken;
-                activeBadgeTarget.badgeId = data.badge_id;
-
                 // 3. Render 2D QR Matrix & 1D Barcode inside high-contrast badge card mockup
                 const qrContainer = document.getElementById('badge-qr-container');
                 qrContainer.innerHTML = `
