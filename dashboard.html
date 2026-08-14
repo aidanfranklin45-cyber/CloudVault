@@ -3835,6 +3835,21 @@
             return false;
         }
 
+        // Helper: returns earliest valid selectable date (advances to tomorrow if all slots today are past 3 PM cutoff)
+        function getEarliestValidDate() {
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const currentHour = now.getHours();
+            
+            // If current time is 3 PM (15:00) or later, all operational windows today are locked or past cutoff.
+            // Automatically advance earliest selectable date to tomorrow!
+            if (currentHour >= 15) {
+                const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+                return `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+            }
+            return todayStr;
+        }
+
         // Upcoming Available Slot Helper: calculates the next available valid time slot for a target date
         function getUpcomingAvailableSlot(targetDateStr = null) {
             const now = new Date();
@@ -3870,6 +3885,24 @@
                 if (parts.length === 3) {
                     normalizedDate = `${parts[2]}-${String(parts[0]).padStart(2, '0')}-${String(parts[1]).padStart(2, '0')}`;
                 }
+            }
+
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            
+            // If checking today and past 3 PM cutoff (all slots are locked), advance date picker to tomorrow and block today out
+            if (normalizedDate <= todayStr && now.getHours() >= 15) {
+                const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+                const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+                const dateInput = selectId === 'retrieval-time-slot' 
+                    ? document.getElementById('retrieval-target-date') 
+                    : document.getElementById('fulfillment-target-date');
+                
+                if (dateInput) {
+                    dateInput.min = tomorrowStr;
+                    dateInput.value = tomorrowStr;
+                }
+                normalizedDate = tomorrowStr;
             }
 
             const targetFacId = facilityId || 'facility_seattle_north';
@@ -3964,10 +3997,10 @@
 
         async function handleReservationDateChange() {
             const dateInput = document.getElementById('retrieval-target-date');
-            const todayStr = new Date().toISOString().split('T')[0];
+            const earliestValid = getEarliestValidDate();
             if (dateInput) {
-                dateInput.min = todayStr;
-                if (dateInput.value < todayStr) dateInput.value = todayStr;
+                dateInput.min = earliestValid;
+                if (!dateInput.value || dateInput.value < earliestValid) dateInput.value = earliestValid;
                 const profile = currentUser ? await getCachedUserProfile(currentUser.id) : null;
                 const facId = profile?.assigned_facility_id || 'facility_seattle_north';
                 await checkSlotAvailability(facId, dateInput.value, 'retrieval-time-slot');
@@ -3981,10 +4014,10 @@
 
         async function handleFulfillmentDateChange() {
             const dateInput = document.getElementById('fulfillment-target-date');
-            const todayStr = new Date().toISOString().split('T')[0];
+            const earliestValid = getEarliestValidDate();
             if (dateInput) {
-                dateInput.min = todayStr;
-                if (dateInput.value < todayStr) dateInput.value = todayStr;
+                dateInput.min = earliestValid;
+                if (!dateInput.value || dateInput.value < earliestValid) dateInput.value = earliestValid;
                 const profile = currentUser ? await getCachedUserProfile(currentUser.id) : null;
                 const facId = profile?.assigned_facility_id || 'facility_seattle_north';
                 await checkSlotAvailability(facId, dateInput.value, 'fulfillment-time-slot');
@@ -4009,14 +4042,12 @@
             const valetFee = systemPricing.valet_base + (count * systemPricing.valet_tote_adder);
             document.getElementById('retrieval-valet-fee-label').textContent = `$${valetFee.toFixed(2)}`;
             
-            // Set default date to today (or tomorrow if past 6 PM)
-            const now = new Date();
-            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-            
+            // Set default date to earliest valid retrieval date (tomorrow if past 3 PM cutoff)
+            const earliestDate = getEarliestValidDate();
             const dateInput = document.getElementById('retrieval-target-date');
             if (dateInput) {
-                dateInput.min = todayStr;
-                dateInput.value = todayStr;
+                dateInput.min = earliestDate;
+                dateInput.value = earliestDate;
             }
 
             // Reset to default logistics & trigger availability + surge check immediately
