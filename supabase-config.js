@@ -215,13 +215,10 @@ async function authenticateEmployeeBadge(token) {
             throw new Error('Badge verification failed.');
         }
 
-        // Cache the verified employee profile
+        // Store the verified employee profile in sessionStorage for the active shift
         const user = data.user;
-        const cacheKey = `cv_user_${user.id}`;
-        const cacheTimeKey = `cv_user_ts_${user.id}`;
-        localStorage.setItem(cacheKey, JSON.stringify(user));
-        localStorage.setItem(cacheTimeKey, String(Date.now()));
-        localStorage.setItem('cv_active_badge_user', JSON.stringify(user));
+        sessionStorage.setItem('cv_active_badge_user', JSON.stringify(user));
+        localStorage.removeItem('cv_active_badge_user'); // Clean up any stale persistent badge credentials
         if (user.assigned_facility_id) {
             localStorage.setItem('cloudvault_selected_facility', user.assigned_facility_id);
         }

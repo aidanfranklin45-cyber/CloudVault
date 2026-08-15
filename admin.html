@@ -1555,7 +1555,7 @@
         function getActiveStaffUid() {
             if (actualUserProfile && actualUserProfile.id) return actualUserProfile.id;
             try {
-                const badgeUser = JSON.parse(localStorage.getItem('cv_active_badge_user') || localStorage.getItem('cv_cached_profile'));
+                const badgeUser = JSON.parse(sessionStorage.getItem('cv_active_badge_user'));
                 if (badgeUser && badgeUser.id) return badgeUser.id;
             } catch(e) {}
             return null;
@@ -1612,17 +1612,17 @@
             switchRoleView();
         }
 
-        // Initialize dashboard UI with Instant 0ms Paint
+        // Initialize dashboard UI
         window.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
             document.getElementById('role-select').value = activeRole;
             initializeCharts();
 
-            // 1. Instant 0ms Paint from cached master data and cached profile
+            // 1. Fast Paint from active shift badge profile if present in sessionStorage
             try {
                 let cachedUser = null;
                 try {
-                    cachedUser = JSON.parse(localStorage.getItem('cv_active_badge_user') || localStorage.getItem('cv_cached_profile'));
+                    cachedUser = JSON.parse(sessionStorage.getItem('cv_active_badge_user'));
                 } catch(e) {}
                 if (cachedUser && cachedUser.role) {
                     applyActiveEmployeeContext(cachedUser);
@@ -1644,15 +1644,14 @@
                             const user = session.user;
                             const profile = await getCachedUserProfile(user.id);
                             if (profile && profile.role) {
-                                try { localStorage.setItem('cv_cached_profile', JSON.stringify(profile)); } catch(e){}
                                 applyActiveEmployeeContext(profile);
                             }
                             loadLiveData();
                         } else {
-                            // Check if logged in via verified 2D badge token
+                            // Check if logged in via verified 2D badge token in active session
                             let badgeUser = null;
                             try {
-                                badgeUser = JSON.parse(localStorage.getItem('cv_active_badge_user'));
+                                badgeUser = JSON.parse(sessionStorage.getItem('cv_active_badge_user'));
                             } catch (e) {}
 
                             if (badgeUser && badgeUser.role && badgeUser.role !== 'customer') {
@@ -1661,6 +1660,7 @@
                             } else {
                                 actualUserRole = null;
                                 actualUserName = null;
+                                localStorage.removeItem('cv_active_badge_user');
                                 window.location.href = "login.html";
                             }
                         }
