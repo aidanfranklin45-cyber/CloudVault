@@ -1892,12 +1892,10 @@
                 }
             });
 
-            const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', facId).single();
+            const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
             if (error || !fac) {
-                const errorMsg = `Pricing Error: Facility record '${facId}' was not found in Supabase.`;
-                console.error(errorMsg, error);
-                alert(errorMsg);
-                throw new Error(errorMsg);
+                console.warn(`Pricing Warning: Facility record '${facId}' not found in Supabase. Skipping pricing load.`);
+                return;
             }
 
             if (document.getElementById('rate-tier-1')) document.getElementById('rate-tier-1').value = (Number(fac.tier1_rate) || 5.00).toFixed(2);
@@ -1952,12 +1950,10 @@
             const facId = selectedId || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
             if (!facId) return;
 
-            const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', facId).single();
+            const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
             if (error || !fac) {
-                const msg = `Facility Error: Facility record '${facId}' was not found in Supabase.`;
-                console.error(msg, error);
-                alert(msg);
-                throw new Error(msg);
+                console.warn(`Facility Warning: Facility record '${facId}' was not found in Supabase.`);
+                return;
             }
 
             loadFacilitySpecs(fac);
@@ -2509,12 +2505,10 @@
 
                 loadSchedulingCalendar(facId);
 
-                const { data: fac, error: facErr } = await supabase.from('facilities').select('*').eq('id', facId).single();
+                const { data: fac, error: facErr } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
                 if (facErr || !fac) {
-                    const msg = `Manager View Error: Facility record '${facId}' not found in Supabase.`;
-                    console.error(msg, facErr);
-                    alert(msg);
-                    throw new Error(msg);
+                    console.warn(`Manager View Warning: Facility record '${facId}' not found in Supabase.`);
+                    return;
                 }
 
                 const usable = fac.usable_warehouse_sqft || 20000;
@@ -2523,7 +2517,7 @@
 
                 // Read active capacity dynamically from real inventory
                 const { count: activeCount } = await supabase.from('inventory').select('*', { count: 'exact', head: true })
-                    .eq('facility_id', facilityId)
+                    .eq('facility_id', facId)
                     .eq('status', 'stored');
                 const active = activeCount || 0;
 
@@ -5694,9 +5688,10 @@
                 if (!facId) return;
                 const queryFacilityId = facId;
 
-                const { data: fac, error: facErr } = await supabase.from('facilities').select('*').eq('id', queryFacilityId).single();
+                const { data: fac, error: facErr } = await supabase.from('facilities').select('*').eq('id', queryFacilityId).maybeSingle();
                 if (facErr || !fac) {
-                    throw new Error(`Logistics Routing Error: Facility record '${queryFacilityId}' not found in Supabase.`);
+                    console.warn(`Logistics Routing Warning: Facility record '${queryFacilityId}' not found in Supabase.`);
+                    return;
                 }
 
                 const activeCity = [fac.city, fac.state].filter(Boolean).join(', ') || fac.name;
@@ -6369,12 +6364,10 @@
 
             const activePill = document.getElementById('active-facility-name-pill');
 
-            const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', selectedId).single();
+            const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', selectedId).maybeSingle();
             if (error || !fac) {
-                const errorMsg = `Executive View Error: Facility '${selectedId}' was not found in Supabase.`;
-                console.error(errorMsg, error);
-                alert(errorMsg);
-                throw new Error(errorMsg);
+                console.warn(`Executive View Warning: Facility '${selectedId}' was not found in Supabase.`);
+                return;
             }
 
             if (activePill) activePill.textContent = fac.name;
