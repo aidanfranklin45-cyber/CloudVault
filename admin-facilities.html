@@ -2073,21 +2073,29 @@
                             if (vaultLocs && vaultLocs.length > 0) {
                                 matrixEl.className = "space-y-4";
                                 const aisleMap = {};
-                                vaultLocs.forEach(loc => {
-                                    const code = (loc.identifier || '').toUpperCase();
-                                    let aisleKey = 'A1';
-                                    let bayKey = 'B01';
-                                    let shelfKey = 'S1';
-                                    const m = code.match(/^(?:V-)?(A\d+)-(B\d+)-(S\d+)$/i);
-                                    if (m) {
-                                        aisleKey = m[1].toUpperCase();
-                                        bayKey = m[2].toUpperCase();
-                                        shelfKey = m[3].toUpperCase();
-                                    } else if (code.includes('-')) {
-                                        const parts = code.split('-');
-                                        aisleKey = parts[0];
-                                        bayKey = parts[1] || 'B01';
+
+                                function extractLocationComponents(rawCode) {
+                                    if (!rawCode || typeof rawCode !== 'string') return null;
+                                    const code = rawCode.trim().toUpperCase();
+                                    const m = code.match(/^(?:V-)?A-?(\d+)(?:-?B-?(\d+))?(?:-?S-?(\d+))?/i);
+                                    if (m && m[1]) {
+                                        const aisleNum = parseInt(m[1], 10);
+                                        const bayNum = m[2] !== undefined ? Math.max(1, parseInt(m[2], 10)) : 1;
+                                        const shelfNum = m[3] !== undefined ? Math.max(1, parseInt(m[3], 10)) : 1;
+                                        return {
+                                            aisle: `A${aisleNum}`,
+                                            bay: `B${String(bayNum).padStart(2, '0')}`,
+                                            shelf: `S${shelfNum}`
+                                        };
                                     }
+                                    return null;
+                                }
+
+                                vaultLocs.forEach(loc => {
+                                    const parsed = extractLocationComponents(loc.identifier || loc.location_code);
+                                    const aisleKey = parsed ? parsed.aisle : 'A1';
+                                    const bayKey = parsed ? parsed.bay : 'B01';
+                                    const shelfKey = parsed ? parsed.shelf : 'S1';
 
                                     if (!aisleMap[aisleKey]) {
                                         aisleMap[aisleKey] = {
@@ -2109,24 +2117,13 @@
                                 });
 
                                 (storedTotes || []).forEach(t => {
-                                    const code = (t.location_code || '').toUpperCase();
-                                    const m = code.match(/^(?:V-)?(A\d+)-(B\d+)-(S\d+)$/i);
-                                    if (m) {
-                                        const a = m[1].toUpperCase();
-                                        const b = m[2].toUpperCase();
+                                    const loc = extractLocationComponents(t.location_code);
+                                    if (loc) {
+                                        const a = loc.aisle;
+                                        const b = loc.bay;
                                         if (aisleMap[a]) {
                                             aisleMap[a].occupiedTotes += 1;
                                             if (aisleMap[a].bays[b]) {
-                                                aisleMap[a].bays[b].occupiedTotes += 1;
-                                            }
-                                        }
-                                    } else if (code.includes('-')) {
-                                        const parts = code.split('-');
-                                        const a = parts[0];
-                                        const b = parts[1];
-                                        if (aisleMap[a]) {
-                                            aisleMap[a].occupiedTotes += 1;
-                                            if (b && aisleMap[a].bays[b]) {
                                                 aisleMap[a].bays[b].occupiedTotes += 1;
                                             }
                                         }
