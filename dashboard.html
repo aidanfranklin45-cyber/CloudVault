@@ -3809,27 +3809,39 @@
                         evening_peak_slot_fee: (fac.evening_peak_slot_fee !== null && fac.evening_peak_slot_fee !== undefined) ? Number(fac.evening_peak_slot_fee) : 4.99,
                         next_day_promo_free: Boolean(fac.next_day_promo_free),
                         max_scheduling_days_out: fac.max_scheduling_days_out || 30,
-                        min_lead_time_days: (fac.min_lead_time_days !== null && fac.min_lead_time_days !== undefined) ? fac.min_lead_time_days : 0
+                        min_lead_time_days: (fac.min_lead_time_days !== null && fac.min_lead_time_days !== undefined) ? fac.min_lead_time_days : 0,
+                        staging_config: fac.staging_config || {}
                     };
                     systemPricing.valet_base = activeFacilityPricing.valet_base;
                     systemPricing.valet_tote_adder = activeFacilityPricing.valet_tote_adder;
-                    // Populate time slot pickers from DB config
-                    populatePickupWindowSelects(fac.pickup_windows);
+                    // Populate time slot pickers from DB config with active facility surge rates
+                    populatePickupWindowSelects(fac.pickup_windows, fac.staging_config, activeFacilityPricing.evening_peak_slot_fee);
                 }
             } catch (e) {
                 console.warn('Facility pricing lookup notice:', e);
             }
         }
 
-        // Populate all time-slot <select> elements from facilities.pickup_windows
-        function populatePickupWindowSelects(windows) {
+        // Populate all time-slot <select> elements from facilities.pickup_windows & dynamic surge rates
+        function populatePickupWindowSelects(windows, stagingConfig = null, peakFee = 4.99) {
             const defaults = [
                 { value: '09:00 AM - 12:00 PM', label: 'Morning (9 AM - 12 PM)' },
                 { value: '12:00 PM - 03:00 PM', label: 'Afternoon (12 PM - 3 PM)' },
                 { value: '03:00 PM - 06:00 PM', label: 'Evening Peak (3 PM - 6 PM)' }
             ];
             const slots = (Array.isArray(windows) && windows.length > 0) ? windows : defaults;
-            const optionsHtml = slots.map(s => `<option value="${s.value}">${s.label}</option>`).join('');
+            const slotSurgeFees = (stagingConfig && stagingConfig.slot_surge_fees) || {};
+
+            const optionsHtml = slots.map(s => {
+                let extraBadge = '';
+                const fee = (slotSurgeFees[s.value] !== undefined) ? Number(slotSurgeFees[s.value]) : (s.value.includes('03:00 PM') ? peakFee : 0);
+                if (fee > 0) {
+                    extraBadge = ` (+$${fee.toFixed(2)} Peak Surcharge)`;
+                }
+                const label = s.label.includes('$') ? s.label : `${s.label}${extraBadge}`;
+                return `<option value="${s.value}">${label}</option>`;
+            }).join('');
+
             ['fulfillment-time-slot', 'retrieval-time-slot'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.innerHTML = optionsHtml;
@@ -3843,13 +3855,21 @@
             today.setHours(0,0,0,0);
             const target = new Date(targetDateStr + 'T00:00:00');
             const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
-            const isPeakSlot = slotStr && slotStr.includes('03:00 PM');
+            const isPeakSlot = slotStr && (slotStr.includes('03:00 PM') || slotStr.includes('06:00 PM'));
 
             const p = activeFacilityPricing || {};
+            const slotSurgeFees = (p.staging_config && p.staging_config.slot_surge_fees) || {};
+            let slotFee = 0.00;
+            if (slotStr && slotSurgeFees[slotStr] !== undefined) {
+                slotFee = Number(slotSurgeFees[slotStr]);
+            } else if (isPeakSlot) {
+                slotFee = (p.evening_peak_slot_fee !== undefined) ? Number(p.evening_peak_slot_fee) : 4.99;
+            }
+
             const nextDayFree = Boolean(p.next_day_promo_free) || (p.next_day_surge_fee === 0);
 
             if (diffDays <= 0) {
-                const sameDayFee = isPeakSlot ? (p.same_day_peak_surge_fee || 24.99) : (p.same_day_surge_fee || 19.99);
+                const sameDayFee = (slotFee > 0 || isPeakSlot) ? (p.same_day_peak_surge_fee || 24.99) : (p.same_day_surge_fee || 19.99);
                 return {
                     fee: sameDayFee,
                     tier: 'same_day_surge',
@@ -3865,7 +3885,7 @@
                         desc: 'Next-day retrieval complimentary courtesy of facility promotion.'
                     };
                 } else {
-                    const nextDayFee = isPeakSlot ? (p.next_day_peak_surge_fee || 14.99) : (p.next_day_surge_fee || 9.99);
+                    const nextDayFee = (slotFee > 0 || isPeakSlot) ? (p.next_day_peak_surge_fee || 14.99) : (p.next_day_surge_fee || 9.99);
                     return {
                         fee: nextDayFee,
                         tier: 'next_day_surge',
@@ -3873,12 +3893,12 @@
                         desc: 'Next-day expedited staging slot reserved.'
                     };
                 }
-            } else if (isPeakSlot) {
+            } else if (slotFee > 0) {
                 return {
-                    fee: p.evening_peak_slot_fee !== undefined ? p.evening_peak_slot_fee : 4.99,
+                    fee: slotFee,
                     tier: 'peak_time_surge',
-                    title: 'Evening Peak Slot Demand',
-                    desc: 'High traffic evening staging window requested.'
+                    title: 'Time-of-Day Peak Window Demand',
+                    desc: `High traffic demand staging window (${slotStr || 'Peak Window'}).`
                 };
             } else {
                 return {

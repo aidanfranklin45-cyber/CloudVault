@@ -596,6 +596,46 @@
                                             class="fspec-input w-full py-1 text-sm text-rose-400 font-bold" placeholder="24.99">
                                     </div>
                                 </div>
+
+                                <div class="bg-gray-950 p-3.5 rounded-xl border border-amber-500/20 space-y-2.5">
+                                    <div class="flex items-center justify-between">
+                                        <label class="text-[10px] font-extrabold uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
+                                            <i data-lucide="clock" class="w-3.5 h-3.5 text-amber-400"></i> Time-of-Day Slot Surcharges (Hourly Windows)
+                                        </label>
+                                        <span class="text-[9px] font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">Dynamic Peak Hours</span>
+                                    </div>
+                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                        <div class="bg-gray-900/80 p-2 rounded-lg border border-gray-800">
+                                            <span class="text-[9px] font-bold text-gray-400 block">Morning (9am-12pm)</span>
+                                            <div class="flex items-center mt-1">
+                                                <span class="text-xs text-gray-500 mr-1">$</span>
+                                                <input type="number" step="0.50" id="conf-slot-fee-morning" class="fspec-input w-full py-0.5 text-xs text-emerald-400 font-bold" placeholder="0.00" value="0.00">
+                                            </div>
+                                        </div>
+                                        <div class="bg-gray-900/80 p-2 rounded-lg border border-gray-800">
+                                            <span class="text-[9px] font-bold text-gray-400 block">Afternoon (12pm-3pm)</span>
+                                            <div class="flex items-center mt-1">
+                                                <span class="text-xs text-gray-500 mr-1">$</span>
+                                                <input type="number" step="0.50" id="conf-slot-fee-afternoon" class="fspec-input w-full py-0.5 text-xs text-emerald-400 font-bold" placeholder="0.00" value="0.00">
+                                            </div>
+                                        </div>
+                                        <div class="bg-gray-900/80 p-2 rounded-lg border border-gray-800">
+                                            <span class="text-[9px] font-bold text-amber-400 block">Evening Peak (3pm-6pm)</span>
+                                            <div class="flex items-center mt-1">
+                                                <span class="text-xs text-amber-500 mr-1">$</span>
+                                                <input type="number" step="0.50" id="conf-slot-fee-evening" class="fspec-input w-full py-0.5 text-xs text-amber-400 font-bold" placeholder="4.99" value="4.99">
+                                            </div>
+                                        </div>
+                                        <div class="bg-gray-900/80 p-2 rounded-lg border border-gray-800">
+                                            <span class="text-[9px] font-bold text-amber-400 block">Night Peak (6pm-9pm)</span>
+                                            <div class="flex items-center mt-1">
+                                                <span class="text-xs text-amber-500 mr-1">$</span>
+                                                <input type="number" step="0.50" id="conf-slot-fee-night" class="fspec-input w-full py-0.5 text-xs text-amber-400 font-bold" placeholder="4.99" value="4.99">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="hidden" id="conf-evening-peak-slot-fee" value="4.99">
+                                </div>
                             </div>
 
                             <div class="pt-3 border-t border-gray-850 space-y-3">
@@ -1485,6 +1525,14 @@
                     document.getElementById('conf-next-day-promo').checked = Boolean(fac.next_day_promo_free);
                     document.getElementById('conf-max-days-out').value = fac.max_scheduling_days_out || 30;
                     document.getElementById('conf-min-lead-days').value = (fac.min_lead_time_days !== null && fac.min_lead_time_days !== undefined) ? fac.min_lead_time_days : 0;
+
+                    const slotSurgeFees = fac.staging_config?.slot_surge_fees || {};
+                    const evePeak = (fac.evening_peak_slot_fee !== null && fac.evening_peak_slot_fee !== undefined) ? Number(fac.evening_peak_slot_fee) : 4.99;
+                    if (document.getElementById('conf-evening-peak-slot-fee')) document.getElementById('conf-evening-peak-slot-fee').value = evePeak;
+                    if (document.getElementById('conf-slot-fee-morning')) document.getElementById('conf-slot-fee-morning').value = (slotSurgeFees['09:00 AM - 12:00 PM'] !== undefined ? Number(slotSurgeFees['09:00 AM - 12:00 PM']) : 0.00).toFixed(2);
+                    if (document.getElementById('conf-slot-fee-afternoon')) document.getElementById('conf-slot-fee-afternoon').value = (slotSurgeFees['12:00 PM - 03:00 PM'] !== undefined ? Number(slotSurgeFees['12:00 PM - 03:00 PM']) : 0.00).toFixed(2);
+                    if (document.getElementById('conf-slot-fee-evening')) document.getElementById('conf-slot-fee-evening').value = (slotSurgeFees['03:00 PM - 06:00 PM'] !== undefined ? Number(slotSurgeFees['03:00 PM - 06:00 PM']) : evePeak).toFixed(2);
+                    if (document.getElementById('conf-slot-fee-night')) document.getElementById('conf-slot-fee-night').value = (slotSurgeFees['06:00 PM - 09:00 PM'] !== undefined ? Number(slotSurgeFees['06:00 PM - 09:00 PM']) : evePeak).toFixed(2);
 
                     // Fetch operational zone data first so currentLoadedZone is set before telemetry & schedule check active state
                     await loadMarketZoneData(fac.id);
@@ -2743,7 +2791,17 @@
                         same_day_peak_surge_fee: Number(document.getElementById('conf-same-day-peak-surge').value) || 24.99,
                         next_day_promo_free: Boolean(document.getElementById('conf-next-day-promo').checked),
                         max_scheduling_days_out: parseInt(document.getElementById('conf-max-days-out').value, 10) || 30,
-                        min_lead_time_days: parseInt(document.getElementById('conf-min-lead-days').value, 10) || 0
+                        min_lead_time_days: parseInt(document.getElementById('conf-min-lead-days').value, 10) || 0,
+                        evening_peak_slot_fee: Number(document.getElementById('conf-slot-fee-evening')?.value || document.getElementById('conf-evening-peak-slot-fee')?.value || 4.99),
+                        staging_config: {
+                            ...(currentLoadedFac.staging_config || {}),
+                            slot_surge_fees: {
+                                "09:00 AM - 12:00 PM": Number(document.getElementById('conf-slot-fee-morning')?.value || 0.00),
+                                "12:00 PM - 03:00 PM": Number(document.getElementById('conf-slot-fee-afternoon')?.value || 0.00),
+                                "03:00 PM - 06:00 PM": Number(document.getElementById('conf-slot-fee-evening')?.value || 4.99),
+                                "06:00 PM - 09:00 PM": Number(document.getElementById('conf-slot-fee-night')?.value || 4.99)
+                            }
+                        }
                     };
 
                     const depEl = document.getElementById('conf-deposit-amount');
