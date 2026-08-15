@@ -1580,10 +1580,18 @@
             }
 
             if (actualAssignedFacilityId) {
-                const facSel = document.getElementById('manager-facility-select');
-                if (facSel) facSel.value = actualAssignedFacilityId;
-                lockFacilityDropdown(actualUserRole !== 'executive');
+                localStorage.setItem('cloudvault_selected_facility', actualAssignedFacilityId);
+                window.currentSelectedFacilityId = actualAssignedFacilityId;
+
+                ['global-facility-select', 'pricing-facility-select', 'manager-facility-select', 'exec-facility-select', 'emp-facility', 'transfer-facility-select', 'tmm-reassign-facility-select'].forEach(id => {
+                    const facSel = document.getElementById(id);
+                    if (facSel) facSel.value = actualAssignedFacilityId;
+                });
             }
+
+            // Only workers are locked to their assigned facility; Managers and Executives can freely change facilities
+            const isWorker = (actualUserRole === 'warehouse_worker');
+            lockFacilityDropdown(isWorker);
 
             switchRoleView();
         }
@@ -1791,11 +1799,14 @@
         }
 
         // Lock or unlock the facility dropdown.
-        // Managers in live mode are locked to their assigned facility.
-        // Executives are always free-select.
+        // Workers in live mode are locked to their assigned facility.
+        // Managers and Executives can always freely select and switch between all facilities.
         function lockFacilityDropdown(locked) {
             const select = document.getElementById('manager-facility-select');
             if (!select) return;
+            if (actualUserRole === 'warehouse_manager' || actualUserRole === 'executive') {
+                locked = false;
+            }
             if (locked) {
                 select.disabled = true;
                 select.classList.add('opacity-50', 'cursor-not-allowed');
