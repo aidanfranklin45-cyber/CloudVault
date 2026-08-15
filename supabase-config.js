@@ -260,10 +260,11 @@ function initGlobalBadgeScanner(options = {}) {
                 const avgInterval = intervals.length ? intervals.reduce((a, b) => a + b, 0) / intervals.length : 0;
                 const scannedString = keyBuffer.map(k => k.char).join('').trim();
 
-                // If fast burst or matches CloudVault prefixes
+                // If fast burst or matches CloudVault prefixes or warehouse location codes
                 const isAuthScan = scannedString.startsWith('CV-AUTH-');
                 const isToteScan = scannedString.startsWith('CV-');
-                const isBurst = avgInterval < BURST_THRESHOLD_MS || isAuthScan || isToteScan;
+                const isLocationScan = scannedString.startsWith('V-') || scannedString.startsWith('ROOM-') || scannedString.startsWith('BAY-') || scannedString.startsWith('SHELF-') || scannedString.startsWith('STAGE-') || /^[A-Z]\d{1,3}/i.test(scannedString);
+                const isBurst = avgInterval < BURST_THRESHOLD_MS || isAuthScan || isToteScan || isLocationScan;
 
                 if (isBurst) {
                     e.preventDefault();

@@ -3051,12 +3051,40 @@
             if (input) input.focus();
         }
 
+        function focusDefaultScanner() {
+            const input = document.getElementById('scan-barcode');
+            if (!input) return;
+            const active = document.activeElement;
+            const isOtherInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT' || active.isContentEditable);
+            if (!isOtherInput && active !== input) {
+                input.focus();
+            }
+        }
+
+        // Global background click handler: Return focus to Instant Tote Scanner unless clicking another input/control
+        window.addEventListener('click', (e) => {
+            const tag = e.target ? (e.target.tagName || '') : '';
+            if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A', 'OPTION'].includes(tag) || e.target.closest('button, a, input, select, textarea, [contenteditable="true"], modal, .modal, #tmm-modal, #facmap-modal')) {
+                return;
+            }
+            focusDefaultScanner();
+        });
+
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') dismissScanOverlay();
+
+            // Hardware scanner / keystroke capture: funnel keystrokes to Instant Tote Scanner if focus is not in another input
+            const active = document.activeElement;
+            const isOtherInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT' || active.isContentEditable);
+            const barcodeInput = document.getElementById('scan-barcode');
+
+            if (!isOtherInput && barcodeInput && active !== barcodeInput && e.key && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                barcodeInput.focus();
+            }
         });
 
         // Unified Global Hardware 2D Barcode / QR Scanner Listener
-        // Automatically handles CV-AUTH- badge scans (shift-switching) & CV- tote scans seamlessly
+        // Automatically handles CV-AUTH- badge scans (shift-switching), CV- tote scans & location scans seamlessly
         initGlobalBadgeScanner({
             onBadgeScanStart: (code) => {
                 showBadgeScanToast('Scanning badge ID...', 'info');
@@ -3071,21 +3099,20 @@
                     loadManagerLiveData();
                     loadWorkerQueues();
                 }
+                setTimeout(focusDefaultScanner, 200);
             },
             onBadgeError: (err) => {
                 playErrorSound();
                 showBadgeScanToast(err || 'Badge verification rejected.', 'error');
+                setTimeout(focusDefaultScanner, 200);
             },
-            onToteScan: (toteCode) => {
-                const workerView = document.getElementById('view-worker');
-                if (workerView && !workerView.classList.contains('hidden')) {
-                    const input = document.getElementById('scan-barcode');
-                    if (input) {
-                        input.removeAttribute('readonly');
-                        input.value = toteCode.trim();
-                    }
-                    simulateScan();
+            onToteScan: (scannedCode) => {
+                const input = document.getElementById('scan-barcode');
+                if (input) {
+                    input.removeAttribute('readonly');
+                    input.value = scannedCode.trim();
                 }
+                simulateScan();
             }
         });
 
@@ -3197,6 +3224,7 @@
                     if (view) view.classList.add('hidden');
                 }
             });
+            setTimeout(focusDefaultScanner, 50);
         }
 
         // =========================================================================
