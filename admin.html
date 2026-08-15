@@ -4586,58 +4586,23 @@
                     return { isValid: true, normalizedCode: match.identifier || cleanCode, zoneType: match.zone_type || 'VAULT' };
                 }
 
-                // Parse coordinates for rich, specific worker feedback on why it failed
+                // Parse coordinates for rich, specific worker feedback or automatic normalization
                 const vaultMatch = cleanCode.match(/^(?:V-)?(A\d+)-?(B\d+)?-?(S\d+)?/i);
                 if (vaultMatch) {
-                    const aisleReq = vaultMatch[1].toUpperCase();
-                    const bayReq = vaultMatch[2] ? vaultMatch[2].toUpperCase() : null;
-                    const shelfReq = vaultMatch[3] ? vaultMatch[3].toUpperCase() : null;
-                    const shelfNum = shelfReq ? parseInt(shelfReq.replace('S', ''), 10) : 0;
+                    const aisleNum = parseInt(vaultMatch[1].toUpperCase().replace('A', ''), 10) || 1;
+                    const bayNum = vaultMatch[2] ? parseInt(vaultMatch[2].toUpperCase().replace('B', ''), 10) : 1;
+                    const shelfNum = vaultMatch[3] ? parseInt(vaultMatch[3].toUpperCase().replace('S', ''), 10) : 1;
 
-                    const existingAisles = new Set();
-                    let maxBayNum = 0;
-                    let maxShelfNum = 0;
-
-                    dbLocations.forEach(l => {
-                        const id = (l.identifier || '').toUpperCase().trim();
-                        const m = id.match(/^(?:V-)?(A\d+)-?(B\d+)?-?(S\d+)?/i);
-                        if (m) {
-                            existingAisles.add(m[1].toUpperCase());
-                            if (m[2]) maxBayNum = Math.max(maxBayNum, parseInt(m[2].replace('B', ''), 10));
-                            if (m[3]) maxShelfNum = Math.max(maxShelfNum, parseInt(m[3].replace('S', ''), 10));
-                        }
-                    });
-
-                    if (shelfReq && shelfNum > maxShelfNum) {
-                        return {
-                            isValid: false,
-                            reason: `Shelf ${shelfReq} does not exist in this facility. Physical rack limit is S${maxShelfNum} (Facility has ${existingAisles.size} Aisles [${Array.from(existingAisles).sort().join(', ')}], max ${maxBayNum} Bays, and Shelves S1-S${maxShelfNum}).`
-                        };
-                    }
-                    if (!existingAisles.has(aisleReq)) {
-                        return {
-                            isValid: false,
-                            reason: `Aisle ${aisleReq} does not exist in this facility. Valid Aisles: ${Array.from(existingAisles).sort().join(', ')}.`
-                        };
-                    }
-                    if (bayReq && parseInt(bayReq.replace('B', ''), 10) > maxBayNum) {
-                        return {
-                            isValid: false,
-                            reason: `Bay ${bayReq} does not exist in this facility. Maximum bays per aisle is B${String(maxBayNum).padStart(2, '0')}.`
-                        };
+                    if (aisleNum >= 1 && aisleNum <= 20 && bayNum >= 1 && bayNum <= 30 && shelfNum >= 1 && shelfNum <= 10) {
+                        const normCode = `A${aisleNum}-B${String(bayNum).padStart(2, '0')}-S${shelfNum}`;
+                        return { isValid: true, normalizedCode: normCode, zoneType: 'VAULT' };
                     }
                 }
 
                 const roomMatch = cleanCode.match(/^(ROOM-\d+)(?:-BAY-(\d+))?/i);
                 if (roomMatch) {
                     const reqRoom = roomMatch[1].toUpperCase();
-                    const existingRooms = new Set(dbLocations.filter(l => (l.zone_type || '').toUpperCase() === 'STAGING').map(l => (l.identifier || '').split('-BAY-')[0]));
-                    if (existingRooms.size > 0 && !existingRooms.has(reqRoom)) {
-                        return {
-                            isValid: false,
-                            reason: `Staging ${reqRoom} does not exist in this facility. Valid rooms: ${Array.from(existingRooms).join(', ')}.`
-                        };
-                    }
+                    return { isValid: true, normalizedCode: reqRoom, zoneType: 'STAGING' };
                 }
 
                 return {
@@ -5799,14 +5764,38 @@
                 if (nextStatus === 'with-customer') transitionDesc = `Delivered — With Customer [📍 ${locCode}]`;
                 if (nextStatus === 'stored') transitionDesc = `Returned & Shelved in Vault Bay [📍 ${locCode}]`;
 
-                triggerScanFeedbackOverlay(true, transitionDesc, barcode);
+                // Dynamic Shelf Capacity Management (Lock remains until 3 totes occupied)
+                let isShelfNowFull = false;
+                const currentOcc = Number(data?.currentOccupancy || 0);
+                const maxCap = Number(data?.maxCapacity || 3);
 
-                if (terminalOutput) {
-                    terminalOutput.innerHTML = `
-                        <span class="text-emerald-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> Scan Successful!</span>
-                        <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">${barcode} &bull; ${transitionDesc}</span>
-                    `;
-                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                if (targetLoc && nextStatus === 'stored') {
+                    if (currentOcc >= maxCap) {
+                        isShelfNowFull = true;
+                    }
+                }
+
+                if (isShelfNowFull) {
+                    clearTargetLocationLock();
+                    triggerScanFeedbackOverlay(true, `Shelf ${targetLoc} is now FULL (${currentOcc}/${maxCap} totes). Destination lock released. Please scan next shelf.`, barcode);
+                    if (terminalOutput) {
+                        terminalOutput.innerHTML = `
+                            <span class="text-amber-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="check-check" class="w-4 h-4 text-amber-400"></i> Shelf Full (${currentOcc}/${maxCap})</span>
+                            <span class="text-[10px] font-mono text-amber-300 mt-1 font-semibold">${targetLoc} is at capacity. Ready for next shelf barcode scan.</span>
+                        `;
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
+                    }
+                } else {
+                    // Retain the active target location lock for subsequent tote scans!
+                    triggerScanFeedbackOverlay(true, transitionDesc, barcode);
+                    if (terminalOutput) {
+                        const countBadge = currentOcc > 0 ? ` &bull; Slot ${currentOcc}/${maxCap} occupied` : (targetLoc ? ` &bull; Locked: ${targetLoc}` : '');
+                        terminalOutput.innerHTML = `
+                            <span class="text-emerald-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> Scan Successful!</span>
+                            <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">${barcode} &bull; ${transitionDesc}${countBadge}</span>
+                        `;
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
+                    }
                 }
 
                 if (barcodeInput) {
