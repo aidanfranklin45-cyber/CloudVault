@@ -1936,13 +1936,12 @@
                         }
 
                         const facRooms = Number(currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || resData?.numStagingRooms || 3);
-                        const roomNums = stgLocs.map(l => {
-                            const match = (l.identifier || '').match(/ROOM-(\d+)/i);
+                        const roomNums = (stgLocs || []).map(l => {
+                            const match = (l.identifier || l.location_code || '').match(/ROOM-(\d+)/i);
                             return match ? parseInt(match[1], 10) : 1;
                         });
-                        const maxRoomFromLocs = Math.max(...roomNums, 1);
-                        const countFromLocations = stgLocs ? stgLocs.length : 0;
-                        const numRooms = Math.max(facRooms, maxRoomFromLocs, countFromLocations, 1);
+                        const maxRoomFromLocs = roomNums.length > 0 ? Math.max(...roomNums, 1) : 3;
+                        const numRooms = Math.max(facRooms, maxRoomFromLocs, 3);
 
                         const reservations = resData ? (resData.reservations || []) : [];
 
