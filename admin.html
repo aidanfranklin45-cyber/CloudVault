@@ -1593,14 +1593,18 @@
 
             try {
                 if (typeof supabase !== 'undefined') {
+                    let hasInitializedAuth = false;
                     supabase.auth.onAuthStateChange(async (event, session) => {
+                        if (hasInitializedAuth && event === 'INITIAL_SESSION') return;
+                        hasInitializedAuth = true;
+
                         if (session && session.user) {
                             const user = session.user;
                             const profile = await getCachedUserProfile(user.id);
                             if (profile && profile.role) {
                                 applyActiveEmployeeContext(profile);
                             }
-                            refreshDashboard();
+                            loadLiveData();
                         } else {
                             // Check if logged in via verified 2D badge token
                             let badgeUser = null;
@@ -1610,7 +1614,7 @@
 
                             if (badgeUser && badgeUser.role && badgeUser.role !== 'customer') {
                                 applyActiveEmployeeContext(badgeUser);
-                                refreshDashboard();
+                                loadLiveData();
                             } else {
                                 actualUserRole = null;
                                 actualUserName = null;
@@ -1645,7 +1649,8 @@
             }
             activeRole = selectedVal;
             switchRoleView();
-            refreshDashboard();
+            loadManagerFacilityData();
+            loadWorkerQueues();
         }
 
         function switchRoleView() {
@@ -1697,8 +1702,6 @@
                 document.getElementById('user-avatar').className = "w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-md";
                 document.getElementById('user-name').textContent = displayName;
                 document.getElementById('user-role-label').textContent = "Super Admin";
-                loadManagerFacilityData();
-                loadWorkerQueues();
             } else if (activeRole === 'manager') {
                 document.getElementById('view-manager').classList.remove('hidden');
                 document.getElementById('view-worker').classList.remove('hidden');
@@ -1706,15 +1709,12 @@
                 document.getElementById('user-avatar').className = "w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-md";
                 document.getElementById('user-name').textContent = displayName;
                 document.getElementById('user-role-label').textContent = "Warehouse Manager";
-                loadManagerFacilityData();
-                loadWorkerQueues();
             } else if (activeRole === 'worker') {
                 document.getElementById('view-worker').classList.remove('hidden');
                 document.getElementById('user-avatar').textContent = avatarText;
                 document.getElementById('user-avatar').className = "w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white font-bold flex items-center justify-center text-xs shadow-md";
                 document.getElementById('user-name').textContent = displayName;
                 document.getElementById('user-role-label').textContent = "Operations Staff";
-                loadWorkerQueues();
                 setTimeout(() => {
                     const input = document.getElementById('scan-barcode');
                     if (input) {
@@ -1907,43 +1907,54 @@
             if (typeof updateValetFormula === 'function') updateValetFormula();
         }
 
+        let _facilityChangeLock = false;
         async function onGlobalFacilityChange(facilityId) {
-            let facId = facilityId;
-            if (!facId) {
-                facId = localStorage.getItem('cloudvault_selected_facility') ||
-                    document.getElementById('global-facility-select')?.value ||
-                    document.getElementById('exec-facility-select')?.value ||
-                    document.getElementById('manager-facility-select')?.value;
-            }
+            if (_facilityChangeLock) return;
+            _facilityChangeLock = true;
 
-            if (!facId) return;
-
-            // Clear target location lock when switching facilities to prevent cross-facility target leaks
-            if (typeof clearTargetLocationLock === 'function') {
-                clearTargetLocationLock();
-            }
-
-            localStorage.setItem('cloudvault_selected_facility', facId);
-            window.currentSelectedFacilityId = facId;
-
-            // Sync all facility dropdowns across admin panels
-            ['global-facility-select', 'exec-facility-select', 'manager-facility-select', 'pricing-facility-select', 'emp-facility', 'transfer-facility-select', 'tmm-reassign-facility-select'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el && Array.from(el.options).some(opt => opt.value === facId)) {
-                    el.value = facId;
+            try {
+                let facId = facilityId;
+                if (!facId) {
+                    facId = localStorage.getItem('cloudvault_selected_facility') ||
+                        document.getElementById('global-facility-select')?.value ||
+                        document.getElementById('exec-facility-select')?.value ||
+                        document.getElementById('manager-facility-select')?.value;
                 }
-            });
 
-            // Sync active facility status pill
-            const activePill = document.getElementById('active-facility-name-pill');
-            const globalSel = document.getElementById('global-facility-select') || document.getElementById('exec-facility-select');
-            if (activePill && globalSel && globalSel.selectedIndex >= 0) {
-                activePill.textContent = globalSel.options[globalSel.selectedIndex]?.text || '';
+                if (!facId) return;
+
+                // Clear target location lock when switching facilities to prevent cross-facility target leaks
+                if (typeof clearTargetLocationLock === 'function') {
+                    clearTargetLocationLock();
+                }
+
+                localStorage.setItem('cloudvault_selected_facility', facId);
+                window.currentSelectedFacilityId = facId;
+
+                // Sync all facility dropdowns across admin panels
+                ['global-facility-select', 'exec-facility-select', 'manager-facility-select', 'pricing-facility-select', 'emp-facility', 'transfer-facility-select', 'tmm-reassign-facility-select'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && Array.from(el.options).some(opt => opt.value === facId)) {
+                        el.value = facId;
+                    }
+                });
+
+                // Sync active facility status pill
+                const activePill = document.getElementById('active-facility-name-pill');
+                const globalSel = document.getElementById('global-facility-select') || document.getElementById('exec-facility-select');
+                if (activePill && globalSel && globalSel.selectedIndex >= 0) {
+                    activePill.textContent = globalSel.options[globalSel.selectedIndex]?.text || '';
+                }
+
+                await Promise.all([
+                    fetchAndRenderFacilitySpecs(facId),
+                    loadRegionalPricing(facId),
+                    loadManagerFacilityData(facId),
+                    loadWorkerQueues(facId)
+                ]);
+            } finally {
+                _facilityChangeLock = false;
             }
-
-            await fetchAndRenderFacilitySpecs(facId);
-            await loadRegionalPricing(facId);
-            await loadWorkerQueues(facId);
         }
 
         async function fetchAndRenderFacilitySpecs(selectedId) {
@@ -3472,18 +3483,19 @@
                 const allRequests = Array.from(new Map(rawManifests.map(m => [m.id, m])).values());
                 const manifests = allRequests;
 
-                // Attach Supabase Realtime listeners for instant queue sync without manual refresh
+                // Attach Supabase Realtime listeners for instant queue sync without manual refresh (debounced)
                 if (!window.hasSetupAdminRealtime) {
                     window.hasSetupAdminRealtime = true;
+                    let realtimeDebounceTimer = null;
+                    const triggerRealtimeRefresh = () => {
+                        if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
+                        realtimeDebounceTimer = setTimeout(() => {
+                            loadWorkerQueues();
+                        }, 200);
+                    };
                     supabase.channel('admin_live_worker_queues')
-                        .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, () => {
-                            console.log('[Realtime] Inventory change detected. Refreshing queues...');
-                            loadWorkerQueues();
-                        })
-                        .on('postgres_changes', { event: '*', schema: 'public', table: 'access_requests' }, () => {
-                            console.log('[Realtime] Access request change detected. Refreshing queues...');
-                            loadWorkerQueues();
-                        })
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, triggerRealtimeRefresh)
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'access_requests' }, triggerRealtimeRefresh)
                         .subscribe();
                 }
 
