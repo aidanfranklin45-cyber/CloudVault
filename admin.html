@@ -9,6 +9,11 @@
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="shortcut icon" type="image/png" href="logo.png">
     <link rel="apple-touch-icon" href="logo.png">
+    <!-- DNS and Preconnect Optimizations -->
+    <link rel="preconnect" href="https://xbxvebnrjryvksvtufqj.supabase.co" crossorigin>
+    <link rel="dns-prefetch" href="https://xbxvebnrjryvksvtufqj.supabase.co">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- PostHog Analytics -->
     <script>
         !function (t, e) { var o, n, p, r; e.__SV || (window.posthog = e, e._i = [], e.init = function (i, s, a) { function g(t, e) { var o = e.split("."); 2 == o.length && (t = t[o[0]], e = o[1]), t[e] = function () { t.push([e].concat(Array.prototype.slice.call(arguments, 0))) } } var c = e; for (void 0 !== a ? c = e[a] = [] : a = "posthog", c.people = c.people || [], c.toString = function (t) { var e = "posthog"; return "posthog" !== a && (e += "." + a), t || (e += " (stub)"), e }, c.people.toString = function () { return c.toString(1) + ".people (stub)" }, p = "capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures onSessionId".split(" "), r = 0; r < p.length; r++)g(c, p[r]); e._i.push([i, s, a]) }, e.__SV = 1.0, o = t.createElement("script"), o.type = "text/javascript", o.async = !0, o.src = "https://us-assets.i.posthog.com/static/array.js", n = t.getElementsByTagName("script")[0], n.parentNode.insertBefore(o, n)) }(document, window.posthog || []);
@@ -1930,8 +1935,21 @@
             if (typeof updateValetFormula === 'function') updateValetFormula();
         }
 
-        // Global Master Dataset Cache
+        // Global Master Dataset Cache with Local Storage Instant Hydration (SWR)
         window._masterAdminData = null;
+        try {
+            const cachedData = localStorage.getItem('cv_master_admin_cache');
+            if (cachedData) {
+                window._masterAdminData = JSON.parse(cachedData);
+                if (window._masterAdminData && window._masterAdminData.facilities) {
+                    window._facilitiesCache = {};
+                    window._masterAdminData.facilities.forEach(f => { window._facilitiesCache[f.id] = f; });
+                    window._allFacilitiesCache = window._masterAdminData.facilities;
+                    window._activeSubsCache = (window._masterAdminData.subscriptions || []).filter(s => s.status === 'active');
+                }
+            }
+        } catch (e) {}
+
         async function loadMasterAdminData(forceRefresh = false) {
             try {
                 if (!forceRefresh && window._masterAdminData) {
@@ -1974,10 +1992,14 @@
                     funnel
                 };
 
+                try {
+                    localStorage.setItem('cv_master_admin_cache', JSON.stringify(window._masterAdminData));
+                } catch (e) {}
+
                 return window._masterAdminData;
             } catch (err) {
                 console.error("Error loading master admin data:", err);
-                return null;
+                return window._masterAdminData || null;
             }
         }
 
@@ -2098,105 +2120,114 @@
             }
         }
 
-        // Load Real Supabase Data
+        async function renderMasterAdminView(master) {
+            if (!master) return;
+            const { facilities, operationalZones, inventory, subscriptions, funnel } = master;
+
+            // Populate Facilities Selectors Dynamically First
+            if (facilities && facilities.length > 0) {
+                const defaultFacId = actualAssignedFacilityId || localStorage.getItem('cloudvault_selected_facility') || facilities[0].id;
+
+                ['global-facility-select', 'pricing-facility-select', 'manager-facility-select', 'exec-facility-select', 'emp-facility', 'transfer-facility-select', 'tmm-reassign-facility-select'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        const curVal = el.value;
+                        el.innerHTML = facilities.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
+                        if (defaultFacId && facilities.some(f => f.id === defaultFacId)) {
+                            el.value = defaultFacId;
+                        } else if (curVal && facilities.some(f => f.id === curVal)) {
+                            el.value = curVal;
+                        } else {
+                            el.value = facilities[0].id;
+                        }
+                    }
+                });
+            }
+
+            // Render Operational Zones
+            const markets = (operationalZones || []).map(z => ({
+                id: z.id,
+                city: z.city,
+                facility_id: z.facility_id,
+                active: z.active,
+                baseValetFee: Number(z.base_valet_fee),
+                requiredDeposit: Number(z.required_deposit) || 25.00,
+                serviceDays: z.service_days,
+                zipCodes: z.zip_codes || []
+            }));
+            renderMarketsList(markets);
+
+            // Funnel and Executive Analytics
+            if (activeRole === 'executive') {
+                let funnelCounts = {
+                    lowVolume: [0, 0, 0, 0, 0],
+                    highVolume: [0, 0, 0, 0, 0]
+                };
+                if (funnel) {
+                    funnelCounts = funnel.value || funnelCounts;
+                }
+
+                updateAnalyticsCharts(funnelCounts);
+                let totalLanded = funnelCounts.lowVolume[0] + funnelCounts.highVolume[0];
+                let totalCompleted = funnelCounts.lowVolume[4] + funnelCounts.highVolume[4];
+                let convRate = totalLanded > 0 ? ((totalCompleted / totalLanded) * 100).toFixed(1) : "0.0";
+                document.getElementById('exec-conv').textContent = `${convRate}%`;
+                const convSubtext = document.getElementById('exec-conv-subtext');
+                if (convSubtext) {
+                    convSubtext.textContent = totalLanded > 0
+                        ? `${totalCompleted} conversions (${totalLanded} visitors)`
+                        : `Estimator conversion metrics`;
+                }
+
+                // Financials
+                const activeSubs = (subscriptions || []).filter(s => s.status === 'active');
+                const subCount = activeSubs.length;
+                const mrr = activeSubs.reduce((acc, sub) => acc + (Number(sub.recurring_storage) || 0), 0);
+                const activeTotes = (inventory || []).filter(i => i.status === 'stored').length;
+
+                document.getElementById('exec-mrr').textContent = `$${mrr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const mrrSubtext = document.getElementById('exec-mrr-subtext');
+                if (mrrSubtext) {
+                    mrrSubtext.innerHTML = `<i data-lucide="arrow-up-right" class="w-3.5 h-3.5 mr-0.5 text-emerald-400"></i> ${subCount} active customer account${subCount !== 1 ? 's' : ''}`;
+                }
+
+                const activeMarkets = (markets || []).filter(m => m && m.active);
+                document.getElementById('exec-totes').textContent = activeTotes.toLocaleString();
+                document.getElementById('exec-markets').textContent = `${activeMarkets.length} Cit${activeMarkets.length !== 1 ? 'ies' : 'y'}`;
+
+                const marketsSubtext = document.getElementById('exec-markets-subtext');
+                if (marketsSubtext) {
+                    const lastMarket = activeMarkets.length > 0 ? activeMarkets[activeMarkets.length - 1].city : null;
+                    marketsSubtext.innerHTML = lastMarket
+                        ? `<i data-lucide="check-circle" class="w-3 h-3 mr-0.5 text-emerald-400"></i> ${lastMarket} active`
+                        : `<i data-lucide="map-pin" class="w-3 h-3 mr-0.5"></i> Active service zones`;
+                }
+            }
+
+            // Render current facility views using in-memory master data
+            const currentFac = localStorage.getItem('cloudvault_selected_facility') || (facilities && facilities[0]?.id ? facilities[0].id : null);
+            if (currentFac) {
+                await onGlobalFacilityChange(currentFac, master);
+            }
+
+            // Load waitlist data
+            loadWaitlistData();
+            lucide.createIcons();
+        }
+
+        // Load Real Supabase Data with Instant Stale-While-Revalidate Paint
         async function loadLiveData() {
             try {
+                // 1. Instant 0ms Paint if cached data exists
+                if (window._masterAdminData) {
+                    renderMasterAdminView(window._masterAdminData);
+                }
+
+                // 2. Fresh Background Parallel Sync
                 const master = await loadMasterAdminData(true);
-                if (!master) return;
-
-                const { facilities, operationalZones, inventory, subscriptions, funnel } = master;
-
-                // Populate Facilities Selectors Dynamically First
-                if (facilities.length > 0) {
-                    const defaultFacId = actualAssignedFacilityId || localStorage.getItem('cloudvault_selected_facility') || facilities[0].id;
-
-                    ['global-facility-select', 'pricing-facility-select', 'manager-facility-select', 'exec-facility-select', 'emp-facility', 'transfer-facility-select', 'tmm-reassign-facility-select'].forEach(id => {
-                        const el = document.getElementById(id);
-                        if (el) {
-                            const curVal = el.value;
-                            el.innerHTML = facilities.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
-                            if (defaultFacId && facilities.some(f => f.id === defaultFacId)) {
-                                el.value = defaultFacId;
-                            } else if (curVal && facilities.some(f => f.id === curVal)) {
-                                el.value = curVal;
-                            } else {
-                                el.value = facilities[0].id;
-                            }
-                        }
-                    });
+                if (master) {
+                    renderMasterAdminView(master);
                 }
-
-                // Render Operational Zones
-                const markets = (operationalZones || []).map(z => ({
-                    id: z.id,
-                    city: z.city,
-                    facility_id: z.facility_id,
-                    active: z.active,
-                    baseValetFee: Number(z.base_valet_fee),
-                    requiredDeposit: Number(z.required_deposit) || 25.00,
-                    serviceDays: z.service_days,
-                    zipCodes: z.zip_codes || []
-                }));
-                renderMarketsList(markets);
-
-                // Funnel and Executive Analytics
-                if (activeRole === 'executive') {
-                    let funnelCounts = {
-                        lowVolume: [0, 0, 0, 0, 0],
-                        highVolume: [0, 0, 0, 0, 0]
-                    };
-                    if (funnel) {
-                        funnelCounts = funnel.value || funnelCounts;
-                    }
-
-                    updateAnalyticsCharts(funnelCounts);
-                    let totalLanded = funnelCounts.lowVolume[0] + funnelCounts.highVolume[0];
-                    let totalCompleted = funnelCounts.lowVolume[4] + funnelCounts.highVolume[4];
-                    let convRate = totalLanded > 0 ? ((totalCompleted / totalLanded) * 100).toFixed(1) : "0.0";
-                    document.getElementById('exec-conv').textContent = `${convRate}%`;
-                    const convSubtext = document.getElementById('exec-conv-subtext');
-                    if (convSubtext) {
-                        convSubtext.textContent = totalLanded > 0
-                            ? `${totalCompleted} conversions (${totalLanded} visitors)`
-                            : `Estimator conversion metrics`;
-                    }
-
-                    // Financials
-                    const activeSubs = (subscriptions || []).filter(s => s.status === 'active');
-                    const subCount = activeSubs.length;
-                    const mrr = activeSubs.reduce((acc, sub) => acc + (Number(sub.recurring_storage) || 0), 0);
-                    const activeTotes = (inventory || []).filter(i => i.status === 'stored').length;
-
-                    document.getElementById('exec-mrr').textContent = `$${mrr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                    const mrrSubtext = document.getElementById('exec-mrr-subtext');
-                    if (mrrSubtext) {
-                        mrrSubtext.innerHTML = `<i data-lucide="arrow-up-right" class="w-3.5 h-3.5 mr-0.5 text-emerald-400"></i> ${subCount} active customer account${subCount !== 1 ? 's' : ''}`;
-                    }
-
-                    const activeMarkets = (markets || []).filter(m => m && m.active);
-                    document.getElementById('exec-totes').textContent = activeTotes.toLocaleString();
-                    document.getElementById('exec-markets').textContent = `${activeMarkets.length} Cit${activeMarkets.length !== 1 ? 'ies' : 'y'}`;
-
-                    const marketsSubtext = document.getElementById('exec-markets-subtext');
-                    if (marketsSubtext) {
-                        const lastMarket = activeMarkets.length > 0 ? activeMarkets[activeMarkets.length - 1].city : null;
-                        marketsSubtext.innerHTML = lastMarket
-                            ? `<i data-lucide="check-circle" class="w-3 h-3 mr-0.5 text-emerald-400"></i> ${lastMarket} active`
-                            : `<i data-lucide="map-pin" class="w-3 h-3 mr-0.5"></i> Active service zones`;
-                    }
-                }
-
-                // Render current facility views using in-memory master data
-                const currentFac = actualAssignedFacilityId || localStorage.getItem('cloudvault_selected_facility') || (facilities[0]?.id || null);
-                if (currentFac) {
-                    localStorage.setItem('cloudvault_selected_facility', currentFac);
-                    window.currentSelectedFacilityId = currentFac;
-                    await onGlobalFacilityChange(currentFac, master);
-                }
-
-                // Load waitlist data
-                loadWaitlistData();
-                lucide.createIcons();
             } catch (err) {
                 console.error("Error loading Supabase live data:", err);
             }
