@@ -600,37 +600,33 @@
                                 <div class="bg-gray-950 p-3.5 rounded-xl border border-amber-500/20 space-y-2.5">
                                     <div class="flex items-center justify-between">
                                         <label class="text-[10px] font-extrabold uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
-                                            <i data-lucide="clock" class="w-3.5 h-3.5 text-amber-400"></i> Time-of-Day Slot Surcharges (Hourly Windows)
+                                            <i data-lucide="clock" class="w-3.5 h-3.5 text-amber-400"></i> Time-of-Day Operating Windows &amp; Surge Fees
                                         </label>
-                                        <span class="text-[9px] font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">Dynamic Peak Hours</span>
+                                        <span class="text-[9px] font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">3 Operating Windows</span>
                                     </div>
-                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                        <div class="bg-gray-900/80 p-2 rounded-lg border border-gray-800">
-                                            <span class="text-[9px] font-bold text-gray-400 block">Morning (9am-12pm)</span>
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                        <div class="bg-gray-900/80 p-2.5 rounded-lg border border-gray-800">
+                                            <span class="text-[9px] font-bold text-gray-400 block">Morning (9am - 12pm)</span>
                                             <div class="flex items-center mt-1">
                                                 <span class="text-xs text-gray-500 mr-1">$</span>
                                                 <input type="number" step="0.50" id="conf-slot-fee-morning" class="fspec-input w-full py-0.5 text-xs text-emerald-400 font-bold" placeholder="0.00" value="0.00">
                                             </div>
                                         </div>
-                                        <div class="bg-gray-900/80 p-2 rounded-lg border border-gray-800">
-                                            <span class="text-[9px] font-bold text-gray-400 block">Afternoon (12pm-3pm)</span>
+                                        <div class="bg-gray-900/80 p-2.5 rounded-lg border border-gray-800">
+                                            <span class="text-[9px] font-bold text-gray-400 block">Afternoon (12pm - 3pm)</span>
                                             <div class="flex items-center mt-1">
                                                 <span class="text-xs text-gray-500 mr-1">$</span>
                                                 <input type="number" step="0.50" id="conf-slot-fee-afternoon" class="fspec-input w-full py-0.5 text-xs text-emerald-400 font-bold" placeholder="0.00" value="0.00">
                                             </div>
                                         </div>
-                                        <div class="bg-gray-900/80 p-2 rounded-lg border border-gray-800">
-                                            <span class="text-[9px] font-bold text-amber-400 block">Evening Peak (3pm-6pm)</span>
+                                        <div class="bg-gray-900/80 p-2.5 rounded-lg border border-amber-500/30 bg-amber-950/20">
+                                            <span class="text-[9px] font-bold text-amber-300 block flex items-center justify-between">
+                                                Evening Peak (3pm - 6pm)
+                                                <span class="text-[8px] bg-amber-500/20 text-amber-300 px-1 rounded">Peak Surcharge</span>
+                                            </span>
                                             <div class="flex items-center mt-1">
                                                 <span class="text-xs text-amber-500 mr-1">$</span>
                                                 <input type="number" step="0.50" id="conf-slot-fee-evening" class="fspec-input w-full py-0.5 text-xs text-amber-400 font-bold" placeholder="4.99" value="4.99">
-                                            </div>
-                                        </div>
-                                        <div class="bg-gray-900/80 p-2 rounded-lg border border-gray-800">
-                                            <span class="text-[9px] font-bold text-amber-400 block">Night Peak (6pm-9pm)</span>
-                                            <div class="flex items-center mt-1">
-                                                <span class="text-xs text-amber-500 mr-1">$</span>
-                                                <input type="number" step="0.50" id="conf-slot-fee-night" class="fspec-input w-full py-0.5 text-xs text-amber-400 font-bold" placeholder="4.99" value="4.99">
                                             </div>
                                         </div>
                                     </div>
@@ -1512,13 +1508,13 @@
                     document.getElementById('conf-insurance').value = (fac.monthly_insurance_cost !== null && fac.monthly_insurance_cost !== undefined) ? fac.monthly_insurance_cost : 650;
 
                     // Populate Pricing & Retrieval Logistics Engine
-                    document.getElementById('conf-tier1').value = (Number(fac.tier1_rate) || 5.00).toFixed(2);
-                    document.getElementById('conf-tier2').value = (Number(fac.tier2_rate) || 3.50).toFixed(2);
-                    document.getElementById('conf-tier3').value = (Number(fac.tier3_rate) || 2.00).toFixed(2);
-                    document.getElementById('conf-tier4').value = (Number(fac.tier4_rate) || 1.00).toFixed(2);
+                    document.getElementById('conf-tier1').value = (fac.tier1_rate !== null && fac.tier1_rate !== undefined) ? Number(fac.tier1_rate).toFixed(2) : '5.00';
+                    document.getElementById('conf-tier2').value = (fac.tier2_rate !== null && fac.tier2_rate !== undefined) ? Number(fac.tier2_rate).toFixed(2) : '3.50';
+                    document.getElementById('conf-tier3').value = (fac.tier3_rate !== null && fac.tier3_rate !== undefined) ? Number(fac.tier3_rate).toFixed(2) : '2.00';
+                    document.getElementById('conf-tier4').value = (fac.tier4_rate !== null && fac.tier4_rate !== undefined) ? Number(fac.tier4_rate).toFixed(2) : '1.00';
                     document.getElementById('conf-valet-base').value = (fac.valet_base !== null && fac.valet_base !== undefined) ? Number(fac.valet_base) : 17.00;
                     document.getElementById('conf-valet-adder').value = (fac.valet_tote_adder !== null && fac.valet_tote_adder !== undefined) ? Number(fac.valet_tote_adder) : 1.00;
-                    document.getElementById('conf-next-day-surge').value = (fac.next_day_surge_fee !== null && fac.next_day_surge_fee !== undefined) ? Number(fac.next_day_surge_fee) : 9.99;
+                    document.getElementById('conf-next-day-surge').value = (fac.next_day_surge_fee !== null && fac.next_day_surge_fee !== undefined) ? Number(fac.next_day_surge_fee) : 0;
                     document.getElementById('conf-next-day-peak-surge').value = (fac.next_day_peak_surge_fee !== null && fac.next_day_peak_surge_fee !== undefined) ? Number(fac.next_day_peak_surge_fee) : 14.99;
                     document.getElementById('conf-same-day-surge').value = (fac.same_day_surge_fee !== null && fac.same_day_surge_fee !== undefined) ? Number(fac.same_day_surge_fee) : 19.99;
                     document.getElementById('conf-same-day-peak-surge').value = (fac.same_day_peak_surge_fee !== null && fac.same_day_peak_surge_fee !== undefined) ? Number(fac.same_day_peak_surge_fee) : 24.99;
@@ -1532,7 +1528,6 @@
                     if (document.getElementById('conf-slot-fee-morning')) document.getElementById('conf-slot-fee-morning').value = (slotSurgeFees['09:00 AM - 12:00 PM'] !== undefined ? Number(slotSurgeFees['09:00 AM - 12:00 PM']) : 0.00).toFixed(2);
                     if (document.getElementById('conf-slot-fee-afternoon')) document.getElementById('conf-slot-fee-afternoon').value = (slotSurgeFees['12:00 PM - 03:00 PM'] !== undefined ? Number(slotSurgeFees['12:00 PM - 03:00 PM']) : 0.00).toFixed(2);
                     if (document.getElementById('conf-slot-fee-evening')) document.getElementById('conf-slot-fee-evening').value = (slotSurgeFees['03:00 PM - 06:00 PM'] !== undefined ? Number(slotSurgeFees['03:00 PM - 06:00 PM']) : evePeak).toFixed(2);
-                    if (document.getElementById('conf-slot-fee-night')) document.getElementById('conf-slot-fee-night').value = (slotSurgeFees['06:00 PM - 09:00 PM'] !== undefined ? Number(slotSurgeFees['06:00 PM - 09:00 PM']) : evePeak).toFixed(2);
 
                     // Fetch operational zone data first so currentLoadedZone is set before telemetry & schedule check active state
                     await loadMarketZoneData(fac.id);
@@ -2761,6 +2756,13 @@
                         return;
                     }
 
+                    const getNumVal = (id, fallback = 0) => {
+                        const el = document.getElementById(id);
+                        if (!el || el.value === '' || el.value === null || el.value === undefined) return fallback;
+                        const n = Number(el.value);
+                        return isNaN(n) ? fallback : n;
+                    };
+
                     const updatedFac = {
                         id: currentLoadedFac.id,
                         name: document.getElementById('conf-name').value.trim(),
@@ -2770,42 +2772,42 @@
                         city: document.getElementById('conf-city').value.trim(),
                         state: document.getElementById('conf-state').value.trim(),
                         zip: document.getElementById('conf-zip').value.trim(),
-                        usable_warehouse_sqft: Number(document.getElementById('conf-sqft').value) || 20000,
-                        sqft_per_tote: Number(document.getElementById('conf-sqft-per-tote').value) || 1.0,
-                        tote_capacity: Number(document.getElementById('conf-tote-capacity').value) || 2000,
-                        num_staging_rooms: Number(document.getElementById('conf-staging-rooms').value) || 2,
-                        staging_rooms: Number(document.getElementById('conf-staging-rooms').value) || 2,
-                        monthly_rent_cost: Number(document.getElementById('conf-rent').value) || 0,
-                        monthly_labor_cost: Number(document.getElementById('conf-labor').value) || 0,
-                        monthly_utilities_cost: Number(document.getElementById('conf-utilities').value) || 0,
-                        monthly_insurance_cost: Number(document.getElementById('conf-insurance').value) || 0,
-                        tier1_rate: Number(document.getElementById('conf-tier1').value) || 5.00,
-                        tier2_rate: Number(document.getElementById('conf-tier2').value) || 3.50,
-                        tier3_rate: Number(document.getElementById('conf-tier3').value) || 2.00,
-                        tier4_rate: Number(document.getElementById('conf-tier4').value) || 1.00,
-                        valet_base: Number(document.getElementById('conf-valet-base').value) || 17.00,
-                        valet_tote_adder: Number(document.getElementById('conf-valet-adder').value) || 1.00,
-                        next_day_surge_fee: Number(document.getElementById('conf-next-day-surge').value) || 9.99,
-                        next_day_peak_surge_fee: Number(document.getElementById('conf-next-day-peak-surge').value) || 14.99,
-                        same_day_surge_fee: Number(document.getElementById('conf-same-day-surge').value) || 19.99,
-                        same_day_peak_surge_fee: Number(document.getElementById('conf-same-day-peak-surge').value) || 24.99,
-                        next_day_promo_free: Boolean(document.getElementById('conf-next-day-promo').checked),
-                        max_scheduling_days_out: parseInt(document.getElementById('conf-max-days-out').value, 10) || 30,
-                        min_lead_time_days: parseInt(document.getElementById('conf-min-lead-days').value, 10) || 0,
-                        evening_peak_slot_fee: Number(document.getElementById('conf-slot-fee-evening')?.value || document.getElementById('conf-evening-peak-slot-fee')?.value || 4.99),
+                        usable_warehouse_sqft: getNumVal('conf-sqft', 20000),
+                        sqft_per_tote: getNumVal('conf-sqft-per-tote', 1.0),
+                        tote_capacity: getNumVal('conf-tote-capacity', 2000),
+                        num_staging_rooms: getNumVal('conf-staging-rooms', 2),
+                        staging_rooms: getNumVal('conf-staging-rooms', 2),
+                        monthly_rent_cost: getNumVal('conf-rent', 0),
+                        monthly_labor_cost: getNumVal('conf-labor', 0),
+                        monthly_utilities_cost: getNumVal('conf-utilities', 0),
+                        monthly_insurance_cost: getNumVal('conf-insurance', 0),
+                        tier1_rate: getNumVal('conf-tier1', 5.00),
+                        tier2_rate: getNumVal('conf-tier2', 3.50),
+                        tier3_rate: getNumVal('conf-tier3', 2.00),
+                        tier4_rate: getNumVal('conf-tier4', 1.00),
+                        valet_base: getNumVal('conf-valet-base', 17.00),
+                        valet_tote_adder: getNumVal('conf-valet-adder', 1.00),
+                        next_day_surge_fee: getNumVal('conf-next-day-surge', 0.00),
+                        next_day_peak_surge_fee: getNumVal('conf-next-day-peak-surge', 14.99),
+                        same_day_surge_fee: getNumVal('conf-same-day-surge', 19.99),
+                        same_day_peak_surge_fee: getNumVal('conf-same-day-peak-surge', 24.99),
+                        next_day_promo_free: Boolean(document.getElementById('conf-next-day-promo')?.checked),
+                        max_scheduling_days_out: parseInt(document.getElementById('conf-max-days-out')?.value, 10) || 30,
+                        min_lead_time_days: getNumVal('conf-min-lead-days', 0),
+                        evening_peak_slot_fee: getNumVal('conf-slot-fee-evening', getNumVal('conf-evening-peak-slot-fee', 4.99)),
                         staging_config: {
                             ...(currentLoadedFac.staging_config || {}),
+                            allowed_slots: ["09:00 AM - 12:00 PM", "12:00 PM - 03:00 PM", "03:00 PM - 06:00 PM"],
                             slot_surge_fees: {
-                                "09:00 AM - 12:00 PM": Number(document.getElementById('conf-slot-fee-morning')?.value || 0.00),
-                                "12:00 PM - 03:00 PM": Number(document.getElementById('conf-slot-fee-afternoon')?.value || 0.00),
-                                "03:00 PM - 06:00 PM": Number(document.getElementById('conf-slot-fee-evening')?.value || 4.99),
-                                "06:00 PM - 09:00 PM": Number(document.getElementById('conf-slot-fee-night')?.value || 4.99)
+                                "09:00 AM - 12:00 PM": getNumVal('conf-slot-fee-morning', 0.00),
+                                "12:00 PM - 03:00 PM": getNumVal('conf-slot-fee-afternoon', 0.00),
+                                "03:00 PM - 06:00 PM": getNumVal('conf-slot-fee-evening', 4.99)
                             }
                         }
                     };
 
                     const depEl = document.getElementById('conf-deposit-amount');
-                    const depositVal = depEl ? (Number(depEl.value) || 25.00) : 25.00;
+                    const depositVal = depEl ? getNumVal('conf-deposit-amount', 25.00) : 25.00;
                     const activeVal = document.getElementById('conf-market-active-select').value === "true";
 
                     try {
