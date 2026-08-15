@@ -2466,14 +2466,21 @@
         }
 
         async function updateValetFormula() {
-            const base = parseFloat(document.getElementById('valet-base').value) || 15.00;
-            const adder = parseFloat(document.getElementById('valet-tote-adder').value) || 1.00;
+            const baseEl = document.getElementById('valet-base');
+            const adderEl = document.getElementById('valet-tote-adder');
+            if (!baseEl || !adderEl) return;
+            const base = parseFloat(baseEl.value) || 15.00;
+            const adder = parseFloat(adderEl.value) || 1.00;
 
-            document.getElementById('formula-base').textContent = base.toFixed(2);
-            document.getElementById('formula-adder').textContent = adder.toFixed(2);
+            const formulaBase = document.getElementById('formula-base');
+            const formulaAdder = document.getElementById('formula-adder');
+            if (formulaBase) formulaBase.textContent = base.toFixed(2);
+            if (formulaAdder) formulaAdder.textContent = adder.toFixed(2);
 
             try {
-                await supabase.from('settings').update({ valet_base: base, valet_tote_adder: adder }).eq('id', 'pricing');
+                if (typeof supabase !== 'undefined') {
+                    await supabase.from('settings').update({ valet_base: base, valet_tote_adder: adder }).eq('id', 'pricing');
+                }
             } catch (e) {
                 console.error("Supabase valet update failed:", e);
             }
@@ -5642,12 +5649,25 @@
                 }
 
                 // Inspect current tote status in local state or query to pick dedicated handler
-                const { data: checkTote } = await supabase.from('inventory').select('status').eq('tote_code', barcode).maybeSingle();
-                const currentStatus = checkTote ? checkTote.status : null;
+                const { data: checkTote } = await supabase.from('inventory').select('id, status, activated, location_code, facility_id').eq('tote_code', barcode).maybeSingle();
+                if (!checkTote) {
+                    triggerScanFeedbackOverlay(false, `Tote ${barcode} not found in inventory system.`);
+                    if (terminalOutput) {
+                        terminalOutput.innerHTML = `
+                            <span class="text-rose-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400"></i> Tote Not Found</span>
+                            <span class="text-[10px] text-rose-300 mt-1 font-mono">Tote barcode ${escapeHtml(barcode)} is not registered.</span>
+                        `;
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
+                    }
+                    if (barcodeInput) barcodeInput.focus();
+                    return;
+                }
+
+                const currentStatus = checkTote.status;
 
                 // Event Routing:
-                // Event 1: Customer Return to Vault (Reshelving into Vault)
-                if (expectedStatus !== 'with-customer' && (expectedStatus === 'stored' || expectedStatus === 'returned' || currentStatus === 'with-customer')) {
+                // Event 1: Customer Return to Vault (Reshelving into Vault from Customer)
+                if (expectedStatus === 'returned' || currentStatus === 'with-customer' || currentStatus === 'out-for-delivery') {
                     if (!targetLoc) {
                         triggerScanFeedbackOverlay(false, "Target Location Required: Please scan or type a shelf/bay code (e.g. V-A01-S01) before reshelving totes.");
                         if (terminalOutput) {
@@ -5668,8 +5688,8 @@
                     data = res.data;
                     error = res.error;
                 } 
-                // Event 3: Vault Pull to Staging or Dispatch
-                else if (expectedStatus !== 'with-customer' && (expectedStatus === 'staged' || expectedStatus === 'pending-dispatch' || currentStatus === 'pending-stage' || currentStatus === 'pending-dispatch')) {
+                // Event 2: Vault Pull to Staging or Dispatch
+                else if ((expectedStatus === 'staged' || expectedStatus === 'pending-dispatch') && (currentStatus === 'stored' || currentStatus === 'pending-stage')) {
                     const res = await supabase.rpc('process_vault_pull', {
                         p_tote_code: barcode,
                         p_target_staging_code: targetLoc
@@ -5677,8 +5697,8 @@
                     data = res.data;
                     error = res.error;
                 }
-                // Event 4: Intake & Activation
-                else if (expectedStatus === 'activate' || (checkTote && checkTote.activated === false)) {
+                // Event 3: Intake & Activation
+                else if (expectedStatus === 'activate' || checkTote.activated === false) {
                     const res = await supabase.rpc('process_tote_activation', {
                         p_tote_code: barcode,
                         p_intake_location_code: targetLoc || 'INTAKE-PROCESSING'
@@ -5700,8 +5720,8 @@
                 }
 
                 if (error) throw error;
-                const nextStatus = data.nextStatus || data.status;
-                const locCode = data.locationCode || data.assigned_location || window.activeTargetLocationCode || 'INTAKE-PROCESSING';
+                const nextStatus = data?.nextStatus || data?.status || expectedStatus;
+                const locCode = data?.locationCode || data?.assigned_location || window.activeTargetLocationCode || 'INTAKE-PROCESSING';
 
                 let transitionDesc = `${nextStatus} [📍 ${locCode}]`;
                 if (nextStatus === 'pending-stage') transitionDesc = `Activated — Moved to Intake Zone [📍 ${locCode}]`;
@@ -5718,6 +5738,7 @@
                         <span class="text-emerald-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> Scan Successful!</span>
                         <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">${barcode} &bull; ${transitionDesc}</span>
                     `;
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
                 }
 
                 if (barcodeInput) {
@@ -5727,12 +5748,14 @@
                 loadWorkerQueues();
             } catch (e) {
                 console.error("Live scan failed:", e);
-                triggerScanFeedbackOverlay(false, e.message || "Failed to transition tote state.");
+                const errMsg = e.message || (typeof e === 'object' && e.error_description ? e.error_description : "Failed to transition tote state.");
+                triggerScanFeedbackOverlay(false, errMsg);
                 if (terminalOutput) {
                     terminalOutput.innerHTML = `
                         <span class="text-red-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="alert-octagon" class="w-4 h-4 text-red-500"></i> Scan Failed</span>
-                        <span class="text-[9px] font-mono text-red-300 mt-1 text-center">${e.message}</span>
+                        <span class="text-[9px] font-mono text-red-300 mt-1 text-center">${escapeHtml(errMsg)}</span>
                     `;
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
                 }
                 if (barcodeInput) barcodeInput.focus();
             }
