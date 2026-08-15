@@ -1547,9 +1547,19 @@
         let activeRole = "executive";
         let actualUserRole = null;
         let actualUserName = null;
+        let actualUserProfile = null;
         let actualAssignedFacilityId = null; // Set for managers/workers — their locked facility
         let funnelChartObj = null;
         let utilizationRingObj = null;
+
+        function getActiveStaffUid() {
+            if (actualUserProfile && actualUserProfile.id) return actualUserProfile.id;
+            try {
+                const badgeUser = JSON.parse(localStorage.getItem('cv_active_badge_user') || localStorage.getItem('cv_cached_profile'));
+                if (badgeUser && badgeUser.id) return badgeUser.id;
+            } catch(e) {}
+            return null;
+        }
 
         function escapeHtml(str) {
             if (!str) return '';
@@ -1566,6 +1576,7 @@
                 window.location.href = 'dashboard.html';
                 return;
             }
+            actualUserProfile = profile;
             actualUserRole = profile.role;
             actualUserName = profile.name || profile.email || 'Staff Member';
             actualAssignedFacilityId = profile.assigned_facility_id || null;
@@ -5734,56 +5745,40 @@
                         return;
                     }
 
-                    const activeStaffUid = (actualEmployeeProfile && actualEmployeeProfile.id) || 
-                                           (typeof actualBadgeUser !== 'undefined' && actualBadgeUser && actualBadgeUser.id) ||
-                                           (typeof actualUser !== 'undefined' && actualUser && actualUser.id) || null;
-
                     const res = await supabase.rpc('process_tote_return', {
                         p_tote_code: barcode,
                         p_target_location_code: targetLoc,
-                        p_staff_uid: activeStaffUid
+                        p_staff_uid: getActiveStaffUid()
                     });
                     data = res.data;
                     error = res.error;
                 } 
                 // Event 2: Vault Pull to Staging or Dispatch
                 else if ((expectedStatus === 'staged' || expectedStatus === 'pending-dispatch') && (currentStatus === 'stored' || currentStatus === 'pending-stage')) {
-                    const activeStaffUid = (actualEmployeeProfile && actualEmployeeProfile.id) || 
-                                           (typeof actualBadgeUser !== 'undefined' && actualBadgeUser && actualBadgeUser.id) ||
-                                           (typeof actualUser !== 'undefined' && actualUser && actualUser.id) || null;
-
                     const res = await supabase.rpc('process_vault_pull', {
                         p_tote_code: barcode,
                         p_target_staging_code: targetLoc,
-                        p_staff_uid: activeStaffUid
+                        p_staff_uid: getActiveStaffUid()
                     });
                     data = res.data;
                     error = res.error;
                 }
                 // Event 3: Intake & Activation
                 else if (expectedStatus === 'activate' || checkTote.activated === false) {
-                    const activeStaffUid = (actualEmployeeProfile && actualEmployeeProfile.id) || 
-                                           (typeof actualBadgeUser !== 'undefined' && actualBadgeUser && actualBadgeUser.id) ||
-                                           (typeof actualUser !== 'undefined' && actualUser && actualUser.id) || null;
-
                     const res = await supabase.rpc('process_tote_activation', {
                         p_tote_code: barcode,
                         p_intake_location_code: targetLoc || 'INTAKE-PROCESSING',
-                        p_staff_uid: activeStaffUid
+                        p_staff_uid: getActiveStaffUid()
                     });
                     data = res.data;
                     error = res.error;
                 }
                 // Fallback to scan_tote
                 else {
-                    const activeStaffUid = (actualEmployeeProfile && actualEmployeeProfile.id) || 
-                                           (typeof actualBadgeUser !== 'undefined' && actualBadgeUser && actualBadgeUser.id) ||
-                                           (typeof actualUser !== 'undefined' && actualUser && actualUser.id) || null;
-
                     const rpcParams = {
                         p_tote_code: barcode,
                         p_expected_status: expectedStatus,
-                        p_staff_uid: activeStaffUid
+                        p_staff_uid: getActiveStaffUid()
                     };
                     if (targetLoc) rpcParams.p_target_location_code = targetLoc;
 
