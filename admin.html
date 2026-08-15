@@ -3495,10 +3495,10 @@
 
                 // Fetch access requests for all active fulfillment jobs
                 const [facManifestsRes, nullManifestsRes] = await Promise.all([
-                    supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, created_at, requested_at')
+                    supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room')
                         .eq('facility_id', queryFacilityId)
                         .not('status', 'in', '("completed","cancelled","returned-to-vault")'),
-                    supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, created_at, requested_at')
+                    supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room')
                         .is('facility_id', null)
                         .not('status', 'in', '("completed","cancelled","returned-to-vault")')
                 ]);
@@ -9348,9 +9348,9 @@
                             </div>
                         </div>
                         <!-- Centered 1D Linear Barcode with Proportional Aspect Ratio -->
-                        <div class="w-full max-w-[85%] mx-auto bg-white px-4 py-2 rounded-xl border border-gray-300 flex flex-col items-center justify-center shadow-inner">
-                            <svg id="modal-live-barcode" class="w-full max-h-10"></svg>
-                            <span class="text-[9px] font-mono font-bold text-gray-700 mt-0.5 tracking-wider">${rawToken}</span>
+                        <div class="w-full max-w-[90%] mx-auto bg-white px-3 py-2 rounded-xl border border-gray-300 flex flex-col items-center justify-center shadow-inner">
+                            <svg id="modal-live-barcode" class="w-full h-12" style="shape-rendering: crispEdges;"></svg>
+                            <span class="text-[10px] font-mono font-bold text-gray-800 mt-0.5 tracking-wider">${rawToken}</span>
                         </div>
                     </div>
                 `;
@@ -9366,10 +9366,12 @@
                     try {
                         JsBarcode('#modal-live-barcode', rawToken, {
                             format: "CODE128",
-                            width: 1.4,
-                            height: 32,
+                            width: 2.0,
+                            height: 38,
                             displayValue: false,
-                            margin: 0
+                            margin: 8,
+                            background: "#ffffff",
+                            lineColor: "#000000"
                         });
                     } catch (e) {}
                 }
@@ -9579,7 +9581,7 @@
                         }
                         .barcode-wrap {
                             background: #ffffff;
-                            width: 85%;
+                            width: 90%;
                             margin: 2px auto 0 auto;
                             padding: 2px 6px;
                             border-radius: 5px;
@@ -9590,7 +9592,11 @@
                         }
                         .barcode-svg {
                             width: 100%;
-                            height: 20px;
+                            height: 26px;
+                            shape-rendering: crispEdges !important;
+                        }
+                        .barcode-svg * {
+                            shape-rendering: crispEdges !important;
                         }
                         .badge-footer {
                             display: flex;
@@ -9630,7 +9636,7 @@
                             </div>
                         </div>
                         <div class="barcode-wrap">
-                            <svg id="print-barcode"></svg>
+                            <svg id="print-barcode" class="barcode-svg"></svg>
                         </div>
                         <div class="badge-footer">
                             <span>SCAN TO ACCESS TERMINAL</span>
@@ -9662,10 +9668,12 @@
                     try {
                         win.JsBarcode(win.document.getElementById('print-barcode'), token, {
                             format: "CODE128",
-                            width: 1.2,
-                            height: 20,
+                            width: 1.6,
+                            height: 26,
                             displayValue: false,
-                            margin: 0
+                            margin: 6,
+                            background: "#ffffff",
+                            lineColor: "#000000"
                         });
                     } catch (e) {}
 
