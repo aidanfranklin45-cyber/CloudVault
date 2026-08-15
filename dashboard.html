@@ -3836,7 +3836,7 @@
             const defaults = [
                 { value: '09:00 AM - 12:00 PM', label: 'Morning (9 AM - 12 PM)' },
                 { value: '12:00 PM - 03:00 PM', label: 'Afternoon (12 PM - 3 PM)' },
-                { value: '03:00 PM - 06:00 PM', label: 'Evening Peak (3 PM - 6 PM)' }
+                { value: '03:00 PM - 06:00 PM', label: 'Evening (3 PM - 6 PM)' }
             ];
             const slots = (Array.isArray(windows) && windows.length > 0) ? windows : defaults;
             const slotSurgeFees = (stagingConfig && stagingConfig.slot_surge_fees) || {};
@@ -3845,9 +3845,10 @@
                 let extraBadge = '';
                 const fee = (slotSurgeFees[s.value] !== undefined) ? Number(slotSurgeFees[s.value]) : (s.value.includes('03:00 PM') ? peakFee : 0);
                 if (fee > 0) {
-                    extraBadge = ` (+$${fee.toFixed(2)} Peak Surcharge)`;
+                    extraBadge = ` (+$${fee.toFixed(2)})`;
                 }
-                const label = s.label.includes('$') ? s.label : `${s.label}${extraBadge}`;
+                const baseLabel = s.label.replace(/\s*\(Peak.*?\)/gi, '').replace(/\s*\(Evening.*?\)/gi, '').replace('Evening Peak', 'Evening');
+                const label = baseLabel.includes('$') ? baseLabel : `${baseLabel}${extraBadge}`;
                 return `<option value="${s.value}">${label}</option>`;
             }).join('');
 
@@ -3864,23 +3865,21 @@
             today.setHours(0,0,0,0);
             const target = new Date(targetDateStr + 'T00:00:00');
             const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
-            const isPeakSlot = slotStr && (slotStr.includes('03:00 PM') || slotStr.includes('06:00 PM'));
+            const isEveningSlot = slotStr && slotStr.includes('03:00 PM');
 
             const p = activeFacilityPricing || {};
             const slotSurgeFees = (p.staging_config && p.staging_config.slot_surge_fees) || {};
             let slotFee = 0.00;
             if (slotStr && slotSurgeFees[slotStr] !== undefined) {
                 slotFee = Number(slotSurgeFees[slotStr]);
-            } else if (isPeakSlot) {
+            } else if (isEveningSlot) {
                 slotFee = (p.evening_peak_slot_fee !== undefined && p.evening_peak_slot_fee !== null) ? Number(p.evening_peak_slot_fee) : 4.99;
             }
 
             const nextDayFree = Boolean(p.next_day_promo_free) || (p.next_day_surge_fee === 0);
 
             if (diffDays <= 0) {
-                const sameDayBase = (p.same_day_surge_fee !== undefined && p.same_day_surge_fee !== null) ? Number(p.same_day_surge_fee) : 19.99;
-                const sameDayPeak = (p.same_day_peak_surge_fee !== undefined && p.same_day_peak_surge_fee !== null) ? Number(p.same_day_peak_surge_fee) : 24.99;
-                const sameDayFee = (slotFee > 0 || isPeakSlot) ? sameDayPeak : sameDayBase;
+                const sameDayFee = (slotFee > 0 || isEveningSlot) ? (p.same_day_peak_surge_fee || 24.99) : (p.same_day_surge_fee || 19.99);
                 return {
                     fee: sameDayFee,
                     tier: 'same_day_surge',
@@ -3888,25 +3887,15 @@
                     desc: 'High demand same-day priority handling fee applied.'
                 };
             } else if (diffDays === 1) {
-                const nextDayBase = (p.next_day_surge_fee !== undefined && p.next_day_surge_fee !== null) ? Number(p.next_day_surge_fee) : 0.00;
-                const nextDayPeak = (p.next_day_peak_surge_fee !== undefined && p.next_day_peak_surge_fee !== null) ? Number(p.next_day_peak_surge_fee) : 14.99;
-                const nextDayFee = (slotFee > 0 || isPeakSlot) ? nextDayPeak : nextDayBase;
-
-                if (nextDayFree && !isPeakSlot && slotFee === 0) {
+                if (nextDayFree) {
                     return {
                         fee: 0.00,
                         tier: 'next_day_promo',
-                        title: 'Next-Day Fast Access (Complimentary)',
-                        desc: 'Next-day retrieval complimentary courtesy of facility configuration.'
-                    };
-                } else if (nextDayFee === 0) {
-                    return {
-                        fee: 0.00,
-                        tier: 'next_day_promo',
-                        title: 'Next-Day Fast Access ($0.00)',
-                        desc: 'Next-day retrieval complimentary courtesy of facility configuration.'
+                        title: 'Next-Day Fast Access (Included Promo)',
+                        desc: 'Next-day retrieval complimentary courtesy of facility promotion.'
                     };
                 } else {
+                    const nextDayFee = (slotFee > 0 || isEveningSlot) ? (p.next_day_peak_surge_fee || 14.99) : (p.next_day_surge_fee || 9.99);
                     return {
                         fee: nextDayFee,
                         tier: 'next_day_surge',

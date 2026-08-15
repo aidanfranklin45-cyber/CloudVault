@@ -581,7 +581,7 @@
                                             class="fspec-input w-full py-1 text-sm text-cyan-400 font-bold" placeholder="9.99">
                                     </div>
                                     <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
-                                        <label class="block text-[10px] font-bold text-gray-400">Next-Day Peak / Eve ($)</label>
+                                        <label class="block text-[10px] font-bold text-gray-400">Next-Day Evening ($)</label>
                                         <input type="number" step="0.50" id="conf-next-day-peak-surge"
                                             class="fspec-input w-full py-1 text-sm text-cyan-400 font-bold" placeholder="14.99">
                                     </div>
@@ -591,18 +591,18 @@
                                             class="fspec-input w-full py-1 text-sm text-rose-400 font-bold" placeholder="19.99">
                                     </div>
                                     <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
-                                        <label class="block text-[10px] font-bold text-gray-400">Same-Day Peak Eve ($)</label>
+                                        <label class="block text-[10px] font-bold text-gray-400">Same-Day Evening ($)</label>
                                         <input type="number" step="0.50" id="conf-same-day-peak-surge"
                                             class="fspec-input w-full py-1 text-sm text-rose-400 font-bold" placeholder="24.99">
                                     </div>
                                 </div>
 
-                                <div class="bg-gray-950 p-3.5 rounded-xl border border-amber-500/20 space-y-2.5">
+                                <div class="bg-gray-950 p-3.5 rounded-xl border border-gray-800 space-y-2.5">
                                     <div class="flex items-center justify-between">
-                                        <label class="text-[10px] font-extrabold uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
-                                            <i data-lucide="clock" class="w-3.5 h-3.5 text-amber-400"></i> Time-of-Day Operating Windows &amp; Surge Fees
+                                        <label class="text-[10px] font-extrabold uppercase text-blue-400 tracking-wider flex items-center gap-1.5">
+                                            <i data-lucide="clock" class="w-3.5 h-3.5 text-blue-400"></i> Time Slot Surcharges (Hourly Windows)
                                         </label>
-                                        <span class="text-[9px] font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">3 Operating Windows</span>
+                                        <span class="text-[9px] font-bold text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/30">Time Window Pricing</span>
                                     </div>
                                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                                         <div class="bg-gray-900/80 p-2.5 rounded-lg border border-gray-800">
@@ -619,13 +619,10 @@
                                                 <input type="number" step="0.50" id="conf-slot-fee-afternoon" class="fspec-input w-full py-0.5 text-xs text-emerald-400 font-bold" placeholder="0.00" value="0.00">
                                             </div>
                                         </div>
-                                        <div class="bg-gray-900/80 p-2.5 rounded-lg border border-amber-500/30 bg-amber-950/20">
-                                            <span class="text-[9px] font-bold text-amber-300 block flex items-center justify-between">
-                                                Evening Peak (3pm - 6pm)
-                                                <span class="text-[8px] bg-amber-500/20 text-amber-300 px-1 rounded">Peak Surcharge</span>
-                                            </span>
+                                        <div class="bg-gray-900/80 p-2.5 rounded-lg border border-gray-800">
+                                            <span class="text-[9px] font-bold text-gray-400 block">Evening (3pm - 6pm)</span>
                                             <div class="flex items-center mt-1">
-                                                <span class="text-xs text-amber-500 mr-1">$</span>
+                                                <span class="text-xs text-gray-500 mr-1">$</span>
                                                 <input type="number" step="0.50" id="conf-slot-fee-evening" class="fspec-input w-full py-0.5 text-xs text-amber-400 font-bold" placeholder="4.99" value="4.99">
                                             </div>
                                         </div>
