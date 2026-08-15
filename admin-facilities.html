@@ -2807,25 +2807,39 @@
                     const depositVal = depEl ? getNumVal('conf-deposit-amount', 25.00) : 25.00;
                     const activeVal = document.getElementById('conf-market-active-select').value === "true";
 
+                    const zoneId = currentLoadedZone ? currentLoadedZone.id : `zone_${currentLoadedFac.id.replace('facility_', '')}`;
+                    const zoneCity = (currentLoadedZone && currentLoadedZone.city) || updatedFac.city || updatedFac.name || 'Active Market';
+                    const zoneZips = currentLoadedZone ? (currentLoadedZone.zip_codes || []) : [];
+
+                    const zoneData = {
+                        id: zoneId,
+                        facility_id: currentLoadedFac.id,
+                        city: zoneCity,
+                        required_deposit: depositVal,
+                        active: activeVal,
+                        zip_codes: zoneZips
+                    };
+
+                    const activeStaffUid = (typeof actualUserProfile !== 'undefined' && actualUserProfile && actualUserProfile.id) ||
+                                           (typeof currentUserProfile !== 'undefined' && currentUserProfile && currentUserProfile.id) ||
+                                           (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.id) || null;
+
                     try {
-                        // Upsert facility row specifically (do NOT mutate global settings row)
-                        const { error: facErr } = await supabase.from('facilities').upsert(updatedFac, { onConflict: 'id' });
-                        if (facErr) throw facErr;
+                        // Use SECURITY DEFINER RPC to bypass client-level RLS restrictions
+                        const { data: rpcRes, error: rpcErr } = await supabase.rpc('save_facility_configuration', {
+                            p_facility_data: updatedFac,
+                            p_zone_data: zoneData,
+                            p_staff_uid: activeStaffUid
+                        });
 
-                        // Update operational zone deposit & active status
-                        const zoneId = currentLoadedZone ? currentLoadedZone.id : `zone_${currentLoadedFac.id.replace('facility_', '')}`;
-                        const zoneCity = (currentLoadedZone && currentLoadedZone.city) || updatedFac.city || updatedFac.name || 'Active Market';
-                        const zoneZips = currentLoadedZone ? (currentLoadedZone.zip_codes || []) : [];
+                        if (rpcErr) {
+                            console.warn("RPC save_facility_configuration notice, attempting direct upsert:", rpcErr);
+                            const { error: facErr } = await supabase.from('facilities').upsert(updatedFac, { onConflict: 'id' });
+                            if (facErr) throw facErr;
 
-                        const { error: zoneErr } = await supabase.from('operational_zones').upsert({
-                            id: zoneId,
-                            facility_id: currentLoadedFac.id,
-                            city: zoneCity,
-                            required_deposit: depositVal,
-                            active: activeVal,
-                            zip_codes: zoneZips
-                        }, { onConflict: 'id' });
-                        if (zoneErr) throw zoneErr;
+                            const { error: zoneErr } = await supabase.from('operational_zones').upsert(zoneData, { onConflict: 'id' });
+                            if (zoneErr) throw zoneErr;
+                        }
 
                         await loadFacilitiesDropdown();
                         if (!silent) {
