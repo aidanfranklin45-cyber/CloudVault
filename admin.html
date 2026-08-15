@@ -2220,7 +2220,7 @@
             }
 
             // Render current facility views using in-memory master data
-            const currentFac = localStorage.getItem('cloudvault_selected_facility') || (facilities && facilities[0]?.id ? facilities[0].id : null);
+            const currentFac = actualAssignedFacilityId || localStorage.getItem('cloudvault_selected_facility') || (facilities && facilities[0]?.id ? facilities[0].id : null);
             if (currentFac) {
                 await onGlobalFacilityChange(currentFac, master);
             }
@@ -3595,7 +3595,7 @@
 
                 let allRequests = [];
                 if (preloadedRequests) {
-                    allRequests = preloadedRequests;
+                    allRequests = preloadedRequests.filter(r => r && r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault');
                 } else {
                     const [facManifestsRes, nullManifestsRes] = await Promise.all([
                         supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room')
@@ -3797,16 +3797,23 @@
                     const jobs = [];
                     const handledToteIds = new Set();
 
-                    // 1. Map items to distinct active access requests
-                    (requests || []).forEach(req => {
+                    // 1. Filter to active non-completed access requests and sort newest first
+                    const activeRequests = (requests || [])
+                        .filter(r => r && r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault')
+                        .sort((a, b) => new Date(b.requested_at || 0) - new Date(a.requested_at || 0));
+
+                    // 2. Map items to distinct active access requests
+                    activeRequests.forEach(req => {
                         const rawItems = req.requested_items || req.requested_tote_codes || [];
                         const reqIdentifiers = new Set(rawItems);
                         
                         let matchingTotes = (items || []).filter(t => 
-                            reqIdentifiers.has(t.id) ||
-                            reqIdentifiers.has(t.tote_code) ||
-                            reqIdentifiers.has(t.barcode) ||
-                            reqIdentifiers.has(t.label)
+                            !handledToteIds.has(t.id) && (
+                                reqIdentifiers.has(t.id) ||
+                                reqIdentifiers.has(t.tote_code) ||
+                                reqIdentifiers.has(t.barcode) ||
+                                reqIdentifiers.has(t.label)
+                            )
                         );
 
                         if (matchingTotes.length > 0) {
@@ -3832,7 +3839,7 @@
                         }
                     });
 
-                    // 2. Map orphan/unlinked totes by UID and fulfillment channel
+                    // 3. Map orphan/unlinked totes by UID and fulfillment channel
                     const unhandledItems = (items || []).filter(t => !handledToteIds.has(t.id));
                     if (unhandledItems.length > 0) {
                         const unlinkedMap = {};
@@ -3852,7 +3859,7 @@
 
                         Object.entries(unlinkedMap).forEach(([key, grp]) => {
                             const owner = resolveToteOwner(grp.uid, grp.totes);
-                            const userReq = (allRequests || []).find(r => r.uid === grp.uid && r.status !== 'completed' && r.status !== 'cancelled');
+                            const userReq = (activeRequests || []).find(r => r.uid === grp.uid);
                             const userAssignedRoom = userReq && userReq.assigned_room ? Number(userReq.assigned_room) : null;
                             const userPin = userReq && userReq.pin ? userReq.pin : (pinByUid[grp.uid] || '1517');
 
