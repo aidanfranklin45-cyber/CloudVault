@@ -1970,14 +1970,6 @@
             loadFacilitySpecs(fac);
         }
 
-        function loadExecutiveFacilitySpecs(facilityId) {
-            return onGlobalFacilityChange(facilityId);
-        }
-
-        function loadManagerFacilityData(facilityId) {
-            return onGlobalFacilityChange(facilityId);
-        }
-
         function saveFacilitySpecs() {
             return saveRegionalPricing();
         }
@@ -2061,7 +2053,7 @@
                 }
                 renderMarketsList(markets);
 
-                // Funnel analytics
+                // Funnel and Executive Analytics
                 if (activeRole === 'executive') {
                     let funnelCounts = {
                         lowVolume: [0, 0, 0, 0, 0],
@@ -2084,7 +2076,7 @@
                             : `Estimator conversion metrics`;
                     }
 
-                    // Financials (Dynamically calculated from real data)
+                    // Financials
                     const { data: subs } = await supabase.from('subscriptions').select('recurring_storage').eq('status', 'active');
                     let mrr = 0;
                     let subCount = 0;
@@ -2113,52 +2105,11 @@
                             : `<i data-lucide="map-pin" class="w-3 h-3 mr-0.5"></i> Active service zones`;
                     }
 
-                    // Populate Facilities Selectors Dynamically
-                    const { data: facs } = await supabase.from('facilities').select('*');
-                    const safeFacs = facs || [];
-                    if (safeFacs.length > 0) {
-                        // Executives have free access to all facilities — no default lock
-                        // Managers and workers are locked to their assigned facility
-                        const isExec = actualUserRole === 'executive';
-                        const preferredFacId = (!isExec && actualAssignedFacilityId) ? actualAssignedFacilityId : null;
-
-                        ['global-facility-select', 'pricing-facility-select', 'manager-facility-select', 'exec-facility-select', 'emp-facility'].forEach(id => {
-                            const el = document.getElementById(id);
-                            if (el) {
-                                const curVal = el.value;
-                                el.innerHTML = safeFacs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
-                                // Non-executives: default to assigned facility
-                                if (preferredFacId && safeFacs.some(f => f.id === preferredFacId)) {
-                                    el.value = preferredFacId;
-                                } else if (curVal && safeFacs.some(f => f.id === curVal)) {
-                                    el.value = curVal;
-                                } else {
-                                    el.value = safeFacs[0].id;
-                                }
-                            }
-                        });
-
-                        // Update the active facility pill name to match
-                        const execSel = document.getElementById('exec-facility-select');
-                        const activePill = document.getElementById('active-facility-name-pill');
-                        if (execSel && activePill && execSel.selectedIndex >= 0) {
-                            activePill.textContent = execSel.options[execSel.selectedIndex]?.text || '';
-                        }
-                    }
-
                     loadExecutiveFacilitySpecs();
-                    loadWaitlistData();
                 }
 
-                // Always load waitlist regardless of role resolution
+                // Load waitlist data
                 loadWaitlistData();
-
-                if (activeRole === 'executive' || activeRole === 'manager') {
-                    loadManagerFacilityData();
-                    loadWorkerQueues();
-                } else if (activeRole === 'worker') {
-                    loadWorkerQueues();
-                }
 
             } catch (err) {
                 console.error("Error loading Supabase live data:", err);
@@ -2497,14 +2448,9 @@
 
             const facilityId = select.value;
             loadManagerLiveData(facilityId);
-
-            // Sync worker queues with the new facility selection if visible
-            if (activeRole === 'executive' || activeRole === 'manager') {
-                loadWorkerQueues();
-            }
         }
 
-        async function loadManagerLiveData(facilityId = null) {
+        async function loadManagerLiveData(facilityId = null, preloadedItems = null, preloadedRequests = null) {
             try {
                 let facId = facilityId || window.currentSelectedFacilityId;
                 if (!facId) {
@@ -2514,7 +2460,7 @@
                 }
                 if (!facId) return;
 
-                loadSchedulingCalendar(facId);
+                loadSchedulingCalendar(facId, preloadedRequests);
 
                 const { data: fac, error: facErr } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
                 if (facErr || !fac) {
@@ -2527,10 +2473,15 @@
                 const stagingRooms = fac.num_staging_rooms || 2;
 
                 // Read active capacity dynamically from real inventory
-                const { count: activeCount } = await supabase.from('inventory').select('*', { count: 'exact', head: true })
-                    .eq('facility_id', facId)
-                    .eq('status', 'stored');
-                const active = activeCount || 0;
+                let active = 0;
+                if (preloadedItems) {
+                    active = preloadedItems.filter(i => (i.facility_id === facId || !i.facility_id) && i.status === 'stored').length;
+                } else {
+                    const { count: activeCount } = await supabase.from('inventory').select('*', { count: 'exact', head: true })
+                        .eq('facility_id', facId)
+                        .eq('status', 'stored');
+                    active = activeCount || 0;
+                }
 
                 const capacityPct = Math.round(((active * sqftTote) / usable) * 100);
                 const totalCapacity = Math.floor(usable / sqftTote);
@@ -2553,17 +2504,21 @@
                 }
 
                 // Access requests override table (Active customer retrieval requests only)
-                const { data: rawReqs, error: reqsErr } = await supabase.from('access_requests')
-                    .select('*, target_date, time_slot, surge_tier, surge_fee')
-                    .eq('facility_id', facId)
-                    .in('status', ['pending', 'staged']);
+                let reqs = [];
+                if (preloadedRequests) {
+                    reqs = preloadedRequests.filter(r => (r.facility_id === facId || !r.facility_id) && (r.status === 'pending' || r.status === 'staged') && ((r.requested_items && r.requested_items.length > 0) || (r.requested_tote_codes && r.requested_tote_codes.length > 0)));
+                } else {
+                    const { data: rawReqs, error: reqsErr } = await supabase.from('access_requests')
+                        .select('*, target_date, time_slot, surge_tier, surge_fee')
+                        .eq('facility_id', facId)
+                        .in('status', ['pending', 'staged']);
+                    reqs = (rawReqs || []).filter(r => (r.requested_items && r.requested_items.length > 0) || (r.requested_tote_codes && r.requested_tote_codes.length > 0));
+                }
 
                 const tableBody = document.getElementById('staging-override-table-body');
                 tableBody.innerHTML = "";
 
-                let reqs = (rawReqs || []).filter(r => (r.requested_items && r.requested_items.length > 0) || (r.requested_tote_codes && r.requested_tote_codes.length > 0));
-
-                if (reqsErr || !reqs || reqs.length === 0) {
+                if (!reqs || reqs.length === 0) {
                     tableBody.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-xs text-gray-500">No active staging access requests for this facility.</td></tr>`;
                 } else {
                     reqs.forEach(req => {
@@ -3088,7 +3043,7 @@
         // =========================================================================
         // FEATURE 3: Worker Shift Productivity Tracker Telemetry
         // =========================================================================
-        async function loadWorkerShiftStats(facilityId = null) {
+        async function loadWorkerShiftStats(facilityId = null, preloadedItems = null, preloadedRequests = null) {
             try {
                 let facId = facilityId || window.currentSelectedFacilityId;
                 if (!facId) {
@@ -3110,22 +3065,34 @@
                 const todayIso = todayMidnight.toISOString();
                 const todayYmd = todayMidnight.toISOString().split('T')[0];
 
-                // 1. Fetch inventory items scanned today
-                const { data: scannedToday } = await supabase
-                    .from('inventory')
-                    .select('id, status, last_scanned_at')
-                    .or(`facility_id.eq.${facId},facility_id.is.null`)
-                    .gte('last_scanned_at', todayIso);
+                // 1. Get inventory items scanned today
+                let scannedToday = preloadedItems;
+                if (!scannedToday) {
+                    const { data } = await supabase
+                        .from('inventory')
+                        .select('id, status, last_scanned_at')
+                        .or(`facility_id.eq.${facId},facility_id.is.null`)
+                        .gte('last_scanned_at', todayIso);
+                    scannedToday = data || [];
+                } else {
+                    scannedToday = scannedToday.filter(i => i.last_scanned_at && i.last_scanned_at >= todayIso);
+                }
 
                 const scanCount = scannedToday ? scannedToday.length : 0;
                 const activationsCount = scannedToday ? scannedToday.filter(i => i.status === 'stored' || i.status === 'staged' || i.status === 'with-customer').length : 0;
 
-                // 2. Fetch access_requests updated/staged today
-                const { data: reqsToday } = await supabase
-                    .from('access_requests')
-                    .select('id, status, target_date, requested_at')
-                    .or(`facility_id.eq.${facId},facility_id.is.null`)
-                    .gte('requested_at', todayIso);
+                // 2. Get access_requests updated/staged today
+                let reqsToday = preloadedRequests;
+                if (!reqsToday) {
+                    const { data } = await supabase
+                        .from('access_requests')
+                        .select('id, status, target_date, requested_at')
+                        .or(`facility_id.eq.${facId},facility_id.is.null`)
+                        .gte('requested_at', todayIso);
+                    reqsToday = data || [];
+                } else {
+                    reqsToday = reqsToday.filter(r => r.requested_at && r.requested_at >= todayIso);
+                }
 
                 const stagedCount = reqsToday ? reqsToday.filter(r => r.status === 'completed' || r.status === 'staged' || r.status === 'in_progress').length : 0;
 
@@ -3188,12 +3155,8 @@
             return `${year}-${month}-${day}`;
         }
 
-        async function loadSchedulingCalendar(facilityId = null) {
+        async function loadSchedulingCalendar(facilityId = null, preloadedRequests = null) {
             try {
-                if (!currentCalendarStartMonday) {
-                    currentCalendarStartMonday = getMondayOfDate(new Date());
-                }
-
                 let facId = facilityId || window.currentSelectedFacilityId;
                 if (!facId) {
                     const globalSel = document.getElementById('global-facility-select');
@@ -3201,6 +3164,10 @@
                     facId = globalSel?.value || mgrSel?.value || actualAssignedFacilityId;
                 }
                 if (!facId) return;
+
+                if (!currentCalendarStartMonday) {
+                    currentCalendarStartMonday = getMondayOfDate(new Date());
+                }
 
                 // Calculate Monday - Sunday dates for current selected week
                 const days = [];
@@ -3235,18 +3202,23 @@
                 });
 
                 // Fetch access requests for this week range at facility
-                const { data: reqs, error: reqErr } = await supabase.from('access_requests')
-                    .select('*, users!uid(name)')
-                    .or(`facility_id.eq.${facId},facility_id.is.null`)
-                    .gte('target_date', startDateYmd)
-                    .lte('target_date', endDateYmd)
-                    .neq('status', 'cancelled');
+                let accessRequests = [];
+                if (preloadedRequests) {
+                    accessRequests = preloadedRequests.filter(r => (r.facility_id === facId || !r.facility_id) && r.target_date >= startDateYmd && r.target_date <= endDateYmd && r.status !== 'cancelled');
+                } else {
+                    const { data: reqs, error: reqErr } = await supabase.from('access_requests')
+                        .select('*, users!uid(name)')
+                        .or(`facility_id.eq.${facId},facility_id.is.null`)
+                        .gte('target_date', startDateYmd)
+                        .lte('target_date', endDateYmd)
+                        .neq('status', 'cancelled');
 
-                if (reqErr) {
-                    console.warn('[Scheduling Calendar] Access requests query notice:', reqErr.message);
+                    if (reqErr) {
+                        console.warn('[Scheduling Calendar] Access requests query notice:', reqErr.message);
+                    }
+                    accessRequests = reqs || [];
                 }
 
-                const accessRequests = reqs || [];
                 const reservations = [];
 
                 calendarLoadedData = { days, reservations, accessRequests, facId };
@@ -3420,11 +3392,9 @@
             if (panel) panel.classList.add('hidden');
         }
 
-        function loadWorkerQueues(facilityId = null) {
+        async function loadWorkerQueues(facilityId = null) {
             updateOfflineQueueBadge();
-            loadWorkerShiftStats(facilityId);
-            loadWorkerLiveData(facilityId);
-            loadWorkerLogisticsRouting(facilityId);
+            await loadWorkerLiveData(facilityId);
         }
 
         // =========================================================================
@@ -3482,6 +3452,10 @@
                 const rawManifests = [...(facManifestsRes.data || []), ...(nullManifestsRes.data || [])];
                 const allRequests = Array.from(new Map(rawManifests.map(m => [m.id, m])).values());
                 const manifests = allRequests;
+
+                // Sync shift stats and logistics routing in-memory (0ms network cost)
+                loadWorkerShiftStats(queryFacilityId, allItems, allRequests);
+                loadWorkerLogisticsRouting(queryFacilityId, allRequests, allItems);
 
                 // Attach Supabase Realtime listeners for instant queue sync without manual refresh (debounced)
                 if (!window.hasSetupAdminRealtime) {
@@ -5659,7 +5633,7 @@
 
         // =========================================================================
         // Google Maps Routes API Logistics Routing Renderer
-        async function loadWorkerLogisticsRouting(facilityId = null) {
+        async function loadWorkerLogisticsRouting(facilityId = null, preloadedRequests = null, preloadedItems = null) {
             try {
                 let facId = facilityId || window.currentSelectedFacilityId;
                 if (!facId) {
@@ -5680,17 +5654,28 @@
                 const activeCity = [fac.city, fac.state].filter(Boolean).join(', ') || fac.name;
                 const hubName = fac.name;
 
-                const { data: rawRequests } = await supabase.from('access_requests')
-                    .select('*, users!uid(id, name, active_zone, assigned_facility_id)')
-                    .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%');
+                let requests = preloadedRequests;
+                if (!requests) {
+                    const { data: rawRequests } = await supabase.from('access_requests')
+                        .select('*, users!uid(id, name, active_zone, assigned_facility_id)')
+                        .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%');
+                    requests = (rawRequests || []).filter(r => 
+                        r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
+                    );
+                } else {
+                    requests = requests.filter(r => 
+                        (r.fulfillment_type === 'valet_delivery' || r.request_type === 'valet_delivery') &&
+                        r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
+                    );
+                }
 
-                const requests = (rawRequests || []).filter(r => 
-                    r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
-                );
-
-                const { data: activeValetTotes } = await supabase.from('inventory')
-                    .select('id, uid, tote_code, label, status, facility_id')
-                    .eq('facility_id', queryFacilityId);
+                let activeValetTotes = preloadedItems;
+                if (!activeValetTotes) {
+                    const { data } = await supabase.from('inventory')
+                        .select('id, uid, tote_code, label, status, facility_id')
+                        .eq('facility_id', queryFacilityId);
+                    activeValetTotes = data || [];
+                }
 
                 // Build discrete delivery stops strictly per active scheduled valet order
                 const stops = [];
