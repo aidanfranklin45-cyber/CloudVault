@@ -234,24 +234,23 @@ async function authenticateEmployeeBadge(token) {
 }
 
 // Global Hardware 2D Barcode HID Scanner Listener
-// Passively listens for rapid burst keystrokes (<50ms per key) and handles CV-AUTH- badges silently
+// Passively listens for rapid burst keystrokes (<60ms per key) and handles CV-AUTH- badges & warehouse barcodes
 function initGlobalBadgeScanner(options = {}) {
     let keyBuffer = [];
     let activeInputPreValue = null;
-    let burstDetected = false;
     const BURST_THRESHOLD_MS = 60; // Hardware scanners emit keystrokes well under 50ms
 
     window.addEventListener('keydown', async (e) => {
         const now = Date.now();
         const activeEl = document.activeElement;
-        const isInputElement = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+        const isInputElement = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT' || activeEl.isContentEditable);
 
-        if (keyBuffer.length === 0 && isInputElement) {
+        if (keyBuffer.length === 0 && isInputElement && activeEl.value !== undefined) {
             activeInputPreValue = activeEl.value;
         }
 
         if (e.key === 'Enter') {
-            if (keyBuffer.length >= 6) {
+            if (keyBuffer.length >= 4) {
                 // Calculate average inter-keystroke interval
                 let intervals = [];
                 for (let i = 1; i < keyBuffer.length; i++) {
@@ -260,22 +259,39 @@ function initGlobalBadgeScanner(options = {}) {
                 const avgInterval = intervals.length ? intervals.reduce((a, b) => a + b, 0) / intervals.length : 0;
                 const scannedString = keyBuffer.map(k => k.char).join('').trim();
 
-                // If fast burst or matches CloudVault prefixes or warehouse location codes
                 const isAuthScan = scannedString.startsWith('CV-AUTH-');
-                const isToteScan = scannedString.startsWith('CV-');
-                const isLocationScan = scannedString.startsWith('V-') || scannedString.startsWith('ROOM-') || scannedString.startsWith('BAY-') || scannedString.startsWith('SHELF-') || scannedString.startsWith('STAGE-') || /^[A-Z]\d{1,3}/i.test(scannedString);
-                const isBurst = avgInterval < BURST_THRESHOLD_MS || isAuthScan || isToteScan || isLocationScan;
+                const isHardwareBurst = avgInterval < BURST_THRESHOLD_MS;
+                const isTargetPrefix = scannedString.startsWith('CV-') || scannedString.startsWith('V-') || scannedString.startsWith('ROOM-') || scannedString.startsWith('BAY-') || scannedString.startsWith('SHELF-') || scannedString.startsWith('STAGE-');
 
-                if (isBurst) {
+                // If user is typing in an input field and it's NOT a hardware burst or CV-AUTH- badge, let the input handle Enter normally
+                if (isInputElement && !isAuthScan && !isHardwareBurst) {
+                    keyBuffer = [];
+                    activeInputPreValue = null;
+                    return; // Allow native input Enter event (e.g. searching in Telemetry Console)
+                }
+
+                // If it is an authentic hardware scan or an employee badge:
+                if (isAuthScan || isHardwareBurst || (!isInputElement && isTargetPrefix)) {
                     e.preventDefault();
                     e.stopPropagation();
 
-                    // Sanitize any input element that might have received scanner characters
-                    if (isInputElement && activeEl) {
+                    // If it's the Master Search Bar in Telemetry Console
+                    if (isInputElement && activeEl && activeEl.id === 'master-tote-search-input') {
+                        activeEl.value = scannedString;
+                        activeEl.dispatchEvent(new Event('input', { bubbles: true }));
+                        if (typeof executeMasterToteSearch === 'function') {
+                            executeMasterToteSearch(scannedString);
+                        }
+                        keyBuffer = [];
+                        activeInputPreValue = null;
+                        return;
+                    }
+
+                    // Sanitize input if badge was scanned while cursor was in an unrelated text box
+                    if (isInputElement && activeEl && activeEl.id !== 'scan-barcode') {
                         if (activeInputPreValue !== null) {
                             activeEl.value = activeInputPreValue;
                         } else {
-                            // Strip scanned string if pre-value was null
                             activeEl.value = activeEl.value.replace(scannedString, '').trim();
                         }
                     }
@@ -294,7 +310,6 @@ function initGlobalBadgeScanner(options = {}) {
                             if (typeof options.onBadgeSuccess === 'function') {
                                 options.onBadgeSuccess(authResult.user, authResult);
                             } else {
-                                // Default redirect / toast behavior
                                 showBadgeScanToast(`Welcome, ${authResult.user.name}! Verified badge.`, 'success');
                                 setTimeout(() => {
                                     window.location.href = 'admin.html';
@@ -317,21 +332,20 @@ function initGlobalBadgeScanner(options = {}) {
                     return;
                 }
             }
-            // Reset buffer if not a valid burst
             keyBuffer = [];
             activeInputPreValue = null;
-        } else if (e.key && e.key.length === 1) {
+        } else if (e.key && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
             // If pause between keystrokes is too long for a scanner burst, reset buffer
             if (keyBuffer.length > 0) {
                 const lastTime = keyBuffer[keyBuffer.length - 1].time;
-                if (now - lastTime > BURST_THRESHOLD_MS * 2.5 && !burstDetected) {
+                if (now - lastTime > BURST_THRESHOLD_MS * 2.5) {
                     keyBuffer = [];
-                    if (isInputElement) activeInputPreValue = activeEl.value;
+                    if (isInputElement && activeEl.value !== undefined) activeInputPreValue = activeEl.value;
                 }
             }
             keyBuffer.push({ char: e.key, time: now });
         }
-    }, true); // Capture phase to intercept before form submit or input handlers
+    }, true);
 }
 
 // Unobtrusive Toast for Badge Scan Feedback
