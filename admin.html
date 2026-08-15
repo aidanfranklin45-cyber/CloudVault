@@ -5709,36 +5709,56 @@
                         return;
                     }
 
+                    const activeStaffUid = (actualEmployeeProfile && actualEmployeeProfile.id) || 
+                                           (typeof actualBadgeUser !== 'undefined' && actualBadgeUser && actualBadgeUser.id) ||
+                                           (typeof actualUser !== 'undefined' && actualUser && actualUser.id) || null;
+
                     const res = await supabase.rpc('process_tote_return', {
                         p_tote_code: barcode,
-                        p_target_location_code: targetLoc
+                        p_target_location_code: targetLoc,
+                        p_staff_uid: activeStaffUid
                     });
                     data = res.data;
                     error = res.error;
                 } 
                 // Event 2: Vault Pull to Staging or Dispatch
                 else if ((expectedStatus === 'staged' || expectedStatus === 'pending-dispatch') && (currentStatus === 'stored' || currentStatus === 'pending-stage')) {
+                    const activeStaffUid = (actualEmployeeProfile && actualEmployeeProfile.id) || 
+                                           (typeof actualBadgeUser !== 'undefined' && actualBadgeUser && actualBadgeUser.id) ||
+                                           (typeof actualUser !== 'undefined' && actualUser && actualUser.id) || null;
+
                     const res = await supabase.rpc('process_vault_pull', {
                         p_tote_code: barcode,
-                        p_target_staging_code: targetLoc
+                        p_target_staging_code: targetLoc,
+                        p_staff_uid: activeStaffUid
                     });
                     data = res.data;
                     error = res.error;
                 }
                 // Event 3: Intake & Activation
                 else if (expectedStatus === 'activate' || checkTote.activated === false) {
+                    const activeStaffUid = (actualEmployeeProfile && actualEmployeeProfile.id) || 
+                                           (typeof actualBadgeUser !== 'undefined' && actualBadgeUser && actualBadgeUser.id) ||
+                                           (typeof actualUser !== 'undefined' && actualUser && actualUser.id) || null;
+
                     const res = await supabase.rpc('process_tote_activation', {
                         p_tote_code: barcode,
-                        p_intake_location_code: targetLoc || 'INTAKE-PROCESSING'
+                        p_intake_location_code: targetLoc || 'INTAKE-PROCESSING',
+                        p_staff_uid: activeStaffUid
                     });
                     data = res.data;
                     error = res.error;
                 }
                 // Fallback to scan_tote
                 else {
+                    const activeStaffUid = (actualEmployeeProfile && actualEmployeeProfile.id) || 
+                                           (typeof actualBadgeUser !== 'undefined' && actualBadgeUser && actualBadgeUser.id) ||
+                                           (typeof actualUser !== 'undefined' && actualUser && actualUser.id) || null;
+
                     const rpcParams = {
                         p_tote_code: barcode,
-                        p_expected_status: expectedStatus
+                        p_expected_status: expectedStatus,
+                        p_staff_uid: activeStaffUid
                     };
                     if (targetLoc) rpcParams.p_target_location_code = targetLoc;
 
