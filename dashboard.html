@@ -3792,31 +3792,65 @@
         // ============================================================
         let selectedReservationSurge = { fee: 0.00, tier: 'standard' };
 
-        async function loadAssignedFacilityPricing(facilityId) {
+        async function loadAssignedFacilityPricing(facilityId = null) {
             let facId = facilityId;
-            if (!facId) {
-                const p = currentUserProfile || currentProfile;
-                facId = (p && (p.assigned_facility_id || p.assigned_facility)) || null;
+            const p = currentUserProfile || currentProfile || (typeof actualUserProfile !== 'undefined' ? actualUserProfile : null);
+
+            // 1. Direct assigned facility on profile
+            if (!facId && p) {
+                facId = p.assigned_facility_id || p.assigned_facility || null;
             }
+
+            // 2. Resolve via customer operational zone / city / zip
+            if (!facId && p) {
+                const userCity = p.city || p.address_city || p.shipping_address?.city || null;
+                const userZip = p.zip || p.address_zip || p.zip_code || p.shipping_address?.zip || null;
+                const userZone = p.active_zone || p.zone_id || null;
+
+                try {
+                    if (userZone) {
+                        const { data: zone } = await supabase.from('operational_zones').select('facility_id').eq('id', userZone).maybeSingle();
+                        if (zone && zone.facility_id) facId = zone.facility_id;
+                    } else if (userZip) {
+                        const { data: zone } = await supabase.from('operational_zones').select('facility_id').contains('zip_codes', [userZip]).maybeSingle();
+                        if (zone && zone.facility_id) facId = zone.facility_id;
+                    } else if (userCity) {
+                        const { data: zone } = await supabase.from('operational_zones').select('facility_id').ilike('city', `%${userCity}%`).maybeSingle();
+                        if (zone && zone.facility_id) facId = zone.facility_id;
+                    }
+                } catch (e) {
+                    console.warn('Zone mapping lookup notice:', e);
+                }
+            }
+
+            // 3. Resolve via customer stored totes
             if (!facId && typeof userTotes !== 'undefined' && Array.isArray(userTotes)) {
                 const foundToteFac = userTotes.find(t => t.facility_id)?.facility_id;
                 if (foundToteFac) facId = foundToteFac;
             }
+
+            // 4. Session facility or fallback
             if (!facId) {
-                facId = 'facility_seattle_north';
+                facId = localStorage.getItem('cloudvault_selected_facility') || 'facility_yakima';
             }
+
             try {
+                // Dynamically fetch live facility configuration from database
                 const { data: fac } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
                 if (fac) {
+                    window.currentActiveFacility = fac;
                     activeFacilityPricing = {
+                        id: fac.id,
+                        name: fac.name,
+                        city: fac.city,
                         valet_base: (fac.valet_base !== null && fac.valet_base !== undefined) ? Number(fac.valet_base) : 17.00,
                         valet_tote_adder: (fac.valet_tote_adder !== null && fac.valet_tote_adder !== undefined) ? Number(fac.valet_tote_adder) : 1.00,
                         next_day_surge_fee: (fac.next_day_surge_fee !== null && fac.next_day_surge_fee !== undefined) ? Number(fac.next_day_surge_fee) : 0.00,
-                        next_day_peak_surge_fee: (fac.next_day_peak_surge_fee !== null && fac.next_day_peak_surge_fee !== undefined) ? Number(fac.next_day_peak_surge_fee) : 14.99,
+                        next_day_peak_surge_fee: (fac.next_day_peak_surge_fee !== null && fac.next_day_peak_surge_fee !== undefined) ? Number(fac.next_day_peak_surge_fee) : 0.00,
                         same_day_surge_fee: (fac.same_day_surge_fee !== null && fac.same_day_surge_fee !== undefined) ? Number(fac.same_day_surge_fee) : 19.99,
                         same_day_peak_surge_fee: (fac.same_day_peak_surge_fee !== null && fac.same_day_peak_surge_fee !== undefined) ? Number(fac.same_day_peak_surge_fee) : 24.99,
-                        evening_peak_slot_fee: (fac.evening_peak_slot_fee !== null && fac.evening_peak_slot_fee !== undefined) ? Number(fac.evening_peak_slot_fee) : 4.99,
-                        next_day_promo_free: Boolean(fac.next_day_promo_free),
+                        evening_peak_slot_fee: (fac.evening_peak_slot_fee !== null && fac.evening_peak_slot_fee !== undefined) ? Number(fac.evening_peak_slot_fee) : 0.00,
+                        next_day_promo_free: Boolean(fac.next_day_promo_free) || (Number(fac.next_day_surge_fee) === 0),
                         max_scheduling_days_out: fac.max_scheduling_days_out || 30,
                         min_lead_time_days: (fac.min_lead_time_days !== null && fac.min_lead_time_days !== undefined) ? fac.min_lead_time_days : 0,
                         staging_config: fac.staging_config || {}
@@ -3825,6 +3859,9 @@
                     systemPricing.valet_tote_adder = activeFacilityPricing.valet_tote_adder;
                     // Populate time slot pickers from DB config with active facility surge rates
                     populatePickupWindowSelects(fac.pickup_windows, fac.staging_config, activeFacilityPricing.evening_peak_slot_fee);
+                    if (typeof updateReservationSurgeUI === 'function') {
+                        updateReservationSurgeUI();
+                    }
                 }
             } catch (e) {
                 console.warn('Facility pricing lookup notice:', e);
@@ -4225,7 +4262,7 @@
                 if (!dateInput.value || dateInput.value < earliestValid) dateInput.value = earliestValid;
                 if (dateInput.value > maxValid) dateInput.value = maxValid;
                 const profile = currentUser ? await getCachedUserProfile(currentUser.id) : null;
-                const facId = profile?.assigned_facility_id || 'facility_seattle_north';
+                const facId = activeFacilityPricing?.id || profile?.assigned_facility_id;
                 await checkSlotAvailability(facId, dateInput.value, 'retrieval-time-slot');
             }
             updateReservationSurgeUI();
@@ -4245,7 +4282,8 @@
                 if (!dateInput.value || dateInput.value < earliestValid) dateInput.value = earliestValid;
                 if (dateInput.value > maxValid) dateInput.value = maxValid;
                 const profile = currentUser ? await getCachedUserProfile(currentUser.id) : null;
-                const facId = profile?.assigned_facility_id || 'facility_seattle_north';
+                if (dateInput && dateInput.value) {
+                const facId = activeFacilityPricing?.id || profile?.assigned_facility_id;
                 await checkSlotAvailability(facId, dateInput.value, 'fulfillment-time-slot');
             }
             updateFulfillmentSurgeUI();
@@ -4261,10 +4299,7 @@
         async function requestRetrieval() {
             if (selectedItems.size === 0) return;
             
-            const userFac = (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
-                            (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility)) ||
-                            'facility_seattle_north';
-            await loadAssignedFacilityPricing(userFac);
+            await loadAssignedFacilityPricing();
 
             // Populate modal counts and pricing
             const count = selectedItems.size;
