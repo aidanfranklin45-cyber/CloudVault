@@ -1879,6 +1879,17 @@
 
 
 
+        // Global Facilities In-Memory Cache
+        window._facilitiesCache = window._facilitiesCache || {};
+        async function getCachedFacility(facilityId) {
+            const facId = facilityId || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+            if (!facId) return null;
+            if (window._facilitiesCache[facId]) return window._facilitiesCache[facId];
+            const { data: fac } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
+            if (fac) window._facilitiesCache[fac.id] = fac;
+            return fac;
+        }
+
         // Regional Dynamic Pricing Handlers
         async function loadRegionalPricing(facilityId) {
             const facId = facilityId || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
@@ -1892,8 +1903,8 @@
                 }
             });
 
-            const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
-            if (error || !fac) {
+            const fac = await getCachedFacility(facId);
+            if (!fac) {
                 console.warn(`Pricing Warning: Facility record '${facId}' not found in Supabase. Skipping pricing load.`);
                 return;
             }
@@ -1961,8 +1972,8 @@
             const facId = selectedId || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
             if (!facId) return;
 
-            const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
-            if (error || !fac) {
+            const fac = await getCachedFacility(facId);
+            if (!fac) {
                 console.warn(`Facility Warning: Facility record '${facId}' was not found in Supabase.`);
                 return;
             }
@@ -2011,6 +2022,7 @@
                 // Populate Facilities Selectors Dynamically First
                 const { data: facs } = await supabase.from('facilities').select('*');
                 const safeFacs = facs || [];
+                safeFacs.forEach(f => { window._facilitiesCache[f.id] = f; });
                 if (safeFacs.length > 0) {
                     const isExec = actualUserRole === 'executive';
                     const preferredFacId = (!isExec && actualAssignedFacilityId) ? actualAssignedFacilityId : null;
@@ -2462,8 +2474,8 @@
 
                 loadSchedulingCalendar(facId, preloadedRequests);
 
-                const { data: fac, error: facErr } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
-                if (facErr || !fac) {
+                const fac = await getCachedFacility(facId);
+                if (!fac) {
                     console.warn(`Manager View Warning: Facility record '${facId}' not found in Supabase.`);
                     return;
                 }
@@ -5645,8 +5657,8 @@
                 if (!facId) return;
                 const queryFacilityId = facId;
 
-                const { data: fac, error: facErr } = await supabase.from('facilities').select('*').eq('id', queryFacilityId).maybeSingle();
-                if (facErr || !fac) {
+                const fac = await getCachedFacility(queryFacilityId);
+                if (!fac) {
                     console.warn(`Logistics Routing Warning: Facility record '${queryFacilityId}' not found in Supabase.`);
                     return;
                 }
@@ -6332,8 +6344,8 @@
 
             const activePill = document.getElementById('active-facility-name-pill');
 
-            const { data: fac, error } = await supabase.from('facilities').select('*').eq('id', selectedId).maybeSingle();
-            if (error || !fac) {
+            const fac = await getCachedFacility(selectedId);
+            if (!fac) {
                 console.warn(`Executive View Warning: Facility '${selectedId}' was not found in Supabase.`);
                 return;
             }
