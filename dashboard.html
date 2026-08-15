@@ -788,6 +788,15 @@
                         </div>
                     </div>
 
+                    <!-- Price Quote Lock & Guarantee Banner -->
+                    <div class="flex items-center justify-between text-[11px] bg-blue-50 text-blue-800 px-3.5 py-2 rounded-xl border border-blue-200">
+                        <div class="flex items-center gap-1.5 font-bold">
+                            <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            <span>Price Quote Guaranteed</span>
+                        </div>
+                        <span id="retrieval-quote-timer" class="font-mono font-black text-blue-700 bg-white px-2 py-0.5 rounded-md border border-blue-200 shadow-sm">15:00</span>
+                    </div>
+
                     <!-- Dynamic Demand & Surge Fee Summary Banner -->
                     <div id="surge-fee-banner" class="bg-gradient-to-r from-blue-50 to-indigo-50/60 p-3.5 rounded-2xl border border-blue-100/80 flex items-center justify-between text-xs">
                         <div class="flex items-center space-x-2.5">
@@ -800,6 +809,26 @@
                             </div>
                         </div>
                         <span class="font-black text-sm text-gray-900" id="surge-fee-amount">$0.00</span>
+                    </div>
+
+                    <!-- Transparent Additive Checkout Ledger -->
+                    <div class="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-2 text-xs">
+                        <div class="flex justify-between items-center text-gray-600">
+                            <span id="ledger-logistics-label">Logistics (Self-Service Pickup):</span>
+                            <span id="ledger-logistics-amount" class="font-bold text-gray-900">$0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center text-gray-600">
+                            <span id="ledger-leadtime-label">Lead Time Access:</span>
+                            <span id="ledger-leadtime-amount" class="font-bold text-gray-900">$0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center text-gray-600">
+                            <span id="ledger-slot-label">Time Window:</span>
+                            <span id="ledger-slot-amount" class="font-bold text-gray-900">$0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center pt-2 border-t border-gray-200 font-extrabold text-sm text-gray-900">
+                            <span>Total Due at Retrieval:</span>
+                            <span id="ledger-total-amount" class="text-blue-600 font-black text-base">$0.00</span>
+                        </div>
                     </div>
                 </div>
                 
@@ -1103,6 +1132,18 @@
                         <span class="text-[10px] font-bold uppercase text-blue-200 block">Next Renewal Date</span>
                         <span id="billing-next-date" class="font-bold text-white text-sm">--</span>
                     </div>
+                </div>
+
+                <!-- Grandfathered Price Lock Protection Badge -->
+                <div class="bg-white/10 p-3 rounded-xl border border-white/15 flex items-center justify-between text-xs text-blue-100">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">🛡️</span>
+                        <div>
+                            <span class="font-extrabold text-white block text-xs">Grandfathered Price-Lock Active</span>
+                            <span class="text-[10px] text-blue-200 block">Your monthly storage rate tier is locked and protected from facility adjustments.</span>
+                        </div>
+                    </div>
+                    <span class="text-[10px] font-extrabold uppercase bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded-full">Locked</span>
                 </div>
             </div>
 
@@ -3963,6 +4004,38 @@
             }
         }
 
+        let quoteLockTimer = null;
+        let quoteExpiresAt = null;
+
+        function startQuoteLockTimer() {
+            if (quoteLockTimer) clearInterval(quoteLockTimer);
+            quoteExpiresAt = Date.now() + 15 * 60 * 1000;
+            const timerEl = document.getElementById('retrieval-quote-timer');
+            if (timerEl) timerEl.textContent = '15:00';
+            
+            quoteLockTimer = setInterval(() => {
+                const remaining = Math.max(0, Math.floor((quoteExpiresAt - Date.now()) / 1000));
+                const mins = String(Math.floor(remaining / 60)).padStart(2, '0');
+                const secs = String(remaining % 60).padStart(2, '0');
+                const tEl = document.getElementById('retrieval-quote-timer');
+                if (tEl) tEl.textContent = `${mins}:${secs}`;
+
+                if (remaining <= 0) {
+                    clearInterval(quoteLockTimer);
+                    loadAssignedFacilityPricing().then(() => {
+                        startQuoteLockTimer();
+                    });
+                }
+            }, 1000);
+        }
+
+        function stopQuoteLockTimer() {
+            if (quoteLockTimer) {
+                clearInterval(quoteLockTimer);
+                quoteLockTimer = null;
+            }
+        }
+
         function updateReservationSurgeUI() {
             const dateInput = document.getElementById('retrieval-target-date');
             const slotInput = document.getElementById('retrieval-time-slot');
@@ -3978,6 +4051,62 @@
             const valetFee = isValet ? (valetBase + (toteCount * valetAdder)) : 0;
             const surgeFee = calc.tier === 'next_day_promo' ? 0.00 : Number(calc.fee || 0);
             const totalFee = valetFee + surgeFee;
+
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const target = new Date(dateInput.value + 'T00:00:00');
+            const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
+            
+            const p = activeFacilityPricing || {};
+            const slotSurgeFees = (p.staging_config && p.staging_config.slot_surge_fees) || {};
+            let slotFee = 0.00;
+            if (slotInput.value && slotSurgeFees[slotInput.value] !== undefined) {
+                slotFee = Number(slotSurgeFees[slotInput.value]);
+            } else if (slotInput.value && slotInput.value.includes('03:00 PM')) {
+                slotFee = Number(p.evening_peak_slot_fee || 0.00);
+            }
+
+            const nextDayFree = Boolean(p.next_day_promo_free) || (p.next_day_surge_fee === 0);
+            const sameDayBase = Number(p.same_day_surge_fee) || 19.99;
+            const nextDayBase = nextDayFree ? 0.00 : (Number(p.next_day_surge_fee) || 0.00);
+            const leadFee = diffDays <= 0 ? sameDayBase : (diffDays === 1 ? nextDayBase : 0.00);
+
+            // Update Additive Ledger Elements
+            const ledgerLogisticsLbl = document.getElementById('ledger-logistics-label');
+            const ledgerLogisticsAmt = document.getElementById('ledger-logistics-amount');
+            const ledgerLeadtimeLbl = document.getElementById('ledger-leadtime-label');
+            const ledgerLeadtimeAmt = document.getElementById('ledger-leadtime-amount');
+            const ledgerSlotLbl = document.getElementById('ledger-slot-label');
+            const ledgerSlotAmt = document.getElementById('ledger-slot-amount');
+            const ledgerTotalAmt = document.getElementById('ledger-total-amount');
+
+            if (ledgerLogisticsLbl && ledgerLogisticsAmt) {
+                ledgerLogisticsLbl.textContent = isValet ? `Valet Doorstep Delivery (${toteCount} ${toteCount === 1 ? 'Tote' : 'Totes'}):` : 'Self-Service Staging Access:';
+                ledgerLogisticsAmt.textContent = isValet ? `$${valetFee.toFixed(2)}` : 'Included ($0.00)';
+            }
+
+            if (ledgerLeadtimeLbl && ledgerLeadtimeAmt) {
+                if (diffDays <= 0) {
+                    ledgerLeadtimeLbl.textContent = 'Same-Day Express Priority:';
+                    ledgerLeadtimeAmt.textContent = `$${sameDayBase.toFixed(2)}`;
+                } else if (diffDays === 1) {
+                    ledgerLeadtimeLbl.textContent = 'Next-Day Fast Access:';
+                    ledgerLeadtimeAmt.textContent = nextDayBase > 0 ? `$${nextDayBase.toFixed(2)}` : 'Included (Promo $0.00)';
+                } else {
+                    ledgerLeadtimeLbl.textContent = 'Advance Lead Time Access:';
+                    ledgerLeadtimeAmt.textContent = 'Standard ($0.00)';
+                }
+            }
+
+            if (ledgerSlotLbl && ledgerSlotAmt) {
+                const shortSlotName = slotInput.value ? slotInput.value.split(' - ')[0] : 'Time Window';
+                ledgerSlotLbl.textContent = `Time Slot (${slotInput.value || 'Window'}):`;
+                ledgerSlotAmt.textContent = slotFee > 0 ? `+$${slotFee.toFixed(2)}` : 'Included ($0.00)';
+            }
+
+            if (ledgerTotalAmt) {
+                ledgerTotalAmt.textContent = totalFee > 0 ? `$${totalFee.toFixed(2)}` : 'FREE ($0.00)';
+            }
 
             const badge = document.getElementById('surge-badge');
             const titleEl = document.getElementById('surge-banner-title');
@@ -4015,7 +4144,7 @@
                 if (confirmBtn) confirmBtn.textContent = `Confirm Valet Delivery ($${totalFee.toFixed(2)})`;
             } else {
                 // Self-Service Pickup Staging
-                if (calc.tier === 'next_day_promo') {
+                if (calc.tier === 'next_day_promo' || totalFee === 0) {
                     if (titleEl) titleEl.textContent = "Next-Day Fast Access (Included Promo)";
                     if (descEl) descEl.textContent = "Next-day retrieval complimentary courtesy of facility promotion.";
                     if (amountEl) amountEl.textContent = "FREE ($0.00)";
@@ -4321,10 +4450,12 @@
             // Reset to default logistics & trigger availability + surge check immediately
             selectRetrievalLogistics('staging');
             await handleReservationDateChange();
+            startQuoteLockTimer();
             document.getElementById('retrieval-modal').classList.remove('hidden');
         }
 
         function closeRetrievalModal() {
+            stopQuoteLockTimer();
             document.getElementById('retrieval-modal').classList.add('hidden');
         }
 
