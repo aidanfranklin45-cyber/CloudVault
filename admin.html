@@ -1502,7 +1502,8 @@
                                 <iframe id="google-maps-iframe"
                                     class="w-full h-full min-h-[320px] border-0 rounded-2xl filter saturate-150 contrast-125 opacity-90"
                                     loading="lazy" allowfullscreen
-                                    src="https://maps.google.com/maps?q=Seattle%2C+WA&t=&z=12&ie=UTF8&iwloc=&output=embed">
+                                    src="about:blank"
+                                    data-src="https://maps.google.com/maps?q=Seattle%2C+WA&t=&z=12&ie=UTF8&iwloc=&output=embed">
                                 </iframe>
 
                                 <!-- Floating Map Telemetry Overlay -->
@@ -2505,7 +2506,7 @@
                 if (document.getElementById('m-tote-capacity')) document.getElementById('m-tote-capacity').textContent = totalCapacity.toLocaleString() + " Totes";
 
                 // Sync Unified Executive Capacity & Profitability Panel
-                recalcFacilityProfit();
+                recalcFacilityProfit(preloadedItems);
 
                 const alertBanner = document.getElementById('capacity-warning-banner');
                 if (capacityPct > 85) {
@@ -6391,7 +6392,7 @@
             recalcFacilityProfit();
         }
 
-        async function recalcFacilityProfit() {
+        async function recalcFacilityProfit(preloadedInventory = null) {
             const rentInput = document.getElementById('fspec-rent').value;
             const laborInput = document.getElementById('fspec-labor').value;
             const utilitiesInput = document.getElementById('fspec-utilities').value;
@@ -6407,14 +6408,22 @@
 
             let facilityId = currentLoadedFac?.id || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
 
-            // 1. Fetch active subscriptions for real revenue calculation
-            const { data: activeSubs } = await supabase.from('subscriptions').select('uid, recurring_storage').eq('status', 'active');
+            // 1. Get active subscriptions from memory cache
+            if (!window._activeSubsCache) {
+                const { data } = await supabase.from('subscriptions').select('uid, recurring_storage').eq('status', 'active');
+                window._activeSubsCache = data || [];
+            }
+            const activeSubs = window._activeSubsCache;
 
             // 2. Fetch inventory for this facility
-            const { data: activeInventory } = await supabase.from('inventory')
-                .select('uid')
-                .eq('facility_id', facilityId)
-                .in('status', ['stored', 'pending-stage', 'staged', 'with-customer']);
+            let activeInventory = preloadedInventory;
+            if (!activeInventory) {
+                const { data } = await supabase.from('inventory')
+                    .select('uid')
+                    .eq('facility_id', facilityId)
+                    .in('status', ['stored', 'pending-stage', 'staged', 'with-customer']);
+                activeInventory = data || [];
+            }
 
             const activeTotesCount = activeInventory ? activeInventory.length : 0;
 
@@ -6595,10 +6604,7 @@
             try {
                 const facId = window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
                 if (facId) {
-                    const { data: fac } = await supabase.from('facilities')
-                        .select('staging_cutoff_time')
-                        .eq('id', facId)
-                        .maybeSingle();
+                    const fac = await getCachedFacility(facId);
                     if (fac && fac.staging_cutoff_time) {
                         const parts = fac.staging_cutoff_time.split(':');
                         cutoffHour = parseInt(parts[0], 10);
