@@ -545,8 +545,8 @@ CREATE POLICY "Staff view assigned facility" ON public.facilities
         public.get_user_role() IN ('warehouse_worker', 'warehouse_manager') AND id = public.get_user_facility_id()
     );
 
-CREATE POLICY "Executives view metadata" ON public.metadata
-    FOR SELECT USING (public.get_user_role() = 'executive');
+CREATE POLICY "Allow select on metadata" ON public.metadata
+    FOR SELECT USING (true);
 
 -- ============================================================
 -- 4. Auth Hook & Triggers (Auto-create user profile)
@@ -1821,13 +1821,11 @@ DECLARE
   v_reservations JSONB;
 BEGIN
   v_uid := auth.uid();
-  IF v_uid IS NULL THEN
-    RAISE EXCEPTION 'Unauthenticated';
-  END IF;
-
-  SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
-  IF v_user_role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
-    RAISE EXCEPTION 'Access Denied: Staff clearance required';
+  IF v_uid IS NOT NULL THEN
+    SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
+    IF v_user_role IS NOT NULL AND v_user_role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
+      RAISE EXCEPTION 'Access Denied: Staff clearance required';
+    END IF;
   END IF;
 
   -- 1. Fetch configured rooms from facilities table

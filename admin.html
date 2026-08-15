@@ -2056,7 +2056,7 @@
                         lowVolume: [0, 0, 0, 0, 0],
                         highVolume: [0, 0, 0, 0, 0]
                     };
-                    const { data: funnel } = await supabase.from('metadata').select('*').eq('id', 'funnel_metrics').single();
+                    const { data: funnel } = await supabase.from('metadata').select('*').eq('id', 'funnel_metrics').maybeSingle();
                     if (funnel) {
                         funnelCounts = funnel.value || funnelCounts;
                     }

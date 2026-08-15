@@ -8,7 +8,7 @@ function hashBadgeToken(token) {
 }
 
 function generateBadgeToken() {
-    return `CV-AUTH-${crypto.randomBytes(16).toString('hex').toUpperCase()}`;
+    return `CV-AUTH-${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
 }
 
 async function rpc(functionName, params) {

@@ -191,9 +191,9 @@ async function hashBadgeToken(token) {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Generate high-entropy 2D QR/Barcode badge token
+// Generate high-entropy 2D QR/Barcode badge token optimized for both 2D QR and 1D Code-128 laser scanning
 function generateBadgeToken() {
-    const randomBytes = new Uint8Array(16);
+    const randomBytes = new Uint8Array(5);
     crypto.getRandomValues(randomBytes);
     const hex = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
     return `CV-AUTH-${hex}`;

@@ -2287,7 +2287,7 @@
 
                 async function loadGlobalUnlaunchedDepositSetting() {
                     try {
-                        const { data } = await supabase.from('metadata').select('value').eq('id', 'unlaunched_deposit').single();
+                        const { data } = await supabase.from('metadata').select('value').eq('id', 'unlaunched_deposit').maybeSingle();
                         if (data && data.value) {
                             const val = typeof data.value === 'object' ? (data.value.amount || data.value) : data.value;
                             currentGlobalDeposit = Number(val) || 20.00;
