@@ -3222,7 +3222,7 @@
                 if (!scannedToday) {
                     const { data } = await supabase
                         .from('inventory')
-                        .select('id, status, last_scanned_at')
+                        .select('id, status, location_type, activated, created_at, last_scanned_at')
                         .or(`facility_id.eq.${facId},facility_id.is.null`)
                         .gte('last_scanned_at', todayIso);
                     scannedToday = data || [];
@@ -3231,22 +3231,33 @@
                 }
 
                 const scanCount = scannedToday ? scannedToday.length : 0;
-                const activationsCount = scannedToday ? scannedToday.filter(i => i.status === 'stored' || i.status === 'staged' || i.status === 'with-customer').length : 0;
 
-                // 2. Get access_requests updated/staged today
+                // Activations: ONLY newly created/intake-activated totes processed today
+                const activationsCount = scannedToday ? scannedToday.filter(i => {
+                    const isCreatedToday = i.created_at && i.created_at >= todayIso;
+                    const isIntakeActivation = (i.location_type === 'intake' || i.status === 'intake' || i.activated === false);
+                    return isCreatedToday || isIntakeActivation;
+                }).length : 0;
+
+                // Staged & Handed Off: Existing vault totes that were pulled, staged, or checked out to customers today
+                const stagedTotes = scannedToday ? scannedToday.filter(i => {
+                    const isRetrievalOrHandOff = (i.status === 'staged' || i.status === 'out-for-delivery' || i.status === 'with-customer');
+                    const isNotNewIntake = (!i.created_at || i.created_at < todayIso);
+                    return isRetrievalOrHandOff && isNotNewIntake;
+                }) : [];
+
+                // 2. Get access_requests for today's schedule
                 let reqsToday = preloadedRequests;
                 if (!reqsToday) {
                     const { data } = await supabase
                         .from('access_requests')
                         .select('id, status, target_date, requested_at')
-                        .or(`facility_id.eq.${facId},facility_id.is.null`)
-                        .gte('requested_at', todayIso);
+                        .or(`facility_id.eq.${facId},facility_id.is.null`);
                     reqsToday = data || [];
-                } else {
-                    reqsToday = reqsToday.filter(r => r.requested_at && r.requested_at >= todayIso);
                 }
 
-                const stagedCount = reqsToday ? reqsToday.filter(r => r.status === 'completed' || r.status === 'staged' || r.status === 'in_progress').length : 0;
+                const completedReqsToday = (reqsToday || []).filter(r => (r.status === 'completed' || r.status === 'staged') && r.target_date === todayYmd);
+                const stagedCount = Math.max(stagedTotes.length, completedReqsToday.length);
 
                 // 3. Evaluate SLA score (Past 18:00 check)
                 const now = new Date();
