@@ -1601,10 +1601,27 @@
             switchRoleView();
         }
 
-        // Initialize dashboard UI
+        // Initialize dashboard UI with Instant 0ms Paint
         window.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
+            document.getElementById('role-select').value = activeRole;
+            initializeCharts();
 
+            // 1. Instant 0ms Paint from cached master data and cached profile
+            try {
+                let cachedUser = null;
+                try {
+                    cachedUser = JSON.parse(localStorage.getItem('cv_active_badge_user') || localStorage.getItem('cv_cached_profile'));
+                } catch(e) {}
+                if (cachedUser && cachedUser.role) {
+                    applyActiveEmployeeContext(cachedUser);
+                }
+                if (window._masterAdminData) {
+                    renderMasterAdminView(window._masterAdminData);
+                }
+            } catch (e) {}
+
+            // 2. Background Auth Verification & Live Data Sync
             try {
                 if (typeof supabase !== 'undefined') {
                     let hasInitializedAuth = false;
@@ -1616,6 +1633,7 @@
                             const user = session.user;
                             const profile = await getCachedUserProfile(user.id);
                             if (profile && profile.role) {
+                                try { localStorage.setItem('cv_cached_profile', JSON.stringify(profile)); } catch(e){}
                                 applyActiveEmployeeContext(profile);
                             }
                             loadLiveData();
@@ -1642,9 +1660,6 @@
             } catch (e) {
                 console.error("Initialization error:", e);
             }
-
-            document.getElementById('role-select').value = activeRole;
-            initializeCharts();
         });
 
         // Switch role UI layout (RBAC Matrix simulation)
