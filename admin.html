@@ -2544,49 +2544,20 @@
                 // Access requests override table (Active customer retrieval requests only)
                 const { data: rawReqs, error: reqsErr } = await supabase.from('access_requests')
                     .select('*, target_date, time_slot, surge_tier, surge_fee')
-                    .eq('facility_id', facilityId)
-                    .eq('status', 'pending');
+                    .eq('facility_id', facId)
+                    .in('status', ['pending', 'staged']);
 
                 const tableBody = document.getElementById('staging-override-table-body');
                 tableBody.innerHTML = "";
 
-                // Filter out non-retrieval requests (e.g. empty tote activations)
-                let reqs = (rawReqs || []).filter(r => r.requested_items && r.requested_items.length > 0);
-
-                if (reqs.length > 0) {
-                    // Check inventory status of requested items to auto-complete finished/stale requests
-                    const allRequestedItemIds = reqs.flatMap(r => r.requested_items || []);
-                    const { data: requestedInventory } = await supabase.from('inventory')
-                        .select('id, status')
-                        .in('id', allRequestedItemIds);
-
-                    const invStatusMap = {};
-                    if (requestedInventory) {
-                        requestedInventory.forEach(inv => { invStatusMap[inv.id] = inv.status; });
-                    }
-
-                    const activeReqs = [];
-                    for (const req of reqs) {
-                        const itemsStatuses = (req.requested_items || []).map(id => invStatusMap[id]);
-                        // An access request is active if at least one item is currently pending-stage or staged
-                        const hasActiveItems = itemsStatuses.some(st => st === 'pending-stage' || st === 'staged');
-
-                        if (!hasActiveItems && itemsStatuses.length > 0) {
-                            // Auto-complete requests whose items are all stored or with-customer
-                            await supabase.from('access_requests').update({ status: 'completed' }).eq('id', req.id);
-                        } else {
-                            activeReqs.push(req);
-                        }
-                    }
-                    reqs = activeReqs;
-                }
+                let reqs = (rawReqs || []).filter(r => (r.requested_items && r.requested_items.length > 0) || (r.requested_tote_codes && r.requested_tote_codes.length > 0));
 
                 if (reqsErr || !reqs || reqs.length === 0) {
                     tableBody.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-xs text-gray-500">No active staging access requests for this facility.</td></tr>`;
                 } else {
                     reqs.forEach(req => {
-                        const expires = req.pin_expires_at ? new Date(req.pin_expires_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'Expired';
-                        const countText = `${(req.requested_items || []).length} Tote${(req.requested_items || []).length !== 1 ? 's' : ''}`;
+                        const expires = req.pin_expires_at ? new Date(req.pin_expires_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'Active';
+                        const countText = `${(req.requested_items || req.requested_tote_codes || []).length} Tote${(req.requested_items || req.requested_tote_codes || []).length !== 1 ? 's' : ''}`;
 
                         // Reservation cell
                         let reservationHtml = `<span class="text-gray-600 text-xs">—</span>`;
@@ -2640,8 +2611,8 @@
                 // Render dynamic employee details for active facility with 2D badge issuance & transfer capabilities
                 const { data: employees } = await supabase.from('users')
                     .select('*')
-                    .eq('assigned_facility_id', facilityId)
-                    .neq('role', 'customer');
+                    .neq('role', 'customer')
+                    .or(`assigned_facility_id.eq.${facId},role.eq.executive,assigned_facility_id.is.null`);
 
                 const { data: badges } = await supabase.from('employee_badges')
                     .select('*')
@@ -8050,12 +8021,21 @@
                 return;
             }
 
-            // 2. Location or Bay Code match -> open Shelf Location Modal
+            // 2. If it is a tote code (starts with CV-), do not treat as a warehouse bay
+            if (uppercaseQ.startsWith('CV-')) {
+                onMasterToteSearchInput(q);
+                return;
+            }
+
+            // 3. Location or Bay Code match -> open Shelf Location Modal
             // Matches aisle/bay/shelf coordinates like A1-B02-S1, A1-B02, V-A01-B02-S01, ROOM-1, B02, etc.
             const isLocationPattern = /^(V-)?[A-Z0-9]+(-[A-Z0-9]+)*$/i.test(q) && (
-                q.includes('-') ||
                 q.toUpperCase().startsWith('ROOM') ||
                 q.toUpperCase().startsWith('BAY') ||
+                q.toUpperCase().startsWith('STAGE') ||
+                q.toUpperCase().startsWith('AISLE') ||
+                q.toUpperCase().startsWith('V-') ||
+                /^A\d+-B\d+/i.test(q) ||
                 /^B\d+$/i.test(q)
             );
 
@@ -8069,7 +8049,7 @@
                 return;
             }
 
-            // 3. Fallback: Search matching customers and inventory
+            // 4. Fallback: Search matching customers and inventory
             onMasterToteSearchInput(q);
         }
 
@@ -8082,7 +8062,7 @@
             if (resultsBox) resultsBox.classList.add('hidden');
 
             const locCode = (locationCode || '').trim().toUpperCase();
-            if (!locCode) return;
+            if (!locCode || locCode.startsWith('CV-')) return;
             window.currentInspectedShelfCode = locCode;
 
             const modal = document.getElementById('shelf-location-master-modal');
