@@ -1919,8 +1919,59 @@
             if (typeof updateValetFormula === 'function') updateValetFormula();
         }
 
+        // Global Master Dataset Cache
+        window._masterAdminData = null;
+        async function loadMasterAdminData(forceRefresh = false) {
+            try {
+                if (!forceRefresh && window._masterAdminData) {
+                    return window._masterAdminData;
+                }
+
+                const [facsRes, zonesRes, invRes, reqsRes, subsRes, usersRes, badgesRes, funnelRes] = await Promise.all([
+                    supabase.from('facilities').select('*'),
+                    supabase.from('operational_zones').select('*'),
+                    supabase.from('inventory').select('*, users!uid(name, email, onboarding_status)'),
+                    supabase.from('access_requests').select('*, users!uid(name, active_zone)'),
+                    supabase.from('subscriptions').select('uid, recurring_storage, logistics_type, status'),
+                    supabase.from('users').select('*').neq('role', 'customer'),
+                    supabase.from('employee_badges').select('*').eq('is_active', true),
+                    supabase.from('metadata').select('*').eq('id', 'funnel_metrics').maybeSingle()
+                ]);
+
+                const facilities = facsRes.data || [];
+                const operationalZones = zonesRes.data || [];
+                const inventory = invRes.data || [];
+                const accessRequests = reqsRes.data || [];
+                const subscriptions = subsRes.data || [];
+                const staffUsers = usersRes.data || [];
+                const badges = badgesRes.data || [];
+                const funnel = funnelRes.data || null;
+
+                window._facilitiesCache = {};
+                facilities.forEach(f => { window._facilitiesCache[f.id] = f; });
+                window._allFacilitiesCache = facilities;
+                window._activeSubsCache = subscriptions.filter(s => s.status === 'active');
+
+                window._masterAdminData = {
+                    facilities,
+                    operationalZones,
+                    inventory,
+                    accessRequests,
+                    subscriptions,
+                    staffUsers,
+                    badges,
+                    funnel
+                };
+
+                return window._masterAdminData;
+            } catch (err) {
+                console.error("Error loading master admin data:", err);
+                return null;
+            }
+        }
+
         let _facilityChangeLock = false;
-        async function onGlobalFacilityChange(facilityId) {
+        async function onGlobalFacilityChange(facilityId, preloadedMaster = null) {
             if (_facilityChangeLock) return;
             _facilityChangeLock = true;
 
@@ -1958,12 +2009,31 @@
                     activePill.textContent = globalSel.options[globalSel.selectedIndex]?.text || '';
                 }
 
-                await Promise.all([
-                    fetchAndRenderFacilitySpecs(facId),
-                    loadRegionalPricing(facId),
-                    loadManagerFacilityData(facId),
-                    loadWorkerQueues(facId)
-                ]);
+                const master = preloadedMaster || window._masterAdminData || await loadMasterAdminData();
+                if (master) {
+                    const fac = master.facilities.find(f => f.id === facId) || master.facilities[0];
+                    if (fac) {
+                        loadFacilitySpecs(fac);
+                    }
+                    loadRegionalPricing(facId);
+
+                    const facItems = master.inventory.filter(i => i.facility_id === facId || !i.facility_id);
+                    const facRequests = master.accessRequests.filter(r => r.facility_id === facId || !r.facility_id);
+
+                    loadWorkerShiftStats(facId, facItems, facRequests);
+                    loadWorkerLogisticsRouting(facId, facRequests, facItems);
+                    loadManagerLiveData(facId, facItems, facRequests, master.staffUsers, master.badges);
+                    loadSchedulingCalendar(facId, facRequests);
+                    loadMissingTotesTable(facId, facItems);
+                    loadWorkerLiveData(facId, facItems, facRequests, master.subscriptions);
+                } else {
+                    await Promise.all([
+                        fetchAndRenderFacilitySpecs(facId),
+                        loadRegionalPricing(facId),
+                        loadManagerFacilityData(facId),
+                        loadWorkerQueues(facId)
+                    ]);
+                }
             } finally {
                 _facilityChangeLock = false;
             }
@@ -2020,11 +2090,13 @@
         // Load Real Supabase Data
         async function loadLiveData() {
             try {
+                const master = await loadMasterAdminData(true);
+                if (!master) return;
+
+                const { facilities, operationalZones, inventory, subscriptions, funnel } = master;
+
                 // Populate Facilities Selectors Dynamically First
-                const { data: facs } = await supabase.from('facilities').select('*');
-                const safeFacs = facs || [];
-                safeFacs.forEach(f => { window._facilitiesCache[f.id] = f; });
-                if (safeFacs.length > 0) {
+                if (facilities.length > 0) {
                     const isExec = actualUserRole === 'executive';
                     const preferredFacId = (!isExec && actualAssignedFacilityId) ? actualAssignedFacilityId : null;
 
@@ -2032,38 +2104,29 @@
                         const el = document.getElementById(id);
                         if (el) {
                             const curVal = el.value;
-                            el.innerHTML = safeFacs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
-                            if (preferredFacId && safeFacs.some(f => f.id === preferredFacId)) {
+                            el.innerHTML = facilities.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
+                            if (preferredFacId && facilities.some(f => f.id === preferredFacId)) {
                                 el.value = preferredFacId;
-                            } else if (curVal && safeFacs.some(f => f.id === curVal)) {
+                            } else if (curVal && facilities.some(f => f.id === curVal)) {
                                 el.value = curVal;
                             } else {
-                                el.value = safeFacs[0].id;
+                                el.value = facilities[0].id;
                             }
                         }
                     });
-
-                    const currentFac = localStorage.getItem('cloudvault_selected_facility') || safeFacs[0].id;
-                    await onGlobalFacilityChange(currentFac);
                 }
 
-                // Get operational zones
-                const { data: zones, error: zonesErr } = await supabase.from('operational_zones').select('*');
-                const markets = [];
-                if (zones && !zonesErr) {
-                    zones.forEach(z => {
-                        markets.push({
-                            id: z.id,
-                            city: z.city,
-                            facility_id: z.facility_id,
-                            active: z.active,
-                            baseValetFee: Number(z.base_valet_fee),
-                            requiredDeposit: Number(z.required_deposit) || 25.00,
-                            serviceDays: z.service_days,
-                            zipCodes: z.zip_codes || []
-                        });
-                    });
-                }
+                // Render Operational Zones
+                const markets = (operationalZones || []).map(z => ({
+                    id: z.id,
+                    city: z.city,
+                    facility_id: z.facility_id,
+                    active: z.active,
+                    baseValetFee: Number(z.base_valet_fee),
+                    requiredDeposit: Number(z.required_deposit) || 25.00,
+                    serviceDays: z.service_days,
+                    zipCodes: z.zip_codes || []
+                }));
                 renderMarketsList(markets);
 
                 // Funnel and Executive Analytics
@@ -2072,7 +2135,6 @@
                         lowVolume: [0, 0, 0, 0, 0],
                         highVolume: [0, 0, 0, 0, 0]
                     };
-                    const { data: funnel } = await supabase.from('metadata').select('*').eq('id', 'funnel_metrics').maybeSingle();
                     if (funnel) {
                         funnelCounts = funnel.value || funnelCounts;
                     }
@@ -2090,15 +2152,10 @@
                     }
 
                     // Financials
-                    const { data: subs } = await supabase.from('subscriptions').select('recurring_storage').eq('status', 'active');
-                    let mrr = 0;
-                    let subCount = 0;
-                    if (subs) {
-                        subCount = subs.length;
-                        mrr = subs.reduce((acc, sub) => acc + Number(sub.recurring_storage), 0);
-                    }
-
-                    const { count: activeTotes } = await supabase.from('inventory').select('*', { count: 'exact', head: true }).eq('status', 'stored');
+                    const activeSubs = (subscriptions || []).filter(s => s.status === 'active');
+                    const subCount = activeSubs.length;
+                    const mrr = activeSubs.reduce((acc, sub) => acc + (Number(sub.recurring_storage) || 0), 0);
+                    const activeTotes = (inventory || []).filter(i => i.status === 'stored').length;
 
                     document.getElementById('exec-mrr').textContent = `$${mrr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                     const mrrSubtext = document.getElementById('exec-mrr-subtext');
@@ -2107,7 +2164,7 @@
                     }
 
                     const activeMarkets = (markets || []).filter(m => m && m.active);
-                    document.getElementById('exec-totes').textContent = (activeTotes || 0).toLocaleString();
+                    document.getElementById('exec-totes').textContent = activeTotes.toLocaleString();
                     document.getElementById('exec-markets').textContent = `${activeMarkets.length} Cit${activeMarkets.length !== 1 ? 'ies' : 'y'}`;
 
                     const marketsSubtext = document.getElementById('exec-markets-subtext');
@@ -2117,13 +2174,17 @@
                             ? `<i data-lucide="check-circle" class="w-3 h-3 mr-0.5 text-emerald-400"></i> ${lastMarket} active`
                             : `<i data-lucide="map-pin" class="w-3 h-3 mr-0.5"></i> Active service zones`;
                     }
+                }
 
-                    loadExecutiveFacilitySpecs();
+                // Render current facility views using in-memory master data
+                const currentFac = localStorage.getItem('cloudvault_selected_facility') || (facilities[0]?.id || null);
+                if (currentFac) {
+                    await onGlobalFacilityChange(currentFac, master);
                 }
 
                 // Load waitlist data
                 loadWaitlistData();
-
+                lucide.createIcons();
             } catch (err) {
                 console.error("Error loading Supabase live data:", err);
             }
@@ -2463,7 +2524,7 @@
             loadManagerLiveData(facilityId);
         }
 
-        async function loadManagerLiveData(facilityId = null, preloadedItems = null, preloadedRequests = null) {
+        async function loadManagerLiveData(facilityId = null, preloadedItems = null, preloadedRequests = null, preloadedStaff = null, preloadedBadges = null) {
             try {
                 let facId = facilityId || window.currentSelectedFacilityId;
                 if (!facId) {
@@ -2553,34 +2614,29 @@
                             const surgeLabel = {
                                 same_day_surge: '🔴 Same-Day',
                                 next_day_surge: '🟡 Next-Day',
-                                standard: '✅ Scheduled'
+                                standard: '🟢 Standard'
                             };
-                            const colorClass = surgeColors[tier] || surgeColors.standard;
-                            const label = surgeLabel[tier] || '✅ Scheduled';
-                            const feeNote = (req.surge_fee && req.surge_fee > 0) ? ` +$${Number(req.surge_fee).toFixed(2)}` : '';
+                            const surgeFeeStr = (req.surge_fee && Number(req.surge_fee) > 0) ? ` (+$${Number(req.surge_fee).toFixed(2)})` : '';
+
                             reservationHtml = `
-                                <div class="space-y-0.5">
-                                    <div class="text-white text-xs font-semibold font-mono">${dateStr}${slotStr ? ' · ' + slotStr : ''}</div>
-                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wide ${colorClass}">${label}${feeNote}</span>
-                                </div>`;
+                                <div class="font-mono text-xs text-gray-200">${dateStr}</div>
+                                <div class="text-[10px] text-gray-400 font-mono">${slotStr}</div>
+                                <span class="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border mt-0.5 ${surgeColors[tier] || surgeColors.standard}">
+                                    ${surgeLabel[tier] || tier}${surgeFeeStr}
+                                </span>
+                            `;
                         }
 
-                        const isSameDay = req.surge_tier === 'same_day_surge';
                         const tr = document.createElement('tr');
-                        tr.className = `border-b border-gray-850 transition ${isSameDay ? 'bg-red-950/10 hover:bg-red-950/20' : 'hover:bg-gray-900/10'}`;
+                        tr.className = "border-b border-gray-850 hover:bg-gray-900/30 text-xs";
                         tr.innerHTML = `
-                            <td class="py-3.5 font-semibold text-sm">
-                                <p class="text-white">${req.uid.substring(0, 8)}...</p>
-                                <p class="text-[9px] text-gray-500 uppercase font-bold tracking-wider">${(req.fulfillment_type || 'staging').replace('_', ' ')}</p>
-                            </td>
-                            <td class="py-3.5 text-sm text-gray-300 font-mono">${countText}</td>
-                            <td class="py-3.5 text-sm text-blue-400 font-mono font-bold tracking-widest">${req.pin}</td>
-                            <td class="py-3.5">${reservationHtml}</td>
-                            <td class="py-3.5 text-xs text-gray-500">${expires}</td>
-                            <td class="py-3.5 text-right">
-                                <button onclick="overridePin('${req.id}')" class="bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/30 hover:border-transparent text-xs font-bold px-3 py-1.5 rounded-lg transition">
-                                    Override PIN
-                                </button>
+                            <td class="py-3 font-mono text-gray-400">${req.uid.substring(0, 8)}...</td>
+                            <td class="py-3 font-bold text-white">${countText}</td>
+                            <td class="py-3">${reservationHtml}</td>
+                            <td class="py-3 font-mono text-gray-300">${expires}</td>
+                            <td class="py-3"><span class="bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20 uppercase font-mono text-[10px] font-bold">${req.status}</span></td>
+                            <td class="py-3 text-right">
+                                <button onclick="overrideStaging('${req.id}')" class="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2.5 py-1 rounded transition">Force Complete</button>
                             </td>
                         `;
                         tableBody.appendChild(tr);
@@ -2588,14 +2644,24 @@
                 }
 
                 // Render dynamic employee details for active facility with 2D badge issuance & transfer capabilities
-                const { data: employees } = await supabase.from('users')
-                    .select('*')
-                    .neq('role', 'customer')
-                    .or(`assigned_facility_id.eq.${facId},role.eq.executive,assigned_facility_id.is.null`);
+                let employees = preloadedStaff;
+                if (!employees) {
+                    const { data: emps } = await supabase.from('users')
+                        .select('*')
+                        .neq('role', 'customer')
+                        .or(`assigned_facility_id.eq.${facId},role.eq.executive,assigned_facility_id.is.null`);
+                    employees = emps || [];
+                } else {
+                    employees = employees.filter(e => e.assigned_facility_id === facId || e.role === 'executive' || !e.assigned_facility_id);
+                }
 
-                const { data: badges } = await supabase.from('employee_badges')
-                    .select('*')
-                    .eq('is_active', true);
+                let badges = preloadedBadges;
+                if (!badges) {
+                    const { data: b } = await supabase.from('employee_badges')
+                        .select('*')
+                        .eq('is_active', true);
+                    badges = b || [];
+                }
 
                 const badgeMap = {};
                 if (badges && badges.length > 0) {
@@ -2647,15 +2713,21 @@
                     rosterEl.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 font-mono">No staff assigned to this facility roster.</div>`;
                 }
 
-                // Load Valet Delivery Route Manifest
-                loadValetManifestData(facilityId);
+                // Load Valet Delivery Route Manifest in-memory
+                loadValetManifestData(facId, preloadedRequests);
 
-                // Display logs from access requests history
-                const { data: historyLogs } = await supabase.from('access_requests')
-                    .select('*')
-                    .eq('facility_id', facilityId)
-                    .order('requested_at', { ascending: false })
-                    .limit(5);
+                // Display logs from access requests history in-memory
+                let historyLogs = [];
+                if (preloadedRequests) {
+                    historyLogs = preloadedRequests.slice(0, 5);
+                } else {
+                    const { data: logs } = await supabase.from('access_requests')
+                        .select('*')
+                        .eq('facility_id', facId)
+                        .order('requested_at', { ascending: false })
+                        .limit(5);
+                    historyLogs = logs || [];
+                }
 
                 const logEl = document.getElementById('activity-log-list');
                 logEl.innerHTML = "";
@@ -2666,7 +2738,7 @@
                         div.className = "bg-gray-900/20 p-2.5 border border-gray-850 rounded-xl flex justify-between text-[11px]";
                         div.innerHTML = `
                             <span class="text-gray-300 font-medium">${log.fulfillment_type || 'staging'} request updated to ${log.status}</span>
-                            <span class="text-gray-500">${timeStr} &bull; User ${log.uid.substring(0, 6)}</span>
+                            <span class="text-gray-500">${timeStr} &bull; User ${log.uid ? log.uid.substring(0, 6) : 'Staff'}</span>
                         `;
                         logEl.appendChild(div);
                     });
@@ -2674,8 +2746,8 @@
                     logEl.innerHTML = `<div class="text-xs text-gray-500 text-center py-4">No recent activity logs.</div>`;
                 }
 
-                // Load Missing Totes Hub
-                loadMissingTotesTable(facilityId);
+                // Load Missing Totes Hub in-memory
+                loadMissingTotesTable(facId, preloadedItems);
 
             } catch (err) {
                 console.error("Supabase manager metrics loading failed:", err);
@@ -2683,24 +2755,30 @@
         }
 
         // Missing Totes Investigation Hub Handlers
-        async function loadMissingTotesTable(facilityId = null) {
+        async function loadMissingTotesTable(facilityId = null, preloadedItems = null) {
             const tableBody = document.getElementById('missing-totes-table-body');
             const countBadge = document.getElementById('missing-totes-count-badge');
             if (!tableBody) return;
 
             try {
-                let query = supabase.from('inventory')
-                    .select('*, users!uid(name, email)')
-                    .eq('status', 'missing-tote');
-                
-                if (facilityId) {
-                    query = query.or(`facility_id.eq.${facilityId},facility_id.is.null`);
+                let missingItems = [];
+                if (preloadedItems) {
+                    missingItems = preloadedItems.filter(i => i.status === 'missing-tote');
+                } else {
+                    let query = supabase.from('inventory')
+                        .select('*, users!uid(name, email)')
+                        .eq('status', 'missing-tote');
+                    
+                    if (facilityId) {
+                        query = query.or(`facility_id.eq.${facilityId},facility_id.is.null`);
+                    }
+
+                    const { data, error } = await query;
+                    if (error) throw error;
+                    missingItems = data || [];
                 }
 
-                const { data: missingItems, error } = await query;
-                if (error) throw error;
-
-                const openMissing = (missingItems || []).filter(i => !i.missing_resolution || i.missing_resolution === 'unresolved');
+                const openMissing = missingItems.filter(i => !i.missing_resolution || i.missing_resolution === 'unresolved');
                 if (countBadge) countBadge.textContent = `${openMissing.length} Open`;
 
                 if (openMissing.length === 0) {
@@ -3414,7 +3492,7 @@
         // Industrial Customer-Grouped Ergonomic Queue Rendering
         // =========================================================================
 
-        async function loadWorkerLiveData(facilityId = null) {
+        async function loadWorkerLiveData(facilityId = null, preloadedItems = null, preloadedRequests = null, preloadedSubs = null) {
             try {
                 let facId = facilityId || window.currentSelectedFacilityId;
                 if (!facId) {
@@ -3441,29 +3519,34 @@
                     if (stageTabBtn) stageTabBtn.classList.remove('animate-pulse', 'border-2', 'border-red-500', 'bg-red-950/40', 'text-red-300');
                 }
 
-                // Fetch all inventory for this facility across all relevant statuses (including unassigned or new intake totes)
-                const statuses = ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer'];
-                
-                const [facRes, nullRes] = await Promise.all([
-                    supabase.from('inventory').select('*, users!uid(name, onboarding_status)').eq('facility_id', queryFacilityId).in('status', statuses),
-                    supabase.from('inventory').select('*, users!uid(name, onboarding_status)').is('facility_id', null).in('status', statuses)
-                ]);
+                let allItems = [];
+                if (preloadedItems) {
+                    allItems = preloadedItems;
+                } else {
+                    const statuses = ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer'];
+                    const [facRes, nullRes] = await Promise.all([
+                        supabase.from('inventory').select('*, users!uid(name, onboarding_status)').eq('facility_id', queryFacilityId).in('status', statuses),
+                        supabase.from('inventory').select('*, users!uid(name, onboarding_status)').is('facility_id', null).in('status', statuses)
+                    ]);
+                    const combinedItems = [...(facRes.data || []), ...(nullRes.data || [])];
+                    allItems = Array.from(new Map(combinedItems.map(item => [item.id, item])).values());
+                }
 
-                const combinedItems = [...(facRes.data || []), ...(nullRes.data || [])];
-                const allItems = Array.from(new Map(combinedItems.map(item => [item.id, item])).values());
-
-                // Fetch access requests for all active fulfillment jobs
-                const [facManifestsRes, nullManifestsRes] = await Promise.all([
-                    supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room')
-                        .eq('facility_id', queryFacilityId)
-                        .not('status', 'in', '("completed","cancelled","returned-to-vault")'),
-                    supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room')
-                        .is('facility_id', null)
-                        .not('status', 'in', '("completed","cancelled","returned-to-vault")')
-                ]);
-
-                const rawManifests = [...(facManifestsRes.data || []), ...(nullManifestsRes.data || [])];
-                const allRequests = Array.from(new Map(rawManifests.map(m => [m.id, m])).values());
+                let allRequests = [];
+                if (preloadedRequests) {
+                    allRequests = preloadedRequests;
+                } else {
+                    const [facManifestsRes, nullManifestsRes] = await Promise.all([
+                        supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room')
+                            .eq('facility_id', queryFacilityId)
+                            .not('status', 'in', '("completed","cancelled","returned-to-vault")'),
+                        supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room')
+                            .is('facility_id', null)
+                            .not('status', 'in', '("completed","cancelled","returned-to-vault")')
+                    ]);
+                    const rawManifests = [...(facManifestsRes.data || []), ...(nullManifestsRes.data || [])];
+                    allRequests = Array.from(new Map(rawManifests.map(m => [m.id, m])).values());
+                }
                 const manifests = allRequests;
 
                 // Sync shift stats and logistics routing in-memory (0ms network cost)
@@ -3477,7 +3560,7 @@
                     const triggerRealtimeRefresh = () => {
                         if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
                         realtimeDebounceTimer = setTimeout(() => {
-                            loadWorkerQueues();
+                            loadLiveData();
                         }, 200);
                     };
                     supabase.channel('admin_live_worker_queues')
@@ -3487,7 +3570,11 @@
                 }
 
                 // Fetch subscriptions to map user logistics_type
-                const { data: subsData } = await supabase.from('subscriptions').select('uid, logistics_type');
+                let subsData = preloadedSubs;
+                if (!subsData) {
+                    const { data } = await supabase.from('subscriptions').select('uid, logistics_type');
+                    subsData = data || [];
+                }
                 const subByUid = {};
                 if (subsData) {
                     subsData.forEach(s => { subByUid[s.uid] = s; });
