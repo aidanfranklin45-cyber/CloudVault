@@ -295,8 +295,7 @@
 
     <script>
         let actualUserRole = null;
-        let actualUserName = null;
-        let activeRole = 'worker'; // 'worker', 'manager', 'executive'
+        let actualAssignedFacilityId = null;
 
         function applyActiveEmployeeContext(profile) {
             if (!profile || profile.role === 'customer') {
@@ -305,7 +304,14 @@
             }
             actualUserRole = profile.role;
             actualUserName = profile.name || profile.email || 'Staff Member';
+            actualAssignedFacilityId = profile.assigned_facility_id || null;
             activeRole = profile.role === 'warehouse_worker' ? 'worker' : profile.role === 'warehouse_manager' ? 'manager' : 'executive';
+
+            if (actualAssignedFacilityId) {
+                localStorage.setItem('cloudvault_selected_facility', actualAssignedFacilityId);
+                const globalSel = document.getElementById('global-facility-select');
+                if (globalSel) globalSel.value = actualAssignedFacilityId;
+            }
 
             const roleSel = document.getElementById('role-select');
             if (roleSel) {
@@ -479,7 +485,8 @@
                     cachedFacilitiesMap = {};
                     facs.forEach(f => { cachedFacilitiesMap[f.id] = f; });
 
-                    const matchedFac = facs.find(f => f.id === savedFacility);
+                    const preferredFacId = actualAssignedFacilityId || savedFacility;
+                    const matchedFac = facs.find(f => f.id === preferredFacId);
                     const activeFacId = matchedFac ? matchedFac.id : facs[0].id;
 
                     if (globalSel) {

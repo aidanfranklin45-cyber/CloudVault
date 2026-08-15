@@ -222,6 +222,9 @@ async function authenticateEmployeeBadge(token) {
         localStorage.setItem(cacheKey, JSON.stringify(user));
         localStorage.setItem(cacheTimeKey, String(Date.now()));
         localStorage.setItem('cv_active_badge_user', JSON.stringify(user));
+        if (user.assigned_facility_id) {
+            localStorage.setItem('cloudvault_selected_facility', user.assigned_facility_id);
+        }
 
         return { success: true, user: user, badgeId: data.badge_id };
     } catch (err) {

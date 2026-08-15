@@ -111,6 +111,9 @@
             if (!session) return;
             try {
                 const profile = await getCachedUserProfile(session.user.id);
+                if (profile && profile.assigned_facility_id) {
+                    localStorage.setItem('cloudvault_selected_facility', profile.assigned_facility_id);
+                }
                 if (profile && STAFF_ROLES.includes(profile.role)) {
                     window.location.href = 'admin.html';
                 } else {
@@ -213,6 +216,9 @@
             },
             onBadgeSuccess: (user) => {
                 showBadgeScanToast(`✓ Welcome, ${user.name || 'Staff'}! Authenticating shift...`, 'success');
+                if (user.assigned_facility_id) {
+                    localStorage.setItem('cloudvault_selected_facility', user.assigned_facility_id);
+                }
                 setTimeout(() => {
                     window.location.href = 'admin.html';
                 }, 400);

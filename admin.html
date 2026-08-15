@@ -2108,16 +2108,15 @@
 
                 // Populate Facilities Selectors Dynamically First
                 if (facilities.length > 0) {
-                    const isExec = actualUserRole === 'executive';
-                    const preferredFacId = (!isExec && actualAssignedFacilityId) ? actualAssignedFacilityId : null;
+                    const defaultFacId = actualAssignedFacilityId || localStorage.getItem('cloudvault_selected_facility') || facilities[0].id;
 
                     ['global-facility-select', 'pricing-facility-select', 'manager-facility-select', 'exec-facility-select', 'emp-facility', 'transfer-facility-select', 'tmm-reassign-facility-select'].forEach(id => {
                         const el = document.getElementById(id);
                         if (el) {
                             const curVal = el.value;
                             el.innerHTML = facilities.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
-                            if (preferredFacId && facilities.some(f => f.id === preferredFacId)) {
-                                el.value = preferredFacId;
+                            if (defaultFacId && facilities.some(f => f.id === defaultFacId)) {
+                                el.value = defaultFacId;
                             } else if (curVal && facilities.some(f => f.id === curVal)) {
                                 el.value = curVal;
                             } else {
@@ -2188,8 +2187,10 @@
                 }
 
                 // Render current facility views using in-memory master data
-                const currentFac = localStorage.getItem('cloudvault_selected_facility') || (facilities[0]?.id || null);
+                const currentFac = actualAssignedFacilityId || localStorage.getItem('cloudvault_selected_facility') || (facilities[0]?.id || null);
                 if (currentFac) {
+                    localStorage.setItem('cloudvault_selected_facility', currentFac);
+                    window.currentSelectedFacilityId = currentFac;
                     await onGlobalFacilityChange(currentFac, master);
                 }
 
@@ -2517,16 +2518,14 @@
         }
 
         // Manager Module - Facility Density & Yield Calculations
-        function loadManagerFacilityData() {
+        function switchManagerFacility() {
             const select = document.getElementById('manager-facility-select');
+            if (!select) return;
 
-            // Managers are locked to their assigned facility only.
-            // Executives can freely browse any facility.
-            if (actualUserRole === 'warehouse_manager' && actualAssignedFacilityId) {
+            // Only workers are locked to their assigned facility; Managers & Executives can freely browse
+            if (actualUserRole === 'warehouse_worker' && actualAssignedFacilityId) {
                 select.value = actualAssignedFacilityId;
                 lockFacilityDropdown(true);
-            } else if (actualUserRole === 'executive') {
-                lockFacilityDropdown(false); // Executives can browse all facilities
             } else {
                 lockFacilityDropdown(false);
             }
@@ -3013,7 +3012,12 @@
                 applyActiveEmployeeContext(user);
                 playSuccessSound();
                 showBadgeScanToast(`✓ Shift Switched: ${user.name} (${user.role.replace('_', ' ')})`, 'success');
-                refreshDashboard();
+                if (user.assigned_facility_id) {
+                    onGlobalFacilityChange(user.assigned_facility_id);
+                } else {
+                    loadManagerLiveData();
+                    loadWorkerQueues();
+                }
             },
             onBadgeError: (err) => {
                 playErrorSound();
