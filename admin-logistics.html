@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" class="h-full bg-gray-950 text-gray-100">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,17 +14,20 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Google Fonts Outfit -->
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
     <style>
         select option {
             background-color: #0b0f19 !important;
             color: #ffffff !important;
             padding: 8px 12px;
         }
+
         body {
             font-family: 'Outfit', sans-serif;
             background-color: #060913;
         }
+
         .glass-panel {
             background: rgba(13, 18, 30, 0.92);
             backdrop-filter: blur(16px);
@@ -31,28 +35,62 @@
         }
 
         /* High-Contrast Readability Overrides */
-        .text-gray-500 { color: #94a3b8 !important; }
-        .text-gray-400 { color: #cbd5e1 !important; }
-        .text-gray-600 { color: #cbd5e1 !important; }
-        .border-gray-800 { border-color: #334155 !important; }
-        .border-gray-850 { border-color: #334155 !important; }
-        .border-gray-900 { border-color: #1e293b !important; }
-        table th { color: #f8fafc !important; font-weight: 800 !important; }
-        table td { color: #f1f5f9 !important; }
-        input, select, textarea { color: #ffffff !important; }
-        input::placeholder { color: #94a3b8 !important; }
+        .text-gray-500 {
+            color: #94a3b8 !important;
+        }
+
+        .text-gray-400 {
+            color: #cbd5e1 !important;
+        }
+
+        .text-gray-600 {
+            color: #cbd5e1 !important;
+        }
+
+        .border-gray-800 {
+            border-color: #334155 !important;
+        }
+
+        .border-gray-850 {
+            border-color: #334155 !important;
+        }
+
+        .border-gray-900 {
+            border-color: #1e293b !important;
+        }
+
+        table th {
+            color: #f8fafc !important;
+            font-weight: 800 !important;
+        }
+
+        table td {
+            color: #f1f5f9 !important;
+        }
+
+        input,
+        select,
+        textarea {
+            color: #ffffff !important;
+        }
+
+        input::placeholder {
+            color: #94a3b8 !important;
+        }
     </style>
 </head>
+
 <body class="flex flex-col min-h-full">
 
     <!-- Top Navigation Header -->
     <header class="sticky top-0 z-40 bg-gray-950/90 border-b border-gray-800/80 backdrop-blur-md">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-            
+
             <!-- Brand & Nav Tabs -->
             <div class="flex items-center space-x-6">
                 <a href="admin.html" class="flex items-center space-x-3 group">
-                    <img src="logo.png" alt="CloudVault Logo" class="w-9 h-9 object-contain rounded-xl group-hover:scale-105 transition shadow-md shadow-amber-500/20">
+                    <img src="logo.png" alt="CloudVault Logo"
+                        class="w-9 h-9 object-contain rounded-xl group-hover:scale-105 transition shadow-md shadow-amber-500/20">
                     <div>
                         <h1 class="text-base font-extrabold text-white tracking-tight">
                             CloudVault Hub
@@ -62,13 +100,16 @@
 
                 <!-- Navigation Tabs -->
                 <nav class="hidden md:flex items-center space-x-1 pl-6 border-l border-gray-800">
-                    <a href="admin.html" id="nav-bi-analytics" class="px-3.5 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
+                    <a href="admin.html" id="nav-bi-analytics"
+                        class="px-3.5 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
                         <i data-lucide="layout-dashboard" class="w-4 h-4 text-gray-400"></i> BI Analytics
                     </a>
-                    <a href="admin-facilities.html" id="nav-facility-config" class="px-3.5 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
+                    <a href="admin-facilities.html" id="nav-facility-config"
+                        class="px-3.5 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-900 transition flex items-center gap-1.5">
                         <i data-lucide="building-2" class="w-4 h-4 text-gray-400"></i> Facility Configuration
                     </a>
-                    <a href="admin-logistics.html" id="nav-logistics-ops" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600/20 border border-amber-500/30 transition flex items-center gap-1.5 shadow-sm">
+                    <a href="admin-logistics.html" id="nav-logistics-ops"
+                        class="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600/20 border border-amber-500/30 transition flex items-center gap-1.5 shadow-sm">
                         <i data-lucide="truck" class="w-4 h-4 text-amber-400"></i> Logistics Operations
                     </a>
                 </nav>
@@ -77,9 +118,11 @@
             <!-- Mode Controllers & Global Switcher -->
             <div class="flex items-center gap-3">
                 <!-- Global Facility Switcher -->
-                <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2 shadow-sm">
+                <div
+                    class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2 shadow-sm">
                     <i data-lucide="building-2" class="w-3.5 h-3.5 text-blue-400"></i>
-                    <select id="global-facility-select" onchange="onGlobalFacilityChange(this.value)" class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
+                    <select id="global-facility-select" onchange="onGlobalFacilityChange(this.value)"
+                        class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
                     </select>
                 </div>
 
@@ -101,70 +144,29 @@
 
     <!-- Main Workspace -->
     <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        
-        <!-- Logistics Live Map & Active Valet Route Manifest Panel -->
-        <div class="glass-panel p-6 rounded-3xl space-y-6">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800 pb-4">
-                <div>
-                    <span class="text-[10px] font-black uppercase text-amber-400 tracking-widest flex items-center gap-1.5">
-                        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i> Active Logistics Hub
-                    </span>
-                    <h2 class="text-xl font-extrabold text-white tracking-tight" id="map-hub-label">Logistics Dispatch Hub</h2>
-                    <p class="text-xs text-gray-400 mt-0.5 font-mono" id="map-telemetry-stops">Hub Station: Loading...</p>
-                </div>
-                <div class="flex items-center gap-3">
-                    <span id="map-stops-count" class="text-xs font-bold text-amber-400 bg-amber-500/10 px-3 py-1 rounded-xl border border-amber-500/20 font-mono">
-                        0 Active Valet Stops
-                    </span>
-                    <span class="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20 flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> GPS Telemetry Live
-                    </span>
-                </div>
-            </div>
-
-            <!-- Grid: Interactive Map & Live Delivery Stops Manifest List -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                
-                <!-- Left: Interactive Map Embed (7 Cols) -->
-                <div class="lg:col-span-7 h-96 rounded-2xl overflow-hidden border border-gray-800 bg-gray-950 relative shadow-2xl">
-                    <iframe id="worker-logistics-map-iframe" class="w-full h-full filter saturate-150 contrast-125" style="border:0;" loading="lazy" allowfullscreen src="about:blank"></iframe>
-                </div>
-
-                <!-- Right: Active Valet Delivery Route Manifest (5 Cols) -->
-                <div class="lg:col-span-5 bg-gray-950/80 border border-gray-850 rounded-2xl p-4 space-y-4">
-                    <div class="flex items-center justify-between border-b border-gray-850 pb-3">
-                        <div class="flex items-center space-x-2">
-                            <i data-lucide="route" class="w-4 h-4 text-blue-400"></i>
-                            <h3 class="font-extrabold text-white text-sm">Valet Route Manifest</h3>
-                        </div>
-                        <span class="text-[10px] text-gray-500 font-mono">Real-Time Queue</span>
-                    </div>
-
-                    <!-- Stops List Container -->
-                    <div id="delivery-stops-list" class="space-y-3 max-h-80 overflow-y-auto pr-1">
-                        <div class="p-4 text-center text-xs text-gray-500 font-mono">Loading delivery stops...</div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
 
         <!-- Customer Facility Relocation & Transfer Portal (Manager & Executive Only) -->
-        <div id="customer-relocation-portal" class="hidden glass-panel p-6 rounded-3xl space-y-6 border border-cyan-500/20 shadow-2xl">
+        <div id="customer-relocation-portal"
+            class="hidden glass-panel p-6 rounded-3xl space-y-6 border border-cyan-500/20 shadow-2xl">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800 pb-4">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
+                    <div
+                        class="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
                         <i data-lucide="user-check" class="w-5 h-5"></i>
                     </div>
                     <div>
                         <h3 class="text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
                             Customer Facility Relocation Portal
-                            <span class="bg-cyan-500/10 text-cyan-400 text-[10px] px-2 py-0.5 rounded-full font-bold border border-cyan-500/20 uppercase">Manager &amp; Executive Tool</span>
+                            <span
+                                class="bg-cyan-500/10 text-cyan-400 text-[10px] px-2 py-0.5 rounded-full font-bold border border-cyan-500/20 uppercase">Manager
+                                &amp; Executive Tool</span>
                         </h3>
-                        <p class="text-xs text-gray-400">Reassign customers, active ZIP code coverage, and tote inventory to any target facility across the network.</p>
+                        <p class="text-xs text-gray-400">Reassign customers, active ZIP code coverage, and tote
+                            inventory to any target facility across the network.</p>
                     </div>
                 </div>
-                <span class="text-xs font-mono font-bold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-xl border border-cyan-500/20 flex items-center gap-1">
+                <span
+                    class="text-xs font-mono font-bold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-xl border border-cyan-500/20 flex items-center gap-1">
                     <i data-lucide="arrow-right-left" class="w-3.5 h-3.5"></i> Network Transfer
                 </span>
             </div>
@@ -172,83 +174,111 @@
             <div class="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
                 <!-- 1. Customer Live Search Input with Auto-complete Dropdown -->
                 <div class="md:col-span-4 space-y-1.5 relative">
-                    <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider flex items-center justify-between">
+                    <label
+                        class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider flex items-center justify-between">
                         <span>Search Customer</span>
                         <span class="text-[10px] text-cyan-400 font-mono">By Name, Email, or ID</span>
                     </label>
                     <div class="relative">
-                        <input type="text" id="relocate-customer-search" oninput="onRelocateCustomerSearchInput(this.value)" onfocus="onRelocateCustomerSearchFocus()" placeholder="Type customer name, email, or ID..." class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold outline-none focus:border-cyan-500 transition pr-8">
-                        <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute right-2.5 top-3 pointer-events-none"></i>
+                        <input type="text" id="relocate-customer-search"
+                            oninput="onRelocateCustomerSearchInput(this.value)"
+                            onfocus="onRelocateCustomerSearchFocus()" placeholder="Type customer name, email, or ID..."
+                            class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold outline-none focus:border-cyan-500 transition pr-8">
+                        <i data-lucide="search"
+                            class="w-4 h-4 text-gray-500 absolute right-2.5 top-3 pointer-events-none"></i>
                     </div>
                     <!-- Search Results Dropdown List -->
-                    <div id="relocate-customer-results" class="hidden absolute top-full left-0 right-0 z-50 mt-1 bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl max-h-60 overflow-y-auto divide-y divide-gray-900">
+                    <div id="relocate-customer-results"
+                        class="hidden absolute top-full left-0 right-0 z-50 mt-1 bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl max-h-60 overflow-y-auto divide-y divide-gray-900">
                     </div>
                     <input type="hidden" id="relocate-selected-user-id" value="">
                 </div>
 
                 <!-- 2. Target Facility Selector -->
                 <div class="md:col-span-4 space-y-1.5">
-                    <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider">Target Destination Facility</label>
-                    <select id="relocate-target-facility-select" onchange="onRelocateFacilityChanged(this.value)" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold outline-none cursor-pointer focus:border-cyan-500 transition">
+                    <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider">Target
+                        Destination Facility</label>
+                    <select id="relocate-target-facility-select" onchange="onRelocateFacilityChanged(this.value)"
+                        class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold outline-none cursor-pointer focus:border-cyan-500 transition">
                         <option value="">Loading facilities...</option>
                     </select>
                 </div>
 
                 <!-- 3. New Active ZIP Code Input -->
                 <div class="md:col-span-4 space-y-1.5">
-                    <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider flex items-center justify-between">
+                    <label
+                        class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider flex items-center justify-between">
                         <span>New Active ZIP Code</span>
                         <span class="text-[10px] text-amber-400 font-mono">Zone Coverage</span>
                     </label>
-                    <input type="text" id="relocate-target-zip-input" placeholder="e.g. 97201" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-amber-400 font-mono font-bold outline-none focus:border-amber-500 transition">
+                    <input type="text" id="relocate-target-zip-input" placeholder="e.g. 97201"
+                        class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-amber-400 font-mono font-bold outline-none focus:border-amber-500 transition">
                 </div>
             </div>
 
             <!-- Transfer Options & Execute Button -->
             <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-gray-850">
                 <label class="flex items-center gap-2.5 text-xs text-gray-300 font-bold cursor-pointer">
-                    <input type="checkbox" id="relocate-move-totes-check" checked class="w-4 h-4 accent-cyan-500 rounded cursor-pointer">
+                    <input type="checkbox" id="relocate-move-totes-check" checked
+                        class="w-4 h-4 accent-cyan-500 rounded cursor-pointer">
                     <span>Reassign active totes, orders, and delivery requests to new facility &amp; ZIP</span>
                 </label>
 
-                <button onclick="executeCustomerRelocation()" id="relocate-execute-btn" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-extrabold px-7 py-3 rounded-xl shadow-lg shadow-cyan-600/20 transition flex items-center gap-2 cursor-pointer border border-cyan-400/30 active:scale-95 shrink-0 w-full sm:w-auto justify-center">
+                <button onclick="executeCustomerRelocation()" id="relocate-execute-btn"
+                    class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-extrabold px-7 py-3 rounded-xl shadow-lg shadow-cyan-600/20 transition flex items-center gap-2 cursor-pointer border border-cyan-400/30 active:scale-95 shrink-0 w-full sm:w-auto justify-center">
                     <i data-lucide="arrow-right-left" class="w-4 h-4"></i>
                     <span>Execute Customer Transfer</span>
                 </button>
             </div>
 
             <!-- Active Selection Summary Card -->
-            <div id="relocate-summary-box" class="hidden bg-gray-950/80 border border-gray-850 rounded-2xl p-4 text-xs space-y-2">
+            <div id="relocate-summary-box"
+                class="hidden bg-gray-950/80 border border-gray-850 rounded-2xl p-4 text-xs space-y-2">
             </div>
         </div>
 
         <!-- Quick Access Action Panel -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <a href="admin.html#worker-panel" class="glass-panel p-6 rounded-3xl space-y-3 hover:border-blue-500/40 transition group">
-                <div class="w-12 h-12 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30 group-hover:scale-105 transition">
+            <a href="admin.html#worker-panel"
+                class="glass-panel p-6 rounded-3xl space-y-3 hover:border-blue-500/40 transition group">
+                <div
+                    class="w-12 h-12 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30 group-hover:scale-105 transition">
                     <i data-lucide="archive-restore" class="w-6 h-6"></i>
                 </div>
                 <h3 class="text-base font-extrabold text-white">Staging &amp; Intake Queues</h3>
-                <p class="text-xs text-gray-400">Industrial 60px action cards for tote intake activation, vault retrieval, and staging room placement.</p>
-                <span class="text-xs font-bold text-blue-400 flex items-center gap-1 group-hover:translate-x-1 transition">Open Queue Panel →</span>
+                <p class="text-xs text-gray-400">Industrial 60px action cards for tote intake activation, vault
+                    retrieval, and staging room placement.</p>
+                <span
+                    class="text-xs font-bold text-blue-400 flex items-center gap-1 group-hover:translate-x-1 transition">Open
+                    Queue Panel →</span>
             </a>
 
-            <a href="admin.html" class="glass-panel p-6 rounded-3xl space-y-3 hover:border-amber-500/40 transition group">
-                <div class="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30 group-hover:scale-105 transition">
+            <a href="admin.html"
+                class="glass-panel p-6 rounded-3xl space-y-3 hover:border-amber-500/40 transition group">
+                <div
+                    class="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30 group-hover:scale-105 transition">
                     <i data-lucide="qr-code" class="w-6 h-6"></i>
                 </div>
                 <h3 class="text-base font-extrabold text-white">Thermal Tag &amp; Barcode Printing</h3>
-                <p class="text-xs text-gray-400">Print 4x6 thermal labels with high-contrast QR codes and Codabar barcode formats for warehouse scanners.</p>
-                <span class="text-xs font-bold text-amber-400 flex items-center gap-1 group-hover:translate-x-1 transition">Print Labels →</span>
+                <p class="text-xs text-gray-400">Print 4x6 thermal labels with high-contrast QR codes and Codabar
+                    barcode formats for warehouse scanners.</p>
+                <span
+                    class="text-xs font-bold text-amber-400 flex items-center gap-1 group-hover:translate-x-1 transition">Print
+                    Labels →</span>
             </a>
 
-            <a href="admin-facilities.html" id="action-card-fac-config" class="glass-panel p-6 rounded-3xl space-y-3 hover:border-indigo-500/40 transition group">
-                <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 group-hover:scale-105 transition">
+            <a href="admin-facilities.html" id="action-card-fac-config"
+                class="glass-panel p-6 rounded-3xl space-y-3 hover:border-indigo-500/40 transition group">
+                <div
+                    class="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 group-hover:scale-105 transition">
                     <i data-lucide="building-2" class="w-6 h-6"></i>
                 </div>
                 <h3 class="text-base font-extrabold text-white">Facility Capacity &amp; Specs</h3>
-                <p class="text-xs text-gray-400">Manage warehouse usable SQFT, tote capacity limits, staging room counts, and operating expenses.</p>
-                <span class="text-xs font-bold text-indigo-400 flex items-center gap-1 group-hover:translate-x-1 transition">Open Facility Config →</span>
+                <p class="text-xs text-gray-400">Manage warehouse usable SQFT, tote capacity limits, staging room
+                    counts, and operating expenses.</p>
+                <span
+                    class="text-xs font-bold text-indigo-400 flex items-center gap-1 group-hover:translate-x-1 transition">Open
+                    Facility Config →</span>
             </a>
         </div>
 
@@ -370,7 +400,7 @@
                             let badgeUser = null;
                             try {
                                 badgeUser = JSON.parse(localStorage.getItem('cv_active_badge_user'));
-                            } catch (e) {}
+                            } catch (e) { }
 
                             if (badgeUser && badgeUser.role && badgeUser.role !== 'customer') {
                                 applyActiveEmployeeContext(badgeUser);
@@ -408,7 +438,7 @@
             if (!dateStr || !slotValue) return false;
             const now = new Date();
             const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-            
+
             if (dateStr < todayStr) return true;
             if (dateStr > todayStr) return false;
 
@@ -457,7 +487,7 @@
                         globalSel.value = activeFacId;
                     }
                     if (relocateTargetSel) {
-                        relocateTargetSel.innerHTML = '<option value="">-- Select Target Destination Facility --</option>' + 
+                        relocateTargetSel.innerHTML = '<option value="">-- Select Target Destination Facility --</option>' +
                             facs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
                     }
 
@@ -513,8 +543,8 @@
                 return;
             }
 
-            const matches = allCustomersRoster.filter(u => 
-                (u.name || '').toLowerCase().includes(q) || 
+            const matches = allCustomersRoster.filter(u =>
+                (u.name || '').toLowerCase().includes(q) ||
                 (u.email || '').toLowerCase().includes(q) ||
                 (u.id || '').toLowerCase().includes(q)
             );
@@ -586,7 +616,7 @@
             try {
                 const { count } = await supabase.from('inventory').select('*', { count: 'exact', head: true }).eq('uid', userId);
                 toteCount = count || 0;
-            } catch (e) {}
+            } catch (e) { }
 
             box.classList.remove('hidden');
             box.innerHTML = `
@@ -802,8 +832,8 @@
 
                 if (telemetryStopsEl) {
                     const zips = stops.map(s => s.zip).filter(Boolean);
-                    telemetryStopsEl.textContent = zips.length > 0 
-                        ? `Waypoints: ${activeCity} (ZIPs ${Array.from(new Set(zips)).join(', ')})` 
+                    telemetryStopsEl.textContent = zips.length > 0
+                        ? `Waypoints: ${activeCity} (ZIPs ${Array.from(new Set(zips)).join(', ')})`
                         : `Hub Station: ${activeCity} (Stationary Intake Mode)`;
                 }
 
@@ -842,13 +872,12 @@
                                     <!-- Driver Info Bar -->
                                     <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800 text-[11px] font-mono flex items-center justify-between">
                                         <span class="text-gray-300 flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5 text-amber-400"></i> ${escapeHtml(driver)}</span>
-                                        <span class="font-bold uppercase text-[10px] px-2.5 py-0.5 rounded border ${
-                                            reqStatus === 'returned-to-vault' || reqStatus === 'completed' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' :
-                                            reqStatus === 'missing-tote' ? 'text-rose-400 bg-rose-500/10 border-rose-500/30' :
-                                            reqStatus === 'with-customer' ? 'text-purple-400 bg-purple-500/10 border-purple-500/30' :
+                                        <span class="font-bold uppercase text-[10px] px-2.5 py-0.5 rounded border ${reqStatus === 'returned-to-vault' || reqStatus === 'completed' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' :
+                                    reqStatus === 'missing-tote' ? 'text-rose-400 bg-rose-500/10 border-rose-500/30' :
+                                        reqStatus === 'with-customer' ? 'text-purple-400 bg-purple-500/10 border-purple-500/30' :
                                             reqStatus === 'arrived' ? 'text-blue-400 bg-blue-500/10 border-blue-500/30' :
-                                            'text-amber-400 bg-amber-500/10 border-amber-500/30'
-                                        }">${reqStatus.replace(/[-_]/g, ' ')}</span>
+                                                'text-amber-400 bg-amber-500/10 border-amber-500/30'
+                                }">${reqStatus.replace(/[-_]/g, ' ')}</span>
                                     </div>
 
                                     <!-- Action Buttons: Simplified for Delivery Driver -->
@@ -884,7 +913,7 @@
             }
         }
 
-        window.assignValetDriver = async function(targetId) {
+        window.assignValetDriver = async function (targetId) {
             const driverName = prompt("Driver Name:", "Alex Rivera") || "Alex Rivera";
             const driverPhone = prompt("Driver Phone:", "(206) 555-0192") || "(206) 555-0192";
             const vehicleInfo = prompt("Vehicle & License Plate:", "Sprinter Van #42 • WA 7XYZ89") || "Sprinter Van #42 • WA 7XYZ89";
@@ -920,7 +949,7 @@
             }
         };
 
-        window.updateDriverTrackingState = async function(targetId, status) {
+        window.updateDriverTrackingState = async function (targetId, status) {
             try {
                 // Unified status column: 'out-for-delivery', 'arrived', 'with-customer', 'returned-to-vault', 'missing-tote'
                 let { data: updatedReqs, error } = await supabase.from('access_requests').update({
@@ -948,4 +977,5 @@
         };
     </script>
 </body>
+
 </html>
