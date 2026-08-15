@@ -3873,34 +3873,40 @@
             if (slotStr && slotSurgeFees[slotStr] !== undefined) {
                 slotFee = Number(slotSurgeFees[slotStr]);
             } else if (isEveningSlot) {
-                slotFee = (p.evening_peak_slot_fee !== undefined && p.evening_peak_slot_fee !== null) ? Number(p.evening_peak_slot_fee) : 4.99;
+                slotFee = (p.evening_peak_slot_fee !== undefined && p.evening_peak_slot_fee !== null) ? Number(p.evening_peak_slot_fee) : 0.00;
             }
 
             const nextDayFree = Boolean(p.next_day_promo_free) || (p.next_day_surge_fee === 0);
+            const sameDayBase = (p.same_day_surge_fee !== undefined && p.same_day_surge_fee !== null) ? Number(p.same_day_surge_fee) : 19.99;
+            const nextDayBase = nextDayFree ? 0.00 : ((p.next_day_surge_fee !== undefined && p.next_day_surge_fee !== null) ? Number(p.next_day_surge_fee) : 9.99);
 
             if (diffDays <= 0) {
-                const sameDayFee = (slotFee > 0 || isEveningSlot) ? (p.same_day_peak_surge_fee || 24.99) : (p.same_day_surge_fee || 19.99);
+                const totalFee = sameDayBase + slotFee;
                 return {
-                    fee: sameDayFee,
+                    fee: totalFee,
                     tier: 'same_day_surge',
                     title: 'Same-Day Express Staging Access',
-                    desc: 'High demand same-day priority handling fee applied.'
+                    desc: slotFee > 0 
+                        ? `Same-day priority ($${sameDayBase.toFixed(2)}) + Time window fee ($${slotFee.toFixed(2)}).`
+                        : 'High demand same-day priority handling fee applied.'
                 };
             } else if (diffDays === 1) {
-                if (nextDayFree) {
+                const totalFee = nextDayBase + slotFee;
+                if (totalFee === 0) {
                     return {
                         fee: 0.00,
                         tier: 'next_day_promo',
-                        title: 'Next-Day Fast Access (Included Promo)',
+                        title: 'Next-Day Fast Access (Complimentary)',
                         desc: 'Next-day retrieval complimentary courtesy of facility promotion.'
                     };
                 } else {
-                    const nextDayFee = (slotFee > 0 || isEveningSlot) ? (p.next_day_peak_surge_fee || 14.99) : (p.next_day_surge_fee || 9.99);
                     return {
-                        fee: nextDayFee,
+                        fee: totalFee,
                         tier: 'next_day_surge',
                         title: 'Next-Day Fast Access',
-                        desc: 'Next-day expedited staging slot reserved.'
+                        desc: (nextDayBase > 0 && slotFee > 0)
+                            ? `Next-day expedited ($${nextDayBase.toFixed(2)}) + Time window fee ($${slotFee.toFixed(2)}).`
+                            : (nextDayBase > 0 ? 'Next-day expedited staging slot reserved.' : `Time window fee ($${slotFee.toFixed(2)}).`)
                     };
                 }
             } else if (slotFee > 0) {
