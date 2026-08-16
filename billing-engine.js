@@ -2252,32 +2252,35 @@
       let effectiveRate = 5.00;
 
       if (isSubscriptionInvoice) {
-        if (!activeToteCount || activeToteCount < 1) activeToteCount = 1;
-
-        // Resolve dynamic customer pricing (Price Lock immunity + facility regional rates)
-        const pricingRes = await this.resolveCustomerPricing(targetUid, targetFacId, activeToteCount);
-        currentTier = pricingRes;
-        effectiveRate = pricingRes.toteRate;
-        const accurateStorageSubtotal = activeToteCount * effectiveRate;
-        subtotal = accurateStorageSubtotal;
-
-        const storageItemIndex = lineItems.findIndex(i => {
-          const d = (i.description || '').toLowerCase();
-          return d.includes('subscription') || d.includes('storage plan') || d.includes('tote storage');
-        });
-
-        if (storageItemIndex !== -1) {
-          lineItems[storageItemIndex].qty = activeToteCount;
-          lineItems[storageItemIndex].unit_price = effectiveRate;
-          lineItems[storageItemIndex].amount = subtotal;
-          lineItems[storageItemIndex].description = `CloudVault Storage Subscription (${activeToteCount} totes @ $${effectiveRate.toFixed(2)}/mo — ${currentTier.tierName})`;
-        } else {
+        const hasStoredLineItems = lineItems.length > 0;
+        if (!hasStoredLineItems) {
+          if (!activeToteCount || activeToteCount < 1) activeToteCount = 1;
+          // Resolve dynamic customer pricing (Price Lock immunity + facility regional rates)
+          const pricingRes = await this.resolveCustomerPricing(targetUid, targetFacId, activeToteCount);
+          currentTier = pricingRes;
+          effectiveRate = pricingRes.toteRate;
+          const accurateStorageSubtotal = activeToteCount * effectiveRate;
+          subtotal = accurateStorageSubtotal;
           lineItems.unshift({
             description: `CloudVault Storage Subscription (${activeToteCount} totes @ $${effectiveRate.toFixed(2)}/mo — ${currentTier.tierName})`,
             qty: activeToteCount,
             unit_price: effectiveRate,
             amount: subtotal
           });
+        } else {
+          // Respect immutable stored line items from database
+          const storageItem = lineItems.find(i => {
+            const d = (i.description || '').toLowerCase();
+            return d.includes('subscription') || d.includes('storage') || d.includes('tote');
+          });
+          if (storageItem && storageItem.qty) {
+            activeToteCount = Number(storageItem.qty);
+          }
+          if (storageItem && storageItem.unit_price) {
+            effectiveRate = Number(storageItem.unit_price);
+          }
+          const pricingRes = await this.resolveCustomerPricing(targetUid, targetFacId, activeToteCount);
+          currentTier = pricingRes;
         }
 
         grandTotal = Math.max(0, subtotal + deliveryFee + surgeFee + tax - discount);
