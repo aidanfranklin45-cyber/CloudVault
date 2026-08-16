@@ -4237,6 +4237,7 @@
                                                 <span class="text-[11px] text-gray-400 font-sans font-medium">${itemLabel}</span>
                                             </div>
                                             <div class="flex items-center gap-1.5">
+                                                <button onclick="revertToteStage('${t.tote_code}', 'stored')" class="text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 text-[10px] font-bold px-2 py-1.5 rounded-xl border border-amber-500/30 transition flex items-center gap-1 cursor-pointer" title="Move back to Vault Storage">↩ Revert</button>
                                                 <button onclick="openReportMissingModal('${t.tote_code}', '${customerName.replace(/'/g, "\\'")}', '${uid}', '${job.jobId}')" class="text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold px-2 py-1.5 rounded-xl border border-rose-500/30 transition cursor-pointer" title="Report Missing">⚠️</button>
                                                 <button onclick="executeVaultPullToStaging('${t.tote_code}', ${assignedRoomNum}, '${expectedScanStatus}', '${job.jobId}')" class="bg-gray-800 hover:bg-gray-700 text-amber-300 hover:text-white border border-amber-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
                                                     <i data-lucide="${actionIcon}" class="w-3 h-3"></i> Pull
@@ -4281,6 +4282,7 @@
 
                         const assignedRoomNum = assignedRoom || 1;
                         const toteIdsJson = JSON.stringify(totes.map(t => t.id)).replace(/"/g, '&quot;');
+                        const toteCodesJson = JSON.stringify(totes.map(t => t.tote_code)).replace(/"/g, '&quot;');
 
                         return `
                             <div class="bg-gray-950 border-2 border-blue-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-blue-500/60 transition">
@@ -4314,24 +4316,31 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                         <span class="text-white font-bold">${t.tote_code}</span>
-                                        <div class="flex items-center gap-2">
+                                        <div class="flex items-center gap-1.5">
+                                            <button onclick="revertToteStage('${t.tote_code}', 'stored')" class="text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-amber-500/30 transition flex items-center gap-1 cursor-pointer" title="Move back to Vault Pull stage">↩ Move Back</button>
                                             <button onclick="openReportMissingModal('${t.tote_code}', '${customerName.replace(/'/g, "\\'")}', '${uid}', '${jobId}')" class="text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-rose-500/30 transition cursor-pointer" title="Report Missing">⚠️</button>
                                             <span class="text-blue-400 text-[10px] bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 font-sans">Ready in Room #${assignedRoomNum}</span>
                                         </div>
                                     </div>`).join('')}
                                 </div>
 
-                                <!-- Industrial Action Buttons (Batch + Single Hand-Off) -->
-                                <div class="grid grid-cols-1 ${totes.length > 1 ? 'sm:grid-cols-2' : ''} gap-3">
-                                    ${totes.length > 1 ? `
-                                    <button onclick="batchHandOffCustomerTotes('${uid}', '${customerName.replace(/'/g, "\\'")}', 'with-customer', ${toteIdsJson})" class="w-full min-h-[60px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
-                                        <i data-lucide="check-check" class="w-6 h-6"></i>
-                                        <span>BATCH CHECK-OUT ALL ${totes.length} TOTES →</span>
-                                    </button>
-                                    ` : ''}
-                                    <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('staged')" class="w-full min-h-[60px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl border-2 border-blue-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
-                                        <i data-lucide="user-check" class="w-6 h-6"></i>
-                                        <span>HAND OFF SINGLE TOTE (${firstCode}) →</span>
+                                <!-- Industrial Action Buttons (Batch + Single Hand-Off + Revert) -->
+                                <div class="space-y-2">
+                                    <div class="grid grid-cols-1 ${totes.length > 1 ? 'sm:grid-cols-2' : ''} gap-3">
+                                        ${totes.length > 1 ? `
+                                        <button onclick="batchHandOffCustomerTotes('${uid}', '${customerName.replace(/'/g, "\\'")}', 'with-customer', ${toteIdsJson})" class="w-full min-h-[60px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                            <i data-lucide="check-check" class="w-6 h-6"></i>
+                                            <span>BATCH CHECK-OUT ALL ${totes.length} TOTES →</span>
+                                        </button>
+                                        ` : ''}
+                                        <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('staged')" class="w-full min-h-[60px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl border-2 border-blue-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                            <i data-lucide="user-check" class="w-6 h-6"></i>
+                                            <span>HAND OFF SINGLE TOTE (${firstCode}) →</span>
+                                        </button>
+                                    </div>
+                                    <button onclick="batchRevertTotes(${toteCodesJson}, 'stored')" class="w-full py-2 bg-gray-900/90 hover:bg-gray-850 text-gray-400 hover:text-amber-300 font-bold text-xs rounded-xl border border-gray-800 transition flex items-center justify-center gap-1.5 cursor-pointer font-mono">
+                                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-amber-400"></i>
+                                        <span>↩ REVERT ALL ${totes.length} TOTE(S) BACK TO VAULT PULL</span>
                                     </button>
                                 </div>
                             </div>`;
@@ -4362,6 +4371,7 @@
                             const dateStr = reqDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
                             const slotStr = timeSlot || '09:00 AM - 12:00 PM';
                             const driver = request?.driver_name || 'Active Fleet Driver';
+                            const toteCodesJson = JSON.stringify(totes.map(t => t.tote_code)).replace(/"/g, '&quot;');
 
                             return `
                                 <div class="bg-gray-950 border-2 border-orange-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-orange-500/60 transition">
@@ -4394,18 +4404,25 @@
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                         ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                             <span class="text-white font-bold">${t.tote_code}</span>
-                                            <div class="flex items-center gap-2">
+                                            <div class="flex items-center gap-1.5">
+                                                <button onclick="revertToteStage('${t.tote_code}', 'stored')" class="text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-amber-500/30 transition flex items-center gap-1 cursor-pointer" title="Move back to Vault / Staging">↩ Move Back</button>
                                                 <button onclick="openReportMissingModal('${t.tote_code}', '${customerName.replace(/'/g, "\\'")}', '${uid}', '${jobId}')" class="text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-rose-500/30 transition cursor-pointer" title="Report Missing">⚠️</button>
                                                 <span class="text-orange-400 text-[10px] bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20 font-sans">Out for Delivery</span>
                                             </div>
                                         </div>`).join('')}
                                     </div>
 
-                                    <!-- Full-Width 60px Ergonomic Industrial Action Button -->
-                                    <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('with-customer')" class="w-full min-h-[60px] bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-orange-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
-                                        <i data-lucide="package-check" class="w-6 h-6"></i>
-                                        <span>CONFIRM DELIVERED TO CUSTOMER (${firstCode}) →</span>
-                                    </button>
+                                    <!-- Action Buttons -->
+                                    <div class="space-y-2">
+                                        <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('with-customer')" class="w-full min-h-[60px] bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-orange-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                            <i data-lucide="package-check" class="w-6 h-6"></i>
+                                            <span>CONFIRM DELIVERED TO CUSTOMER (${firstCode}) →</span>
+                                        </button>
+                                        <button onclick="batchRevertTotes(${toteCodesJson}, 'stored')" class="w-full py-2 bg-gray-900/90 hover:bg-gray-850 text-gray-400 hover:text-amber-300 font-bold text-xs rounded-xl border border-gray-800 transition flex items-center justify-center gap-1.5 cursor-pointer font-mono">
+                                            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-amber-400"></i>
+                                            <span>↩ REVERT ALL ${totes.length} TOTE(S) OFF TRUCK TO VAULT</span>
+                                        </button>
+                                    </div>
                                 </div>`;
                         }).join('');
                     }
@@ -4432,6 +4449,7 @@
                         const returnLabel = isValet ? 'DRIVER PICKED UP — RETURN TO VAULT' : 'SCAN RETURN BACK TO VAULT';
                         const returnNote = isValet ? 'Driver will pick up / returned via delivery van' : 'Customer returns at facility locker/room';
                         const orderLabel = job.isRequest ? `Order ID: ${jobId.substring(0, 8)}` : 'Checked Out Items';
+                        const toteCodesJson = JSON.stringify(totes.map(t => t.tote_code)).replace(/"/g, '&quot;');
 
                         return `
                             <div class="bg-gray-950 border-2 border-purple-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-purple-500/60 transition">
@@ -4457,18 +4475,25 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                         <span class="text-white font-bold">${t.tote_code}</span>
-                                        <div class="flex items-center gap-2">
+                                        <div class="flex items-center gap-1.5">
+                                            <button onclick="revertToteStage('${t.tote_code}', '${isValet ? 'out-for-delivery' : 'staged'}')" class="text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-amber-500/30 transition flex items-center gap-1 cursor-pointer" title="Revert to ${isValet ? 'Driver Dispatch' : 'Staging Room'}">↩ Move Back</button>
                                             <button onclick="openReportMissingModal('${t.tote_code}', '${customerName.replace(/'/g, "\\'")}', '${uid}', '${jobId}')" class="text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-rose-500/30 transition cursor-pointer" title="Report Missing">⚠️</button>
                                             <span class="text-purple-400 text-[10px] bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 font-sans">Return Pending</span>
                                         </div>
                                     </div>`).join('')}
                                 </div>
 
-                                <!-- Full-Width 60px Ergonomic Industrial Action Button -->
-                                <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('stored')" class="w-full min-h-[60px] bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-purple-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
-                                    <i data-lucide="package-check" class="w-6 h-6"></i>
-                                    <span>${returnLabel} (${firstCode}) →</span>
-                                </button>
+                                <!-- Action Buttons -->
+                                <div class="space-y-2">
+                                    <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('stored')" class="w-full min-h-[60px] bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-purple-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                        <i data-lucide="package-check" class="w-6 h-6"></i>
+                                        <span>${returnLabel} (${firstCode}) →</span>
+                                    </button>
+                                    <button onclick="batchRevertTotes(${toteCodesJson}, '${isValet ? 'out-for-delivery' : 'staged'}')" class="w-full py-2 bg-gray-900/90 hover:bg-gray-850 text-gray-400 hover:text-amber-300 font-bold text-xs rounded-xl border border-gray-800 transition flex items-center justify-center gap-1.5 cursor-pointer font-mono">
+                                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-amber-400"></i>
+                                        <span>↩ REVERT ALL ${totes.length} TOTE(S) BACK TO ${isValet ? 'DRIVER DISPATCH' : 'STAGING ROOM'}</span>
+                                    </button>
+                                </div>
                             </div>`;
                     }).join('');
                 }
@@ -5846,6 +5871,14 @@
                         if (typeof lucide !== 'undefined') lucide.createIcons();
                     }
                 } else {
+                    // Record last scan event for quick 1-click Undo
+                    window.lastScanEvent = {
+                        barcode: barcode,
+                        prevStatus: currentStatus,
+                        nextStatus: nextStatus,
+                        locCode: locCode
+                    };
+
                     // Retain the active target location lock for subsequent tote scans!
                     triggerScanFeedbackOverlay(true, transitionDesc, barcode);
                     if (terminalOutput) {
@@ -5853,6 +5886,12 @@
                         terminalOutput.innerHTML = `
                             <span class="text-emerald-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> Scan Successful!</span>
                             <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">${barcode} &bull; ${transitionDesc}${countBadge}</span>
+                            <div class="mt-2 flex items-center justify-center">
+                                <button onclick="undoLastScan()" class="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold font-mono transition flex items-center gap-1 cursor-pointer">
+                                    <i data-lucide="rotate-ccw" class="w-3 h-3 text-amber-400"></i>
+                                    <span>↩ Undo Scan (${barcode})</span>
+                                </button>
+                            </div>
                         `;
                         if (typeof lucide !== 'undefined') lucide.createIcons();
                     }
@@ -5876,6 +5915,72 @@
                 }
                 if (barcodeInput) barcodeInput.focus();
             }
+        }
+
+        // =========================================================================
+        // Operational Queue Stage Revert & Misscan Undo Handlers
+        // =========================================================================
+        async function revertToteStage(toteCode, targetStatus = null) {
+            if (!toteCode) return;
+            try {
+                const { data, error } = await supabase.rpc('revert_tote_stage', {
+                    p_tote_code: toteCode,
+                    p_target_status: targetStatus,
+                    p_staff_uid: getActiveStaffUid()
+                });
+                if (error) throw error;
+
+                showToast(`↩ Tote ${toteCode} moved back to ${data?.revertedStatus || 'previous stage'}`);
+                playBeep(440, 0.15, 'sine');
+
+                const terminalOutput = document.getElementById('terminal-output');
+                if (terminalOutput) {
+                    terminalOutput.innerHTML = `
+                        <span class="text-amber-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="rotate-ccw" class="w-4 h-4 text-amber-400"></i> Stage Reverted</span>
+                        <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">${toteCode} moved back to [${data?.revertedStatus}] (${data?.locationCode})</span>
+                    `;
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                }
+
+                loadWorkerQueues();
+            } catch (err) {
+                console.error("Failed to revert tote stage:", err);
+                showToast(`Revert Error: ${err.message || 'Unknown error'}`, true);
+            }
+        }
+
+        async function batchRevertTotes(toteCodes, targetStatus = null) {
+            if (!toteCodes || toteCodes.length === 0) return;
+            if (!confirm(`Move all ${toteCodes.length} tote(s) back to previous stage?`)) return;
+
+            try {
+                let successCount = 0;
+                for (const code of toteCodes) {
+                    const { error } = await supabase.rpc('revert_tote_stage', {
+                        p_tote_code: code,
+                        p_target_status: targetStatus,
+                        p_staff_uid: getActiveStaffUid()
+                    });
+                    if (!error) successCount++;
+                }
+
+                showToast(`↩ ${successCount}/${toteCodes.length} totes moved back to previous stage`);
+                playBeep(440, 0.2, 'sine');
+                loadWorkerQueues();
+            } catch (err) {
+                console.error("Batch revert failed:", err);
+                showToast(`Batch Revert Error: ${err.message}`, true);
+            }
+        }
+
+        async function undoLastScan() {
+            if (!window.lastScanEvent || !window.lastScanEvent.barcode) {
+                showToast("No recent scan event to undo.", true);
+                return;
+            }
+            const { barcode, prevStatus } = window.lastScanEvent;
+            window.lastScanEvent = null;
+            await revertToteStage(barcode, prevStatus);
         }
 
         // Vault Pull to Staging helper with Target Room assignment

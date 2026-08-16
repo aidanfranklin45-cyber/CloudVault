@@ -2072,6 +2072,150 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- =========================================================================
+-- EVENT 0: REVERT TOTE STAGE / MISSCAN UNDO HANDLER
+-- =========================================================================
+CREATE OR REPLACE FUNCTION public.revert_tote_stage(
+  p_tote_code TEXT,
+  p_target_status TEXT DEFAULT NULL,
+  p_staff_uid UUID DEFAULT NULL
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_uid UUID;
+  v_item RECORD;
+  v_user_role public.user_role;
+  v_prev_status public.inventory_status;
+  v_target_status public.inventory_status;
+  v_target_location_code TEXT;
+  v_target_location_type TEXT;
+  v_fulfillment_type TEXT;
+  v_customer_pin TEXT;
+  v_assigned_room INT;
+BEGIN
+  v_uid := COALESCE(auth.uid(), p_staff_uid);
+  IF v_uid IS NULL THEN
+    SELECT id INTO v_uid FROM public.users WHERE role IN ('warehouse_worker', 'warehouse_manager', 'executive') LIMIT 1;
+  END IF;
+
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
+  IF v_user_role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
+    RAISE EXCEPTION 'Access Denied: Staff clearance required';
+  END IF;
+
+  SELECT id, tote_code, status, uid, activated, location_code, location_type, facility_id INTO v_item 
+  FROM public.inventory 
+  WHERE tote_code = p_tote_code LIMIT 1;
+
+  IF v_item IS NULL THEN
+    RAISE EXCEPTION 'Tote % not found in inventory', p_tote_code;
+  END IF;
+
+  v_prev_status := v_item.status;
+
+  -- Determine if customer had a valet vs staging request
+  SELECT ar.fulfillment_type, ar.pin, ar.assigned_room INTO v_fulfillment_type, v_customer_pin, v_assigned_room
+  FROM public.access_requests ar
+  WHERE ar.uid = v_item.uid
+    AND (
+      ar.requested_items IS NULL 
+      OR cardinality(ar.requested_items) = 0
+      OR v_item.id = ANY(ar.requested_items)
+      OR (ar.requested_tote_codes IS NOT NULL AND v_item.tote_code = ANY(ar.requested_tote_codes))
+    )
+  ORDER BY ar.requested_at DESC
+  LIMIT 1;
+
+  -- Determine previous logical status and location
+  IF p_target_status IS NOT NULL AND p_target_status <> '' THEN
+    v_target_status := p_target_status::public.inventory_status;
+    IF v_target_status = 'staged' THEN
+      v_target_location_code := 'ROOM-' || COALESCE(v_assigned_room, 1) || '-BAY-01';
+      v_target_location_type := 'staging';
+    ELSIF v_target_status IN ('stored', 'pending-stage') THEN
+      v_target_location_code := 'VAULT-BAY-01';
+      v_target_location_type := 'vault';
+    ELSIF v_target_status = 'out-for-delivery' THEN
+      v_target_location_code := 'VALET-TRUCK-A';
+      v_target_location_type := 'dispatch';
+    ELSE
+      v_target_location_code := 'INTAKE-PROCESSING';
+      v_target_location_type := 'intake';
+    END IF;
+
+  ELSIF v_item.status = 'with-customer' THEN
+    IF v_fulfillment_type = 'valet_delivery' THEN
+      v_target_status := 'out-for-delivery'::public.inventory_status;
+      v_target_location_code := 'VALET-TRUCK-A';
+      v_target_location_type := 'dispatch';
+    ELSE
+      v_target_status := 'staged'::public.inventory_status;
+      v_target_location_code := 'ROOM-' || COALESCE(v_assigned_room, 1) || '-BAY-01';
+      v_target_location_type := 'staging';
+    END IF;
+
+  ELSIF v_item.status = 'out-for-delivery' OR v_item.status = 'pending-dispatch' THEN
+    v_target_status := 'stored'::public.inventory_status;
+    v_target_location_code := 'VAULT-BAY-01';
+    v_target_location_type := 'vault';
+
+  ELSIF v_item.status = 'staged' THEN
+    v_target_status := 'stored'::public.inventory_status;
+    v_target_location_code := 'VAULT-BAY-01';
+    v_target_location_type := 'vault';
+
+  ELSIF v_item.status = 'pending-stage' THEN
+    v_target_status := 'stored'::public.inventory_status;
+    v_target_location_code := 'VAULT-BAY-01';
+    v_target_location_type := 'vault';
+
+  ELSE
+    v_target_status := 'stored'::public.inventory_status;
+    v_target_location_code := 'VAULT-BAY-01';
+    v_target_location_type := 'vault';
+  END IF;
+
+  -- Reopen access request if it was completed prematurely
+  IF v_target_status IN ('staged', 'out-for-delivery', 'pending-dispatch', 'pending-stage', 'stored') THEN
+    UPDATE public.access_requests
+    SET status = 'pending'
+    WHERE uid = v_item.uid
+      AND (
+        requested_items IS NULL 
+        OR cardinality(requested_items) = 0 
+        OR v_item.id = ANY(requested_items) 
+        OR (requested_tote_codes IS NOT NULL AND v_item.tote_code = ANY(requested_tote_codes))
+      );
+  END IF;
+
+  -- Update inventory table
+  UPDATE public.inventory
+  SET status = v_target_status,
+      location_code = v_target_location_code,
+      location_type = v_target_location_type,
+      activated = true,
+      last_scanned_at = now(),
+      last_scanned_by = v_uid,
+      updated_at = now()
+  WHERE id = v_item.id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'event', 'TOTE_STAGE_REVERTED',
+    'toteCode', p_tote_code,
+    'previousStatus', v_prev_status,
+    'revertedStatus', v_target_status,
+    'locationCode', v_target_location_code,
+    'locationType', v_target_location_type,
+    'customerUid', v_item.uid,
+    'message', 'Tote successfully moved back to previous stage (' || v_target_status::text || ')'
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- =========================================================================
 -- EVENT 1: TOTE RETURN & VAULT SHELVING HANDLER
 -- =========================================================================
 CREATE OR REPLACE FUNCTION public.process_tote_return(
