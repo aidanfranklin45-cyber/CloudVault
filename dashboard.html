@@ -5255,7 +5255,10 @@
                     if (rawType === 'unreturned_tote_fee' || rawType === 'missing_tote_fee' || rawType === 'missing_tote' || notes.includes('missing tote') || notes.includes('unreturned')) {
                         return 'Missing Container Replacement Fee';
                     }
-                    if (rawType === 'unlaunched_deposit' || notes.includes('deposit')) {
+                    if (rawType === 'subscription' || rawType === 'monthly_subscription' || rawType === 'initial_subscription' || hasStorageLine) {
+                        return 'Monthly Storage Plan';
+                    }
+                    if (rawType === 'unlaunched_deposit' || (rawType !== 'subscription' && notes.includes('pre-launch deposit'))) {
                         return 'Pre-Launch Deposit';
                     }
                     if (rawType === 'refund') {
