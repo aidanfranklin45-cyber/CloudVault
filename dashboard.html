@@ -334,8 +334,8 @@
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
                             </div>
                             <div>
-                                <h4 class="font-extrabold text-gray-900 text-xs">5-Year Price Guarantee</h4>
-                                <p class="text-[11px] text-gray-500 mt-0.5">Locks your monthly tier rates for up to 5 years from facility opening.</p>
+                                <h4 class="font-extrabold text-gray-900 text-xs">3-Year Price Guarantee</h4>
+                                <p class="text-[11px] text-gray-500 mt-0.5">Locks your monthly tier rates for up to 3 years from facility opening.</p>
                             </div>
                         </div>
                         <div class="bg-white/80 border border-blue-200/60 p-3.5 rounded-2xl flex items-start space-x-3">
@@ -2755,7 +2755,7 @@
                     zip_code: wizardZip,
                     requested_totes: wizardTotes || 5,
                     deposit_amount: 25.00,
-                    price_lock_years: 5,
+                    price_lock_years: 3,
                     refund_guarantee_days: 365,
                     payment_status: 'deposit_paid'
                 });
@@ -3476,7 +3476,7 @@
                         </div>
                         <div class="bg-gray-900/80 p-4 rounded-2xl border border-gray-800 space-y-1">
                             <div class="text-[10px] font-bold uppercase text-gray-500 font-mono">Guaranteed Rates</div>
-                            <div class="text-sm font-extrabold text-blue-400">🔒 5-Year Rate Lock</div>
+                            <div class="text-sm font-extrabold text-blue-400">🔒 3-Year Rate Lock</div>
                             <div class="text-[11px] text-gray-400">Immune to regional price hikes</div>
                         </div>
                         <div class="bg-gray-900/80 p-4 rounded-2xl border border-gray-800 space-y-1">
@@ -5239,11 +5239,11 @@
             if (sub && sub.price_lock_expires_at) {
                 lockExpiry = new Date(sub.price_lock_expires_at);
             } else if (sub && sub.created_at) {
-                lockExpiry = new Date(new Date(sub.created_at).getTime() + (5 * 365.25 * 24 * 60 * 60 * 1000));
+                lockExpiry = new Date(new Date(sub.created_at).getTime() + (3 * 365.25 * 24 * 60 * 60 * 1000));
             } else if (currentUser && currentUser.created_at) {
-                lockExpiry = new Date(new Date(currentUser.created_at).getTime() + (5 * 365.25 * 24 * 60 * 60 * 1000));
+                lockExpiry = new Date(new Date(currentUser.created_at).getTime() + (3 * 365.25 * 24 * 60 * 60 * 1000));
             } else {
-                lockExpiry = new Date(Date.now() + (5 * 365.25 * 24 * 60 * 60 * 1000));
+                lockExpiry = new Date(Date.now() + (3 * 365.25 * 24 * 60 * 60 * 1000));
             }
             updatePriceLockTimer(lockExpiry);
             if (window._priceLockTimerInterval) clearInterval(window._priceLockTimerInterval);

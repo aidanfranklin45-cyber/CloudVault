@@ -1173,12 +1173,12 @@
                     <div id="waitlist-step-payment" class="hidden-section space-y-4 pt-2 border-t border-gray-200">
                         <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs space-y-2.5">
                             <div class="flex items-center justify-between font-extrabold text-amber-900">
-                                <span>🔒 5-Year Legacy Price Lock Deposit</span>
+                                <span>🔒 3-Year Legacy Price Lock Deposit</span>
                                 <span class="text-base font-black text-amber-700"
                                     id="waitlist-deposit-display">$20.00</span>
                             </div>
                             <p class="text-amber-800 leading-relaxed text-[11px]">
-                                Your deposit secures priority facility capacity and locks in current rates for 5 years against future regional price increases.
+                                Your deposit secures priority facility capacity and locks in current rates for 3 years against future regional price increases.
                             </p>
                             <div class="pt-2 border-t border-amber-200/60 space-y-1.5 text-[10.5px]">
                                 <p class="text-emerald-900 font-medium">
@@ -1242,7 +1242,7 @@
                             ✓</div>
                         <h4 class="font-bold text-lg">Priority Deposit &amp; Price Lock Secured!</h4>
                         <p class="text-xs text-emerald-800 leading-relaxed">
-                            We've reserved your spot, created your account, and locked in your legacy rate for 5 years.
+                            We've reserved your spot, created your account, and locked in your legacy rate for 3 years.
                         </p>
                         <button onclick="window.location.href='dashboard.html'"
                             class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm py-3 px-4 rounded-xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer">
@@ -1949,7 +1949,7 @@
                     zip_code: zip,
                     requested_totes: flowData.totes || 5,
                     deposit_amount: reqDeposit,
-                    price_lock_years: 5,
+                    price_lock_years: 3,
                     refund_guarantee_days: 365,
                     payment_status: 'pending_deposit',
                     status: 'pending_deposit'
@@ -1962,7 +1962,7 @@
                         zip_code: zip,
                         requested_totes: flowData.totes || 5,
                         deposit_amount: reqDeposit,
-                        price_lock_years: 5,
+                        price_lock_years: 3,
                         refund_guarantee_days: 365,
                         payment_status: 'pending_deposit',
                         status: 'pending_deposit'
@@ -2094,7 +2094,7 @@
                             total_amount: depositAmt,
                             payment_method: 'card',
                             line_items: [
-                                { description: 'Unlaunched Market Priority Queue Reservation & 5-Year Rate Lock Deposit', qty: 1, unit_price: depositAmt, amount: depositAmt }
+                                { description: 'Unlaunched Market Priority Queue Reservation & 3-Year Rate Lock Deposit', qty: 1, unit_price: depositAmt, amount: depositAmt }
                             ],
                             notes: `Unlaunched market priority deposit ($25.00) for email ${activeWaitlistEmail}.`
                         });

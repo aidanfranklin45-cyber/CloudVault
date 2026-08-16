@@ -261,7 +261,7 @@ CREATE TABLE public.waitlist (
     city TEXT,
     requested_totes INTEGER DEFAULT 5,
     deposit_amount NUMERIC(10,2) DEFAULT 20.00,
-    price_lock_years INTEGER DEFAULT 5,
+    price_lock_years INTEGER DEFAULT 3,
     refund_guarantee_days INTEGER DEFAULT 365,
     payment_status TEXT DEFAULT 'deposit_paid',
     status TEXT DEFAULT 'deposit_paid',
@@ -273,7 +273,7 @@ CREATE TABLE public.waitlist (
 -- Safe migration fallback for pre-existing waitlist tables in Supabase
 ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.users(id) ON DELETE SET NULL;
 ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(10,2) DEFAULT 20.00;
-ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS price_lock_years INTEGER DEFAULT 5;
+ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS price_lock_years INTEGER DEFAULT 3;
 ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS refund_guarantee_days INTEGER DEFAULT 365;
 ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'deposit_paid';
 ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'deposit_paid';
