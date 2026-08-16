@@ -1654,48 +1654,42 @@
             };
 
             // ── 1. Activation / Intake Flow Cards ──────────────────────────────
-            const pendingUnactivatedItems = (currentInventory || []).filter(i => 
-                i.activated === false && ['pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery'].includes(i.status)
-            );
-            const isNewCustomerOnboarding = currentProfile && currentProfile.onboarding_status !== 'active' && currentProfile.onboarding_status !== 'completed';
-
-            if (activationReqs.length > 0 || pendingUnactivatedItems.length > 0 || (isNewCustomerOnboarding && (stagingRoomItems.length > 0 || valetItems.length > 0))) {
-                const isValetActivation = activationReqs.some(r => r.fulfillment_type === 'valet_delivery');
-                const isStagedReady = stagingRoomItems.length > 0 || (currentInventory || []).some(i => i.status === 'staged' || i.status === 'pending-stage');
-
-                if (isValetActivation || valetItems.length > 0) {
-                    const isOutForDelivery = valetItems.some(i => i.status === 'out-for-delivery');
-                    const req = activationReqs.find(r => r.fulfillment_type === 'valet_delivery') || activationReqs[0];
-                    let rawDate = (req && req.target_date) ? req.target_date : new Date().toISOString().split('T')[0];
-                    let rawSlot = (req && req.time_slot) ? req.time_slot : null;
-                    if (!rawSlot || isSlotPastOrActive(rawDate, rawSlot)) {
-                        const upcoming = getUpcomingAvailableSlot(rawDate);
-                        rawDate = upcoming.targetDate;
-                        rawSlot = upcoming.timeSlot;
-                    }
-                    const dateStr = new Date(rawDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-                    const timeStr = rawSlot;
-                    cards.push(buildFlowCard({
-                        flowType: 'activation-valet',
-                        icon: '🚚',
-                        title: 'New Tote Activation — Valet Door Delivery',
-                        subtitle: isOutForDelivery ? `Driver en route • ${timeStr}` : `Dispatch window: ${dateStr} • ${timeStr}`,
-                        badgeText: isOutForDelivery ? 'OUT FOR DELIVERY' : 'DISPATCHED',
-                        badgeColor: isOutForDelivery ? 'orange' : 'blue',
-                        steps: [
-                            { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
-                            { label: '2. Intake Prep', sub: '✓ Empty totes prepped', done: true },
-                            { label: '3. On Truck', sub: isOutForDelivery ? 'Driver en route to you' : 'Loading on van', done: false, active: true },
-                            { label: '4. With Customer', sub: isOutForDelivery ? 'Arriving soon' : dateStr, done: false, active: false },
-                        ],
-                        totes: valetItems.length > 0 ? valetItems : currentInventory,
-                        pinBlock: buildValetBlock(timeStr, dateStr, req),
-                    }));
-                } else {
-                    const req = activationReqs[0];
+            if (activationReqs.length > 0) {
+                activationReqs.forEach(req => {
+                    const isValetActivation = req.fulfillment_type === 'valet_delivery';
                     const { room: roomNum, pin } = resolveRoomAndPin(req);
-                    let rawDate = (req && req.target_date) ? req.target_date : new Date().toISOString().split('T')[0];
-                    let rawSlot = (req && req.time_slot) ? req.time_slot : null;
+
+                    // Resolve exact totes for this activation request
+                    const rawItems = req.requested_items || req.requested_tote_codes || [];
+                    const requestedSet = new Set(rawItems);
+
+                    let reqTotes = [];
+                    if (requestedSet.size > 0) {
+                        reqTotes = (currentInventory || []).filter(item => 
+                            requestedSet.has(item.id) ||
+                            requestedSet.has(item.tote_code) ||
+                            requestedSet.has(item.barcode) ||
+                            requestedSet.has(item.label)
+                        );
+                    }
+
+                    // If not matched by explicit IDs, use additional_totes count or newly added totes
+                    const expectedCount = Number(req.additional_totes) || (currentProfile?.active_totes_held || 25);
+                    if (reqTotes.length === 0) {
+                        const additionalCandidates = (currentInventory || []).filter(item => 
+                            (item.label || '').toLowerCase().includes('additional') ||
+                            item.activated === false ||
+                            ['pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery'].includes(item.status)
+                        );
+                        if (additionalCandidates.length > 0) {
+                            reqTotes = additionalCandidates.slice(-expectedCount);
+                        } else {
+                            reqTotes = (currentInventory || []).slice(-expectedCount);
+                        }
+                    }
+
+                    let rawDate = req.target_date || new Date().toISOString().split('T')[0];
+                    let rawSlot = req.time_slot || null;
                     if (!rawSlot || isSlotPastOrActive(rawDate, rawSlot)) {
                         const upcoming = getUpcomingAvailableSlot(rawDate);
                         rawDate = upcoming.targetDate;
@@ -1703,27 +1697,47 @@
                     }
                     const dateStr = new Date(rawDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
                     const timeStr = rawSlot;
-                    const isStagedReady = stagingRoomItems.some(i => i.status === 'staged') || (req && (req.status === 'staged' || req.status === 'ready'));
 
-                    cards.push(buildFlowCard({
-                        flowType: 'activation-staging',
-                        icon: '📦',
-                        title: isStagedReady ? `New Tote Activation — Staging Room #${roomNum} Pickup` : `New Tote Activation — Vault Prep in Progress`,
-                        subtitle: isStagedReady
-                            ? `Your empty tote(s) are ready in Staging Room #${roomNum} • PIN: ${pin}`
-                            : `Intake preparation in progress • ${dateStr} • ${timeStr}`,
-                        badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'INTAKE PREPARATION IN PROGRESS',
-                        badgeColor: isStagedReady ? 'emerald' : 'blue',
-                        steps: [
-                            { label: '1. Intake & Activation', sub: '✓ Empty totes prepped', done: true, active: false },
-                            { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting room assignment...', done: isStagedReady, active: !isStagedReady },
-                            { label: '3. With Customer', sub: isStagedReady ? `PIN: ${pin} — Awaiting pickup` : 'PIN code pending', done: false, active: isStagedReady },
-                            { label: '4. Vault Storage', sub: 'After packing & return', done: false, active: false },
-                        ],
-                        totes: stagingRoomItems.length > 0 ? stagingRoomItems : currentInventory,
-                        pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : buildPendingPinBlock(dateStr, timeStr),
-                    }));
-                }
+                    if (isValetActivation) {
+                        const isOutForDelivery = reqTotes.some(i => i.status === 'out-for-delivery') || req.status === 'out-for-delivery';
+                        cards.push(buildFlowCard({
+                            flowType: 'activation-valet',
+                            icon: '🚚',
+                            title: 'New Tote Activation — Valet Door Delivery',
+                            subtitle: isOutForDelivery ? `Driver en route • ${timeStr}` : `Dispatch window: ${dateStr} • ${timeStr}`,
+                            badgeText: isOutForDelivery ? 'OUT FOR DELIVERY' : 'DISPATCHED',
+                            badgeColor: isOutForDelivery ? 'orange' : 'blue',
+                            steps: [
+                                { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
+                                { label: '2. Intake Prep', sub: '✓ Empty totes prepped', done: true },
+                                { label: '3. On Truck', sub: isOutForDelivery ? 'Driver en route to you' : 'Loading on van', done: false, active: true },
+                                { label: '4. With Customer', sub: isOutForDelivery ? 'Arriving soon' : dateStr, done: false, active: false },
+                            ],
+                            totes: reqTotes,
+                            pinBlock: buildValetBlock(timeStr, dateStr, req),
+                        }));
+                    } else {
+                        const isStagedReady = reqTotes.some(i => i.status === 'staged') || req.status === 'staged' || req.status === 'ready';
+                        cards.push(buildFlowCard({
+                            flowType: 'activation-staging',
+                            icon: '📦',
+                            title: isStagedReady ? `New Tote Activation — Staging Room #${roomNum} Pickup` : `New Tote Activation — Vault Prep in Progress`,
+                            subtitle: isStagedReady
+                                ? `Your empty tote(s) are ready in Staging Room #${roomNum} • PIN: ${pin}`
+                                : `Intake preparation in progress • ${dateStr} • ${timeStr}`,
+                            badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'INTAKE PREPARATION IN PROGRESS',
+                            badgeColor: isStagedReady ? 'emerald' : 'blue',
+                            steps: [
+                                { label: '1. Intake & Activation', sub: '✓ Empty totes prepped', done: true, active: false },
+                                { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting room assignment...', done: isStagedReady, active: !isStagedReady },
+                                { label: '3. With Customer', sub: isStagedReady ? `PIN: ${pin} — Awaiting pickup` : 'PIN code pending', done: false, active: isStagedReady },
+                                { label: '4. Vault Storage', sub: 'After packing & return', done: false, active: false },
+                            ],
+                            totes: reqTotes,
+                            pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : buildPendingPinBlock(dateStr, timeStr),
+                        }));
+                    }
+                });
             }
 
             // ── 2. Stored Tote Retrieval Flow Cards (One discrete card per request) ──
@@ -4319,14 +4333,23 @@
 
             try {
                 // 2. Fetch RPC capacity data if available to overlay capacity badges
-                const { data: availability } = await supabase.rpc('get_staging_availability', {
+                const { data: availability, error } = await supabase.rpc('get_staging_availability', {
                     p_facility_id: targetFacId,
                     p_target_date: normalizedDate
                 });
 
+                if (error) {
+                    console.warn('[Capacity Check] Notice:', error.message);
+                }
+
                 if (availability && availability.length > 0) {
                     const availMap = {};
-                    availability.forEach(a => { availMap[a.slot] = a.available_capacity; });
+                    availability.forEach(a => { 
+                        availMap[a.slot] = {
+                            rooms: a.available_rooms !== undefined ? a.available_rooms : Math.ceil((a.available_capacity || 0) / 20),
+                            capacity: a.available_capacity
+                        };
+                    });
 
                     Array.from(selectEl.options).forEach(opt => {
                         if (opt.disabled) return; // Respect local elapsed disable
@@ -4335,11 +4358,13 @@
                                           cleanVal.includes('12:00') ? 'Afternoon (12 PM - 3 PM)' :
                                           'Evening Peak (3 PM - 6 PM)';
 
-                        if (availMap[cleanVal] === 0) {
+                        const slotInfo = availMap[cleanVal];
+                        if (slotInfo && slotInfo.rooms === 0) {
                             opt.disabled = true;
                             opt.textContent = `${baseLabel} — 🔴 FULL`;
-                        } else if (availMap[cleanVal] !== undefined) {
-                            opt.textContent = `${baseLabel} (${availMap[cleanVal]} slots left)`;
+                        } else if (slotInfo && slotInfo.rooms !== undefined) {
+                            const roomCount = slotInfo.rooms;
+                            opt.textContent = `${baseLabel} (${roomCount} room${roomCount !== 1 ? 's' : ''} available)`;
                         }
                     });
 
@@ -4411,9 +4436,10 @@
                 if (!dateInput.value || dateInput.value < earliestValid) dateInput.value = earliestValid;
                 if (dateInput.value > maxValid) dateInput.value = maxValid;
                 const profile = currentUser ? await getCachedUserProfile(currentUser.id) : null;
-                if (dateInput && dateInput.value) {
                 const facId = activeFacilityPricing?.id || profile?.assigned_facility_id;
-                await checkSlotAvailability(facId, dateInput.value, 'fulfillment-time-slot');
+                if (dateInput.value) {
+                    await checkSlotAvailability(facId, dateInput.value, 'fulfillment-time-slot');
+                }
             }
             updateFulfillmentSurgeUI();
         }

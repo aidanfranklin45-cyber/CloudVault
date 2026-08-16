@@ -807,6 +807,66 @@
                 </div>
             </div>
 
+            <!-- Executive Customer Data Privacy & Statutory Erasure Hub (GDPR / CCPA) -->
+            <div class="glass-panel p-6 sm:p-8 rounded-3xl border border-red-500/20 space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-5 gap-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 text-lg font-bold">
+                            🛡️
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-extrabold text-white flex items-center gap-2">
+                                Customer Data Privacy &amp; Erasure Hub
+                                <span class="text-[10px] font-mono font-bold bg-red-500/20 text-red-300 border border-red-500/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Super Admin Clearance</span>
+                            </h3>
+                            <p class="text-xs text-gray-400 font-mono">GDPR Article 17 (Right to Erasure) &amp; CCPA compliance with 7-year statutory financial ledger preservation</p>
+                        </div>
+                    </div>
+                    <button onclick="loadPrivacyAuditLogs()" class="px-3.5 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                        <i data-lucide="history" class="w-3.5 h-3.5 text-blue-400"></i> View Privacy Audit Logs
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <!-- Left: Customer Search & Selection -->
+                    <div class="lg:col-span-5 space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold uppercase text-gray-400 mb-1.5 font-mono">1. Search Customer to Manage / Erase</label>
+                            <div class="relative">
+                                <input type="text" id="privacy-user-search" oninput="searchPrivacyCustomers(this.value)" placeholder="Search by email, name, or customer ID..."
+                                    class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:border-red-500 outline-none">
+                            </div>
+                        </div>
+
+                        <div id="privacy-search-results" class="bg-gray-950/80 border border-gray-850 rounded-2xl p-2 max-h-56 overflow-y-auto space-y-1">
+                            <div class="p-3 text-center text-xs text-gray-500 font-mono">Type customer email or name above...</div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Customer Privacy Dossier & Deletion Trigger -->
+                    <div class="lg:col-span-7">
+                        <div id="privacy-customer-dossier" class="bg-gray-950/90 border border-gray-850 rounded-2xl p-5 space-y-4">
+                            <div class="text-center py-6 text-gray-500 space-y-1">
+                                <div class="text-2xl">👤</div>
+                                <p class="text-xs font-bold text-gray-400">No Customer Selected</p>
+                                <p class="text-[11px] text-gray-600 font-mono">Select a customer from the search list to inspect data footprint and process compliance requests.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Privacy Audit Logs Drawer -->
+                <div id="privacy-audit-drawer" class="hidden pt-4 border-t border-gray-850 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">Compliance Audit Trail (Immutable Log)</span>
+                        <span id="privacy-audit-count" class="text-xs text-blue-400 font-mono">0 records</span>
+                    </div>
+                    <div id="privacy-audit-list" class="bg-gray-950 rounded-2xl border border-gray-850 p-3 max-h-48 overflow-y-auto space-y-2 text-xs font-mono">
+                        <div class="text-center text-gray-500 py-3">Loading compliance logs...</div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- VIEW 2: WAREHOUSE MANAGER ROLE -->
@@ -5891,6 +5951,254 @@
         }
 
         // =========================================================================
+        // GDPR & CCPA Customer Data Privacy & Erasure Hub
+        // =========================================================================
+        let selectedPrivacyCustomer = null;
+        let privacySearchDebounce = null;
+
+        async function searchPrivacyCustomers(query) {
+            clearTimeout(privacySearchDebounce);
+            const resultsBox = document.getElementById('privacy-search-results');
+            if (!resultsBox) return;
+
+            const q = (query || '').trim();
+            if (!q || q.length < 2) {
+                resultsBox.innerHTML = '<div class="p-3 text-center text-xs text-gray-500 font-mono">Type at least 2 characters...</div>';
+                return;
+            }
+
+            privacySearchDebounce = setTimeout(async () => {
+                resultsBox.innerHTML = '<div class="p-3 text-center text-xs text-blue-400 font-mono">Searching accounts...</div>';
+                try {
+                    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
+                    let req = supabase.from('users').select('id, name, email, role, assigned_facility_id, active_totes_held, created_at').neq('role', 'executive');
+                    
+                    if (isUUID) {
+                        req = req.eq('id', q);
+                    } else {
+                        req = req.or(`email.ilike.%${q}%,name.ilike.%${q}%`);
+                    }
+
+                    const { data: users, error } = await req.limit(8);
+
+                    if (error) throw error;
+
+                    if (!users || users.length === 0) {
+                        resultsBox.innerHTML = '<div class="p-3 text-center text-xs text-gray-500 font-mono">No matching customer accounts found.</div>';
+                        return;
+                    }
+
+                    resultsBox.innerHTML = users.map(u => `
+                        <div onclick="selectPrivacyCustomer('${u.id}')" class="p-2.5 bg-gray-900/60 hover:bg-gray-850 border border-gray-800 hover:border-blue-500/50 rounded-xl cursor-pointer transition flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-bold text-white">${escapeHtml(u.name || 'Unnamed Customer')}</p>
+                                <p class="text-[10px] text-gray-400 font-mono">${escapeHtml(u.email || u.id)}</p>
+                            </div>
+                            <span class="text-[9px] font-mono font-bold bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded-full">${u.active_totes_held || 0} Totes</span>
+                        </div>
+                    `).join('');
+                } catch (err) {
+                    console.error("Privacy search error:", err);
+                    resultsBox.innerHTML = `<div class="p-3 text-center text-xs text-red-400 font-mono">Search failed: ${escapeHtml(err.message)}</div>`;
+                }
+            }, 250);
+        }
+
+        async function selectPrivacyCustomer(userId) {
+            const dossier = document.getElementById('privacy-customer-dossier');
+            if (!dossier) return;
+
+            dossier.innerHTML = '<div class="p-6 text-center text-xs text-blue-400 font-mono">Loading customer privacy record...</div>';
+
+            try {
+                const { data: user, error } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', userId)
+                    .single();
+
+                if (error || !user) throw error || new Error("User not found");
+
+                selectedPrivacyCustomer = user;
+
+                // Query associated records footprint
+                const [invRes, reqRes, invoiceRes] = await Promise.all([
+                    supabase.from('inventory').select('id, tote_code, label').eq('uid', userId),
+                    supabase.from('access_requests').select('id, request_type, status').eq('uid', userId),
+                    supabase.from('invoices').select('id, invoice_number, total_amount, created_at').eq('uid', userId)
+                ]);
+
+                const totes = invRes.data || [];
+                const reqs = reqRes.data || [];
+                const invoices = invoiceRes.data || [];
+
+                dossier.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-start border-b border-gray-800 pb-3">
+                            <div>
+                                <h4 class="text-sm font-extrabold text-white">${escapeHtml(user.name || 'Unnamed Customer')}</h4>
+                                <p class="text-xs text-blue-400 font-mono">${escapeHtml(user.email || user.id)}</p>
+                                <p class="text-[10px] text-gray-500 font-mono mt-0.5">UID: ${user.id}</p>
+                            </div>
+                            <span class="px-2.5 py-1 rounded-full text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 uppercase">
+                                ${user.role || 'customer'}
+                            </span>
+                        </div>
+
+                        <!-- Data Footprint Overview Grid -->
+                        <div class="grid grid-cols-3 gap-2 text-center">
+                            <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800">
+                                <p class="text-[9px] text-gray-400 uppercase font-mono">Totes Held</p>
+                                <p class="text-base font-black text-white font-mono mt-0.5">${totes.length}</p>
+                            </div>
+                            <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800">
+                                <p class="text-[9px] text-gray-400 uppercase font-mono">Active Jobs</p>
+                                <p class="text-base font-black text-amber-400 font-mono mt-0.5">${reqs.length}</p>
+                            </div>
+                            <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800">
+                                <p class="text-[9px] text-gray-400 uppercase font-mono">Tax / Invoices</p>
+                                <p class="text-base font-black text-indigo-400 font-mono mt-0.5">${invoices.length}</p>
+                            </div>
+                        </div>
+
+                        <!-- Legal Action Notice -->
+                        <div class="p-3 bg-red-950/30 border border-red-500/20 rounded-xl space-y-1 text-[11px] text-red-200">
+                            <p class="font-bold">Permanent Erasure Protocol:</p>
+                            <p class="text-[10px] text-red-300/80">
+                                Executing erasure will permanently wipe the auth credentials, name, email, phone, and inventory records. 
+                                ${invoices.length > 0 ? `The ${invoices.length} billing receipt(s) will be unlinked and preserved as anonymized ledger totals for 7-year statutory tax compliance.` : ''}
+                            </p>
+                        </div>
+
+                        <div class="pt-1 flex justify-end gap-2">
+                            <button type="button" onclick="openPrivacyErasureModal()" class="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-red-600/25 flex items-center gap-1.5 cursor-pointer">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                <span>Erase Customer Data (GDPR / CCPA)</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            } catch (err) {
+                console.error("Failed to load customer dossier:", err);
+                dossier.innerHTML = `<div class="p-6 text-center text-xs text-red-400 font-mono">Failed to load customer: ${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        function openPrivacyErasureModal() {
+            if (!selectedPrivacyCustomer) {
+                showToast("Please select a customer first.", true);
+                return;
+            }
+            document.getElementById('pem-target-uid').value = selectedPrivacyCustomer.id;
+            document.getElementById('pem-customer-name').textContent = selectedPrivacyCustomer.name || 'Unnamed Customer';
+            document.getElementById('pem-customer-email').textContent = selectedPrivacyCustomer.email || selectedPrivacyCustomer.id;
+            document.getElementById('pem-customer-totes').textContent = `${selectedPrivacyCustomer.active_totes_held || 0} Totes`;
+            document.getElementById('pem-verification-input').value = '';
+            document.getElementById('privacy-erasure-modal').classList.remove('hidden');
+        }
+
+        function closePrivacyErasureModal() {
+            document.getElementById('privacy-erasure-modal').classList.add('hidden');
+        }
+
+        async function executeCustomerDataErasure() {
+            const targetUid = document.getElementById('pem-target-uid').value;
+            const reason = document.getElementById('pem-reason').value;
+            const verifyInput = document.getElementById('pem-verification-input').value.trim();
+            const btn = document.getElementById('btn-confirm-privacy-erasure');
+
+            if (verifyInput !== 'CONFIRM DELETE' && (!selectedPrivacyCustomer || verifyInput.toLowerCase() !== (selectedPrivacyCustomer.email || '').toLowerCase())) {
+                alert('Verification mismatch. Please type CONFIRM DELETE or the customer exact email.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="animate-spin">⏳</span> Erasing Data...';
+
+            try {
+                const { data, error } = await supabase.rpc('delete_customer_data_privacy', {
+                    p_target_uid: targetUid,
+                    p_reason: reason
+                });
+
+                if (error) throw error;
+
+                showToast(`✓ Customer data permanently erased. Audit Ref: ${data.audit_id ? data.audit_id.slice(0, 8) : 'Logged'}`);
+                closePrivacyErasureModal();
+
+                // Reset dossier and search
+                selectedPrivacyCustomer = null;
+                document.getElementById('privacy-user-search').value = '';
+                document.getElementById('privacy-search-results').innerHTML = '<div class="p-3 text-center text-xs text-emerald-400 font-mono">✓ Erasure completed successfully.</div>';
+                document.getElementById('privacy-customer-dossier').innerHTML = `
+                    <div class="text-center py-6 text-gray-500 space-y-1">
+                        <div class="text-2xl text-emerald-400">✓</div>
+                        <p class="text-xs font-bold text-gray-300">Customer Data Erased</p>
+                        <p class="text-[11px] text-gray-500 font-mono">The account was purged and financial records anonymized.</p>
+                    </div>
+                `;
+
+                // Reload telemetry and audit logs
+                loadExecutiveStats();
+                loadPrivacyAuditLogs();
+            } catch (err) {
+                console.error("Erasure execution failed:", err);
+                alert("Failed to execute data erasure: " + (err.message || "Unknown error"));
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="trash-2" class="w-3.5 h-3.5"></i> <span>Permanently Erase</span>';
+            }
+        }
+
+        async function loadPrivacyAuditLogs() {
+            const drawer = document.getElementById('privacy-audit-drawer');
+            const list = document.getElementById('privacy-audit-list');
+            const countEl = document.getElementById('privacy-audit-count');
+            if (!drawer || !list) return;
+
+            drawer.classList.remove('hidden');
+            list.innerHTML = '<div class="text-center text-gray-500 py-3">Loading compliance logs...</div>';
+
+            try {
+                const { data: logs, error } = await supabase
+                    .from('privacy_audit_logs')
+                    .select('*')
+                    .order('executed_at', { ascending: false })
+                    .limit(20);
+
+                if (error) throw error;
+
+                if (countEl) countEl.textContent = `${(logs || []).length} log${(logs || []).length !== 1 ? 's' : ''}`;
+
+                if (!logs || logs.length === 0) {
+                    list.innerHTML = '<div class="text-center text-gray-500 py-3">No data erasure compliance events logged yet.</div>';
+                    return;
+                }
+
+                list.innerHTML = logs.map(l => {
+                    const dateStr = new Date(l.executed_at).toLocaleString();
+                    return `
+                        <div class="p-2.5 bg-gray-900/70 border border-gray-800 rounded-xl space-y-1">
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-400 font-bold font-mono text-[10px]">🛡️ ${escapeHtml(l.action_type || 'erasure')}</span>
+                                <span class="text-gray-500 text-[10px]">${dateStr}</span>
+                            </div>
+                            <p class="text-gray-300 text-xs">${escapeHtml(l.compliance_reason)}</p>
+                            <div class="flex justify-between items-center text-[10px] text-gray-500 border-t border-gray-800/60 pt-1">
+                                <span>Target: <span class="font-mono text-gray-400">${String(l.target_uid).slice(0, 8)}...</span></span>
+                                <span>By: <span class="font-mono text-blue-400">${escapeHtml(l.executed_by_email || 'Executive')}</span></span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error("Failed to load audit logs:", err);
+                list.innerHTML = `<div class="text-center text-red-400 py-2">Error loading audit logs: ${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        // =========================================================================
         // Google Maps Routes API Logistics Routing Renderer
         async function loadWorkerLogisticsRouting(facilityId = null, preloadedRequests = null, preloadedItems = null) {
             try {
@@ -9165,21 +9473,32 @@
 
             try {
                 if (presetKey === 'all') {
-                    const { data: totes1 } = await supabase.from('inventory').select('tote_code').eq('facility_id', facId);
-                    const { data: totes2 } = await supabase.from('inventory').select('tote_code').is('facility_id', null);
-                    codes = [...(totes1 || []), ...(totes2 || [])].map(t => t.tote_code);
+                    let q = supabase.from('inventory').select('tote_code');
+                    if (facId) q = q.eq('facility_id', facId);
+                    const { data: totes } = await q;
+                    codes = (totes || []).map(t => t.tote_code);
                 } else if (presetKey === 'activate') {
-                    const { data: totes1 } = await supabase.from('inventory').select('tote_code').eq('facility_id', facId).eq('activated', false);
-                    const { data: totes2 } = await supabase.from('inventory').select('tote_code').is('facility_id', null).eq('activated', false);
-                    const { data: reqs } = await supabase.from('access_requests').select('requested_tote_codes').eq('status', 'pending');
-                    const reqCodes = (reqs || []).flatMap(r => r.requested_tote_codes || []);
-                    const combined = [...(totes1 || []), ...(totes2 || [])].map(t => t.tote_code).concat(reqCodes);
-                    codes = Array.from(new Set(combined.filter(Boolean)));
+                    let q = supabase.from('inventory').select('tote_code');
+                    if (facId) q = q.eq('facility_id', facId);
+                    const { data: totes } = await q.or('activated.eq.false,status.eq.intake');
+                    if (totes && totes.length > 0) {
+                        codes = totes.map(t => t.tote_code);
+                    } else {
+                        let reqQ = supabase.from('access_requests').select('requested_tote_codes').eq('status', 'pending');
+                        if (facId) reqQ = reqQ.eq('facility_id', facId);
+                        const { data: reqs } = await reqQ;
+                        codes = (reqs || []).flatMap(r => r.requested_tote_codes || []);
+                    }
+                    codes = Array.from(new Set(codes.filter(Boolean)));
                 } else if (presetKey === 'stage') {
-                    const { data: totes } = await supabase.from('inventory').select('tote_code').eq('status', 'pending-stage');
+                    let q = supabase.from('inventory').select('tote_code').eq('status', 'pending-stage');
+                    if (facId) q = q.eq('facility_id', facId);
+                    const { data: totes } = await q;
                     if (totes) codes = totes.map(t => t.tote_code);
                 } else if (presetKey === 'customer') {
-                    const { data: totes } = await supabase.from('inventory').select('tote_code').eq('status', 'staged');
+                    let q = supabase.from('inventory').select('tote_code').eq('status', 'staged');
+                    if (facId) q = q.eq('facility_id', facId);
+                    const { data: totes } = await q;
                     if (totes) codes = totes.map(t => t.tote_code);
                 }
             } catch (e) {
@@ -10867,6 +11186,83 @@
                 <button type="button" onclick="closeReportMissingModal()" class="w-1/2 bg-gray-900 hover:bg-gray-800 text-gray-300 font-bold py-3 rounded-xl text-xs transition">Cancel</button>
                 <button type="button" onclick="submitMissingReport()" class="w-1/2 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl text-xs transition shadow-lg shadow-red-600/30 flex items-center justify-center gap-1.5 cursor-pointer">
                     <span>⚠️ Submit Report</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GDPR / CCPA Permanent Customer Data Erasure Modal -->
+    <div id="privacy-erasure-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-gray-950 border-2 border-red-600/70 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-5 fade-in">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-11 h-11 rounded-2xl bg-red-500/20 text-red-400 font-bold flex items-center justify-center text-xl border border-red-500/40">
+                        🛡️
+                    </div>
+                    <div>
+                        <h3 class="text-base font-extrabold text-white">Confirm Customer Data Erasure</h3>
+                        <p class="text-xs text-red-400 font-mono">GDPR Article 17 / CCPA Permanent Action</p>
+                    </div>
+                </div>
+                <button onclick="closePrivacyErasureModal()" class="text-gray-400 hover:text-white p-2 rounded-xl bg-gray-900 border border-gray-800 transition">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-xs">
+                <div class="bg-red-950/40 border border-red-500/30 p-3.5 rounded-2xl space-y-1.5 text-red-200">
+                    <p class="font-bold flex items-center gap-1.5">
+                        <span>⚠️</span> This action is permanent and cannot be undone.
+                    </p>
+                    <ul class="list-disc list-inside text-[11px] text-red-300/90 space-y-0.5">
+                        <li>Customer auth account and profile will be deleted immediately.</li>
+                        <li>Personal info, delivery notes, and tote contents/labels will be erased.</li>
+                        <li>Physical totes will be returned to the facility pool.</li>
+                        <li>Financial ledger amounts will be anonymized for 7-year statutory tax compliance.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-gray-900/80 p-3.5 rounded-2xl border border-gray-800 space-y-1">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400 font-mono">Target Customer:</span>
+                        <span id="pem-customer-name" class="font-bold text-white">—</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400 font-mono">Customer Email:</span>
+                        <span id="pem-customer-email" class="font-mono text-blue-400 font-bold">—</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400 font-mono">Active Totes:</span>
+                        <span id="pem-customer-totes" class="font-mono text-emerald-400 font-bold">0 Totes</span>
+                    </div>
+                </div>
+
+                <input type="hidden" id="pem-target-uid">
+
+                <div>
+                    <label class="block font-bold uppercase text-gray-400 mb-1.5 font-mono text-[10px]">Legal / Compliance Reason *</label>
+                    <select id="pem-reason" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5 text-xs text-white focus:border-red-500 outline-none">
+                        <option value="Customer GDPR Article 17 Right to Erasure Request">Customer GDPR Article 17 Right to Erasure Request</option>
+                        <option value="Customer CCPA Deletion Request">Customer CCPA Deletion Request</option>
+                        <option value="Voluntary Account Closure & Complete Data Purge">Voluntary Account Closure & Complete Data Purge</option>
+                        <option value="Executive Legal / Compliance Order">Executive Legal / Compliance Order</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-bold uppercase text-gray-400 mb-1.5 font-mono text-[10px]">
+                        Type <span id="pem-confirm-match" class="text-red-400 font-black select-all">CONFIRM DELETE</span> to authorize *
+                    </label>
+                    <input type="text" id="pem-verification-input" placeholder="Type CONFIRM DELETE" 
+                        class="w-full bg-gray-900 border border-gray-800 rounded-xl p-3 text-xs text-white placeholder-gray-600 focus:border-red-500 outline-none font-mono">
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-2 border-t border-gray-800">
+                <button type="button" onclick="closePrivacyErasureModal()" class="w-1/2 bg-gray-900 hover:bg-gray-800 text-gray-300 font-bold py-3 rounded-xl text-xs transition">Cancel</button>
+                <button type="button" id="btn-confirm-privacy-erasure" onclick="executeCustomerDataErasure()" class="w-1/2 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl text-xs transition shadow-lg shadow-red-600/30 flex items-center justify-center gap-1.5 cursor-pointer">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    <span>Permanently Erase</span>
                 </button>
             </div>
         </div>
