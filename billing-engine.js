@@ -167,43 +167,20 @@
         const userRes = await sb.from('users').select('*').eq('id', userId).maybeSingle();
         const user = userRes.data || {};
 
-        const oldTotes = rpcRes.oldTotes;
-        const newTotes = rpcRes.newTotes;
+        const oldTotes = rpcRes.oldTotal || rpcRes.oldTotes;
+        const newTotes = rpcRes.newTotal || rpcRes.newTotes;
         const oldRate = Number(rpcRes.oldRate) || 0;
         const newRate = Number(rpcRes.newRate) || 0;
         const newMonthly = Number(rpcRes.newMonthly) || 0;
 
-        const rateChanged = oldRate !== newRate;
+        const rateChanged = oldRate !== newRate && oldRate > 0;
         const noteText = rateChanged
-          ? `Partial Tote Unsubscribe: Reduced ${reduceCount} tote(s) (${oldTotes} -> ${newTotes}). Volume tier rate updated from $${oldRate.toFixed(2)} to $${newRate.toFixed(2)}/tote/mo.`
-          : `Partial Tote Unsubscribe: Reduced ${reduceCount} tote(s) (${oldTotes} -> ${newTotes}). Maintained rate of $${newRate.toFixed(2)}/tote/mo.`;
-
-        const invRes = await this.createInvoiceRecord({
-          uid: userId,
-          customer_name: user.name || 'Valued Customer',
-          customer_email: user.email,
-          facility_id: user.assigned_facility_id,
-          invoice_type: 'subscription_modification',
-          payment_status: 'processed',
-          subtotal: newMonthly,
-          total_amount: newMonthly,
-          payment_method: 'account_adjustment',
-          transaction_reference: `SUB-MOD-${Date.now().toString().slice(-6)}`,
-          notes: noteText,
-          line_items: [
-            {
-              description: `Subscription Modification: Tote Reduction (${oldTotes} totes down to ${newTotes} totes @ $${newRate.toFixed(2)}/mo)`,
-              qty: newTotes,
-              unit_price: newRate,
-              amount: newMonthly
-            }
-          ]
-        });
+          ? `✓ Unsubscribed ${reduceCount} container(s) (${oldTotes} → ${newTotes} totes). New tier: $${newRate.toFixed(2)}/mo ($${newMonthly.toFixed(2)}/mo). Pro-rata adjustment will appear on your next statement.`
+          : `✓ Unsubscribed ${reduceCount} container(s) (${oldTotes} → ${newTotes} totes). New monthly: $${newMonthly.toFixed(2)}/mo. Pro-rata adjustment will appear on your next statement.`;
 
         return {
           success: true,
           result: rpcRes,
-          invoice: invRes.data || null,
           message: noteText
         };
       } catch (err) {
