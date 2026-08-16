@@ -1134,16 +1134,31 @@
                     </div>
                 </div>
 
-                <!-- Grandfathered Price Lock Protection Badge -->
-                <div class="bg-white/10 p-3 rounded-xl border border-white/15 flex items-center justify-between text-xs text-blue-100">
-                    <div class="flex items-center gap-2">
-                        <span class="text-base">🛡️</span>
-                        <div>
-                            <span class="font-extrabold text-white block text-xs">Grandfathered Price-Lock Active</span>
-                            <span class="text-[10px] text-blue-200 block">Your monthly storage rate tier is locked and protected from facility adjustments.</span>
+                <!-- Grandfathered Price Lock Protection Badge & Live Countdown Timer -->
+                <div class="bg-white/10 p-3.5 rounded-xl border border-white/15 space-y-2 text-xs text-blue-100">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">🛡️</span>
+                            <div>
+                                <span class="font-extrabold text-white block text-xs">Grandfathered Price-Lock Active</span>
+                                <span class="text-[10px] text-blue-200 block">Your monthly storage rates are locked & protected from facility increases.</span>
+                            </div>
                         </div>
+                        <span id="price-lock-status-badge" class="text-[10px] font-extrabold uppercase bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            Locked
+                        </span>
                     </div>
-                    <span class="text-[10px] font-extrabold uppercase bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded-full">Locked</span>
+                    
+                    <div class="pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
+                        <div class="flex items-center gap-1.5 text-blue-200">
+                            <span>⏳</span>
+                            <span>Guarantee Until: <strong id="price-lock-expiry-date" class="text-white font-bold">Aug 5, 2031</strong></span>
+                        </div>
+                        <span id="price-lock-countdown" class="font-mono font-extrabold text-emerald-300 bg-emerald-950/40 border border-emerald-400/30 px-2.5 py-0.5 rounded-lg text-[10px] shadow-sm">
+                            Calculating...
+                        </span>
+                    </div>
                 </div>
             </div>
 
@@ -5218,7 +5233,54 @@
                 if (nextDateEl) nextDateEl.textContent = 'N/A';
             }
 
+            // Grandfathered Price-Lock Countdown Timer
+            const sub = currentSubscription;
+            let lockExpiry = null;
+            if (sub && sub.price_lock_expires_at) {
+                lockExpiry = new Date(sub.price_lock_expires_at);
+            } else if (sub && sub.created_at) {
+                lockExpiry = new Date(new Date(sub.created_at).getTime() + (5 * 365.25 * 24 * 60 * 60 * 1000));
+            } else if (currentUser && currentUser.created_at) {
+                lockExpiry = new Date(new Date(currentUser.created_at).getTime() + (5 * 365.25 * 24 * 60 * 60 * 1000));
+            } else {
+                lockExpiry = new Date(Date.now() + (5 * 365.25 * 24 * 60 * 60 * 1000));
+            }
+            updatePriceLockTimer(lockExpiry);
+            if (window._priceLockTimerInterval) clearInterval(window._priceLockTimerInterval);
+            window._priceLockTimerInterval = setInterval(() => updatePriceLockTimer(lockExpiry), 60000);
+
             loadInvoiceHistory();
+        }
+
+        function updatePriceLockTimer(expiryDate) {
+            const countEl = document.getElementById('price-lock-countdown');
+            const dateEl = document.getElementById('price-lock-expiry-date');
+            if (!countEl) return;
+
+            const now = new Date().getTime();
+            const expiry = new Date(expiryDate).getTime();
+            const diff = expiry - now;
+
+            if (dateEl) {
+                dateEl.textContent = new Date(expiryDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+            }
+
+            if (diff <= 0) {
+                countEl.textContent = 'Expired';
+                countEl.className = 'font-mono font-extrabold text-red-300 bg-red-950/40 border border-red-400/30 px-2.5 py-0.5 rounded-lg text-[10px]';
+                return;
+            }
+
+            const totalDays = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const years = Math.floor(totalDays / 365.25);
+            const remainingDays = Math.floor(totalDays % 365.25);
+
+            if (years > 0) {
+                countEl.textContent = `⏳ ${years}y ${remainingDays}d remaining`;
+            } else {
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                countEl.textContent = `⏳ ${totalDays}d ${hours}h remaining`;
+            }
         }
 
         async function loadInvoiceHistory() {

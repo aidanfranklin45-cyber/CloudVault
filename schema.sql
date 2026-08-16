@@ -93,6 +93,7 @@ CREATE TABLE public.users (
     active_totes_held INTEGER DEFAULT 0,
     has_price_lock BOOLEAN DEFAULT false,
     price_lock_rates JSONB DEFAULT NULL,
+    price_lock_expires_at TIMESTAMPTZ DEFAULT NULL,
     deposit_paid_amount NUMERIC(10,2) DEFAULT 0.00,
     avatar_color TEXT DEFAULT 'blue',
     is_overdue BOOLEAN DEFAULT false,
@@ -102,6 +103,7 @@ CREATE TABLE public.users (
 -- Migration fallbacks for users
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS has_price_lock BOOLEAN DEFAULT false;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS price_lock_rates JSONB DEFAULT NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS price_lock_expires_at TIMESTAMPTZ DEFAULT NULL;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS deposit_paid_amount NUMERIC(10,2) DEFAULT 0.00;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_overdue BOOLEAN DEFAULT false;
 
@@ -202,6 +204,7 @@ CREATE TABLE public.subscriptions (
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS facility_id TEXT DEFAULT NULL;
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS has_price_lock BOOLEAN DEFAULT false;
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS price_lock_rates JSONB DEFAULT NULL;
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS price_lock_expires_at TIMESTAMPTZ DEFAULT NULL;
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS last_billed_at TIMESTAMPTZ;
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS next_billing_date TIMESTAMPTZ;
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS cancel_at TIMESTAMPTZ DEFAULT NULL;
