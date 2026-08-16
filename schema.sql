@@ -877,13 +877,52 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Add Totes to Subscription
+-- ─────────────────────────────────────────────────────────────────────
+-- 10. Subscription Billing Segments & Dynamic Pro-Rata Tier Engine
+-- ─────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS public.subscription_billing_segments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  subscription_id UUID REFERENCES public.subscriptions(id) ON DELETE CASCADE,
+  uid UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  facility_id TEXT,
+  tote_count INT NOT NULL,
+  unit_rate NUMERIC(10,2) NOT NULL,
+  effective_start TIMESTAMPTZ NOT NULL,
+  effective_end TIMESTAMPTZ,
+  reason TEXT DEFAULT 'initial_subscription',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sub_billing_segs_uid ON public.subscription_billing_segments(uid);
+CREATE INDEX IF NOT EXISTS idx_sub_billing_segs_sub ON public.subscription_billing_segments(subscription_id);
+CREATE INDEX IF NOT EXISTS idx_sub_billing_segs_dates ON public.subscription_billing_segments(effective_start, effective_end);
+
+ALTER TABLE public.subscription_billing_segments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can read own billing segments" ON public.subscription_billing_segments;
+CREATE POLICY "Users can read own billing segments"
+  ON public.subscription_billing_segments
+  FOR SELECT
+  USING (auth.uid() = uid);
+
+DROP POLICY IF EXISTS "Staff full access to billing segments" ON public.subscription_billing_segments;
+CREATE POLICY "Staff full access to billing segments"
+  ON public.subscription_billing_segments
+  FOR ALL
+  USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('warehouse_worker', 'warehouse_manager', 'executive')));
+
+-- Add Totes to Subscription (Pro-Rata Segment Driven)
 CREATE OR REPLACE FUNCTION public.add_totes(
   p_additional_totes INT,
-  p_logistics_type TEXT
+  p_logistics_type TEXT,
+  p_target_date DATE DEFAULT NULL,
+  p_time_slot TEXT DEFAULT NULL
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_uid UUID;
+  v_user_name TEXT;
+  v_user_email TEXT;
   v_current_totes INT;
   v_current_recurring NUMERIC;
   v_new_total INT;
@@ -896,14 +935,20 @@ DECLARE
   v_sub_id UUID;
   v_pin TEXT;
   v_expires_at TIMESTAMPTZ;
+  v_inv_number TEXT;
+  v_txn_ref TEXT;
+  v_tax_rate NUMERIC := 0.00;
+  v_valet_tax NUMERIC := 0.00;
+  v_valet_total NUMERIC := 0.00;
 BEGIN
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'Unauthenticated';
   END IF;
 
-  -- Read current user's assigned facility & active zone
-  SELECT assigned_facility_id, active_zone INTO v_facility_id, v_zip
+  -- Read user profile
+  SELECT name, email, assigned_facility_id, active_zone 
+  INTO v_user_name, v_user_email, v_facility_id, v_zip
   FROM public.users
   WHERE id = v_uid;
 
@@ -924,11 +969,17 @@ BEGIN
       v_facility_id := 'facility_seattle_north';
     END IF;
 
-    -- Persist resolved assigned_facility_id back to user profile
     UPDATE public.users
     SET assigned_facility_id = v_facility_id
     WHERE id = v_uid;
   END IF;
+
+  -- Lookup zip tax rate (0.00 if not found)
+  SELECT COALESCE(tax_rate, 0.00) INTO v_tax_rate
+  FROM public.service_areas
+  WHERE zip_code = v_zip AND active = true
+  LIMIT 1;
+  IF v_tax_rate IS NULL THEN v_tax_rate := 0.00; END IF;
 
   -- Read current subscription
   SELECT id, total_totes, recurring_storage INTO v_sub_id, v_current_totes, v_current_recurring
@@ -945,7 +996,7 @@ BEGIN
     RAISE EXCEPTION 'Cannot exceed 500 totes';
   END IF;
 
-  -- Calculate rate
+  -- Calculate rate based on whole active tote pool
   IF v_new_total >= 50 THEN v_new_rate := 1.00;
   ELSIF v_new_total >= 25 THEN v_new_rate := 2.00;
   ELSIF v_new_total >= 10 THEN v_new_rate := 3.50;
@@ -954,13 +1005,18 @@ BEGIN
 
   v_new_recurring := v_new_total * v_new_rate;
   v_delta := v_new_recurring - COALESCE(v_current_recurring, 0);
+
   IF p_logistics_type = 'valet_pickup' THEN
     v_valet_fee := 15.00 + (p_additional_totes * 1.00);
+    v_valet_tax := ROUND((v_valet_fee * v_tax_rate)::numeric, 2);
+    v_valet_total := v_valet_fee + v_valet_tax;
   ELSE
     v_valet_fee := 0.00;
+    v_valet_tax := 0.00;
+    v_valet_total := 0.00;
   END IF;
 
-  -- Update subscription
+  -- Update subscription record
   UPDATE public.subscriptions
   SET total_totes = v_new_total,
       tote_rate = v_new_rate,
@@ -969,7 +1025,32 @@ BEGIN
       last_updated = now()
   WHERE id = v_sub_id;
 
-  -- Create inventory items with facility-tethered scrambled tote codes (e.g. CV-SEA-49AK)
+  -- Pro-Rata Segment Ledger: Close active segment & open new segment
+  UPDATE public.subscription_billing_segments
+  SET effective_end = now()
+  WHERE subscription_id = v_sub_id AND effective_end IS NULL;
+
+  INSERT INTO public.subscription_billing_segments (
+    subscription_id,
+    uid,
+    facility_id,
+    tote_count,
+    unit_rate,
+    effective_start,
+    effective_end,
+    reason
+  ) VALUES (
+    v_sub_id,
+    v_uid,
+    v_facility_id,
+    v_new_total,
+    v_new_rate,
+    now(),
+    NULL,
+    'tote_addition'
+  );
+
+  -- Create inventory items with unique randomized codes
   FOR i IN 0..(p_additional_totes - 1) LOOP
     INSERT INTO public.inventory (uid, tote_code, label, status, facility_id)
     VALUES (
@@ -997,7 +1078,7 @@ BEGIN
       total_mrr = total_mrr + v_delta
   WHERE id = 'financials';
 
-  -- If valet, create access request
+  -- If valet, create access request and charge upfront valet logistics dispatch fee only
   IF p_logistics_type = 'valet_pickup' THEN
     v_pin := floor(1000 + random() * 9000)::text;
     v_expires_at := now() + interval '24 hours';
@@ -1010,8 +1091,83 @@ BEGIN
       v_pin,
       v_expires_at,
       v_valet_fee,
-      v_user_facility,
+      v_facility_id,
       'pending'
+    );
+
+    -- Generate immediate invoice for Valet Logistics Dispatch ONLY (Storage is billed pro-rata at month end)
+    v_inv_number := 'INV-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(FLOOR(RANDOM() * 900000 + 100000)::TEXT, 6, '0');
+    v_txn_ref := 'TXN-VALET-' || LPAD(FLOOR(RANDOM() * 900000 + 100000)::TEXT, 6, '0');
+
+    INSERT INTO public.invoices (
+      invoice_number,
+      uid,
+      customer_name,
+      customer_email,
+      facility_id,
+      subscription_id,
+      invoice_type,
+      payment_status,
+      subtotal,
+      delivery_fee,
+      tax,
+      total_amount,
+      payment_method,
+      transaction_reference,
+      notes,
+      line_items,
+      due_date,
+      created_at,
+      paid_at
+    ) VALUES (
+      v_inv_number,
+      v_uid,
+      COALESCE(v_user_name, 'Valued Customer'),
+      v_user_email,
+      v_facility_id,
+      v_sub_id,
+      'valet_delivery',
+      'paid',
+      0.00,
+      v_valet_fee,
+      v_valet_tax,
+      v_valet_total,
+      'card_on_file',
+      v_txn_ref,
+      'Valet container delivery for ' || p_additional_totes::TEXT || ' new containers',
+      jsonb_build_array(
+        jsonb_build_object(
+          'description', 'Valet Delivery & Logistics Dispatch Fee (' || p_additional_totes::TEXT || ' containers)',
+          'qty', 1,
+          'unit_price', v_valet_fee,
+          'amount', v_valet_fee
+        ),
+        jsonb_build_object(
+          'description', 'State/Local Sales Tax (' || (v_tax_rate * 100)::TEXT || '%)',
+          'qty', 1,
+          'unit_price', v_valet_tax,
+          'amount', v_valet_tax
+        )
+      ),
+      NOW(),
+      NOW(),
+      NOW()
+    );
+
+    INSERT INTO public.charges (
+      uid,
+      charge_type,
+      amount,
+      totes_charged,
+      status,
+      charged_at
+    ) VALUES (
+      v_uid,
+      'valet_delivery',
+      v_valet_total,
+      p_additional_totes,
+      'succeeded',
+      NOW()
     );
   END IF;
 
@@ -1021,23 +1177,108 @@ BEGIN
     'newRate', v_new_rate,
     'newMonthly', v_new_recurring,
     'delta', v_delta,
-    'valetFee', v_valet_fee
+    'valetFee', v_valet_fee,
+    'valetTotal', v_valet_total,
+    'immediateBilled', v_valet_total,
+    'message', 'Added ' || p_additional_totes::text || ' totes. Storage will be billed pro-rata on your monthly renewal date.'
   );
 END;
 $$ LANGUAGE plpgsql;
 
--- Partial Tote Unsubscribe / Reduction Function
+-- Partial Tote Unsubscribe / Reduction Function (Pro-Rata Segment Driven)
 CREATE OR REPLACE FUNCTION public.reduce_subscription_totes(
     p_uid UUID,
     p_reduce_count INT
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_sub RECORD;
-  v_user RECORD;
   v_facility_id TEXT;
   v_current_totes INT;
   v_new_total INT;
-  v_t1 NUMERIC; v_t2 NUMERIC; v_t3 NUMERIC; v_t4 NUMERIC;
+  v_new_rate NUMERIC;
+  v_new_recurring NUMERIC;
+  v_delta NUMERIC;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  SELECT s.*, u.assigned_facility_id INTO v_sub
+  FROM public.subscriptions s
+  JOIN public.users u ON s.uid = u.id
+  WHERE s.uid = p_uid AND s.status = 'active'
+  LIMIT 1;
+
+  IF v_sub IS NULL THEN
+    RAISE EXCEPTION 'No active subscription found';
+  END IF;
+
+  v_current_totes := COALESCE(v_sub.total_totes, v_sub.tote_count, 1);
+  v_new_total := v_current_totes - p_reduce_count;
+
+  IF v_new_total < 1 THEN
+    RAISE EXCEPTION 'Cannot reduce below 1 container. Please use Cancel Subscription to close account.';
+  END IF;
+
+  IF v_new_total >= 50 THEN v_new_rate := 1.00;
+  ELSIF v_new_total >= 25 THEN v_new_rate := 2.00;
+  ELSIF v_new_total >= 10 THEN v_new_rate := 3.50;
+  ELSE v_new_rate := 5.00;
+  END IF;
+
+  v_new_recurring := v_new_total * v_new_rate;
+  v_delta := v_new_recurring - COALESCE(v_sub.recurring_storage, 0);
+
+  UPDATE public.subscriptions
+  SET total_totes = v_new_total,
+      tote_rate = v_new_rate,
+      recurring_storage = v_new_recurring,
+      last_updated = now()
+  WHERE id = v_sub.id;
+
+  -- Pro-Rata Segment Ledger: Close active segment & open new segment for reduced tote pool
+  UPDATE public.subscription_billing_segments
+  SET effective_end = now()
+  WHERE subscription_id = v_sub.id AND effective_end IS NULL;
+
+  INSERT INTO public.subscription_billing_segments (
+    subscription_id,
+    uid,
+    facility_id,
+    tote_count,
+    unit_rate,
+    effective_start,
+    effective_end,
+    reason
+  ) VALUES (
+    v_sub.id,
+    p_uid,
+    COALESCE(v_sub.assigned_facility_id, 'facility_seattle_north'),
+    v_new_total,
+    v_new_rate,
+    now(),
+    NULL,
+    'tote_reduction'
+  );
+
+  UPDATE public.users
+  SET active_totes_held = GREATEST(0, active_totes_held - p_reduce_count)
+  WHERE id = p_uid;
+
+  UPDATE public.metadata
+  SET total_totes = GREATEST(0, total_totes - p_reduce_count),
+      total_mrr = total_mrr + v_delta
+  WHERE id = 'financials';
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'newTotal', v_new_total,
+    'newRate', v_new_rate,
+    'newMonthly', v_new_recurring,
+    'message', 'Subscription updated to ' || v_new_total::text || ' containers. Pro-rata storage rate updated.'
+  );
+END;
+$$ LANGUAGE plpgsql;
   v_new_rate NUMERIC;
   v_new_recurring NUMERIC;
   v_delta NUMERIC;
@@ -1975,10 +2216,10 @@ BEGIN
     v_next_location_type := 'vault';
 
     -- Require explicit scanned/locked target location when returning to vault
-    IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' AND p_target_location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING') THEN
+    IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' AND p_target_location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING', 'DROP-OFF-BUFFER') THEN
       v_next_location_code := p_target_location_code;
     ELSE
-      RAISE EXCEPTION 'Target Location Required: Please scan or set a target shelf/bay location barcode before executing a reshelf.';
+      RAISE EXCEPTION 'No Vault Shelf Locked: Please scan or lock a destination shelf/bay barcode (e.g. A1-B01-S1 or V-A01-S01) before putting totes into storage.';
     END IF;
 
   ELSIF v_item.status = 'stored' THEN
@@ -1994,42 +2235,22 @@ BEGIN
       v_next_status := 'stored'::public.inventory_status;
       v_next_location_type := 'vault';
 
-      IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' THEN
+      IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' AND p_target_location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING', 'DROP-OFF-BUFFER') THEN
         v_next_location_code := p_target_location_code;
-      ELSIF v_item.location_code IS NOT NULL AND v_item.location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING') THEN
+      ELSIF v_item.location_code IS NOT NULL AND v_item.location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING', 'DROP-OFF-BUFFER') THEN
         v_next_location_code := v_item.location_code;
       ELSE
-        SELECT COALESCE(identifier, location_code) INTO v_next_location_code
-        FROM public.warehouse_locations
-        WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
-          AND (zone_type = 'VAULT' OR location_type = 'vault' OR identifier ILIKE 'V-%')
-          AND (is_occupied = false OR is_occupied IS NULL)
-        ORDER BY created_at ASC
-        LIMIT 1;
-
-        IF v_next_location_code IS NULL THEN
-          RAISE EXCEPTION 'No Available Warehouse Location: Please scan or set a target shelf/bay barcode, or generate vault locations in Facility Config.';
-        END IF;
+        RAISE EXCEPTION 'No Vault Shelf Locked: Please scan or lock a target shelf/bay barcode before putting totes into storage.';
       END IF;
     END IF;
 
   ELSE
     v_next_status := 'stored'::public.inventory_status;
     v_next_location_type := 'vault';
-    IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' THEN
+    IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' AND p_target_location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING', 'DROP-OFF-BUFFER') THEN
       v_next_location_code := p_target_location_code;
     ELSE
-      SELECT COALESCE(identifier, location_code) INTO v_next_location_code
-      FROM public.warehouse_locations
-      WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
-        AND (zone_type = 'VAULT' OR location_type = 'vault' OR identifier ILIKE 'V-%')
-        AND (is_occupied = false OR is_occupied IS NULL)
-      ORDER BY created_at ASC
-      LIMIT 1;
-
-      IF v_next_location_code IS NULL THEN
-        RAISE EXCEPTION 'No Available Warehouse Location: Please scan or set a target shelf/bay barcode, or generate vault locations in Facility Config.';
-      END IF;
+      RAISE EXCEPTION 'No Vault Shelf Locked: Please scan or lock a target shelf/bay barcode before putting totes into storage.';
     END IF;
   END IF;
 
@@ -2038,8 +2259,37 @@ BEGIN
     v_next_location_code := p_target_location_code;
     IF p_target_location_code ILIKE 'ROOM-%' OR p_target_location_code ILIKE '%STAGE%' OR p_target_location_code ILIKE '%BAY%' THEN
       v_next_location_type := 'staging';
+    ELSIF p_target_location_code ILIKE '%TRUCK%' OR p_target_location_code ILIKE '%DISPATCH%' THEN
+      v_next_location_type := 'dispatch';
+    ELSIF p_target_location_code ILIKE '%INTAKE%' THEN
+      v_next_location_type := 'intake';
     ELSE
       v_next_location_type := 'vault';
+    END IF;
+  END IF;
+
+  -- Capacity Enforcement Check if shelving into vault storage
+  IF v_next_status = 'stored' AND v_next_location_code IS NOT NULL AND v_next_location_code NOT IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING', 'DROP-OFF-BUFFER') THEN
+    SELECT id, COALESCE(capacity, 4) as capacity INTO v_target_loc
+    FROM public.warehouse_locations
+    WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
+      AND (identifier = v_next_location_code OR location_code = v_next_location_code)
+    LIMIT 1;
+
+    IF v_target_loc IS NOT NULL THEN
+      v_capacity := COALESCE(v_target_loc.capacity, 4);
+    ELSE
+      v_capacity := 4;
+    END IF;
+
+    SELECT COUNT(*) INTO v_current_count
+    FROM public.inventory
+    WHERE location_code = v_next_location_code
+      AND status IN ('stored', 'staged', 'pending-stage')
+      AND id != v_item.id;
+
+    IF v_current_count >= v_capacity THEN
+      RAISE EXCEPTION 'Shelf % is at FULL CAPACITY (%/% totes occupied). Maximum capacity for this shelf is % totes. Please lock another shelf.', v_next_location_code, v_current_count, v_capacity, v_capacity;
     END IF;
   END IF;
 
@@ -2062,7 +2312,7 @@ BEGIN
 
   RETURN jsonb_build_object(
     'success', true,
-    'nextStatus', v_next_status,
+    'status', v_next_status,
     'locationCode', v_next_location_code,
     'locationType', v_next_location_type,
     'fulfillmentType', v_fulfillment_type,
@@ -2220,18 +2470,23 @@ $$ LANGUAGE plpgsql;
 -- =========================================================================
 CREATE OR REPLACE FUNCTION public.process_tote_return(
   p_tote_code TEXT,
-  p_target_location_code TEXT DEFAULT NULL
+  p_target_location_code TEXT DEFAULT NULL,
+  p_staff_uid UUID DEFAULT NULL
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_uid UUID;
   v_item RECORD;
   v_user_role public.user_role;
   v_assigned_location_code TEXT;
-  v_capacity INT := 3;
+  v_capacity INT := 4;
   v_current_count INT := 0;
   v_target_loc RECORD;
 BEGIN
-  v_uid := auth.uid();
+  v_uid := COALESCE(auth.uid(), p_staff_uid);
+  IF v_uid IS NULL THEN
+    SELECT id INTO v_uid FROM public.users WHERE role IN ('warehouse_worker', 'warehouse_manager', 'executive') LIMIT 1;
+  END IF;
+
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'Unauthenticated';
   END IF;
@@ -2249,29 +2504,26 @@ BEGIN
     RAISE EXCEPTION 'Return Error: Tote % not found in inventory system', p_tote_code;
   END IF;
 
-  IF v_item.status NOT IN ('with-customer', 'out-for-delivery', 'stored', 'staged') THEN
-    RAISE EXCEPTION 'Return Error: Tote % is in status % and cannot be processed for return', p_tote_code, v_item.status;
-  END IF;
-
-  IF p_target_location_code IS NULL OR trim(p_target_location_code) = '' OR p_target_location_code IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING') THEN
-    RAISE EXCEPTION 'Target Location Required: Please scan or enter a shelf/bay code before executing a reshelf for tote %.', p_tote_code;
+  -- Require explicit locked shelf/bay location
+  IF p_target_location_code IS NULL OR trim(p_target_location_code) = '' OR p_target_location_code IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING', 'DROP-OFF-BUFFER') THEN
+    RAISE EXCEPTION 'No Vault Shelf Locked: Please scan or select a destination shelf/bay barcode (e.g. A1-B01-S1 or V-A01-S01) before putting totes into storage.';
   END IF;
 
   v_assigned_location_code := trim(p_target_location_code);
 
-  -- Capacity Enforcement Check
-  SELECT id, COALESCE(capacity, 3) as capacity INTO v_target_loc
+  -- Capacity Enforcement Check (Overfill Prevention)
+  SELECT id, COALESCE(capacity, 4) as capacity INTO v_target_loc
   FROM public.warehouse_locations
   WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
     AND (identifier = v_assigned_location_code OR location_code = v_assigned_location_code)
   LIMIT 1;
 
   IF v_target_loc IS NOT NULL THEN
-    v_capacity := v_target_loc.capacity;
+    v_capacity := COALESCE(v_target_loc.capacity, 4);
   ELSIF v_assigned_location_code ILIKE '%ROOM%' OR v_assigned_location_code ILIKE '%STAGE%' OR v_assigned_location_code ILIKE '%LOCKER%' THEN
     v_capacity := 1;
   ELSE
-    v_capacity := 3;
+    v_capacity := 4;
   END IF;
 
   SELECT COUNT(*) INTO v_current_count
@@ -2281,7 +2533,7 @@ BEGIN
     AND id != v_item.id;
 
   IF v_current_count >= v_capacity THEN
-    RAISE EXCEPTION 'Shelf/Location % is already FULL (%/% totes occupied). Maximum capacity for this location is % totes.', v_assigned_location_code, v_current_count, v_capacity, v_capacity;
+    RAISE EXCEPTION 'Shelf % is at FULL CAPACITY (%/% totes occupied). Maximum capacity for this shelf is % totes. Please lock another shelf.', v_assigned_location_code, v_current_count, v_capacity, v_capacity;
   END IF;
 
   UPDATE public.inventory
@@ -2290,7 +2542,8 @@ BEGIN
       location_type = 'vault',
       activated = true,
       last_scanned_at = now(),
-      last_scanned_by = v_uid
+      last_scanned_by = v_uid,
+      updated_at = now()
   WHERE id = v_item.id;
 
   IF v_item.location_code IS NOT NULL AND v_item.location_code <> v_assigned_location_code THEN
@@ -2928,46 +3181,127 @@ $$ LANGUAGE plpgsql;
 -- ─────────────────────────────────────────────────────────────────────
 -- run_daily_autopay_billing RPC & pg_cron Schedule
 -- ─────────────────────────────────────────────────────────────────────
+DROP FUNCTION IF EXISTS public.run_daily_autopay_billing() CASCADE;
+
 CREATE OR REPLACE FUNCTION public.run_daily_autopay_billing()
 RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_sub RECORD;
+  v_seg RECORD;
   v_inv_count INT := 0;
   v_overdue_count INT := 0;
   v_inv_number TEXT;
-  v_subtotal NUMERIC;
-  v_valet_fee NUMERIC;
-  v_total NUMERIC;
+  v_txn_ref TEXT;
+  v_period_start TIMESTAMPTZ;
+  v_period_end TIMESTAMPTZ;
+  v_total_days NUMERIC;
+  v_seg_start TIMESTAMPTZ;
+  v_seg_end TIMESTAMPTZ;
+  v_seg_days NUMERIC;
+  v_seg_amount NUMERIC;
+  v_subtotal NUMERIC := 0.00;
+  v_tax_rate NUMERIC := 0.00;
+  v_tax NUMERIC := 0.00;
+  v_total_amount NUMERIC := 0.00;
+  v_line_items JSONB := '[]'::jsonb;
+  v_seg_count INT := 0;
 BEGIN
-  -- 1. Process active subscriptions due for billing (next_billing_date <= CURRENT_DATE or NULL)
+  -- Process active subscriptions due for billing (next_billing_date <= CURRENT_DATE or NULL)
   FOR v_sub IN 
-    SELECT s.*, u.name AS user_name, u.email AS user_email, u.assigned_facility_id
+    SELECT s.*, u.name AS user_name, u.email AS user_email, u.assigned_facility_id, u.active_zone
     FROM public.subscriptions s
     LEFT JOIN public.users u ON s.uid = u.id
     WHERE s.status = 'active' 
       AND (s.next_billing_date IS NULL OR s.next_billing_date <= CURRENT_DATE)
   LOOP
-    v_subtotal := COALESCE(v_sub.recurring_storage, v_sub.tote_count * v_sub.tote_rate, 0.00);
-    v_valet_fee := COALESCE(v_sub.valet_fee, 0.00);
-    v_total := COALESCE(v_sub.monthly_total, v_subtotal + v_valet_fee);
-    IF v_total <= 0 AND v_subtotal > 0 THEN
-      v_total := v_subtotal;
+    v_subtotal := 0.00;
+    v_line_items := '[]'::jsonb;
+    v_seg_count := 0;
+
+    -- Define billing cycle window
+    v_period_start := COALESCE(v_sub.last_billed_at, v_sub.created_at, now() - interval '1 month');
+    v_period_end := now();
+
+    -- Calculate total duration in days (e.g. 28, 30, 31)
+    v_total_days := GREATEST(1.0, EXTRACT(EPOCH FROM (v_period_end - v_period_start)) / 86400.0);
+
+    -- Fetch exact zip tax rate from service_areas (0.00 if none configured)
+    SELECT COALESCE(tax_rate, 0.00) INTO v_tax_rate
+    FROM public.service_areas
+    WHERE zip_code = v_sub.active_zone AND active = true
+    LIMIT 1;
+    IF v_tax_rate IS NULL THEN v_tax_rate := 0.00; END IF;
+
+    -- Query all active segments for this subscription
+    FOR v_seg IN
+      SELECT *
+      FROM public.subscription_billing_segments
+      WHERE subscription_id = v_sub.id
+        AND effective_start < v_period_end
+        AND (effective_end IS NULL OR effective_end > v_period_start)
+      ORDER BY effective_start ASC
+    LOOP
+      v_seg_count := v_seg_count + 1;
+      v_seg_start := GREATEST(v_period_start, v_seg.effective_start);
+      v_seg_end := LEAST(v_period_end, COALESCE(v_seg.effective_end, v_period_end));
+      v_seg_days := GREATEST(0.01, EXTRACT(EPOCH FROM (v_seg_end - v_seg_start)) / 86400.0);
+
+      -- Pro-rata formula: Tote Count * Monthly Tier Rate * (Days in Segment / Total Days in Month)
+      v_seg_amount := ROUND((v_seg.tote_count * v_seg.unit_rate * (v_seg_days / v_total_days))::numeric, 2);
+      v_subtotal := v_subtotal + v_seg_amount;
+
+      -- Add traceable math line item
+      v_line_items := v_line_items || jsonb_build_array(jsonb_build_object(
+        'description', 'Storage: ' || v_seg.tote_count::text || ' Totes @ $' || TO_CHAR(v_seg.unit_rate, 'FM999.00') || '/mo (' || TO_CHAR(v_seg_start, 'Mon DD') || ' – ' || TO_CHAR(v_seg_end, 'Mon DD') || ' • ' || ROUND(v_seg_days, 1)::text || ' of ' || ROUND(v_total_days, 1)::text || ' days)',
+        'qty', v_seg.tote_count,
+        'unit_price', v_seg.unit_rate,
+        'days_active', ROUND(v_seg_days, 1),
+        'total_cycle_days', ROUND(v_total_days, 1),
+        'amount', v_seg_amount
+      ));
+    END LOOP;
+
+    -- Fallback if no segments existed: use current subscription snapshot
+    IF v_seg_count = 0 THEN
+      v_subtotal := COALESCE(v_sub.recurring_storage, v_sub.total_totes * v_sub.tote_rate, 5.00);
+      v_line_items := jsonb_build_array(jsonb_build_object(
+        'description', 'CloudVault Monthly Storage Plan (' || COALESCE(v_sub.total_totes, 1)::text || ' totes @ $' || TO_CHAR(COALESCE(v_sub.tote_rate, 5.00), 'FM999.00') || '/mo)',
+        'qty', COALESCE(v_sub.total_totes, 1),
+        'unit_price', COALESCE(v_sub.tote_rate, 5.00),
+        'amount', v_subtotal
+      ));
     END IF;
 
-    -- Generate unique invoice number
-    v_inv_number := 'INV-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0');
+    -- Tax calculation
+    v_tax := ROUND((v_subtotal * v_tax_rate)::numeric, 2);
+    v_total_amount := v_subtotal + v_tax;
 
-    -- Insert recurring subscription invoice into public.invoices
+    -- Add Tax line item if applicable
+    IF v_tax > 0 THEN
+      v_line_items := v_line_items || jsonb_build_array(jsonb_build_object(
+        'description', 'State/Local Sales Tax (' || (v_tax_rate * 100)::text || '%)',
+        'qty', 1,
+        'unit_price', v_tax,
+        'amount', v_tax
+      ));
+    END IF;
+
+    -- Generate unique invoice number and transaction reference
+    v_inv_number := 'INV-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(FLOOR(RANDOM() * 900000 + 100000)::TEXT, 6, '0');
+    v_txn_ref := 'AUTOPAY-' || v_sub.id || '-' || TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD');
+
+    -- Insert consolidated monthly recurring invoice
     INSERT INTO public.invoices (
       invoice_number,
       uid,
       customer_name,
       customer_email,
       facility_id,
+      subscription_id,
       invoice_type,
       payment_status,
       subtotal,
-      delivery_fee,
+      tax,
       total_amount,
       payment_method,
       transaction_reference,
@@ -2982,32 +3316,52 @@ BEGIN
       COALESCE(v_sub.user_name, 'Valued Customer'),
       v_sub.user_email,
       COALESCE(v_sub.assigned_facility_id, 'facility_seattle_north'),
+      v_sub.id,
       'subscription',
       'paid',
       v_subtotal,
-      v_valet_fee,
-      v_total,
+      v_tax,
+      v_total_amount,
       'autopay',
-      'AUTOPAY-' || v_sub.id || '-' || TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD'),
-      'Automated daily recurring subscription autopay renewal',
-      jsonb_build_array(
-        jsonb_build_object(
-          'description', 'CloudVault Monthly Autopay Storage Subscription (' || COALESCE(v_sub.tote_count, 0) || ' totes @ $' || COALESCE(v_sub.tote_rate, 0) || '/mo)',
-          'qty', COALESCE(v_sub.tote_count, 1),
-          'unit_price', COALESCE(v_sub.tote_rate, v_subtotal),
-          'amount', v_subtotal
-        )
-      ),
+      v_txn_ref,
+      'Comprehensive monthly pro-rata storage renewal',
+      v_line_items,
       NOW() + INTERVAL '3 days',
       NOW(),
       NOW()
     );
 
-    -- Update last_billed_at = NOW(), advance next_billing_date = CURRENT_DATE + INTERVAL '1 month'
+    -- Close historical segments for this past period
+    UPDATE public.subscription_billing_segments
+    SET effective_end = now()
+    WHERE subscription_id = v_sub.id AND (effective_end IS NULL OR effective_end <= now());
+
+    -- Seed clean base segment for the upcoming new month
+    INSERT INTO public.subscription_billing_segments (
+      subscription_id,
+      uid,
+      facility_id,
+      tote_count,
+      unit_rate,
+      effective_start,
+      effective_end,
+      reason
+    ) VALUES (
+      v_sub.id,
+      v_sub.uid,
+      COALESCE(v_sub.assigned_facility_id, 'facility_seattle_north'),
+      COALESCE(v_sub.total_totes, 1),
+      COALESCE(v_sub.tote_rate, 5.00),
+      now(),
+      NULL,
+      'cycle_renewal'
+    );
+
+    -- Advance next_billing_date by 1 month and update last_billed_at
     UPDATE public.subscriptions
-    SET last_billed_at = NOW(),
+    SET last_billed_at = now(),
         next_billing_date = CURRENT_DATE + INTERVAL '1 month',
-        last_updated = NOW()
+        last_updated = now()
     WHERE id = v_sub.id;
 
     v_inv_count := v_inv_count + 1;

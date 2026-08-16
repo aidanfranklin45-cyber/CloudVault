@@ -1548,7 +1548,8 @@
                 if (error) throw error;
 
                 closeAddTotesPanel();
-                showToast(`${additionalToteCount} tote${additionalToteCount > 1 ? 's' : ''} added! New monthly: $${data.newMonthly.toFixed(2)}/mo`);
+                const newMo = data?.newMonthly ? Number(data.newMonthly).toFixed(2) : '0.00';
+                showToast(`✓ ${additionalToteCount} containers added! Pro-rata storage will be billed on your monthly statement ($${newMo}/mo tier).`);
             } catch (err) {
                 console.error('Add totes failed:', err);
                 errEl.textContent = err.message || 'Something went wrong. Please try again.';
@@ -5263,8 +5264,8 @@
                     if (rawType === 'initial_reservation') {
                         return 'Initial Plan Reservation';
                     }
-                    if (rawType === 'subscription_expansion' || rawType === 'subscription_modification') {
-                        return 'Plan Modification';
+                    if (rawType === 'additional_totes' || rawType === 'subscription_expansion' || rawType === 'subscription_modification' || notes.includes('additional')) {
+                        return 'Additional Totes Subscription';
                     }
 
                     const isValet = rawType.includes('valet') || delFee > 0 || hasValetLine || notes.includes('valet');

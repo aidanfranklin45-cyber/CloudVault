@@ -2103,11 +2103,11 @@
                         document.getElementById('manager-facility-select')?.value;
                 }
 
-                if (!facId) return;
-
-                // Clear target location lock when switching facilities to prevent cross-facility target leaks
-                if (typeof clearTargetLocationLock === 'function') {
-                    clearTargetLocationLock();
+                // Clear target location lock ONLY when switching to a different facility
+                if (window.currentSelectedFacilityId && window.currentSelectedFacilityId !== facId) {
+                    if (typeof clearTargetLocationLock === 'function') {
+                        clearTargetLocationLock();
+                    }
                 }
 
                 localStorage.setItem('cloudvault_selected_facility', facId);
@@ -3072,6 +3072,25 @@
                 osc.start(now);
                 osc.stop(now + 0.45);
             } catch (e) { console.warn("Audio cue error:", e); }
+        }
+
+        function playBeep(freq = 440, duration = 0.2, type = 'sine') {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, now);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + duration);
+            } catch (e) {
+                console.warn("Audio cue error:", e);
+            }
         }
 
         function triggerScanFeedbackOverlay(success, message, code = '') {
@@ -4485,7 +4504,7 @@
 
                                 <!-- Action Buttons -->
                                 <div class="space-y-2">
-                                    <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('stored')" class="w-full min-h-[60px] bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-purple-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                    <button onclick="if(!window.activeTargetLocationCode){openFacilityMapModal();showToast('⚠️ No Vault Shelf Locked! Please select a shelf on the Facility Map first.', true);return;}document.getElementById('scan-barcode').value='${firstCode}';simulateScan('stored')" class="w-full min-h-[60px] bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-purple-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                         <i data-lucide="package-check" class="w-6 h-6"></i>
                                         <span>${returnLabel} (${firstCode}) →</span>
                                     </button>
@@ -4791,6 +4810,13 @@
             if (display) display.textContent = window.activeTargetLocationCode;
             if (banner) banner.classList.remove('hidden');
 
+            // Set / Reset 5-minute inactivity lock timer
+            clearTimeout(window.targetLocationLockTimer);
+            window.targetLocationLockTimer = setTimeout(() => {
+                clearTargetLocationLock();
+                showToast("📍 Target location lock released after 5 minutes of inactivity.", "info");
+            }, 5 * 60 * 1000);
+
             const roomSel = document.getElementById('staging-target-room-selector');
             if (roomSel) {
                 if (window.activeTargetLocationCode && window.activeTargetLocationCode.startsWith('ROOM-')) {
@@ -4806,6 +4832,7 @@
         }
 
         function clearTargetLocationLock() {
+            clearTimeout(window.targetLocationLockTimer);
             window.activeTargetLocationCode = null;
             const banner = document.getElementById('target-location-banner');
             if (banner) banner.classList.add('hidden');
@@ -5778,16 +5805,22 @@
                 }
 
                 const currentStatus = checkTote.status;
+                const isReturningToVault = expectedStatus === 'returned' || expectedStatus === 'stored' || currentStatus === 'with-customer' || currentStatus === 'out-for-delivery';
 
-                // Event Routing:
-                // Event 1: Customer Return to Vault (Reshelving into Vault from Customer)
-                if (expectedStatus === 'returned' || currentStatus === 'with-customer' || currentStatus === 'out-for-delivery') {
-                    if (!targetLoc) {
-                        triggerScanFeedbackOverlay(false, "Target Location Required: Please scan or type a shelf/bay code (e.g. V-A01-S01) before reshelving totes.");
+                // Enforce Target Location Lock whenever shelving or putting totes into the facility vault
+                if (isReturningToVault) {
+                    if (!targetLoc || targetLoc === 'INTAKE-PROCESSING' || targetLoc === 'CUSTOMER-PREMISES' || targetLoc === 'VALET-TRUCK-A' || targetLoc === 'DROP-OFF-BUFFER') {
+                        playBeep(220, 0.25, 'sawtooth');
+                        triggerScanFeedbackOverlay(false, "No Vault Shelf Locked: Please scan or lock a shelf barcode (e.g. A1-B01-S1) before shelving totes into the vault.");
                         if (terminalOutput) {
                             terminalOutput.innerHTML = `
-                                <span class="text-amber-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="map-pin-off" class="w-4 h-4 text-amber-400"></i> Target Location Required</span>
-                                <span class="text-[10px] text-amber-300 mt-1 font-mono">Please scan or type a shelf/bay barcode (e.g. V-A01-S01) to lock destination before reshelving.</span>
+                                <span class="text-amber-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="map-pin-off" class="w-4 h-4 text-amber-400"></i> No Vault Shelf Locked!</span>
+                                <span class="text-[10px] text-amber-300 mt-1 font-mono text-center">You must lock a target shelf before putting totes into storage.</span>
+                                <div class="mt-2 flex items-center justify-center">
+                                    <button onclick="openFacilityMapModal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold font-mono transition flex items-center gap-1 cursor-pointer">
+                                        <i data-lucide="map" class="w-3.5 h-3.5"></i> 🗺️ Open Facility Map to Lock Shelf
+                                    </button>
+                                </div>
                             `;
                             if (typeof lucide !== 'undefined') lucide.createIcons();
                         }
@@ -5795,6 +5828,53 @@
                         return;
                     }
 
+                    // Dynamically look up location capacity attribute from warehouse_locations table
+                    let maxCapacity = 3;
+                    try {
+                        const { data: locRecord } = await supabase
+                            .from('warehouse_locations')
+                            .select('capacity')
+                            .or(`identifier.eq.${targetLoc},location_code.eq.${targetLoc}`)
+                            .maybeSingle();
+
+                        if (locRecord && locRecord.capacity) {
+                            maxCapacity = Number(locRecord.capacity);
+                        }
+                    } catch (e) {
+                        console.warn("Dynamic capacity lookup warning:", e);
+                    }
+
+                    // Enforce Shelf Capacity / Overfill Prevention from dynamic capacity attribute
+                    const { count: storedCount } = await supabase
+                        .from('inventory')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('location_code', targetLoc)
+                        .in('status', ['stored', 'staged', 'pending-stage'])
+                        .neq('tote_code', barcode);
+
+                    if (storedCount !== null && storedCount >= maxCapacity) {
+                        playBeep(220, 0.3, 'sawtooth');
+                        triggerScanFeedbackOverlay(false, `Shelf ${targetLoc} is FULL (${storedCount}/${maxCapacity} totes occupied). Please lock an available shelf.`);
+                        if (terminalOutput) {
+                            terminalOutput.innerHTML = `
+                                <span class="text-rose-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400"></i> Shelf Overfill Prevented!</span>
+                                <span class="text-[10px] text-rose-300 mt-1 font-mono">Shelf ${escapeHtml(targetLoc)} is at MAX CAPACITY (${storedCount}/${maxCapacity} totes).</span>
+                                <div class="mt-2 flex items-center justify-center">
+                                    <button onclick="openFacilityMapModal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold font-mono transition flex items-center gap-1 cursor-pointer">
+                                        <i data-lucide="map" class="w-3.5 h-3.5"></i> Pick Available Shelf on Map
+                                    </button>
+                                </div>
+                            `;
+                            if (typeof lucide !== 'undefined') lucide.createIcons();
+                        }
+                        if (barcodeInput) barcodeInput.focus();
+                        return;
+                    }
+                }
+
+                // Event Routing:
+                // Event 1: Customer Return to Vault (Reshelving into Vault from Customer)
+                if (isReturningToVault) {
                     const res = await supabase.rpc('process_tote_return', {
                         p_tote_code: barcode,
                         p_target_location_code: targetLoc,
@@ -5849,13 +5929,13 @@
                 if (nextStatus === 'with-customer') transitionDesc = `Delivered — With Customer [📍 ${locCode}]`;
                 if (nextStatus === 'stored') transitionDesc = `Returned & Shelved in Vault Bay [📍 ${locCode}]`;
 
-                // Dynamic Shelf Capacity Management (Lock remains until 3 totes occupied)
+                // Dynamic Shelf Capacity Management (Lock remains until dynamic capacity reached)
                 let isShelfNowFull = false;
                 const currentOcc = Number(data?.currentOccupancy || 0);
                 const maxCap = Number(data?.maxCapacity || 3);
 
                 if (targetLoc && nextStatus === 'stored') {
-                    if (currentOcc >= maxCap) {
+                    if (data?.isFull === true || (currentOcc > 0 && currentOcc >= maxCap)) {
                         isShelfNowFull = true;
                     }
                 }
@@ -5871,6 +5951,20 @@
                         if (typeof lucide !== 'undefined') lucide.createIcons();
                     }
                 } else {
+                    // Refresh 5-minute inactivity timer on each successful scan to retain lock for subsequent totes!
+                    if (window.activeTargetLocationCode) {
+                        clearTimeout(window.targetLocationLockTimer);
+                        window.targetLocationLockTimer = setTimeout(() => {
+                            clearTargetLocationLock();
+                            showToast("📍 Target location lock released after 5 minutes of inactivity.", "info");
+                        }, 5 * 60 * 1000);
+
+                        const display = document.getElementById('target-location-code-display');
+                        if (display) {
+                            display.textContent = `${window.activeTargetLocationCode}${currentOcc > 0 ? ` (${currentOcc}/${maxCap} totes)` : ''}`;
+                        }
+                    }
+
                     // Record last scan event for quick 1-click Undo
                     window.lastScanEvent = {
                         barcode: barcode,
