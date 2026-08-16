@@ -3187,60 +3187,47 @@
                             showToast(res.message || `Successfully unsubscribed ${tpmCount} tote(s)!`);
                             closeTotePlanManagerModal();
                             closeBillingModal();
-                            initDashboard();
+                            
+                            const { data: updatedSub } = await supabase.from('subscriptions').select('*').eq('uid', currentUser.id).maybeSingle();
+                            if (updatedSub) {
+                                currentSubscription = updatedSub;
+                                const headerPlan = document.getElementById('active-plan-header');
+                                if (headerPlan) {
+                                    headerPlan.textContent = `${updatedSub.total_totes} Totes Plan ($${Number(updatedSub.tote_rate).toFixed(2)}/tote — $${Number(updatedSub.recurring_storage).toFixed(2)}/mo)`;
+                                }
+                                updateAddTotesPreview();
+                            }
+                            if (typeof globalFetchInventory === 'function') {
+                                globalFetchInventory();
+                            }
                         } else {
                             alert(`Reduction error: ${res.error}`);
                         }
                     }
                 } else {
-                    // Add mode
-                    if (window.CloudVaultBilling && typeof window.CloudVaultBilling.calculateProratedExpansion === 'function') {
-                        const curTotes = currentSubscription ? (currentSubscription.total_totes || 0) : 0;
-                        const proRataRes = await window.CloudVaultBilling.calculateProratedExpansion({
-                            currentTotes: curTotes,
-                            additionalTotes: tpmCount,
-                            userId: currentUser.id,
-                            facilityId: userFac,
-                            nextBillingDate: currentSubscription ? currentSubscription.next_billing_date : null
-                        });
+                    // Add mode (calls pro-rata segment engine)
+                    const { data, error } = await supabase.rpc('add_totes', {
+                        p_additional_totes: tpmCount,
+                        p_logistics_type: 'self_service'
+                    });
 
-                        const { data, error } = await supabase.rpc('add_totes_to_subscription', {
-                            p_uid: currentUser.id,
-                            p_additional_totes: tpmCount,
-                            p_logistics_type: 'self_dropoff'
-                        });
+                    if (error) throw error;
 
-                        if (error) throw error;
-
-                        if (proRataRes && proRataRes.proRataAmount > 0 && window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
-                            await window.CloudVaultBilling.createInvoiceRecord({
-                                uid: currentUser.id,
-                                customer_name: currentUser.user_metadata?.name || currentUser.email.split('@')[0],
-                                customer_email: currentUser.email,
-                                facility_id: userFac,
-                                invoice_type: 'subscription_expansion',
-                                payment_status: 'paid',
-                                subtotal: proRataRes.proRataAmount,
-                                total_amount: proRataRes.proRataAmount,
-                                payment_method: 'card',
-                                notes: `Mid-cycle tote expansion (+${tpmCount} totes, pro-rata billing)`,
-                                line_items: [
-                                    {
-                                        description: `Prorated Tote Expansion (+${tpmCount} totes @ $${proRataRes.newRate.toFixed(2)}/mo — ${proRataRes.daysRemaining} days remaining)`,
-                                        qty: tpmCount,
-                                        unit_price: proRataRes.proRataAmount / tpmCount,
-                                        amount: proRataRes.proRataAmount
-                                    }
-                                ],
-                                created_at: new Date().toISOString(),
-                                paid_at: new Date().toISOString()
-                            });
+                    showToast(`Successfully added +${tpmCount} totes to plan! Storage will be billed pro-rata on your next monthly renewal.`);
+                    closeTotePlanManagerModal();
+                    closeBillingModal();
+                    
+                    const { data: updatedSub } = await supabase.from('subscriptions').select('*').eq('uid', currentUser.id).maybeSingle();
+                    if (updatedSub) {
+                        currentSubscription = updatedSub;
+                        const headerPlan = document.getElementById('active-plan-header');
+                        if (headerPlan) {
+                            headerPlan.textContent = `${updatedSub.total_totes} Totes Plan ($${Number(updatedSub.tote_rate).toFixed(2)}/tote — $${Number(updatedSub.recurring_storage).toFixed(2)}/mo)`;
                         }
-
-                        showToast(`Successfully added +${tpmCount} totes to plan! Pro-rated storage: $${proRataRes.proRataAmount.toFixed(2)}`);
-                        closeTotePlanManagerModal();
-                        closeBillingModal();
-                        initDashboard();
+                        updateAddTotesPreview();
+                    }
+                    if (typeof globalFetchInventory === 'function') {
+                        globalFetchInventory();
                     }
                 }
             } catch (err) {
