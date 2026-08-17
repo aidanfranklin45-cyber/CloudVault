@@ -918,7 +918,7 @@ CREATE POLICY "Staff full access to billing segments"
 -- Add Totes to Subscription (Pro-Rata Segment Driven)
 CREATE OR REPLACE FUNCTION public.add_totes(
   p_additional_totes INT,
-  p_logistics_type TEXT,
+  p_logistics_type TEXT DEFAULT 'self_dropoff',
   p_target_date DATE DEFAULT NULL,
   p_time_slot TEXT DEFAULT NULL
 ) RETURNS JSONB SECURITY DEFINER AS $$
