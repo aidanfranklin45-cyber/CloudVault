@@ -8195,7 +8195,7 @@
                 recurringTotal = Number(sub.recurring_storage);
             }
 
-            const lockBadge = isPriceLock ? ' 🔒 Price Locked' : '';
+            const lockBadge = isPriceLock ? ' 🔒 3-Year Price Lock Active' : ' (Standard Rate)';
             document.getElementById('cbd-customer-rate').textContent = `$${toteRate.toFixed(2)}/tote/mo ($${recurringTotal.toFixed(2)} total — Tier ${tierNum}${lockBadge})`;
 
             const cardBrand = user.card_brand || user.payment_method_brand || 'Visa';
@@ -9774,7 +9774,8 @@
                 document.getElementById('tmm-customer-name').textContent = user.name || 'N/A';
                 document.getElementById('tmm-customer-email').textContent = user.email || 'N/A';
                 document.getElementById('tmm-customer-tenure').textContent = `Member for ${calculateTenureString(user.created_at)}`;
-                document.getElementById('tmm-customer-plan').textContent = sub ? `${sub.total_totes || 0} Tote(s) @ $${(Number(sub.tote_rate) || 0).toFixed(2)}/mo` : 'No Active Subscription';
+                const hasUserLock = user.has_price_lock || (sub && sub.has_price_lock);
+                document.getElementById('tmm-customer-plan').textContent = sub ? `${sub.total_totes || 0} Tote(s) @ $${(Number(sub.tote_rate) || 0).toFixed(2)}/mo${hasUserLock ? ' 🔒 (Price Lock Active)' : ''}` : 'No Active Subscription';
                 document.getElementById('tmm-customer-totes-held').textContent = `${finalTotesHeld} Active Tote(s)`;
                 document.getElementById('tmm-customer-created-at').textContent = user.created_at ? new Date(user.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
