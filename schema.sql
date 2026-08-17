@@ -1053,17 +1053,53 @@ BEGIN
     'tote_addition'
   );
 
-  -- Create inventory items with unique randomized codes
-  FOR i IN 0..(p_additional_totes - 1) LOOP
-    INSERT INTO public.inventory (uid, tote_code, label, status, facility_id)
-    VALUES (
-      v_uid,
-      public.generate_tote_code(v_facility_id),
-      'Additional Tote #' || (COALESCE(v_current_totes, 0) + i + 1),
-      (CASE WHEN p_logistics_type = 'valet_pickup' THEN 'with-customer' ELSE 'stored' END)::inventory_status,
-      v_facility_id
-    );
-  END LOOP;
+  -- ── RECYCLED-FIRST INTAKE PROVISIONING ──
+  -- 1. Find unassigned recycled totes sitting in the Activation Room (INTAKE-BAY-1)
+  SELECT array_agg(id) INTO v_recycled_ids
+  FROM (
+    SELECT id FROM public.inventory
+    WHERE facility_id = v_facility_id
+      AND uid IS NULL
+      AND (activated = false OR status = 'stored')
+    ORDER BY created_at ASC
+    LIMIT p_additional_totes
+  ) sub;
+
+  IF v_recycled_ids IS NOT NULL THEN
+    v_recycled_count := cardinality(v_recycled_ids);
+    
+    -- Claim and assign recycled totes to this customer
+    UPDATE public.inventory
+    SET uid = v_uid,
+        label = 'Additional Tote #' || (v_current_totes + 1),
+        status = (CASE WHEN p_logistics_type = 'valet_pickup' THEN 'with-customer' ELSE 'stored' END)::public.inventory_status,
+        activated = false,
+        location_code = 'INTAKE-BAY-1',
+        location_type = 'intake',
+        photo_url = NULL,
+        notes = NULL,
+        last_scanned_at = now()
+    WHERE id = ANY(v_recycled_ids);
+  END IF;
+
+  -- 2. If additional totes are still needed beyond recycled pool, insert new barcode rows
+  v_needed_new := p_additional_totes - v_recycled_count;
+  IF v_needed_new > 0 THEN
+    FOR i IN 0..(v_needed_new - 1) LOOP
+      INSERT INTO public.inventory (
+        uid, tote_code, label, status, facility_id, activated, location_code, location_type
+      ) VALUES (
+        v_uid,
+        public.generate_tote_code(v_facility_id),
+        'Additional Tote #' || (COALESCE(v_current_totes, 0) + v_recycled_count + i + 1),
+        (CASE WHEN p_logistics_type = 'valet_pickup' THEN 'with-customer' ELSE 'stored' END)::public.inventory_status,
+        v_facility_id,
+        false,
+        'INTAKE-BAY-1',
+        'intake'
+      );
+    END LOOP;
+  END IF;
 
   -- Update users table
   UPDATE public.users 
@@ -4320,10 +4356,87 @@ BEGIN
     'success', true,
     'toteCode', p_tote_code,
     'recirculated', true,
+    'locationCode', COALESCE(p_shelf_location_code, 'INTAKE-BAY-1'),
     'previousOwnerUid', v_owner_uid,
     'activeTotesHeld', v_new_held,
     'allRequestTotesReturned', v_all_returned,
-    'message', 'Tote ' || p_tote_code || ' successfully verified, emptied, and recirculated to facility pool.'
+    'message', 'Tote ' || p_tote_code || ' successfully verified, emptied, and recirculated to Activation Room (INTAKE-BAY-1).'
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- =========================================================================
+-- BATCH CHECK-IN RETURNED EXIT TOTES (1-Click Recirculate All to Activation Room)
+-- =========================================================================
+CREATE OR REPLACE FUNCTION public.batch_checkin_returned_exit_totes(
+    p_tote_codes TEXT[],
+    p_shelf_location_code TEXT DEFAULT 'INTAKE-BAY-1'
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_uid UUID;
+  v_user_role public.user_role;
+  v_count INT := 0;
+  v_owner_uid UUID;
+  v_new_held INT;
+BEGIN
+  v_uid := auth.uid();
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
+  IF v_user_role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
+    RAISE EXCEPTION 'Access Denied: Warehouse Staff clearance required';
+  END IF;
+
+  IF p_tote_codes IS NULL OR cardinality(p_tote_codes) = 0 THEN
+    RAISE EXCEPTION 'No tote codes provided for batch check-in';
+  END IF;
+
+  -- Find owner UID from first tote
+  SELECT uid INTO v_owner_uid
+  FROM public.inventory
+  WHERE tote_code = p_tote_codes[1] AND uid IS NOT NULL
+  LIMIT 1;
+
+  -- Recirculate all specified totes into Activation Room (INTAKE-BAY-1)
+  UPDATE public.inventory
+  SET uid = NULL,
+      label = 'Empty Tote #' || right(tote_code, 4),
+      status = 'stored'::public.inventory_status,
+      activated = false,
+      location_code = COALESCE(p_shelf_location_code, 'INTAKE-BAY-1'),
+      location_type = 'intake',
+      photo_url = NULL,
+      notes = NULL,
+      last_scanned_at = now(),
+      last_scanned_by = v_uid
+  WHERE tote_code = ANY(p_tote_codes);
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+
+  -- Decrement customer active_totes_held if customer was attached
+  IF v_owner_uid IS NOT NULL THEN
+    UPDATE public.users
+    SET active_totes_held = GREATEST(0, COALESCE(active_totes_held, 0) - v_count)
+    WHERE id = v_owner_uid
+    RETURNING active_totes_held INTO v_new_held;
+
+    -- Mark matching pending requests as completed
+    UPDATE public.access_requests
+    SET status = 'completed'
+    WHERE uid = v_owner_uid
+      AND (p_tote_codes && requested_tote_codes)
+      AND status IN ('pending', 'staged', 'out-for-delivery', 'with-customer');
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'recirculatedCount', v_count,
+    'locationCode', COALESCE(p_shelf_location_code, 'INTAKE-BAY-1'),
+    'previousOwnerUid', v_owner_uid,
+    'activeTotesHeld', v_new_held,
+    'message', 'Successfully checked in and recirculated ' || v_count::text || ' totes into Activation Room (INTAKE-BAY-1).'
   );
 END;
 $$ LANGUAGE plpgsql;

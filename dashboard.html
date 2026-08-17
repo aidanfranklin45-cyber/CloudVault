@@ -5670,332 +5670,388 @@
             }
         }
 
-        async function confirmScheduleToteReturn() {
-            const btn = document.getElementById('btn-confirm-tote-return');
-            btn.disabled = true;
-            btn.textContent = 'Generating PIN...';
+            async function confirmScheduleToteReturn() {
+                const btn = document.getElementById('btn-confirm-tote-return');
+                btn.disabled = true;
+                btn.textContent = 'Generating PIN...';
 
-            try {
-                const { data, error } = await supabase.rpc('schedule_cancellation_tote_return', {
-                    p_fulfillment_type: returnLogisticsType
-                });
+                try {
+                    const { data, error } = await supabase.rpc('schedule_cancellation_tote_return', {
+                        p_fulfillment_type: returnLogisticsType
+                    });
 
-                if (error) throw error;
+                    if (error) throw error;
 
-                if (returnLogisticsType === 'staging') {
-                    document.getElementById('return-pin-code').textContent = data.pin;
-                    document.getElementById('return-pin-result').classList.remove('hidden');
-                    showToast(`Staging Drop-Off scheduled! PIN: ${data.pin}`);
-                } else {
-                    showToast('Valet return pickup scheduled!');
-                    closeCancelReturnModal();
+                    if (returnLogisticsType === 'staging') {
+                        document.getElementById('return-pin-code').textContent = data.pin;
+                        document.getElementById('return-pin-result').classList.remove('hidden');
+                        showToast(`Staging Drop-Off scheduled! PIN: ${data.pin}`);
+                    } else {
+                        showToast('Valet return pickup scheduled!');
+                        closeCancelReturnModal();
+                    }
+
+                    if (typeof globalFetchRequests === 'function') globalFetchRequests();
+                } catch (err) {
+                    console.error("Failed to schedule tote return:", err);
+                    alert("Failed to schedule tote return: " + (err.message || "Unknown error"));
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = 'Generate Return PIN';
                 }
-
-                if (typeof globalFetchRequests === 'function') globalFetchRequests();
-            } catch (err) {
-                console.error("Failed to schedule tote return:", err);
-                alert("Failed to schedule tote return: " + (err.message || "Unknown error"));
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Generate Return PIN';
-            }
-        }
-
-        // ============================================================
-        // Excess Totes Permanent Exit Retrieval Controller
-        // ============================================================
-        let selectedExcessTotes = new Set();
-        let excessFulfillmentType = 'staging';
-        let targetExcessQuota = 0;
-
-        function getGraceWindowDetails() {
-            const sub = currentSubscription;
-            const reductionDate = (sub && (sub.updated_at || sub.last_updated || sub.created_at)) ? new Date(sub.updated_at || sub.last_updated || sub.created_at) : new Date();
-            const graceEnd = new Date(reductionDate.getTime() + (3 * 24 * 60 * 60 * 1000));
-            
-            const formattedDate = graceEnd.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-            const formattedTime = graceEnd.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-            
-            const diffMs = graceEnd.getTime() - Date.now();
-            let remainingText = '';
-            let isExpired = false;
-
-            if (diffMs > 0) {
-                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                const diffDays = Math.floor(diffHours / 24);
-                const remHours = diffHours % 24;
-                remainingText = diffDays > 0 ? `⏳ ${diffDays}d ${remHours}h remaining` : `⏳ ${diffHours}h remaining`;
-            } else {
-                isExpired = true;
-                remainingText = '⚠️ Grace Period Expired';
             }
 
-            return {
-                graceEnd,
-                formattedDate,
-                formattedTime,
-                remainingText,
-                isExpired,
-                fullDeadlineStr: `${formattedDate} at ${formattedTime}`
-            };
-        }
+            // ============================================================
+            // User Cancellation Flow Modal (Full Account Exit Retrieval)
+            // ============================================================
+            let isCancellationExitMode = false;
 
-        function checkExcessTotesState() {
-            const banner = document.getElementById('excess-totes-banner');
-            if (!banner) return;
+            function triggerCancelFlowUser() {
+                if (!currentUser) return;
+                document.getElementById('user-dropdown')?.classList.add('hidden');
+                openExcessTotesModal(true); // Open in full cancellation exit mode with 100% auto-selected
+            }
 
-            const subTotal = currentSubscription ? Number(currentSubscription.total_totes || 0) : 0;
-            const storedCount = (currentInventory || []).length;
-            const excess = Math.max(0, storedCount - subTotal);
+            // ============================================================
+            // Excess Totes & Cancellation Exit Retrieval Engine
+            // ============================================================
+            let selectedExcessTotes = new Set();
+            let excessFulfillmentType = 'staging';
+            let targetExcessQuota = 0;
 
-            const hasPendingExitReq = (currentRequests || []).some(r => 
-                (r.request_type === 'exit_retrieval' || r.request_type === 'retrieval_exit') && 
-                (r.status === 'pending' || r.status === 'staged' || r.status === 'pending-dispatch' || r.status === 'out-for-delivery')
-            );
-
-            const grace = getGraceWindowDetails();
-
-            if (excess > 0 && !hasPendingExitReq && subTotal > 0) {
-                const badge = document.getElementById('excess-badge-count');
-                const msg = document.getElementById('excess-banner-message');
-                const graceEl = document.getElementById('excess-grace-timer');
-
-                if (badge) badge.textContent = `${excess} Excess`;
-                if (msg) msg.innerHTML = `Your current subscription covers <strong>${subTotal} totes</strong>, but you have <strong>${storedCount} totes</strong> in warehouse storage. Please select which containers to keep and schedule an exit retrieval for your <strong>${excess} excess totes</strong>.`;
+            function getGraceWindowDetails() {
+                const sub = currentSubscription;
+                const reductionDate = (sub && (sub.updated_at || sub.last_updated || sub.created_at)) ? new Date(sub.updated_at || sub.last_updated || sub.created_at) : new Date();
+                const graceEnd = new Date(reductionDate.getTime() + (3 * 24 * 60 * 60 * 1000));
                 
-                const graceMsg = document.getElementById('excess-grace-msg');
-                if (graceMsg) {
-                    graceMsg.innerHTML = `<span>⏳ <strong>3-Day Grace Window Deadline:</strong> ${grace.fullDeadlineStr} <span class="font-mono font-black ${grace.isExpired ? 'text-red-700 bg-red-100' : 'text-amber-900 bg-amber-200'} px-2 py-0.5 rounded-md ml-1">${grace.remainingText}</span>. Noncompliance daily storage surcharges ($1.50/tote/day) apply thereafter.</span>`;
+                const formattedDate = graceEnd.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+                const formattedTime = graceEnd.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+                
+                const diffMs = graceEnd.getTime() - Date.now();
+                let remainingText = '';
+                let isExpired = false;
+
+                if (diffMs > 0) {
+                    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                    const diffDays = Math.floor(diffHours / 24);
+                    const remHours = diffHours % 24;
+                    remainingText = diffDays > 0 ? `⏳ ${diffDays}d ${remHours}h remaining` : `⏳ ${diffHours}h remaining`;
+                } else {
+                    isExpired = true;
+                    remainingText = '⚠️ Grace Period Expired';
                 }
 
-                banner.classList.remove('hidden');
-            } else if (hasPendingExitReq) {
-                const badge = document.getElementById('excess-badge-count');
-                const msg = document.getElementById('excess-banner-message');
-                if (badge) badge.textContent = `Exit Retrieval In Progress`;
-                if (msg) msg.innerHTML = `An exit retrieval request is currently active. Warehouse staff are pulling your excess containers. ⏳ <strong>Return Deadline:</strong> ${grace.fullDeadlineStr} (${grace.remainingText}).`;
-                banner.classList.remove('hidden');
-            } else {
-                banner.classList.add('hidden');
-            }
-        }
-
-        function openExcessTotesModal() {
-            const modal = document.getElementById('excess-totes-modal');
-            if (!modal) return;
-
-            const subTotal = currentSubscription ? Number(currentSubscription.total_totes || 0) : 0;
-            const storedCount = (currentInventory || []).length;
-            targetExcessQuota = Math.max(1, storedCount - subTotal);
-            const grace = getGraceWindowDetails();
-
-            document.getElementById('excess-modal-target-num').textContent = targetExcessQuota;
-            document.getElementById('excess-modal-total-num').textContent = storedCount;
-
-            const subTitle = document.getElementById('excess-modal-subtitle');
-            if (subTitle) {
-                subTitle.textContent = `Downsizing Plan Adjustment • Grace Deadline: ${grace.fullDeadlineStr} (${grace.remainingText})`;
+                return {
+                    graceEnd,
+                    formattedDate,
+                    formattedTime,
+                    remainingText,
+                    isExpired,
+                    fullDeadlineStr: `${formattedDate} at ${formattedTime}`
+                };
             }
 
-            const agreementDeadline = document.getElementById('excess-agreement-deadline');
-            if (agreementDeadline) {
-                agreementDeadline.textContent = grace.fullDeadlineStr;
+            function checkExcessTotesState() {
+                const banner = document.getElementById('excess-totes-banner');
+                if (!banner) return;
+
+                const subTotal = currentSubscription ? Number(currentSubscription.total_totes || 0) : 0;
+                const storedCount = (currentInventory || []).length;
+                const excess = Math.max(0, storedCount - subTotal);
+
+                const hasPendingExitReq = (currentRequests || []).some(r => 
+                    (r.request_type === 'exit_retrieval' || r.request_type === 'retrieval_exit' || r.request_type === 'cancellation_tote_return') && 
+                    (r.status === 'pending' || r.status === 'staged' || r.status === 'pending-dispatch' || r.status === 'out-for-delivery')
+                );
+
+                const grace = getGraceWindowDetails();
+
+                if (excess > 0 && !hasPendingExitReq && subTotal > 0) {
+                    const badge = document.getElementById('excess-badge-count');
+                    const msg = document.getElementById('excess-banner-message');
+
+                    if (badge) badge.textContent = `${excess} Excess`;
+                    if (msg) msg.innerHTML = `Your current subscription covers <strong>${subTotal} totes</strong>, but you have <strong>${storedCount} totes</strong> in warehouse storage. Please select which containers to keep and schedule an exit retrieval for your <strong>${excess} excess totes</strong>.`;
+                    
+                    const graceMsg = document.getElementById('excess-grace-msg');
+                    if (graceMsg) {
+                        graceMsg.innerHTML = `<span>⏳ <strong>3-Day Grace Window Deadline:</strong> ${grace.fullDeadlineStr} <span class="font-mono font-black ${grace.isExpired ? 'text-red-700 bg-red-100' : 'text-amber-900 bg-amber-200'} px-2 py-0.5 rounded-md ml-1">${grace.remainingText}</span>. Noncompliance daily storage surcharges ($1.50/tote/day) apply thereafter.</span>`;
+                    }
+
+                    banner.classList.remove('hidden');
+                } else if (hasPendingExitReq) {
+                    const badge = document.getElementById('excess-badge-count');
+                    const msg = document.getElementById('excess-banner-message');
+                    if (badge) badge.textContent = `Exit Retrieval In Progress`;
+                    if (msg) msg.innerHTML = `An exit retrieval request is currently active. Warehouse staff are pulling your excess containers. ⏳ <strong>Return Deadline:</strong> ${grace.fullDeadlineStr} (${grace.remainingText}).`;
+                    banner.classList.remove('hidden');
+                } else {
+                    banner.classList.add('hidden');
+                }
             }
 
-            // Strictly enforce 3-day grace period on date picker
-            const todayStr = new Date().toISOString().split('T')[0];
-            const maxGraceStr = grace.graceEnd.toISOString().split('T')[0];
-            
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const tomorrowStr = tomorrow.toISOString().split('T')[0];
+            function openExcessTotesModal(isCancellation = false) {
+                const modal = document.getElementById('excess-totes-modal');
+                if (!modal) return;
 
-            const dateInput = document.getElementById('excess-target-date');
-            if (dateInput) {
-                dateInput.min = todayStr;
-                dateInput.max = maxGraceStr;
-                dateInput.value = (tomorrowStr <= maxGraceStr) ? tomorrowStr : maxGraceStr;
+                isCancellationExitMode = isCancellation === true;
+
+                const storedCount = (currentInventory || []).length;
+                const subTotal = currentSubscription ? Number(currentSubscription.total_totes || 0) : 0;
+                
+                // If full cancellation: ALL totes must exit (100%). If partial reduction: excess amount.
+                targetExcessQuota = isCancellationExitMode ? storedCount : Math.max(1, storedCount - subTotal);
+                const grace = getGraceWindowDetails();
+
+                document.getElementById('excess-modal-target-num').textContent = targetExcessQuota;
+                document.getElementById('excess-modal-total-num').textContent = storedCount;
+
+                const subTitle = document.getElementById('excess-modal-subtitle');
+                if (subTitle) {
+                    subTitle.textContent = isCancellationExitMode 
+                        ? `Account Cancellation & Full Exit • Grace Deadline: ${grace.fullDeadlineStr} (${grace.remainingText})`
+                        : `Downsizing Plan Adjustment • Grace Deadline: ${grace.fullDeadlineStr} (${grace.remainingText})`;
+                }
+
+                const agreementDeadline = document.getElementById('excess-agreement-deadline');
+                if (agreementDeadline) {
+                    agreementDeadline.textContent = grace.fullDeadlineStr;
+                }
+
+                // Strictly enforce 3-day grace period on date picker
+                const todayStr = new Date().toISOString().split('T')[0];
+                const maxGraceStr = grace.graceEnd.toISOString().split('T')[0];
+                
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+                const dateInput = document.getElementById('excess-target-date');
+                if (dateInput) {
+                    dateInput.min = todayStr;
+                    dateInput.max = maxGraceStr;
+                    dateInput.value = (tomorrowStr <= maxGraceStr) ? tomorrowStr : maxGraceStr;
+                }
+
+                const dateHint = document.getElementById('excess-date-limit-hint');
+                if (dateHint) {
+                    dateHint.textContent = `📅 Must be scheduled on or before ${grace.formattedDate} (3-day grace window limit).`;
+                }
+
+                // Estimate valet fee
+                const vBase = Number(systemPricing?.valet_base || 15.00);
+                const vAdd = Number(systemPricing?.valet_tote_adder || 1.00);
+                const estValet = vBase + (targetExcessQuota * vAdd);
+                const vLabel = document.getElementById('excess-valet-fee-label');
+                if (vLabel) vLabel.textContent = `$${estValet.toFixed(2)}`;
+
+                selectedExcessTotes.clear();
+
+                // In Cancellation mode, 100% of all customer totes are automatically pre-selected!
+                if (isCancellationExitMode) {
+                    (currentInventory || []).forEach(item => selectedExcessTotes.add(item.id));
+                }
+
+                renderExcessTotesList();
+                updateExcessSelectionUI();
+                setExcessFulfillment('staging');
+
+                modal.classList.remove('hidden');
             }
 
-            const dateHint = document.getElementById('excess-date-limit-hint');
-            if (dateHint) {
-                dateHint.textContent = `📅 Must be scheduled on or before ${grace.formattedDate} (3-day grace window).`;
+            function closeExcessTotesModal() {
+                const modal = document.getElementById('excess-totes-modal');
+                if (modal) modal.classList.add('hidden');
+                isCancellationExitMode = false;
             }
 
-            // Estimate valet fee
-            const vBase = Number(systemPricing?.valet_base || 15.00);
-            const vAdd = Number(systemPricing?.valet_tote_adder || 1.00);
-            const estValet = vBase + (targetExcessQuota * vAdd);
-            const vLabel = document.getElementById('excess-valet-fee-label');
-            if (vLabel) vLabel.textContent = `$${estValet.toFixed(2)}`;
+            function setExcessFulfillment(type) {
+                excessFulfillmentType = type;
+                const optStaging = document.getElementById('excess-opt-staging');
+                const optValet = document.getElementById('excess-opt-valet');
+                const rStaging = document.getElementById('excess-radio-staging');
+                const rValet = document.getElementById('excess-radio-valet');
 
-            selectedExcessTotes.clear();
-            renderExcessTotesList();
-            updateExcessSelectionUI();
-            setExcessFulfillment('staging');
-
-            modal.classList.remove('hidden');
-        }
-
-        function closeExcessTotesModal() {
-            const modal = document.getElementById('excess-totes-modal');
-            if (modal) modal.classList.add('hidden');
-        }
-
-        function setExcessFulfillment(type) {
-            excessFulfillmentType = type;
-            const optStaging = document.getElementById('excess-opt-staging');
-            const optValet = document.getElementById('excess-opt-valet');
-            const rStaging = document.getElementById('excess-radio-staging');
-            const rValet = document.getElementById('excess-radio-valet');
-
-            if (type === 'staging') {
-                optStaging.className = 'p-3.5 rounded-2xl border-2 border-amber-600 bg-amber-50/60 cursor-pointer transition flex items-start gap-3';
-                optValet.className = 'p-3.5 rounded-2xl border-2 border-gray-200 bg-white hover:border-gray-300 cursor-pointer transition flex items-start gap-3';
-                rStaging.className = 'w-4 h-4 rounded-full border-[4px] border-amber-600 bg-white mt-0.5 flex-shrink-0';
-                rValet.className = 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mt-0.5 flex-shrink-0';
-            } else {
-                optValet.className = 'p-3.5 rounded-2xl border-2 border-amber-600 bg-amber-50/60 cursor-pointer transition flex items-start gap-3';
-                optStaging.className = 'p-3.5 rounded-2xl border-2 border-gray-200 bg-white hover:border-gray-300 cursor-pointer transition flex items-start gap-3';
-                rValet.className = 'w-4 h-4 rounded-full border-[4px] border-amber-600 bg-white mt-0.5 flex-shrink-0';
-                rStaging.className = 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mt-0.5 flex-shrink-0';
+                if (type === 'staging') {
+                    optStaging.className = 'p-3.5 rounded-2xl border-2 border-amber-600 bg-amber-50/60 cursor-pointer transition flex items-start gap-3';
+                    optValet.className = 'p-3.5 rounded-2xl border-2 border-gray-200 bg-white hover:border-gray-300 cursor-pointer transition flex items-start gap-3';
+                    rStaging.className = 'w-4 h-4 rounded-full border-[4px] border-amber-600 bg-white mt-0.5 flex-shrink-0';
+                    rValet.className = 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mt-0.5 flex-shrink-0';
+                } else {
+                    optValet.className = 'p-3.5 rounded-2xl border-2 border-amber-600 bg-amber-50/60 cursor-pointer transition flex items-start gap-3';
+                    optStaging.className = 'p-3.5 rounded-2xl border-2 border-gray-200 bg-white hover:border-gray-300 cursor-pointer transition flex items-start gap-3';
+                    rValet.className = 'w-4 h-4 rounded-full border-[4px] border-amber-600 bg-white mt-0.5 flex-shrink-0';
+                    rStaging.className = 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mt-0.5 flex-shrink-0';
+                }
             }
-        }
 
-        function renderExcessTotesList() {
-            const grid = document.getElementById('excess-totes-grid');
-            if (!grid) return;
+            function renderExcessTotesList() {
+                const listEl = document.getElementById('excess-totes-grid');
+                if (!listEl) return;
 
-            grid.innerHTML = (currentInventory || []).map(item => {
-                const isSelected = selectedExcessTotes.has(item.id);
-                const label = item.label || 'Empty Tote';
-                const code = item.tote_code || 'CV-TOTE';
-                const hasImg = !!item.photo_url;
-
-                return `
-                    <div onclick="toggleExcessToteSelection('${item.id}')" class="p-2.5 rounded-xl border ${isSelected ? 'border-amber-600 bg-amber-50/90 shadow-sm ring-1 ring-amber-500' : 'border-gray-200 bg-white hover:bg-gray-100'} cursor-pointer transition flex items-center space-x-2.5">
-                        <input type="checkbox" ${isSelected ? 'checked' : ''} class="w-4 h-4 text-amber-600 rounded border-gray-300 pointer-events-none flex-shrink-0">
-                        <div class="overflow-hidden flex-1">
-                            <div class="text-xs font-black text-gray-900 truncate">${escapeHtml(label)}</div>
-                            <div class="text-[10px] font-mono text-gray-500 truncate">${escapeHtml(code)}</div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function toggleExcessToteSelection(toteId) {
-            if (selectedExcessTotes.has(toteId)) {
-                selectedExcessTotes.delete(toteId);
-            } else {
-                if (selectedExcessTotes.size >= targetExcessQuota) {
-                    showToast(`You have already selected the required quota (${targetExcessQuota} totes).`);
+                const inv = currentInventory || [];
+                if (inv.length === 0) {
+                    listEl.innerHTML = '<div class="col-span-full py-8 text-center text-xs text-gray-400">No inventory containers found.</div>';
                     return;
                 }
-                selectedExcessTotes.add(toteId);
-            }
-            renderExcessTotesList();
-            updateExcessSelectionUI();
-        }
 
-        function autoSelectExcessTotes(mode) {
-            selectedExcessTotes.clear();
-            const inv = currentInventory || [];
+                listEl.innerHTML = inv.map(item => {
+                    const isSelected = selectedExcessTotes.has(item.id);
+                    const itemLabel = item.label || 'Standard Container';
+                    const tagColor = isSelected ? 'border-amber-600 bg-amber-50/60' : 'border-gray-200 bg-white hover:border-gray-300';
+                    const checkboxState = isSelected ? 'bg-amber-600 border-amber-600 text-white' : 'border-gray-300 bg-white';
 
-            if (mode === 'empty') {
-                // Select empty totes or unlabelled first
-                const sorted = [...inv].sort((a, b) => {
-                    const aEmpty = !a.photo_url || (a.label || '').toLowerCase().includes('empty');
-                    const bEmpty = !b.photo_url || (b.label || '').toLowerCase().includes('empty');
-                    return (bEmpty ? 1 : 0) - (aEmpty ? 1 : 0);
-                });
-                sorted.slice(0, targetExcessQuota).forEach(item => selectedExcessTotes.add(item.id));
-            } else {
-                // Select first targetExcessQuota
-                inv.slice(0, targetExcessQuota).forEach(item => selectedExcessTotes.add(item.id));
-            }
-
-            renderExcessTotesList();
-            updateExcessSelectionUI();
-        }
-
-        function updateExcessSelectionUI() {
-            const count = selectedExcessTotes.size;
-            const counter = document.getElementById('excess-selected-counter');
-            const submitBtn = document.getElementById('btn-submit-excess-exit');
-
-            if (counter) {
-                counter.textContent = `${count} / ${targetExcessQuota} Selected`;
-                counter.className = count === targetExcessQuota 
-                    ? 'text-xs font-black text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300 font-mono'
-                    : 'text-xs font-extrabold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 font-mono';
+                    return `
+                        <div onclick="toggleExcessToteSelection('${item.id}')" class="p-3 rounded-2xl border-2 ${tagColor} transition cursor-pointer flex items-center justify-between gap-2 select-none">
+                            <div class="flex items-center space-x-3 overflow-hidden">
+                                <div class="w-5 h-5 rounded-lg border flex items-center justify-center ${checkboxState} flex-shrink-0">
+                                    ${isSelected ? '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>' : ''}
+                                </div>
+                                <div class="truncate">
+                                    <div class="font-bold text-xs text-gray-900 truncate">${escapeHtml(itemLabel)}</div>
+                                    <div class="text-[10px] font-mono text-gray-500">${escapeHtml(item.tote_code || '')}</div>
+                                </div>
+                            </div>
+                            <span class="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${item.status === 'stored' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600'} flex-shrink-0">
+                                ${item.status || 'stored'}
+                            </span>
+                        </div>
+                    `;
+                }).join('');
             }
 
-            if (submitBtn) {
-                submitBtn.disabled = count !== targetExcessQuota;
-                submitBtn.innerHTML = count === targetExcessQuota 
-                    ? `<span>✓ Confirm Exit Retrieval (${count} Selected)</span>`
-                    : `<span>Select Exactly ${targetExcessQuota} Totes (${count}/${targetExcessQuota})</span>`;
-            }
-        }
-
-        async function submitExcessExitRetrieval() {
-            if (selectedExcessTotes.size !== targetExcessQuota) {
-                alert(`Please select exactly ${targetExcessQuota} totes to exit.`);
-                return;
-            }
-
-            const targetDate = document.getElementById('excess-target-date').value;
-            const timeSlot = document.getElementById('excess-time-slot').value;
-            const submitBtn = document.getElementById('btn-submit-excess-exit');
-
-            const grace = getGraceWindowDetails();
-            const chosenDate = new Date(targetDate + 'T23:59:59');
-            if (chosenDate > grace.graceEnd) {
-                alert(`Exit retrieval must be scheduled within your 3-day grace window (on or before ${grace.formattedDate}).`);
-                return;
-            }
-
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span>Processing Retrieval Order...</span>';
-
-            try {
-                const { data, error } = await supabase.rpc('create_exit_retrieval_request', {
-                    p_tote_ids: Array.from(selectedExcessTotes),
-                    p_fulfillment_type: excessFulfillmentType,
-                    p_target_date: targetDate,
-                    p_time_slot: timeSlot,
-                    p_delivery_notes: `Excess Tote Plan Reduction Exit Pull (${targetExcessQuota} totes)`
-                });
-
-                if (error) throw error;
-
-                closeExcessTotesModal();
-
-                if (excessFulfillmentType === 'staging') {
-                    showToast(`Exit Retrieval scheduled! Your PIN is: ${data.pin}. 3-Day return grace period is active.`);
+            function toggleExcessToteSelection(id) {
+                if (selectedExcessTotes.has(id)) {
+                    selectedExcessTotes.delete(id);
                 } else {
-                    showToast(`Valet Exit Delivery scheduled for ${targetDate}! 3-Day return grace period is active.`);
+                    if (selectedExcessTotes.size >= targetExcessQuota) {
+                        showToast(`You need to select exactly ${targetExcessQuota} totes. Deselect one first.`, true);
+                        return;
+                    }
+                    selectedExcessTotes.add(id);
                 }
-
-                if (typeof globalFetchRequests === 'function') await globalFetchRequests();
-                if (typeof globalFetchInventory === 'function') await globalFetchInventory();
-                checkExcessTotesState();
-            } catch (err) {
-                console.error("Exit retrieval failed:", err);
-                alert("Failed to submit exit retrieval request: " + (err.message || "Unknown error"));
-            } finally {
-                submitBtn.disabled = false;
+                renderExcessTotesList();
                 updateExcessSelectionUI();
             }
-        }
 
-        window.openExcessTotesModal = openExcessTotesModal;
-        window.closeExcessTotesModal = closeExcessTotesModal;
-        window.toggleExcessToteSelection = toggleExcessToteSelection;
-        window.autoSelectExcessTotes = autoSelectExcessTotes;
-        window.setExcessFulfillment = setExcessFulfillment;
-        window.submitExcessExitRetrieval = submitExcessExitRetrieval;
+            function autoSelectExcessTotes(mode) {
+                selectedExcessTotes.clear();
+                const inv = currentInventory || [];
+
+                if (mode === 'empty') {
+                    const sorted = [...inv].sort((a, b) => {
+                        const aEmpty = !a.photo_url && (!a.label || a.label.includes('Empty') || a.label.includes('Tote #'));
+                        const bEmpty = !b.photo_url && (!b.label || b.label.includes('Empty') || b.label.includes('Tote #'));
+                        return (bEmpty ? 1 : 0) - (aEmpty ? 1 : 0);
+                    });
+                    sorted.slice(0, targetExcessQuota).forEach(item => selectedExcessTotes.add(item.id));
+                } else {
+                    inv.slice(0, targetExcessQuota).forEach(item => selectedExcessTotes.add(item.id));
+                }
+
+                renderExcessTotesList();
+                updateExcessSelectionUI();
+            }
+
+            function updateExcessSelectionUI() {
+                const count = selectedExcessTotes.size;
+                const counter = document.getElementById('excess-selected-counter');
+                const submitBtn = document.getElementById('btn-submit-excess-exit');
+
+                if (counter) {
+                    counter.textContent = `${count} / ${targetExcessQuota} Selected`;
+                    counter.className = count === targetExcessQuota 
+                        ? 'text-xs font-black text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300 font-mono'
+                        : 'text-xs font-extrabold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 font-mono';
+                }
+
+                if (submitBtn) {
+                    submitBtn.disabled = count !== targetExcessQuota;
+                    submitBtn.innerHTML = count === targetExcessQuota 
+                        ? (isCancellationExitMode ? `<span>✓ Confirm Account Cancellation (${count} Totes)</span>` : `<span>✓ Confirm Exit Retrieval (${count} Selected)</span>`)
+                        : `<span>Select Exactly ${targetExcessQuota} Totes (${count}/${targetExcessQuota})</span>`;
+                }
+            }
+
+            async function submitExcessExitRetrieval() {
+                if (selectedExcessTotes.size !== targetExcessQuota) {
+                    alert(`Please select exactly ${targetExcessQuota} totes to exit.`);
+                    return;
+                }
+
+                const targetDate = document.getElementById('excess-target-date').value;
+                const timeSlot = document.getElementById('excess-time-slot').value;
+                const submitBtn = document.getElementById('btn-submit-excess-exit');
+
+                const grace = getGraceWindowDetails();
+                const chosenDate = new Date(targetDate + 'T23:59:59');
+                if (chosenDate > grace.graceEnd) {
+                    alert(`Exit retrieval must be scheduled within your 3-day grace window (on or before ${grace.formattedDate}).`);
+                    return;
+                }
+
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span>Processing Retrieval Order...</span>';
+
+                try {
+                    const { data, error } = await supabase.rpc('create_exit_retrieval_request', {
+                        p_tote_ids: Array.from(selectedExcessTotes),
+                        p_fulfillment_type: excessFulfillmentType,
+                        p_target_date: targetDate,
+                        p_time_slot: timeSlot,
+                        p_delivery_notes: isCancellationExitMode 
+                            ? `Full Account Cancellation Exit Pull (${targetExcessQuota} totes)` 
+                            : `Excess Tote Plan Reduction Exit Pull (${targetExcessQuota} totes)`
+                    });
+
+                    if (error) throw error;
+
+                    // If cancellation mode: update subscription status
+                    if (isCancellationExitMode) {
+                        await supabase
+                            .from('subscriptions')
+                            .update({ status: 'canceling', last_updated: new Date().toISOString() })
+                            .eq('uid', currentUser.id);
+
+                        await supabase
+                            .from('users')
+                            .update({ subscription_status: 'canceling' })
+                            .eq('id', currentUser.id);
+                    }
+
+                    closeExcessTotesModal();
+
+                    if (excessFulfillmentType === 'staging') {
+                        showToast(isCancellationExitMode 
+                            ? `Subscription Cancelled! Your Staging Room PIN is: ${data.pin}. Please return containers within 3 days.`
+                            : `Exit Retrieval scheduled! Your PIN is: ${data.pin}. 3-Day return grace period is active.`
+                        );
+                    } else {
+                        showToast(isCancellationExitMode
+                            ? `Subscription Cancelled! Valet Exit Delivery scheduled for ${targetDate}.`
+                            : `Valet Exit Delivery scheduled for ${targetDate}! 3-Day return grace period is active.`
+                        );
+                    }
+
+                    if (typeof globalFetchRequests === 'function') await globalFetchRequests();
+                    if (typeof globalFetchInventory === 'function') await globalFetchInventory();
+                    checkExcessTotesState();
+                } catch (err) {
+                    console.error("Exit retrieval failed:", err);
+                    alert("Failed to submit exit retrieval request: " + (err.message || "Unknown error"));
+                } finally {
+                    submitBtn.disabled = false;
+                    updateExcessSelectionUI();
+                }
+            }
+
+            window.openExcessTotesModal = openExcessTotesModal;
+            window.closeExcessTotesModal = closeExcessTotesModal;
+            window.toggleExcessToteSelection = toggleExcessToteSelection;
+            window.autoSelectExcessTotes = autoSelectExcessTotes;
+            window.setExcessFulfillment = setExcessFulfillment;
+            window.submitExcessExitRetrieval = submitExcessExitRetrieval;
+            window.triggerCancelFlowUser = triggerCancelFlowUser;
     </script>
 </body>
 </html>

@@ -4486,7 +4486,11 @@
                                             <p class="text-[11px] font-mono text-gray-400">${orderLabel} • ${totes.length} Tote(s) Out • ${returnNote}</p>
                                         </div>
                                     </div>
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <button onclick="batchCheckinCustomerReturnedTotes('${uid}', ${toteCodesJson})" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md cursor-pointer">
+                                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                                            <span>⚡ Check-In &amp; Recirculate All (${totes.length})</span>
+                                        </button>
                                         ${fulfillmentBadge(fulfillmentType)}
                                         <span class="text-xs font-mono font-bold text-purple-400 bg-purple-500/10 px-3 py-1 rounded-xl border border-purple-500/30">With Customer</span>
                                     </div>
@@ -4496,6 +4500,7 @@
                                     ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                         <span class="text-white font-bold">${t.tote_code}</span>
                                         <div class="flex items-center gap-1.5">
+                                            <button onclick="checkinSingleReturnedTote('${t.tote_code}')" class="text-emerald-300 hover:text-white bg-emerald-500/20 hover:bg-emerald-500/30 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-emerald-500/40 transition flex items-center gap-1 cursor-pointer" title="Check-in and place into Activation Room (INTAKE-BAY-1)">🔄 Recirculate</button>
                                             <button onclick="revertToteStage('${t.tote_code}', '${isValet ? 'out-for-delivery' : 'staged'}')" class="text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-amber-500/30 transition flex items-center gap-1 cursor-pointer" title="Revert to ${isValet ? 'Driver Dispatch' : 'Staging Room'}">↩ Move Back</button>
                                             <button onclick="openReportMissingModal('${t.tote_code}', '${customerName.replace(/'/g, "\\'")}', '${uid}', '${jobId}')" class="text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-rose-500/30 transition cursor-pointer" title="Report Missing">⚠️</button>
                                             <span class="text-purple-400 text-[10px] bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 font-sans">Return Pending</span>
@@ -4505,9 +4510,13 @@
 
                                 <!-- Action Buttons -->
                                 <div class="space-y-2">
-                                    <button onclick="if(!window.activeTargetLocationCode){openFacilityMapModal();showToast('⚠️ No Vault Shelf Locked! Please select a shelf on the Facility Map first.', true);return;}document.getElementById('scan-barcode').value='${firstCode}';simulateScan('stored')" class="w-full min-h-[60px] bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-purple-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
-                                        <i data-lucide="package-check" class="w-6 h-6"></i>
-                                        <span>${returnLabel} (${firstCode}) →</span>
+                                    <button onclick="batchCheckinCustomerReturnedTotes('${uid}', ${toteCodesJson})" class="w-full min-h-[56px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                        <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                                        <span>⚡ CHECK-IN &amp; RECIRCULATE ALL ${totes.length} TOTES TO ACTIVATION ROOM (INTAKE-BAY-1)</span>
+                                    </button>
+                                    <button onclick="if(!window.activeTargetLocationCode){openFacilityMapModal();showToast('⚠️ No Vault Shelf Locked! Please select a shelf on the Facility Map first.', true);return;}document.getElementById('scan-barcode').value='${firstCode}';simulateScan('stored')" class="w-full min-h-[46px] bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl border border-purple-400/40 shadow-md flex items-center justify-center gap-2 cursor-pointer transition">
+                                        <i data-lucide="package-check" class="w-4 h-4"></i>
+                                        <span>OR RESHELVE BELONGINGS TO VAULT SHELF (${firstCode}) →</span>
                                     </button>
                                     <button onclick="batchRevertTotes(${toteCodesJson}, '${isValet ? 'out-for-delivery' : 'staged'}')" class="w-full py-2 bg-gray-900/90 hover:bg-gray-850 text-gray-400 hover:text-amber-300 font-bold text-xs rounded-xl border border-gray-800 transition flex items-center justify-center gap-1.5 cursor-pointer font-mono">
                                         <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-amber-400"></i>
@@ -6077,6 +6086,74 @@
             } catch (err) {
                 console.error("Batch revert failed:", err);
                 showToast(`Batch Revert Error: ${err.message}`, true);
+            }
+        }
+
+        async function undoLastScan(barcode) {
+            if (!barcode) return;
+            const prevStatus = lastScanPreviousState[barcode] || 'intake';
+            await revertToteStage(barcode, prevStatus);
+        }
+
+        // =========================================================================
+        // Recirculation Check-In Handlers (Activation Room / INTAKE-BAY-1)
+        // =========================================================================
+        async function checkinSingleReturnedTote(toteCode) {
+            if (!toteCode) return;
+            try {
+                const { data, error } = await supabase.rpc('checkin_returned_exit_totes', {
+                    p_tote_code: toteCode,
+                    p_shelf_location_code: 'INTAKE-BAY-1'
+                });
+                if (error) throw error;
+
+                showToast(`✓ Tote ${toteCode} checked in & recirculated to Activation Room!`);
+                playBeep(587, 0.15, 'triangle');
+
+                const terminalOutput = document.getElementById('terminal-output');
+                if (terminalOutput) {
+                    terminalOutput.innerHTML = `
+                        <span class="text-emerald-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i> Recirculated to Activation Room</span>
+                        <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">${toteCode} assigned to [INTAKE-BAY-1]</span>
+                    `;
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                }
+
+                loadWorkerQueues();
+            } catch (err) {
+                console.error("Single tote check-in failed:", err);
+                showToast(`Check-In Error: ${err.message || 'Unknown error'}`, true);
+            }
+        }
+
+        async function batchCheckinCustomerReturnedTotes(uid, toteCodes) {
+            if (!toteCodes || toteCodes.length === 0) return;
+            if (!confirm(`Check in and recirculate all ${toteCodes.length} empty tote(s) to the Activation Room (INTAKE-BAY-1)?`)) return;
+
+            try {
+                showToast(`Checking in ${toteCodes.length} totes...`);
+                const { data, error } = await supabase.rpc('batch_checkin_returned_exit_totes', {
+                    p_tote_codes: toteCodes,
+                    p_shelf_location_code: 'INTAKE-BAY-1'
+                });
+                if (error) throw error;
+
+                showToast(`🎉 Successfully recirculated ${data?.recirculatedCount || toteCodes.length} totes to Activation Room!`);
+                playBeep(587, 0.25, 'triangle');
+
+                const terminalOutput = document.getElementById('terminal-output');
+                if (terminalOutput) {
+                    terminalOutput.innerHTML = `
+                        <span class="text-emerald-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i> Batch Check-In Complete</span>
+                        <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">${toteCodes.length} totes moved to [INTAKE-BAY-1]</span>
+                    `;
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                }
+
+                loadWorkerQueues();
+            } catch (err) {
+                console.error("Batch check-in failed:", err);
+                showToast(`Batch Check-In Error: ${err.message || 'Unknown error'}`, true);
             }
         }
 
