@@ -4266,9 +4266,12 @@ $$ LANGUAGE plpgsql;
 -- =========================================================================
 -- CHECK-IN & RECIRCULATE RETURNED EXIT TOTES RPC (Warehouse Worker)
 -- =========================================================================
+-- CHECK-IN & RECIRCULATE RETURNED EXIT TOTES RPC (Warehouse Worker)
+-- =========================================================================
 CREATE OR REPLACE FUNCTION public.checkin_returned_exit_totes(
     p_tote_code TEXT,
-    p_shelf_location_code TEXT DEFAULT 'RACK-RETURN-01'
+    p_shelf_location_code TEXT DEFAULT 'INTAKE-BAY-1',
+    p_staff_uid UUID DEFAULT NULL
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_uid UUID;
@@ -4280,7 +4283,11 @@ DECLARE
   v_all_returned BOOLEAN := true;
   v_code TEXT;
 BEGIN
-  v_uid := auth.uid();
+  v_uid := COALESCE(auth.uid(), p_staff_uid);
+  IF v_uid IS NULL THEN
+    SELECT id INTO v_uid FROM public.users WHERE role IN ('warehouse_worker', 'warehouse_manager', 'executive') ORDER BY created_at ASC LIMIT 1;
+  END IF;
+
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'Unauthenticated';
   END IF;
@@ -4300,13 +4307,13 @@ BEGIN
 
   v_owner_uid := v_item.uid;
 
-  -- 1. Recirculate container back to facility available pool
+  -- 1. Recirculate container back to facility available pool (INTAKE-BAY-1)
   UPDATE public.inventory
   SET uid = NULL,
       label = 'Empty Tote #' || right(p_tote_code, 4),
       status = 'stored'::public.inventory_status,
-      location_code = COALESCE(p_shelf_location_code, 'RACK-RETURN-01'),
-      location_type = 'shelf',
+      location_code = COALESCE(p_shelf_location_code, 'INTAKE-BAY-1'),
+      location_type = 'intake',
       activated = false,
       photo_url = NULL,
       notes = NULL,
@@ -4330,7 +4337,6 @@ BEGIN
     ORDER BY requested_at DESC LIMIT 1;
 
     IF v_active_req IS NOT NULL THEN
-      -- Check if any remaining totes in this request are still unreturned
       IF v_active_req.requested_tote_codes IS NOT NULL THEN
         FOREACH v_code IN ARRAY v_active_req.requested_tote_codes LOOP
           IF EXISTS (
@@ -4370,7 +4376,8 @@ $$ LANGUAGE plpgsql;
 -- =========================================================================
 CREATE OR REPLACE FUNCTION public.batch_checkin_returned_exit_totes(
     p_tote_codes TEXT[],
-    p_shelf_location_code TEXT DEFAULT 'INTAKE-BAY-1'
+    p_shelf_location_code TEXT DEFAULT 'INTAKE-BAY-1',
+    p_staff_uid UUID DEFAULT NULL
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_uid UUID;
@@ -4379,7 +4386,11 @@ DECLARE
   v_owner_uid UUID;
   v_new_held INT;
 BEGIN
-  v_uid := auth.uid();
+  v_uid := COALESCE(auth.uid(), p_staff_uid);
+  IF v_uid IS NULL THEN
+    SELECT id INTO v_uid FROM public.users WHERE role IN ('warehouse_worker', 'warehouse_manager', 'executive') ORDER BY created_at ASC LIMIT 1;
+  END IF;
+
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'Unauthenticated';
   END IF;

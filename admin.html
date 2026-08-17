@@ -6283,7 +6283,8 @@
             try {
                 const { data, error } = await supabase.rpc('checkin_returned_exit_totes', {
                     p_tote_code: toteCode,
-                    p_shelf_location_code: 'INTAKE-BAY-1'
+                    p_shelf_location_code: 'INTAKE-BAY-1',
+                    p_staff_uid: getActiveStaffUid()
                 });
                 if (error) throw error;
 
@@ -6314,7 +6315,8 @@
                 showToast(`Checking in ${toteCodes.length} totes...`);
                 const { data, error } = await supabase.rpc('batch_checkin_returned_exit_totes', {
                     p_tote_codes: toteCodes,
-                    p_shelf_location_code: 'INTAKE-BAY-1'
+                    p_shelf_location_code: 'INTAKE-BAY-1',
+                    p_staff_uid: getActiveStaffUid()
                 });
                 if (error) throw error;
 
