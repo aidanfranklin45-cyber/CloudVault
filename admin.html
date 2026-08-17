@@ -4292,9 +4292,12 @@
                 });
 
                 const pullItems = (allItems || []).filter(i => 
-                    i.status === 'pending-stage' || 
-                    i.status === 'pending-dispatch' ||
-                    (i.status === 'stored' && (requestedToteIdentifiers.has(i.id) || requestedToteIdentifiers.has(i.tote_code)))
+                    i.activated !== false && 
+                    i.status !== 'intake' && (
+                        i.status === 'pending-stage' || 
+                        i.status === 'pending-dispatch' ||
+                        (i.status === 'stored' && (requestedToteIdentifiers.has(i.id) || requestedToteIdentifiers.has(i.tote_code)))
+                    )
                 );
 
                 function isValetItem(i) {
