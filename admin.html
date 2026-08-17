@@ -4165,9 +4165,9 @@
                     return jobs;
                 }
 
-                // ── Tab 1: NEW INTAKE CARDS ──
+                // ── Tab 1: NEW INTAKE CARDS (Customer-requested un-activated totes only) ──
                 const activateItems = (allItems || []).filter(i => 
-                    i.activated === false || 
+                    (i.activated === false && i.uid != null) || 
                     i.status === 'intake'
                 );
                 document.getElementById('wtab-activate-count').textContent = activateItems.length;

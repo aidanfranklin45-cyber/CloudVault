@@ -4266,6 +4266,8 @@ $$ LANGUAGE plpgsql;
 -- =========================================================================
 -- CHECK-IN & RECIRCULATE RETURNED EXIT TOTES RPC (Warehouse Worker)
 -- =========================================================================
+-- CHECK-IN & RECIRCULATE RETURNED EXIT TOTES RPC (Warehouse Worker)
+-- =========================================================================
 CREATE OR REPLACE FUNCTION public.checkin_returned_exit_totes(
     p_tote_code TEXT,
     p_shelf_location_code TEXT DEFAULT 'INTAKE-BAY-1',
@@ -4305,19 +4307,8 @@ BEGIN
 
   v_owner_uid := v_item.uid;
 
-  -- 1. Recirculate container back to facility available pool (INTAKE-BAY-1)
-  UPDATE public.inventory
-  SET uid = NULL,
-      label = 'Empty Tote #' || right(p_tote_code, 4),
-      status = 'stored'::public.inventory_status,
-      location_code = COALESCE(p_shelf_location_code, 'INTAKE-BAY-1'),
-      location_type = 'intake',
-      activated = false,
-      image_url = NULL,
-      category = NULL,
-      last_scanned_at = now(),
-      last_scanned_by = v_uid
-  WHERE id = v_item.id;
+  -- 1. Delete/retire the old container tag record from active inventory
+  DELETE FROM public.inventory WHERE id = v_item.id;
 
   -- 2. Decrement customer active_totes_held if customer was attached
   IF v_owner_uid IS NOT NULL THEN
@@ -4360,11 +4351,11 @@ BEGIN
     'success', true,
     'toteCode', p_tote_code,
     'recirculated', true,
-    'locationCode', COALESCE(p_shelf_location_code, 'INTAKE-BAY-1'),
+    'tagRetired', true,
     'previousOwnerUid', v_owner_uid,
     'activeTotesHeld', v_new_held,
     'allRequestTotesReturned', v_all_returned,
-    'message', 'Tote ' || p_tote_code || ' successfully verified, emptied, and recirculated to Activation Room (INTAKE-BAY-1).'
+    'message', 'Tote ' || p_tote_code || ' surrendered: old tag retired and plastic bin returned to clean facility tote stack.'
   );
 END;
 $$ LANGUAGE plpgsql;
@@ -4408,18 +4399,8 @@ BEGIN
   WHERE tote_code = p_tote_codes[1] AND uid IS NOT NULL
   LIMIT 1;
 
-  -- Recirculate all specified totes into Activation Room (INTAKE-BAY-1)
-  UPDATE public.inventory
-  SET uid = NULL,
-      label = 'Empty Tote #' || right(tote_code, 4),
-      status = 'stored'::public.inventory_status,
-      activated = false,
-      location_code = COALESCE(p_shelf_location_code, 'INTAKE-BAY-1'),
-      location_type = 'intake',
-      image_url = NULL,
-      category = NULL,
-      last_scanned_at = now(),
-      last_scanned_by = v_uid
+  -- Delete all specified surrendered tote records from active inventory
+  DELETE FROM public.inventory
   WHERE tote_code = ANY(p_tote_codes);
 
   GET DIAGNOSTICS v_count = ROW_COUNT;
@@ -4442,10 +4423,10 @@ BEGIN
   RETURN jsonb_build_object(
     'success', true,
     'recirculatedCount', v_count,
-    'locationCode', COALESCE(p_shelf_location_code, 'INTAKE-BAY-1'),
+    'tagsRetired', true,
     'previousOwnerUid', v_owner_uid,
     'activeTotesHeld', v_new_held,
-    'message', 'Successfully checked in and recirculated ' || v_count::text || ' totes into Activation Room (INTAKE-BAY-1).'
+    'message', 'Successfully retired ' || v_count::text || ' surrendered tote tags. Plastic bins returned to clean facility tote stack.'
   );
 END;
 $$ LANGUAGE plpgsql;
