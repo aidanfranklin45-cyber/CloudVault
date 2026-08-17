@@ -467,7 +467,7 @@
                             <p class="text-[12px] text-amber-900 mt-1 leading-relaxed" id="excess-banner-message">
                                 Your current subscription covers <strong>10 totes</strong>, but you have <strong>50 totes</strong> in warehouse storage. Please select which containers to keep and schedule an exit retrieval for your <strong>40 excess totes</strong>.
                             </p>
-                            <p class="text-[11px] text-amber-800 font-bold mt-1.5 flex items-center gap-1.5">
+                            <p class="text-[11px] text-amber-800 font-bold mt-1.5 flex items-center gap-1.5" id="excess-grace-msg">
                                 <span>⏳ <strong>3-Day Grace Window:</strong> Please schedule exit retrieval to avoid excess daily storage noncompliance surcharges ($1.50/tote/day).</span>
                             </p>
                         </div>
@@ -1387,7 +1387,7 @@
                     </div>
                     <div>
                         <h2 class="text-lg font-black tracking-tight">Select Totes for Permanent Exit</h2>
-                        <p class="text-xs text-amber-100 font-medium">Downsizing Plan Adjustment • 3-Day Compliance Window</p>
+                        <p class="text-xs text-amber-100 font-medium" id="excess-modal-subtitle">Downsizing Plan Adjustment • 3-Day Compliance Window</p>
                     </div>
                 </div>
                 <button onclick="closeExcessTotesModal()" class="text-amber-200 hover:text-white transition p-1.5 rounded-xl hover:bg-white/10">
@@ -1479,7 +1479,7 @@
                         <span>Tote Return & Penalty Agreement</span>
                     </div>
                     <p class="text-[11px] text-gray-300 leading-relaxed">
-                        Containers remain CloudVault property. Once you empty your belongings, return the physical containers to our facility return rack. Unreturned or retained containers will be assessed a replacement fee of <strong>$15.00/tote + sales tax</strong> after the 3-day grace window.
+                        Containers remain CloudVault property. Once you empty your belongings, return the physical containers to our facility return rack by <strong class="text-amber-400 font-bold" id="excess-agreement-deadline">within 3 days</strong>. Unreturned or retained containers will be assessed a replacement fee of <strong>$15.00/tote + sales tax</strong> after the 3-day grace window.
                     </p>
                 </div>
             </div>
@@ -5707,6 +5707,38 @@
         let excessFulfillmentType = 'staging';
         let targetExcessQuota = 0;
 
+        function getGraceWindowDetails() {
+            const sub = currentSubscription;
+            const reductionDate = (sub && (sub.updated_at || sub.last_updated || sub.created_at)) ? new Date(sub.updated_at || sub.last_updated || sub.created_at) : new Date();
+            const graceEnd = new Date(reductionDate.getTime() + (3 * 24 * 60 * 60 * 1000));
+            
+            const formattedDate = graceEnd.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+            const formattedTime = graceEnd.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+            
+            const diffMs = graceEnd.getTime() - Date.now();
+            let remainingText = '';
+            let isExpired = false;
+
+            if (diffMs > 0) {
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffDays = Math.floor(diffHours / 24);
+                const remHours = diffHours % 24;
+                remainingText = diffDays > 0 ? `⏳ ${diffDays}d ${remHours}h remaining` : `⏳ ${diffHours}h remaining`;
+            } else {
+                isExpired = true;
+                remainingText = '⚠️ Grace Period Expired';
+            }
+
+            return {
+                graceEnd,
+                formattedDate,
+                formattedTime,
+                remainingText,
+                isExpired,
+                fullDeadlineStr: `${formattedDate} at ${formattedTime}`
+            };
+        }
+
         function checkExcessTotesState() {
             const banner = document.getElementById('excess-totes-banner');
             if (!banner) return;
@@ -5720,17 +5752,27 @@
                 (r.status === 'pending' || r.status === 'staged' || r.status === 'pending-dispatch' || r.status === 'out-for-delivery')
             );
 
+            const grace = getGraceWindowDetails();
+
             if (excess > 0 && !hasPendingExitReq && subTotal > 0) {
                 const badge = document.getElementById('excess-badge-count');
                 const msg = document.getElementById('excess-banner-message');
+                const graceEl = document.getElementById('excess-grace-timer');
+
                 if (badge) badge.textContent = `${excess} Excess`;
                 if (msg) msg.innerHTML = `Your current subscription covers <strong>${subTotal} totes</strong>, but you have <strong>${storedCount} totes</strong> in warehouse storage. Please select which containers to keep and schedule an exit retrieval for your <strong>${excess} excess totes</strong>.`;
+                
+                const graceMsg = document.getElementById('excess-grace-msg');
+                if (graceMsg) {
+                    graceMsg.innerHTML = `<span>⏳ <strong>3-Day Grace Window Deadline:</strong> ${grace.fullDeadlineStr} <span class="font-mono font-black ${grace.isExpired ? 'text-red-700 bg-red-100' : 'text-amber-900 bg-amber-200'} px-2 py-0.5 rounded-md ml-1">${grace.remainingText}</span>. Noncompliance daily storage surcharges ($1.50/tote/day) apply thereafter.</span>`;
+                }
+
                 banner.classList.remove('hidden');
             } else if (hasPendingExitReq) {
                 const badge = document.getElementById('excess-badge-count');
                 const msg = document.getElementById('excess-banner-message');
                 if (badge) badge.textContent = `Exit Retrieval In Progress`;
-                if (msg) msg.innerHTML = `An exit retrieval request is currently active. Warehouse staff are pulling your excess containers. ⏳ <strong>3-day return grace period active.</strong>`;
+                if (msg) msg.innerHTML = `An exit retrieval request is currently active. Warehouse staff are pulling your excess containers. ⏳ <strong>Return Deadline:</strong> ${grace.fullDeadlineStr} (${grace.remainingText}).`;
                 banner.classList.remove('hidden');
             } else {
                 banner.classList.add('hidden');
@@ -5744,9 +5786,20 @@
             const subTotal = currentSubscription ? Number(currentSubscription.total_totes || 0) : 0;
             const storedCount = (currentInventory || []).length;
             targetExcessQuota = Math.max(1, storedCount - subTotal);
+            const grace = getGraceWindowDetails();
 
             document.getElementById('excess-modal-target-num').textContent = targetExcessQuota;
             document.getElementById('excess-modal-total-num').textContent = storedCount;
+
+            const subTitle = document.getElementById('excess-modal-subtitle');
+            if (subTitle) {
+                subTitle.textContent = `Downsizing Plan Adjustment • Grace Deadline: ${grace.fullDeadlineStr} (${grace.remainingText})`;
+            }
+
+            const agreementDeadline = document.getElementById('excess-agreement-deadline');
+            if (agreementDeadline) {
+                agreementDeadline.textContent = grace.fullDeadlineStr;
+            }
 
             // Set default date to tomorrow
             const tomorrow = new Date();
