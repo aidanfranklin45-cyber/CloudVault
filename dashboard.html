@@ -1712,6 +1712,11 @@
                 closeAddTotesPanel();
                 const newMo = data?.newMonthly ? Number(data.newMonthly).toFixed(2) : '0.00';
                 showToast(`✓ ${additionalToteCount} containers added! Pro-rata storage will be billed on your monthly statement ($${newMo}/mo tier).`);
+
+                if (typeof globalFetchSubscription === 'function') await globalFetchSubscription();
+                if (typeof globalFetchInventory === 'function') await globalFetchInventory();
+                if (typeof globalFetchRequests === 'function') await globalFetchRequests();
+                checkExcessTotesState();
             } catch (err) {
                 console.error('Add totes failed:', err);
                 errEl.textContent = err.message || 'Something went wrong. Please try again.';
