@@ -396,22 +396,37 @@
             lucide.createIcons();
             try {
                 if (typeof supabase !== 'undefined') {
-                    supabase.auth.onAuthStateChange(async (event, session) => {
-                        if (session && session.user) {
-                            const profile = await getCachedUserProfile(session.user.id);
+                    // 1. Initial Session Check
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    const session = sessionData?.session;
+
+                    if (session && session.user) {
+                        const profile = await getCachedUserProfile(session.user.id);
+                        if (profile && profile.role) {
+                            applyActiveEmployeeContext(profile);
+                        }
+                    } else {
+                        let badgeUser = null;
+                        try {
+                            badgeUser = JSON.parse(sessionStorage.getItem('cv_active_badge_user')) || JSON.parse(localStorage.getItem('cv_active_badge_user'));
+                        } catch (e) { }
+
+                        if (badgeUser && badgeUser.role && badgeUser.role !== 'customer') {
+                            applyActiveEmployeeContext(badgeUser);
+                        } else {
+                            window.location.href = "login.html";
+                            return;
+                        }
+                    }
+
+                    // 2. Auth State Change Listener (only redirect on explicit SIGNED_OUT)
+                    supabase.auth.onAuthStateChange(async (event, newSession) => {
+                        if (event === 'SIGNED_OUT') {
+                            window.location.href = "login.html";
+                        } else if (newSession && newSession.user) {
+                            const profile = await getCachedUserProfile(newSession.user.id);
                             if (profile && profile.role) {
                                 applyActiveEmployeeContext(profile);
-                            }
-                        } else {
-                            let badgeUser = null;
-                            try {
-                                badgeUser = JSON.parse(localStorage.getItem('cv_active_badge_user'));
-                            } catch (e) { }
-
-                            if (badgeUser && badgeUser.role && badgeUser.role !== 'customer') {
-                                applyActiveEmployeeContext(badgeUser);
-                            } else {
-                                window.location.href = "login.html";
                             }
                         }
                     });
