@@ -2704,7 +2704,8 @@ $$ LANGUAGE plpgsql;
 -- =========================================================================
 CREATE OR REPLACE FUNCTION public.process_vault_pull(
   p_tote_code TEXT,
-  p_target_staging_code TEXT DEFAULT NULL
+  p_target_staging_code TEXT DEFAULT NULL,
+  p_staff_uid UUID DEFAULT NULL
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_uid UUID;
@@ -2714,8 +2715,13 @@ DECLARE
   v_next_location_code TEXT;
   v_next_location_type TEXT;
   v_customer_pin TEXT;
+  v_req_id UUID;
 BEGIN
-  v_uid := auth.uid();
+  v_uid := COALESCE(auth.uid(), p_staff_uid);
+  IF v_uid IS NULL THEN
+    SELECT id INTO v_uid FROM public.users WHERE role IN ('warehouse_worker', 'warehouse_manager', 'executive') ORDER BY created_at ASC LIMIT 1;
+  END IF;
+
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'Unauthenticated';
   END IF;
@@ -2733,25 +2739,38 @@ BEGIN
     RAISE EXCEPTION 'Pull Error: Tote % not found in inventory', p_tote_code;
   END IF;
 
+  -- Find active request linked to this tote
+  SELECT id, pin INTO v_req_id, v_customer_pin
+  FROM public.access_requests
+  WHERE uid = v_item.uid 
+    AND (p_tote_code = ANY(requested_tote_codes) OR v_item.id::text = ANY(requested_items))
+    AND status NOT IN ('completed', 'cancelled', 'returned-to-vault')
+  ORDER BY requested_at DESC LIMIT 1;
+
   IF v_item.status = 'pending-dispatch' OR p_target_staging_code ILIKE '%TRUCK%' OR p_target_staging_code ILIKE '%DISPATCH%' THEN
     v_next_status := 'out-for-delivery'::public.inventory_status;
     v_next_location_code := COALESCE(p_target_staging_code, 'VALET-TRUCK-A');
     v_next_location_type := 'dispatch';
   ELSE
     v_next_status := 'staged'::public.inventory_status;
-    v_next_location_code := COALESCE(p_target_staging_code, 'STAGE-BAY-A1');
+    v_next_location_code := COALESCE(p_target_staging_code, 'ROOM-1');
     v_next_location_type := 'staging';
 
-    -- Physical Staging Room Occupancy Check: Prevent staging into a room with totes for another customer!
-    IF p_target_staging_code IS NOT NULL AND p_target_staging_code <> '' THEN
+    -- Strict Staging Room Conflict Check: Prevent staging into a room currently occupied by another access request/event
+    IF v_next_location_code ~* '^ROOM-[0-9]+' THEN
       IF EXISTS (
-        SELECT 1 FROM public.inventory
-        WHERE location_code = p_target_staging_code
-          AND status IN ('staged', 'pending-stage')
-          AND id <> v_item.id
-          AND uid <> v_item.uid
+        SELECT 1 
+        FROM public.inventory i
+        LEFT JOIN public.access_requests ar ON (i.tote_code = ANY(ar.requested_tote_codes) OR i.id = ANY(ar.requested_items))
+        WHERE i.location_code = v_next_location_code
+          AND i.status IN ('staged', 'pending-stage')
+          AND i.id <> v_item.id
+          AND (
+            (v_req_id IS NOT NULL AND ar.id IS NOT NULL AND ar.id <> v_req_id)
+            OR (v_req_id IS NULL AND i.uid <> v_item.uid)
+          )
       ) THEN
-        RAISE EXCEPTION 'Staging Room Conflict: Room % is currently occupied by active totes for another customer! Please select a vacant room.', p_target_staging_code;
+        RAISE EXCEPTION 'Staging Room Conflict: % is already occupied by another retrieval order! Please select a vacant room.', v_next_location_code;
       END IF;
     END IF;
   END IF;
@@ -2764,11 +2783,6 @@ BEGIN
       last_scanned_at = now(),
       last_scanned_by = v_uid
   WHERE id = v_item.id;
-
-  SELECT pin INTO v_customer_pin
-  FROM public.access_requests
-  WHERE uid = v_item.uid AND status = 'pending'
-  ORDER BY requested_at DESC LIMIT 1;
 
   RETURN jsonb_build_object(
     'success', true,

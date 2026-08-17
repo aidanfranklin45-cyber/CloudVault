@@ -4050,6 +4050,15 @@
                         if (matchingTotes.length > 0) {
                             matchingTotes.forEach(t => handledToteIds.add(t.id));
                             const owner = resolveToteOwner(req.uid, matchingTotes);
+                            let resolvedRoom = req.assigned_room ? Number(req.assigned_room) : null;
+                            if (!resolvedRoom) {
+                                const stagedToteWithRoom = matchingTotes.find(t => t.location_code && t.location_code.match(/ROOM-?(\d+)/i));
+                                if (stagedToteWithRoom) {
+                                    const m = stagedToteWithRoom.location_code.match(/ROOM-?(\d+)/i);
+                                    if (m) resolvedRoom = parseInt(m[1], 10);
+                                }
+                            }
+
                             jobs.push({
                                 jobId: req.id,
                                 isRequest: true,
@@ -4064,7 +4073,7 @@
                                 surgeTier: req.surge_tier,
                                 surgeFee: req.surge_fee,
                                 pin: req.pin || pinByUid[req.uid] || '1517',
-                                assignedRoom: req.assigned_room ? Number(req.assigned_room) : null,
+                                assignedRoom: resolvedRoom,
                                 status: req.status,
                                 totes: matchingTotes
                             });
@@ -4085,6 +4094,15 @@
                             if (matchingTotes.length > 0) {
                                 matchingTotes.forEach(t => handledToteIds.add(t.id));
                                 const owner = resolveToteOwner(req.uid, matchingTotes);
+                                let resolvedRoom = req.assigned_room ? Number(req.assigned_room) : null;
+                                if (!resolvedRoom) {
+                                    const stagedToteWithRoom = matchingTotes.find(t => t.location_code && t.location_code.match(/ROOM-?(\d+)/i));
+                                    if (stagedToteWithRoom) {
+                                        const m = stagedToteWithRoom.location_code.match(/ROOM-?(\d+)/i);
+                                        if (m) resolvedRoom = parseInt(m[1], 10);
+                                    }
+                                }
+
                                 jobs.push({
                                     jobId: req.id,
                                     isRequest: true,
@@ -4099,7 +4117,7 @@
                                     surgeTier: req.surge_tier,
                                     surgeFee: req.surge_fee,
                                     pin: req.pin || pinByUid[req.uid] || '1517',
-                                    assignedRoom: req.assigned_room ? Number(req.assigned_room) : null,
+                                    assignedRoom: resolvedRoom,
                                     status: req.status,
                                     totes: matchingTotes
                                 });
@@ -4136,7 +4154,14 @@
                         Object.entries(unlinkedMap).forEach(([key, grp]) => {
                             const owner = resolveToteOwner(grp.uid, grp.totes);
                             const userReq = grp.histReq || activeRequests.find(r => r.uid === grp.uid);
-                            const userAssignedRoom = userReq && userReq.assigned_room ? Number(userReq.assigned_room) : null;
+                            let userAssignedRoom = userReq && userReq.assigned_room ? Number(userReq.assigned_room) : null;
+                            if (!userAssignedRoom) {
+                                const stagedToteWithRoom = grp.totes.find(t => t.location_code && t.location_code.match(/ROOM-?(\d+)/i));
+                                if (stagedToteWithRoom) {
+                                    const m = stagedToteWithRoom.location_code.match(/ROOM-?(\d+)/i);
+                                    if (m) userAssignedRoom = parseInt(m[1], 10);
+                                }
+                            }
                             const userPin = userReq && userReq.pin ? userReq.pin : (pinByUid[grp.uid] || '1517');
                             const firstTote = grp.totes[0];
                             const resolvedJobId = userReq?.id || `ORD-${(firstTote?.tote_code || grp.uid || 'CUST').replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
@@ -4161,6 +4186,24 @@
                             });
                         });
                     }
+
+                    // Enforce Non-Overlapping Staging Room Numbers across active self-serve jobs
+                    const usedRooms = new Set();
+                    jobs.forEach(j => {
+                        if (j.assignedRoom) usedRooms.add(j.assignedRoom);
+                    });
+                    let nextRoomNum = 1;
+                    jobs.forEach(j => {
+                        if (j.fulfillmentType !== 'valet_delivery') {
+                            if (!j.assignedRoom) {
+                                while (usedRooms.has(nextRoomNum)) {
+                                    nextRoomNum++;
+                                }
+                                j.assignedRoom = nextRoomNum;
+                                usedRooms.add(nextRoomNum);
+                            }
+                        }
+                    });
 
                     return jobs;
                 }
