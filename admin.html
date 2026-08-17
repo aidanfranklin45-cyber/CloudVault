@@ -7927,17 +7927,29 @@
                     matchingUserList = matchingUsers;
                 }
 
-                // 2. Search location coordinates in warehouse_locations & inventory
+                // 2. Search location coordinates in warehouse_locations (exclude tote codes starting with CV-)
                 let locationResults = [];
-                const { data: locs } = await supabase.from('warehouse_locations')
-                    .select('id, identifier, zone_type, is_occupied, facility_id')
-                    .or(`identifier.ilike.%${q}%,location_code.ilike.%${q}%`)
-                    .limit(5);
+                if (!q.toUpperCase().startsWith('CV-')) {
+                    const { data: locs } = await supabase.from('warehouse_locations')
+                        .select('id, identifier, zone_type, is_occupied, facility_id')
+                        .or(`identifier.ilike.%${q}%,location_code.ilike.%${q}%`)
+                        .limit(5);
 
-                if (locs && locs.length > 0) {
-                    locationResults = locs;
-                } else if (/^[A-Z0-9]+-[A-Z0-9]+(-[A-Z0-9]+)?$/i.test(q)) {
-                    locationResults = [{ identifier: q.toUpperCase(), zone_type: q.toUpperCase().startsWith('ROOM') ? 'STAGING' : 'VAULT' }];
+                    if (locs && locs.length > 0) {
+                        locationResults = locs;
+                    } else if (/^(V-)?[A-Z0-9]+(-[A-Z0-9]+)*$/i.test(q) && (
+                        q.toUpperCase().startsWith('ROOM') ||
+                        q.toUpperCase().startsWith('BAY') ||
+                        q.toUpperCase().startsWith('STAGE') ||
+                        q.toUpperCase().startsWith('AISLE') ||
+                        q.toUpperCase().startsWith('INTAKE') ||
+                        q.toUpperCase().startsWith('RACK') ||
+                        q.toUpperCase().startsWith('V-') ||
+                        /^A\d+-B\d+/i.test(q) ||
+                        /^B\d+$/i.test(q)
+                    )) {
+                        locationResults = [{ identifier: q.toUpperCase(), zone_type: q.toUpperCase().startsWith('ROOM') ? 'STAGING' : 'VAULT' }];
+                    }
                 }
 
                 // 3. Search inventory joined with users
