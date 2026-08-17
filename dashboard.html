@@ -1665,7 +1665,10 @@
                 tierBanner.classList.add('hidden');
             }
 
-            document.getElementById('add-valet-fee-label').textContent = `$${(15.00 + additionalToteCount * 1.00).toFixed(2)}`;
+            const vBase = Number(activeFacilityPricing?.valet_base != null ? activeFacilityPricing.valet_base : (systemPricing?.valet_base || 8.00));
+            const vAdder = Number(activeFacilityPricing?.valet_tote_adder != null ? activeFacilityPricing.valet_tote_adder : (systemPricing?.valet_tote_adder || 1.00));
+            const valetLabel = document.getElementById('add-valet-fee-label');
+            if (valetLabel) valetLabel.textContent = `$${(vBase + additionalToteCount * vAdder).toFixed(2)}`;
         }
 
         function selectAddLogistics(type) {
