@@ -3093,6 +3093,49 @@
             }
         }
 
+        // Universal Toast Notification Handler
+        function showToast(msg, isError = false) {
+            let container = document.getElementById('admin-toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'admin-toast-container';
+                container.className = 'fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 pointer-events-none max-w-md w-full';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto px-4 py-3 rounded-2xl shadow-2xl border text-sm font-mono flex items-center gap-3 transition-all duration-300 transform translate-y-4 opacity-0 ${
+                isError === true || isError === 'error'
+                    ? 'bg-rose-950/95 border-rose-500/60 text-rose-200' 
+                    : isError === 'info'
+                    ? 'bg-blue-950/95 border-blue-500/60 text-blue-200'
+                    : 'bg-emerald-950/95 border-emerald-500/60 text-emerald-200'
+            }`;
+
+            const iconHtml = isError === true || isError === 'error'
+                ? '<i data-lucide="alert-triangle" class="w-5 h-5 text-rose-400 shrink-0"></i>'
+                : isError === 'info'
+                ? '<i data-lucide="info" class="w-5 h-5 text-blue-400 shrink-0"></i>'
+                : '<i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400 shrink-0"></i>';
+
+            toast.innerHTML = `
+                ${iconHtml}
+                <div class="flex-1 text-xs font-semibold leading-relaxed">${msg}</div>
+            `;
+
+            container.appendChild(toast);
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-4', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
         function triggerScanFeedbackOverlay(success, message, code = '') {
             const overlay = document.getElementById('scan-overlay');
             const card = document.getElementById('scan-overlay-card');
