@@ -9749,19 +9749,43 @@
 
                 // Populate Customer Telemetry
                 const user = item.users || {};
+                const { count: actualTotesCount } = await supabase.from('inventory')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('uid', item.uid);
+
+                const finalTotesHeld = actualTotesCount !== null ? actualTotesCount : (user.active_totes_held || 0);
+
                 document.getElementById('tmm-customer-name').textContent = user.name || 'N/A';
                 document.getElementById('tmm-customer-email').textContent = user.email || 'N/A';
                 document.getElementById('tmm-customer-tenure').textContent = `Member for ${calculateTenureString(user.created_at)}`;
                 document.getElementById('tmm-customer-plan').textContent = sub ? `${sub.total_totes || 0} Tote(s) @ $${(Number(sub.tote_rate) || 0).toFixed(2)}/mo` : 'No Active Subscription';
-                document.getElementById('tmm-customer-totes-held').textContent = `${user.active_totes_held || 0} Active Tote(s)`;
+                document.getElementById('tmm-customer-totes-held').textContent = `${finalTotesHeld} Active Tote(s)`;
                 document.getElementById('tmm-customer-created-at').textContent = user.created_at ? new Date(user.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+
+                // Determine accurate Staging Room / Vault Rack Allocation
+                let resolvedRoomText = 'Vault Storage';
+                if (item.location_code && item.location_code.match(/ROOM-?(\d+)/i)) {
+                    const m = item.location_code.match(/ROOM-?(\d+)/i);
+                    resolvedRoomText = `Staging Room #${m[1]}`;
+                } else if (item.status === 'staged' || item.status === 'pending-stage') {
+                    const { data: req } = await supabase.from('access_requests')
+                        .select('assigned_room')
+                        .eq('uid', item.uid)
+                        .not('status', 'in', '("completed","cancelled","returned-to-vault")')
+                        .order('requested_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                    resolvedRoomText = req?.assigned_room ? `Staging Room #${req.assigned_room}` : 'Staging Room #1';
+                } else if (item.location_code) {
+                    resolvedRoomText = `Vault Shelf (${item.location_code})`;
+                }
 
                 // Populate Tote Telemetry
                 document.getElementById('tmm-tote-tenure').textContent = `Stored for ${calculateTenureString(item.created_at)}`;
                 document.getElementById('tmm-tote-label').textContent = item.label || 'Standard Tote';
                 document.getElementById('tmm-tote-category').textContent = item.category || 'General Storage';
-                document.getElementById('tmm-tote-facility').textContent = item.facilities?.name || item.facility_id || 'Seattle FC';
-                document.getElementById('tmm-tote-room').textContent = `Staging Room #${typeof getAssignedRoom === 'function' ? getAssignedRoom(item.uid) : '1'}`;
+                document.getElementById('tmm-tote-facility').textContent = item.facilities?.name || item.facility_id || 'Yakima FC';
+                document.getElementById('tmm-tote-room').textContent = resolvedRoomText;
                 document.getElementById('tmm-tote-created-at').textContent = item.created_at ? new Date(item.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
                 // Populate Location Telemetry & Select Dropdown
