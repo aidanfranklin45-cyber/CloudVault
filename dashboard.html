@@ -4832,6 +4832,8 @@
                         const valetAdderTotal = toteCount * valetAdder;
                         const surgeFee = selectedReservationSurge ? Number(selectedReservationSurge.fee || 0) : 0;
                         const isNextDayPromo = selectedReservationSurge && selectedReservationSurge.tier === 'next_day_promo';
+                        const finalDeliveryFee = retrievalLogisticsType === 'valet_delivery' ? (valetBase + valetAdderTotal) : 0;
+                        
                         let invoiceType = 'self_service_staging';
                         if (retrievalLogisticsType === 'valet_delivery') {
                             invoiceType = surgeFee > 0 ? 'expedited_valet_delivery' : 'valet_delivery';
@@ -4842,26 +4844,19 @@
                         const lineItems = [];
                         if (retrievalLogisticsType === 'valet_delivery') {
                             lineItems.push({
-                                description: `Valet Base Fee`,
+                                description: `Valet Logistics Dispatch Base Fee`,
                                 qty: 1,
                                 unit_price: valetBase,
                                 amount: valetBase
                             });
                             if (valetAdderTotal > 0) {
                                 lineItems.push({
-                                    description: `Per Tote Valet Fee ($${valetAdder.toFixed(2)}/tote)`,
+                                    description: `Valet Per Tote Handling Fee ($${valetAdder.toFixed(2)}/tote)`,
                                     qty: toteCount,
                                     unit_price: valetAdder,
                                     amount: valetAdderTotal
                                 });
                             }
-                        } else if (deliveryFee > 0) {
-                            lineItems.push({
-                                description: `Self-Service Staging Fee`,
-                                qty: 1,
-                                unit_price: deliveryFee,
-                                amount: deliveryFee
-                            });
                         }
                         if (isNextDayPromo) {
                             lineItems.push({ description: `Next-Day Fast Access (Facility Promotional Waiver)`, qty: 1, unit_price: 0, amount: 0 });
@@ -4869,21 +4864,23 @@
                             lineItems.push({ description: `Expedited Staging Access (${selectedReservationSurge.title || 'Surge Tier'})`, qty: 1, unit_price: surgeFee, amount: surgeFee });
                         }
 
-                        await window.CloudVaultBilling.createInvoiceRecord({
-                            uid: currentUser.id,
-                            customer_name: currentUser.user_metadata?.name || (currentProfile && currentProfile.name) || currentUser.email.split('@')[0],
-                            customer_email: currentUser.email,
-                            facility_id: userFac,
-                            zip_code: userZip,
-                            invoice_type: invoiceType,
-                            payment_status: 'paid',
-                            subtotal: 0,
-                            delivery_fee: deliveryFee,
-                            surge_fee: surgeFee,
-                            payment_method: 'card',
-                            line_items: lineItems,
-                            notes: `Access retrieval request for ${toteCount} totes (${retrievalLogisticsType === 'valet_delivery' ? 'Valet Delivery' : 'Self-Service Staging'}). Target Date: ${targetDate || 'Standard'}.${isNextDayPromo ? ' (Free Next-Day Promo Applied)' : ''}`
-                        });
+                        if (finalDeliveryFee > 0 || surgeFee > 0) {
+                            await window.CloudVaultBilling.createInvoiceRecord({
+                                uid: currentUser.id,
+                                customer_name: currentUser.user_metadata?.name || (currentProfile && currentProfile.name) || currentUser.email.split('@')[0],
+                                customer_email: currentUser.email,
+                                facility_id: userFac,
+                                zip_code: userZip,
+                                invoice_type: invoiceType,
+                                payment_status: 'paid',
+                                subtotal: 0.00,
+                                delivery_fee: finalDeliveryFee,
+                                surge_fee: surgeFee,
+                                payment_method: 'card_on_file',
+                                line_items: lineItems,
+                                notes: `Access retrieval request for ${toteCount} totes (${retrievalLogisticsType === 'valet_delivery' ? 'Valet Delivery' : 'Self-Service Staging'}). Target Date: ${targetDate || 'Standard'}.${isNextDayPromo ? ' (Free Next-Day Promo Applied)' : ''}`
+                            });
+                        }
                     } catch (invErr) {
                         console.warn('[CloudVault Billing] Access request invoice creation notice:', invErr);
                     }
