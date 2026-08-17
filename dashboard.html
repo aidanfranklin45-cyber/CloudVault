@@ -3841,9 +3841,25 @@
 
             filteredData.forEach((item) => {
                 const id = item.id;
-                const isSelected = selectedItems.has(id);
-                const isStored = item.status === 'stored' && item.activated !== false;
+                
+                // Find if this container is currently part of an active retrieval in progress
+                const activeReq = (currentRequests || []).find(r => 
+                    r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault' &&
+                    (
+                        (r.requested_items && r.requested_items.includes(id)) || 
+                        (r.requested_tote_codes && item.tote_code && r.requested_tote_codes.includes(item.tote_code))
+                    )
+                );
+
+                const isInActiveRequest = !!activeReq;
+                const isStored = (item.status === 'stored') && (item.activated !== false) && !isInActiveRequest;
                 const isBulky = item.item_type === 'bulky';
+
+                if (isInActiveRequest && selectedItems.has(id)) {
+                    selectedItems.delete(id);
+                }
+
+                const isSelected = selectedItems.has(id);
 
                 const itemCat = getItemCategory(item);
                 const catBadgeHtml = itemCat ? `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${getCategoryBadgeClass(itemCat)}">#${itemCat.toLowerCase()}</span>` : '';
@@ -3860,10 +3876,6 @@
                       );
 
                 let actionHTML = '';
-                const activeReq = currentRequests.find(r => 
-                    (r.requested_items && r.requested_items.includes(id)) || 
-                    (r.requested_tote_codes && item.tote_code && r.requested_tote_codes.includes(item.tote_code))
-                );
                 const isValet = (activeReq && (activeReq.fulfillment_type === 'valet_delivery' || activeReq.fulfillment_type === 'valet_pickup')) || 
                                 (currentSubscription && (currentSubscription.logistics_type === 'valet_pickup' || currentSubscription.logistics_type === 'valet_delivery')) ||
                                 item.status === 'pending-dispatch' || 
@@ -3871,24 +3883,26 @@
 
                 if (item.activated === false) {
                     actionHTML = '<span class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded border border-amber-200">Intake / Vault Storage Pending</span>';
-                } else if (item.status === 'pending-stage') {
+                } else if (item.status === 'staged') {
                     actionHTML = isValet
-                        ? '<span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded border border-blue-200 flex items-center gap-1">🚚 Valet Delivery Pending</span>'
-                        : '<span class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded border border-amber-200">Staging Pending</span>';
+                        ? '<span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-200 flex items-center gap-1">🚚 Valet Delivery Prepped</span>'
+                        : '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Staged in Room</span>';
                 } else if (item.status === 'pending-dispatch') {
                     actionHTML = '<span class="text-[10px] font-bold text-orange-600 bg-orange-50 px-2.5 py-1 rounded border border-orange-200 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span> 🚚 Valet Prep / Pending Dispatch</span>';
                 } else if (item.status === 'out-for-delivery') {
                     actionHTML = '<span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-200 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping"></span> 🚚 Out for Delivery</span>';
-                } else if (item.status === 'staged') {
-                    actionHTML = isValet
-                        ? '<span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-200 flex items-center gap-1">🚚 Valet Delivery Prepped</span>'
-                        : '<span class="text-[10px] font-bold text-green-600 bg-green-50 px-2.5 py-1 rounded border border-green-200">Staged (Ready)</span>';
                 } else if (item.status === 'with-customer') {
                     actionHTML = '<span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded border border-blue-200">With You</span>';
-                } else {
+                } else if (isInActiveRequest || item.status === 'pending-stage') {
+                    actionHTML = isValet
+                        ? '<span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded border border-blue-200 flex items-center gap-1">🚚 Valet Delivery Pending</span>'
+                        : '<span class="text-[10px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> ⏳ Retrieval in Progress</span>';
+                } else if (isStored) {
                     actionHTML = `<div class="w-6 h-6 rounded border-2 flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300'}">
                                     ${isSelected ? '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>' : ''}
                                    </div>`;
+                } else {
+                    actionHTML = '<span class="text-[10px] font-bold text-gray-500 bg-gray-100 px-2.5 py-1 rounded border border-gray-200">Unavailable</span>';
                 }
 
                 card.innerHTML = `

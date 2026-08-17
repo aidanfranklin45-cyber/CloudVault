@@ -2656,6 +2656,27 @@ BEGIN
     RAISE EXCEPTION 'Retrieval Error: Selected totes do not belong to customer or were not found';
   END IF;
 
+  -- Validation: Ensure none of the requested totes are already in an active retrieval request
+  IF EXISTS (
+    SELECT 1 FROM public.access_requests ar
+    WHERE ar.uid = p_uid
+      AND ar.status IN ('pending', 'staged', 'out-for-delivery', 'with-customer')
+      AND (
+        ar.requested_items && p_tote_ids
+        OR (ar.requested_tote_codes IS NOT NULL AND ar.requested_tote_codes && v_tote_codes)
+      )
+  ) THEN
+    RAISE EXCEPTION 'Retrieval Error: One or more selected totes are already part of an active retrieval request in progress.';
+  END IF;
+
+  -- Validation: Ensure all requested totes are currently stored in vault
+  IF EXISTS (
+    SELECT 1 FROM public.inventory
+    WHERE id = ANY(p_tote_ids) AND status <> 'stored'
+  ) THEN
+    RAISE EXCEPTION 'Retrieval Error: Only totes stored in the vault can be retrieved.';
+  END IF;
+
   SELECT assigned_facility_id INTO v_user_facility FROM public.users WHERE id = p_uid;
   IF v_user_facility IS NULL THEN
     v_user_facility := 'facility_seattle_north';
