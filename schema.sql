@@ -2366,7 +2366,8 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION public.revert_tote_stage(
   p_tote_code TEXT,
   p_target_status TEXT DEFAULT NULL,
-  p_staff_uid UUID DEFAULT NULL
+  p_staff_uid UUID DEFAULT NULL,
+  p_target_location_code TEXT DEFAULT NULL
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_uid UUID;
@@ -2417,52 +2418,49 @@ BEGIN
   ORDER BY ar.requested_at DESC
   LIMIT 1;
 
-  -- Determine previous logical status and location
+  -- Determine target status and location
   IF p_target_status IS NOT NULL AND p_target_status <> '' THEN
     v_target_status := p_target_status::public.inventory_status;
-    IF v_target_status = 'staged' THEN
-      v_target_location_code := 'ROOM-' || COALESCE(v_assigned_room, 1) || '-BAY-01';
-      v_target_location_type := 'staging';
-    ELSIF v_target_status IN ('stored', 'pending-stage') THEN
-      v_target_location_code := 'VAULT-BAY-01';
-      v_target_location_type := 'vault';
-    ELSIF v_target_status = 'out-for-delivery' THEN
-      v_target_location_code := 'VALET-TRUCK-A';
-      v_target_location_type := 'dispatch';
-    ELSE
-      v_target_location_code := 'INTAKE-PROCESSING';
-      v_target_location_type := 'intake';
-    END IF;
-
   ELSIF v_item.status = 'with-customer' THEN
-    IF v_fulfillment_type = 'valet_delivery' THEN
-      v_target_status := 'out-for-delivery'::public.inventory_status;
-      v_target_location_code := 'VALET-TRUCK-A';
-      v_target_location_type := 'dispatch';
-    ELSE
-      v_target_status := 'staged'::public.inventory_status;
-      v_target_location_code := 'ROOM-' || COALESCE(v_assigned_room, 1) || '-BAY-01';
-      v_target_location_type := 'staging';
-    END IF;
-
+    v_target_status := CASE WHEN v_fulfillment_type = 'valet_delivery' THEN 'out-for-delivery'::public.inventory_status ELSE 'staged'::public.inventory_status END;
   ELSIF v_item.status = 'out-for-delivery' OR v_item.status = 'pending-dispatch' THEN
     v_target_status := 'stored'::public.inventory_status;
-    v_target_location_code := 'VAULT-BAY-01';
-    v_target_location_type := 'vault';
-
   ELSIF v_item.status = 'staged' THEN
     v_target_status := 'stored'::public.inventory_status;
-    v_target_location_code := 'VAULT-BAY-01';
-    v_target_location_type := 'vault';
-
   ELSIF v_item.status = 'pending-stage' THEN
     v_target_status := 'stored'::public.inventory_status;
-    v_target_location_code := 'VAULT-BAY-01';
-    v_target_location_type := 'vault';
-
   ELSE
     v_target_status := 'stored'::public.inventory_status;
-    v_target_location_code := 'VAULT-BAY-01';
+  END IF;
+
+  -- Determine target location code
+  IF p_target_location_code IS NOT NULL AND p_target_location_code <> '' THEN
+    v_target_location_code := p_target_location_code;
+    v_target_location_type := CASE 
+      WHEN v_target_location_code ~* '^ROOM-' THEN 'staging'
+      WHEN v_target_location_code ~* '^VALET-' THEN 'dispatch'
+      WHEN v_target_location_code ~* '^INTAKE-' THEN 'intake'
+      ELSE 'vault'
+    END;
+  ELSIF v_target_status = 'staged' THEN
+    v_target_location_code := 'ROOM-' || COALESCE(v_assigned_room, 1);
+    v_target_location_type := 'staging';
+  ELSIF v_target_status = 'out-for-delivery' THEN
+    v_target_location_code := 'VALET-TRUCK-A';
+    v_target_location_type := 'dispatch';
+  ELSIF v_target_status = 'pending-dispatch' THEN
+    v_target_location_code := 'VALET-LOADING-BAY-A';
+    v_target_location_type := 'dispatch';
+  ELSIF v_target_status = 'pending-stage' THEN
+    v_target_location_code := 'INTAKE-PROCESSING';
+    v_target_location_type := 'intake';
+  ELSE
+    -- Stored in vault: preserve existing vault shelf if valid, or use authentic shelf location
+    IF v_item.location_code IS NOT NULL AND NOT (v_item.location_code ~* '^(ROOM-|VALET-|CUSTOMER-|INTAKE-)') THEN
+      v_target_location_code := v_item.location_code;
+    ELSE
+      v_target_location_code := COALESCE((SELECT identifier FROM public.warehouse_locations WHERE zone_type = 'VAULT' AND facility_id = v_item.facility_id LIMIT 1), 'A1-B01-S1');
+    END IF;
     v_target_location_type := 'vault';
   END IF;
 

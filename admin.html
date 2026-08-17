@@ -6271,13 +6271,15 @@
         // =========================================================================
         // Operational Queue Stage Revert & Misscan Undo Handlers
         // =========================================================================
-        async function revertToteStage(toteCode, targetStatus = null) {
+        async function revertToteStage(toteCode, targetStatus = null, targetLocationCode = null) {
             if (!toteCode) return;
             try {
+                const effectiveLocation = targetLocationCode || (window.activeTargetLocationCode && !window.activeTargetLocationCode.startsWith('ROOM-') ? window.activeTargetLocationCode : null);
                 const { data, error } = await supabase.rpc('revert_tote_stage', {
                     p_tote_code: toteCode,
                     p_target_status: targetStatus,
-                    p_staff_uid: getActiveStaffUid()
+                    p_staff_uid: getActiveStaffUid(),
+                    p_target_location_code: effectiveLocation
                 });
                 if (error) throw error;
 
@@ -6300,17 +6302,19 @@
             }
         }
 
-        async function batchRevertTotes(toteCodes, targetStatus = null) {
+        async function batchRevertTotes(toteCodes, targetStatus = null, targetLocationCode = null) {
             if (!toteCodes || toteCodes.length === 0) return;
             if (!confirm(`Move all ${toteCodes.length} tote(s) back to previous stage?`)) return;
 
             try {
+                const effectiveLocation = targetLocationCode || (window.activeTargetLocationCode && !window.activeTargetLocationCode.startsWith('ROOM-') ? window.activeTargetLocationCode : null);
                 let successCount = 0;
                 for (const code of toteCodes) {
                     const { error } = await supabase.rpc('revert_tote_stage', {
                         p_tote_code: code,
                         p_target_status: targetStatus,
-                        p_staff_uid: getActiveStaffUid()
+                        p_staff_uid: getActiveStaffUid(),
+                        p_target_location_code: effectiveLocation
                     });
                     if (!error) successCount++;
                 }
