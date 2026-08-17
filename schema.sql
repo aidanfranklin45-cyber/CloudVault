@@ -4100,5 +4100,226 @@ BEGIN
 END;
 $$;
 
+-- =========================================================================
+-- CREATE EXIT RETRIEVAL REQUEST RPC (Customer Tote Reduction Pull)
+-- =========================================================================
+CREATE OR REPLACE FUNCTION public.create_exit_retrieval_request(
+    p_tote_ids UUID[],
+    p_fulfillment_type TEXT DEFAULT 'staging',
+    p_target_date DATE DEFAULT CURRENT_DATE + 1,
+    p_time_slot TEXT DEFAULT '09:00 AM - 12:00 PM',
+    p_delivery_notes TEXT DEFAULT NULL
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_uid UUID;
+  v_user RECORD;
+  v_sub RECORD;
+  v_user_facility TEXT;
+  v_pin TEXT;
+  v_next_status public.inventory_status;
+  v_req_id UUID;
+  v_tote_codes TEXT[];
+  v_valet_fee NUMERIC(10,2) := 0.00;
+  v_valet_base NUMERIC(10,2) := 15.00;
+  v_valet_adder NUMERIC(10,2) := 1.00;
+  v_tote_count INT;
+BEGIN
+  v_uid := auth.uid();
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  IF p_tote_ids IS NULL OR cardinality(p_tote_ids) = 0 THEN
+    RAISE EXCEPTION 'Exit Retrieval Error: At least one tote must be selected for return/exit';
+  END IF;
+
+  v_tote_count := cardinality(p_tote_ids);
+
+  SELECT * INTO v_user FROM public.users WHERE id = v_uid;
+  IF v_user IS NULL THEN
+    RAISE EXCEPTION 'User profile not found';
+  END IF;
+
+  SELECT * INTO v_sub FROM public.subscriptions WHERE uid = v_uid AND status = 'active' LIMIT 1;
+
+  SELECT array_agg(tote_code) INTO v_tote_codes
+  FROM public.inventory
+  WHERE id = ANY(p_tote_ids) AND uid = v_uid;
+
+  IF v_tote_codes IS NULL OR cardinality(v_tote_codes) <> v_tote_count THEN
+    RAISE EXCEPTION 'Exit Retrieval Error: One or more selected totes do not belong to customer or were not found';
+  END IF;
+
+  v_user_facility := COALESCE(v_user.assigned_facility_id, 'facility_seattle_north');
+
+  -- Calculate Valet fee if valet delivery selected (Drop-off + Return leg)
+  IF p_fulfillment_type = 'valet_delivery' THEN
+    SELECT 
+      COALESCE(valet_base_rate, 15.00),
+      COALESCE(valet_tote_rate, 1.00)
+    INTO v_valet_base, v_valet_adder
+    FROM public.facilities WHERE id = v_user_facility LIMIT 1;
+
+    v_valet_fee := v_valet_base + (v_tote_count * v_valet_adder);
+  END IF;
+
+  -- 4-digit PIN for Staging Room entry & verification
+  v_pin := lpad(floor(random() * 10000)::text, 4, '0');
+  v_next_status := CASE WHEN p_fulfillment_type = 'valet_delivery' THEN 'pending-dispatch'::public.inventory_status ELSE 'pending-stage'::public.inventory_status END;
+
+  UPDATE public.inventory
+  SET status = v_next_status,
+      last_scanned_at = now()
+  WHERE id = ANY(p_tote_ids) AND uid = v_uid;
+
+  INSERT INTO public.access_requests (
+    uid,
+    request_type,
+    fulfillment_type,
+    requested_items,
+    requested_tote_codes,
+    facility_id,
+    pin,
+    pin_expires_at,
+    valet_fee,
+    status,
+    target_date,
+    time_slot,
+    delivery_notes
+  ) VALUES (
+    v_uid,
+    'exit_retrieval',
+    p_fulfillment_type,
+    p_tote_ids,
+    v_tote_codes,
+    v_user_facility,
+    v_pin,
+    now() + interval '72 hours', -- 3-day grace period
+    v_valet_fee,
+    'pending',
+    p_target_date,
+    p_time_slot,
+    p_delivery_notes
+  ) RETURNING id INTO v_req_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'event', 'EXIT_RETRIEVAL_SUBMITTED',
+    'requestId', v_req_id,
+    'requestedToteIds', p_tote_ids,
+    'requestedToteCodes', v_tote_codes,
+    'toteCount', v_tote_count,
+    'fulfillmentType', p_fulfillment_type,
+    'valetFee', v_valet_fee,
+    'pin', v_pin,
+    'targetDate', p_target_date,
+    'timeSlot', p_time_slot,
+    'graceDays', 3,
+    'message', 'Exit retrieval scheduled. 3-day grace period active to empty and return containers.'
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- =========================================================================
+-- CHECK-IN & RECIRCULATE RETURNED EXIT TOTES RPC (Warehouse Worker)
+-- =========================================================================
+CREATE OR REPLACE FUNCTION public.checkin_returned_exit_totes(
+    p_tote_code TEXT,
+    p_shelf_location_code TEXT DEFAULT 'RACK-RETURN-01'
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_uid UUID;
+  v_user_role public.user_role;
+  v_item RECORD;
+  v_owner_uid UUID;
+  v_new_held INT;
+  v_active_req RECORD;
+  v_all_returned BOOLEAN := true;
+  v_code TEXT;
+BEGIN
+  v_uid := auth.uid();
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated';
+  END IF;
+
+  SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
+  IF v_user_role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
+    RAISE EXCEPTION 'Access Denied: Warehouse Staff clearance required';
+  END IF;
+
+  SELECT id, tote_code, uid, facility_id, status INTO v_item
+  FROM public.inventory
+  WHERE tote_code = p_tote_code LIMIT 1;
+
+  IF v_item IS NULL THEN
+    RAISE EXCEPTION 'Check-In Error: Tote % not found in inventory', p_tote_code;
+  END IF;
+
+  v_owner_uid := v_item.uid;
+
+  -- 1. Recirculate container back to facility available pool
+  UPDATE public.inventory
+  SET uid = NULL,
+      label = 'Empty Tote #' || right(p_tote_code, 4),
+      status = 'stored'::public.inventory_status,
+      location_code = COALESCE(p_shelf_location_code, 'RACK-RETURN-01'),
+      location_type = 'shelf',
+      activated = false,
+      photo_url = NULL,
+      notes = NULL,
+      last_scanned_at = now(),
+      last_scanned_by = v_uid
+  WHERE id = v_item.id;
+
+  -- 2. Decrement customer active_totes_held if customer was attached
+  IF v_owner_uid IS NOT NULL THEN
+    UPDATE public.users
+    SET active_totes_held = GREATEST(0, COALESCE(active_totes_held, 0) - 1)
+    WHERE id = v_owner_uid
+    RETURNING active_totes_held INTO v_new_held;
+
+    -- 3. Check for matching pending exit_retrieval or cancellation request
+    SELECT * INTO v_active_req
+    FROM public.access_requests
+    WHERE uid = v_owner_uid 
+      AND p_tote_code = ANY(requested_tote_codes)
+      AND status IN ('pending', 'staged', 'out-for-delivery', 'with-customer')
+    ORDER BY requested_at DESC LIMIT 1;
+
+    IF v_active_req IS NOT NULL THEN
+      -- Check if any remaining totes in this request are still unreturned
+      IF v_active_req.requested_tote_codes IS NOT NULL THEN
+        FOREACH v_code IN ARRAY v_active_req.requested_tote_codes LOOP
+          IF EXISTS (
+            SELECT 1 FROM public.inventory 
+            WHERE tote_code = v_code 
+              AND uid = v_owner_uid 
+              AND status IN ('pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer')
+          ) THEN
+            v_all_returned := false;
+          END IF;
+        END LOOP;
+      END IF;
+
+      IF v_all_returned THEN
+        UPDATE public.access_requests
+        SET status = 'completed'
+        WHERE id = v_active_req.id;
+      END IF;
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'toteCode', p_tote_code,
+    'recirculated', true,
+    'previousOwnerUid', v_owner_uid,
+    'activeTotesHeld', v_new_held,
+    'allRequestTotesReturned', v_all_returned,
+    'message', 'Tote ' || p_tote_code || ' successfully verified, emptied, and recirculated to facility pool.'
+  );
+END;
+$$ LANGUAGE plpgsql;
+
 
 

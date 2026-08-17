@@ -4227,6 +4227,7 @@
                                             <h4 class="text-sm font-extrabold text-white flex items-center gap-2 flex-wrap">
                                                 ${customerName}
                                                 ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
+                                                ${job.request && (job.request.request_type === 'exit_retrieval' || job.request.request_type === 'retrieval_exit') ? '<span class="text-rose-450 bg-rose-500/20 border border-rose-500/40 text-rose-300 font-black px-2.5 py-0.5 rounded text-[9px] uppercase animate-pulse">⚠️ PERMANENT EXIT PULL (' + totes.length + ' TOTES)</span>' : ''}
                                                 ${isValet ? '<span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 VALET DELIVERY</span>' : '<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE STAGING</span>'}
                                             </h4>
                                             <p class="text-[11px] font-mono text-gray-400">Order ID: ${job.jobId.substring(0, 8)} • ${totes.length} Tote(s) in Order</p>
@@ -5873,8 +5874,20 @@
                 }
 
                 // Event Routing:
+                // Event 0: Permanent Empty Tote Return & Pool Recirculation
+                const isRecirculateReturn = (targetLoc && targetLoc.toUpperCase().includes('RETURN')) || 
+                                           expectedStatus === 'recirculate';
+
+                if (isRecirculateReturn) {
+                    const res = await supabase.rpc('checkin_returned_exit_totes', {
+                        p_tote_code: barcode,
+                        p_shelf_location_code: targetLoc || 'RACK-RETURN-01'
+                    });
+                    data = res.data;
+                    error = res.error;
+                }
                 // Event 1: Customer Return to Vault (Reshelving into Vault from Customer)
-                if (isReturningToVault) {
+                else if (isReturningToVault) {
                     const res = await supabase.rpc('process_tote_return', {
                         p_tote_code: barcode,
                         p_target_location_code: targetLoc,
