@@ -1296,10 +1296,14 @@
                             <span>Logistics Option (<span id="invoice-logistics">Self-Serve</span>)</span>
                             <span class="font-bold text-gray-900">$<span id="invoice-upfront">0.00</span></span>
                         </div>
+                        <div class="flex justify-between text-gray-600">
+                            <span>Estimated Sales Tax (<span id="invoice-tax-rate">8.50%</span>)</span>
+                            <span class="font-bold text-gray-900">$<span id="invoice-tax-amt">2.13</span></span>
+                        </div>
                         <div class="h-px bg-gray-200 my-2"></div>
                         <div class="flex justify-between font-bold text-gray-900">
                             <span>Total First Month</span>
-                            <span class="text-blue-600 text-base">$<span id="invoice-first-month">25.00</span></span>
+                            <span class="text-blue-600 text-base">$<span id="invoice-first-month">27.13</span></span>
                         </div>
                         <div class="text-xs text-emerald-600 font-extrabold text-center pt-2">💳 Immediate Payment: Your card will be charged today upon order submission.
                         </div>
@@ -1766,7 +1770,10 @@
             const monthly = Math.round(flowData.totes * rate * 100) / 100;
             const isValet = flowData.logisticsType === 'valet_pickup';
             const upfront = isValet ? 15.00 + (flowData.totes * 1.00) : 0;
-            const firstMonth = monthly + upfront;
+            const subtotal = monthly + upfront;
+            const taxRate = flowData.taxRate != null ? flowData.taxRate : 0.085;
+            const taxAmt = Math.round(subtotal * taxRate * 100) / 100;
+            const firstMonth = Math.round((subtotal + taxAmt) * 100) / 100;
 
             // Update Step 1 UI elements
             document.getElementById('flow-tier-badge').textContent = label;
@@ -1791,6 +1798,7 @@
             flowData.price = monthly;
             flowData.toteRate = rate;
             flowData.upfront = upfront;
+            flowData.tax = taxAmt;
             flowData.firstMonth = firstMonth;
 
             // Sync Summary Ribbon
@@ -1806,6 +1814,10 @@
             if (invoiceLogistics) invoiceLogistics.textContent = isValet ? 'Valet Pickup' : 'Self-Serve';
             const invoiceUpfront = document.getElementById('invoice-upfront');
             if (invoiceUpfront) invoiceUpfront.textContent = upfront.toFixed(2);
+            const invoiceTaxRate = document.getElementById('invoice-tax-rate');
+            if (invoiceTaxRate) invoiceTaxRate.textContent = `${(taxRate * 100).toFixed(2)}%`;
+            const invoiceTaxAmt = document.getElementById('invoice-tax-amt');
+            if (invoiceTaxAmt) invoiceTaxAmt.textContent = taxAmt.toFixed(2);
             const invoiceFirstMonth = document.getElementById('invoice-first-month');
             if (invoiceFirstMonth) invoiceFirstMonth.textContent = firstMonth.toFixed(2);
         }
@@ -1890,7 +1902,9 @@
 
                 flowData.zip = zip;
                 flowData.facilityId = area.facility_id;
-                logMilestone('zip_code_check', { zip: zip, city: area.city, facility_id: area.facility_id });
+                flowData.taxRate = (area.tax_rate != null) ? Number(area.tax_rate) : 0.085;
+                calculateFlowTotal();
+                logMilestone('zip_code_check', { zip: zip, city: area.city, facility_id: area.facility_id, tax_rate: flowData.taxRate });
 
                 setTimeout(() => {
                     showStep(3);

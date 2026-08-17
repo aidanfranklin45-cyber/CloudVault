@@ -1161,7 +1161,7 @@
                 </div>
 
                 <!-- Grandfathered Price Lock Protection Badge & Live Countdown Timer -->
-                <div class="bg-white/10 p-3.5 rounded-xl border border-white/15 space-y-2 text-xs text-blue-100">
+                <div id="price-lock-banner-container" class="bg-white/10 p-3.5 rounded-xl border border-white/15 space-y-2 text-xs text-blue-100">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
                             <span class="text-base">🛡️</span>
@@ -5373,21 +5373,21 @@
                 if (nextDateEl) nextDateEl.textContent = 'N/A';
             }
 
-            // Grandfathered Price-Lock Countdown Timer
+            // Grandfathered Price-Lock Countdown Timer (Shown only for eligible prelaunch accounts)
             const sub = currentSubscription;
-            let lockExpiry = null;
-            if (sub && sub.price_lock_expires_at) {
-                lockExpiry = new Date(sub.price_lock_expires_at);
-            } else if (sub && sub.created_at) {
-                lockExpiry = new Date(new Date(sub.created_at).getTime() + (3 * 365.25 * 24 * 60 * 60 * 1000));
-            } else if (currentUser && currentUser.created_at) {
-                lockExpiry = new Date(new Date(currentUser.created_at).getTime() + (3 * 365.25 * 24 * 60 * 60 * 1000));
+            const hasLock = !!(currentUser?.has_price_lock || sub?.has_price_lock);
+            const lockContainer = document.getElementById('price-lock-banner-container');
+            const lockExpiry = sub?.price_lock_expires_at ? new Date(sub.price_lock_expires_at) : (currentUser?.price_lock_expires_at ? new Date(currentUser.price_lock_expires_at) : null);
+
+            if (hasLock && lockExpiry && lockExpiry.getTime() > Date.now()) {
+                if (lockContainer) lockContainer.classList.remove('hidden');
+                updatePriceLockTimer(lockExpiry);
+                if (window._priceLockTimerInterval) clearInterval(window._priceLockTimerInterval);
+                window._priceLockTimerInterval = setInterval(() => updatePriceLockTimer(lockExpiry), 60000);
             } else {
-                lockExpiry = new Date(Date.now() + (3 * 365.25 * 24 * 60 * 60 * 1000));
+                if (lockContainer) lockContainer.classList.add('hidden');
+                if (window._priceLockTimerInterval) clearInterval(window._priceLockTimerInterval);
             }
-            updatePriceLockTimer(lockExpiry);
-            if (window._priceLockTimerInterval) clearInterval(window._priceLockTimerInterval);
-            window._priceLockTimerInterval = setInterval(() => updatePriceLockTimer(lockExpiry), 60000);
 
             loadInvoiceHistory();
         }

@@ -804,22 +804,31 @@
           try {
             const { data: sub } = await sb.from('subscriptions').select('*').eq('uid', userId).maybeSingle();
             if (sub) {
+              const { data: usr } = await sb.from('users').select('active_zone, assigned_facility_id').eq('id', userId).maybeSingle();
+              const custZip = usr?.active_zone || null;
+              const custFac = sub.facility_id || usr?.assigned_facility_id || 'facility_yakima';
               const toteCount = Number(sub.total_totes || sub.tote_count || 1);
-              const toteRate = Number(sub.tote_rate || 3.50);
+              const toteRate = Number(sub.tote_rate || 5.00);
               const storageAmt = Number(sub.recurring_storage || (toteCount * toteRate));
               const valetFee = Number(sub.valet_fee || 0);
-              const total = Number(sub.first_month_total || (storageAmt + valetFee));
+              const subtotal = storageAmt + valetFee;
+
+              const taxInfo = await this.resolveCustomerTaxRate(userId, custFac, custZip);
+              const taxRate = Number(taxInfo.taxRate || 0);
+              const taxAmt = Math.round(subtotal * taxRate * 100) / 100;
+              const total = Math.round((subtotal + taxAmt) * 100) / 100;
               const createdAt = sub.created_at || new Date().toISOString();
 
               const created = await this.createInvoiceRecord({
                 uid: userId,
                 customer_name: customerEmail ? customerEmail.split('@')[0] : 'Valued Customer',
                 customer_email: customerEmail || null,
-                facility_id: sub.facility_id || 'facility_seattle_north',
+                facility_id: custFac,
                 invoice_type: 'subscription',
                 payment_status: 'paid',
                 subtotal: storageAmt,
                 delivery_fee: valetFee,
+                tax: taxAmt,
                 total_amount: total,
                 payment_method: 'card',
                 notes: 'Initial subscription signup invoice receipt',
@@ -829,7 +838,9 @@
                     qty: toteCount,
                     unit_price: toteRate,
                     amount: storageAmt
-                  }
+                  },
+                  ...(valetFee > 0 ? [{ description: 'Valet Delivery Service Fee', qty: 1, unit_price: valetFee, amount: valetFee }] : []),
+                  ...(taxAmt > 0 ? [{ description: `State/Local Sales Tax (${(taxRate * 100).toFixed(2)}%)`, qty: 1, unit_price: taxAmt, amount: taxAmt, tax_rate: taxRate }] : [])
                 ],
                 created_at: createdAt,
                 paid_at: createdAt

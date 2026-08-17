@@ -809,6 +809,8 @@ BEGIN
     monthly_total,
     plan_tier,
     status,
+    has_price_lock,
+    price_lock_expires_at,
     current_period_end,
     next_billing_date,
     last_billed_at
@@ -825,6 +827,8 @@ BEGIN
     v_first_month_total,
     'valet_flex',
     'active',
+    v_has_lock,
+    CASE WHEN v_has_lock IS TRUE THEN now() + interval '3 years' ELSE NULL END,
     now() + interval '30 days',
     now() + interval '30 days',
     now()
