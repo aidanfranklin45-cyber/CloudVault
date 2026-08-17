@@ -4123,6 +4123,7 @@ DECLARE
   v_valet_base NUMERIC(10,2) := 15.00;
   v_valet_adder NUMERIC(10,2) := 1.00;
   v_tote_count INT;
+  v_max_allowed_date DATE;
 BEGIN
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
@@ -4131,6 +4132,12 @@ BEGIN
 
   IF p_tote_ids IS NULL OR cardinality(p_tote_ids) = 0 THEN
     RAISE EXCEPTION 'Exit Retrieval Error: At least one tote must be selected for return/exit';
+  END IF;
+
+  -- Enforce 3-Day Grace Window Limit on scheduled retrieval target date
+  v_max_allowed_date := (current_date + interval '3 days')::DATE;
+  IF p_target_date > v_max_allowed_date THEN
+    RAISE EXCEPTION 'Schedule Error: Exit retrieval must be scheduled within your 3-day grace window (on or before %)', v_max_allowed_date;
   END IF;
 
   v_tote_count := cardinality(p_tote_ids);

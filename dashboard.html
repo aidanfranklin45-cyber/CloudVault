@@ -1461,6 +1461,7 @@
                     <div>
                         <label class="text-[11px] font-bold text-gray-600 block mb-1">Target Retrieval Date:</label>
                         <input type="date" id="excess-target-date" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-amber-500">
+                        <p class="text-[10px] text-amber-800 font-bold mt-1" id="excess-date-limit-hint">Must be scheduled within your 3-day grace window.</p>
                     </div>
                     <div>
                         <label class="text-[11px] font-bold text-gray-600 block mb-1">Time Slot Window:</label>
@@ -5801,13 +5802,24 @@
                 agreementDeadline.textContent = grace.fullDeadlineStr;
             }
 
-            // Set default date to tomorrow
+            // Strictly enforce 3-day grace period on date picker
+            const todayStr = new Date().toISOString().split('T')[0];
+            const maxGraceStr = grace.graceEnd.toISOString().split('T')[0];
+            
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
             const dateInput = document.getElementById('excess-target-date');
             if (dateInput) {
-                dateInput.value = tomorrow.toISOString().split('T')[0];
-                dateInput.min = new Date().toISOString().split('T')[0];
+                dateInput.min = todayStr;
+                dateInput.max = maxGraceStr;
+                dateInput.value = (tomorrowStr <= maxGraceStr) ? tomorrowStr : maxGraceStr;
+            }
+
+            const dateHint = document.getElementById('excess-date-limit-hint');
+            if (dateHint) {
+                dateHint.textContent = `📅 Must be scheduled on or before ${grace.formattedDate} (3-day grace window).`;
             }
 
             // Estimate valet fee
@@ -5936,6 +5948,13 @@
             const targetDate = document.getElementById('excess-target-date').value;
             const timeSlot = document.getElementById('excess-time-slot').value;
             const submitBtn = document.getElementById('btn-submit-excess-exit');
+
+            const grace = getGraceWindowDetails();
+            const chosenDate = new Date(targetDate + 'T23:59:59');
+            if (chosenDate > grace.graceEnd) {
+                alert(`Exit retrieval must be scheduled within your 3-day grace window (on or before ${grace.formattedDate}).`);
+                return;
+            }
 
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<span>Processing Retrieval Order...</span>';
