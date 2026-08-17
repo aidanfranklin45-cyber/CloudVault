@@ -4266,8 +4266,6 @@ $$ LANGUAGE plpgsql;
 -- =========================================================================
 -- CHECK-IN & RECIRCULATE RETURNED EXIT TOTES RPC (Warehouse Worker)
 -- =========================================================================
--- CHECK-IN & RECIRCULATE RETURNED EXIT TOTES RPC (Warehouse Worker)
--- =========================================================================
 CREATE OR REPLACE FUNCTION public.checkin_returned_exit_totes(
     p_tote_code TEXT,
     p_shelf_location_code TEXT DEFAULT 'INTAKE-BAY-1',
@@ -4315,8 +4313,8 @@ BEGIN
       location_code = COALESCE(p_shelf_location_code, 'INTAKE-BAY-1'),
       location_type = 'intake',
       activated = false,
-      photo_url = NULL,
-      notes = NULL,
+      image_url = NULL,
+      category = NULL,
       last_scanned_at = now(),
       last_scanned_by = v_uid
   WHERE id = v_item.id;
@@ -4418,8 +4416,8 @@ BEGIN
       activated = false,
       location_code = COALESCE(p_shelf_location_code, 'INTAKE-BAY-1'),
       location_type = 'intake',
-      photo_url = NULL,
-      notes = NULL,
+      image_url = NULL,
+      category = NULL,
       last_scanned_at = now(),
       last_scanned_by = v_uid
   WHERE tote_code = ANY(p_tote_codes);
