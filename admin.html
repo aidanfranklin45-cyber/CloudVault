@@ -3953,6 +3953,28 @@
                     return `<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE</span>`;
                 }
 
+                // Universal Job Event Badge Helper
+                function getJobEventBadge(job) {
+                    const reqType = job.requestType || job.request?.request_type;
+                    const notes = (job.request?.delivery_notes || '').toLowerCase();
+                    if (notes.includes('plan reduction') || reqType === 'exit_retrieval') {
+                        return `<span class="bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase font-mono tracking-wide">↩️ PLAN REDUCTION EXIT</span>`;
+                    }
+                    if (notes.includes('cancellation') || reqType === 'cancellation_return') {
+                        return `<span class="bg-rose-500/15 text-rose-300 border border-rose-500/30 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase font-mono tracking-wide">⚠️ CANCELLATION RETURN</span>`;
+                    }
+                    if (reqType === 'new_tote_delivery') {
+                        return `<span class="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase font-mono tracking-wide">📦 NEW TOTE DELIVERY</span>`;
+                    }
+                    if (reqType === 'retrieval') {
+                        return `<span class="bg-blue-500/15 text-blue-300 border border-blue-500/30 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase font-mono tracking-wide">🚪 VAULT RETRIEVAL</span>`;
+                    }
+                    if (job.fulfillmentType === 'valet_delivery') {
+                        return `<span class="bg-orange-500/15 text-orange-300 border border-orange-500/30 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase font-mono tracking-wide">🚚 VALET DELIVERY</span>`;
+                    }
+                    return `<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase font-mono">🚪 SELF-SERVE</span>`;
+                }
+
                 // Universal AccessRequest-based job grouping helper
                 function buildRequestJobGroups(items, requests, defaultFulfillment = 'staging') {
                     const jobs = [];
@@ -3963,7 +3985,7 @@
                         .filter(r => r && r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault')
                         .sort((a, b) => new Date(b.requested_at || 0) - new Date(a.requested_at || 0));
 
-                    // 2. Map items to distinct active access requests
+                    // 2. Map items to distinct active access requests (Explicit Item Matches)
                     activeRequests.forEach(req => {
                         const rawItems = req.requested_items || req.requested_tote_codes || [];
                         const reqIdentifiers = new Set(rawItems);
@@ -3988,6 +4010,7 @@
                                 owner: owner,
                                 customerName: owner.name,
                                 fulfillmentType: req.fulfillment_type || req.request_type || defaultFulfillment,
+                                requestType: req.request_type || 'retrieval',
                                 targetDate: req.target_date,
                                 timeSlot: req.time_slot || '09:00 AM - 12:00 PM',
                                 surgeTier: req.surge_tier,
@@ -4000,38 +4023,85 @@
                         }
                     });
 
-                    // 3. Map orphan/unlinked totes by UID and fulfillment channel
+                    // 2b. Map active requests with no explicit item list (e.g. new_tote_delivery or open onboarding reservations)
+                    activeRequests.forEach(req => {
+                        const rawItems = req.requested_items || req.requested_tote_codes || [];
+                        if (rawItems.length === 0) {
+                            const isValet = req.fulfillment_type === 'valet_delivery' || req.request_type === 'valet_delivery';
+                            const fType = isValet ? 'valet_delivery' : defaultFulfillment;
+                            
+                            let matchingTotes = (items || []).filter(t => 
+                                !handledToteIds.has(t.id) && t.uid === req.uid
+                            );
+
+                            if (matchingTotes.length > 0) {
+                                matchingTotes.forEach(t => handledToteIds.add(t.id));
+                                const owner = resolveToteOwner(req.uid, matchingTotes);
+                                jobs.push({
+                                    jobId: req.id,
+                                    isRequest: true,
+                                    request: req,
+                                    uid: req.uid,
+                                    owner: owner,
+                                    customerName: owner.name,
+                                    fulfillmentType: req.fulfillment_type || req.request_type || fType,
+                                    requestType: req.request_type || 'new_tote_delivery',
+                                    targetDate: req.target_date,
+                                    timeSlot: req.time_slot || '09:00 AM - 12:00 PM',
+                                    surgeTier: req.surge_tier,
+                                    surgeFee: req.surge_fee,
+                                    pin: req.pin || pinByUid[req.uid] || '1517',
+                                    assignedRoom: req.assigned_room ? Number(req.assigned_room) : null,
+                                    status: req.status,
+                                    totes: matchingTotes
+                                });
+                            }
+                        }
+                    });
+
+                    // 3. Map unhandled totes into isolated distinct event containers (Never combine separate events)
                     const unhandledItems = (items || []).filter(t => !handledToteIds.has(t.id));
                     if (unhandledItems.length > 0) {
                         const unlinkedMap = {};
                         unhandledItems.forEach(t => {
                             const isValet = t.status === 'out-for-delivery' || t.status === 'pending-dispatch';
                             const fType = isValet ? 'valet_delivery' : defaultFulfillment;
-                            const key = `${t.uid || 'unassigned'}_${fType}`;
-                            if (!unlinkedMap[key]) {
-                                unlinkedMap[key] = {
+                            
+                            // Check if tote belonged to a historical completed/exit request
+                            const histReq = (requests || []).find(r => {
+                                const list = r.requested_items || r.requested_tote_codes || [];
+                                return list.includes(t.id) || list.includes(t.tote_code);
+                            });
+
+                            const eventKey = histReq ? `req_${histReq.id}` : `${t.uid || 'unassigned'}_${fType}_${t.status || 'custody'}`;
+                            if (!unlinkedMap[eventKey]) {
+                                unlinkedMap[eventKey] = {
                                     uid: t.uid,
                                     fulfillmentType: fType,
+                                    histReq: histReq || null,
                                     totes: []
                                 };
                             }
-                            unlinkedMap[key].totes.push(t);
+                            unlinkedMap[eventKey].totes.push(t);
                         });
 
                         Object.entries(unlinkedMap).forEach(([key, grp]) => {
                             const owner = resolveToteOwner(grp.uid, grp.totes);
-                            const userReq = (activeRequests || []).find(r => r.uid === grp.uid);
+                            const userReq = grp.histReq || (activeRequests || []).find(r => r.uid === grp.uid);
                             const userAssignedRoom = userReq && userReq.assigned_room ? Number(userReq.assigned_room) : null;
                             const userPin = userReq && userReq.pin ? userReq.pin : (pinByUid[grp.uid] || '1517');
+                            const firstTote = grp.totes[0];
+                            const resolvedJobId = userReq?.id || `ORD-${(firstTote?.tote_code || grp.uid || 'CUST').replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
 
                             jobs.push({
-                                jobId: `unlinked_${key}`,
-                                isRequest: false,
+                                jobId: resolvedJobId,
+                                isRequest: Boolean(userReq),
                                 request: userReq || null,
                                 uid: grp.uid,
                                 owner: owner,
                                 customerName: owner.name,
                                 fulfillmentType: grp.fulfillmentType,
+                                requestType: userReq?.request_type || (grp.histReq?.delivery_notes?.includes('Plan Reduction') ? 'exit_retrieval' : 'custody_hold'),
                                 targetDate: userReq?.target_date || null,
                                 timeSlot: userReq?.time_slot || null,
                                 surgeTier: userReq?.surge_tier || null,
@@ -4312,12 +4382,12 @@
                                             ${owner.initials}
                                         </div>
                                         <div>
-                                            <div class="flex items-center gap-2">
+                                            <div class="flex items-center gap-2 flex-wrap">
                                                 <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
                                                 ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
-                                                <span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE</span>
+                                                ${getJobEventBadge(job)}
                                             </div>
-                                            <p class="text-[11px] font-mono text-gray-400">Order ID: ${jobId.substring(0, 8)} • ${totes.length} Staged Tote(s)</p>
+                                            <p class="text-[11px] font-mono text-gray-400">Order ID: <span class="text-blue-300 font-bold font-mono">${jobId.startsWith('ORD-') ? jobId : jobId.substring(0, 8)}</span> • ${totes.length} Staged Tote(s)${job.request?.delivery_notes ? ` • <span class="text-gray-300">${escapeHtml(job.request.delivery_notes)}</span>` : ''}</p>
                                         </div>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
@@ -4401,12 +4471,12 @@
                                                 ${owner.initials}
                                             </div>
                                             <div>
-                                                <div class="flex items-center gap-2">
+                                                <div class="flex items-center gap-2 flex-wrap">
                                                     <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
                                                     ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
-                                                    <span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 VALET DELIVERY</span>
+                                                    ${getJobEventBadge(job)}
                                                 </div>
-                                                <p class="text-[11px] font-mono text-gray-400">Order ID: ${jobId.substring(0, 8)} • ${totes.length} Tote(s) Out on Van • ${driver}</p>
+                                                <p class="text-[11px] font-mono text-gray-400">Order ID: <span class="text-orange-300 font-bold font-mono">${jobId.startsWith('ORD-') ? jobId : jobId.substring(0, 8)}</span> • ${totes.length} Tote(s) Out on Van • ${driver}</p>
                                             </div>
                                         </div>
                                         <div class="flex flex-wrap items-center gap-2">
@@ -4468,7 +4538,7 @@
                         const isValet = fulfillmentType === 'valet_delivery';
                         const returnLabel = isValet ? 'DRIVER PICKED UP — RETURN TO VAULT' : 'SCAN RETURN BACK TO VAULT';
                         const returnNote = isValet ? 'Driver will pick up / returned via delivery van' : 'Customer returns at facility locker/room';
-                        const orderLabel = job.isRequest ? `Order ID: ${jobId.substring(0, 8)}` : 'Checked Out Items';
+                        const orderLabel = `Order ID: <span class="text-purple-300 font-bold font-mono">${jobId.startsWith('ORD-') ? jobId : jobId.substring(0, 8)}</span>`;
                         const toteCodesJson = JSON.stringify(totes.map(t => t.tote_code)).replace(/"/g, '&quot;');
 
                         return `
@@ -4479,11 +4549,12 @@
                                             ${owner.initials}
                                         </div>
                                         <div>
-                                            <div class="flex items-center gap-2">
+                                            <div class="flex items-center gap-2 flex-wrap">
                                                 <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
                                                 ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
+                                                ${getJobEventBadge(job)}
                                             </div>
-                                            <p class="text-[11px] font-mono text-gray-400">${orderLabel} • ${totes.length} Tote(s) Out • ${returnNote}</p>
+                                            <p class="text-[11px] font-mono text-gray-400">${orderLabel} • ${totes.length} Tote(s) Out${job.request?.delivery_notes ? ` • <span class="text-gray-300">${escapeHtml(job.request.delivery_notes)}</span>` : ` • ${returnNote}`}</p>
                                         </div>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
