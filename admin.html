@@ -3756,20 +3756,22 @@
 
                 let allRequests = [];
                 if (preloadedRequests) {
-                    allRequests = preloadedRequests.filter(r => r && r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault');
+                    allRequests = preloadedRequests;
                 } else {
                     const [facManifestsRes, nullManifestsRes] = await Promise.all([
-                        supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room')
+                        supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room, delivery_notes')
                             .eq('facility_id', queryFacilityId)
-                            .not('status', 'in', '("completed","cancelled","returned-to-vault")'),
-                        supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room')
+                            .order('requested_at', { ascending: false })
+                            .limit(200),
+                        supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room, delivery_notes')
                             .is('facility_id', null)
-                            .not('status', 'in', '("completed","cancelled","returned-to-vault")')
+                            .order('requested_at', { ascending: false })
+                            .limit(100)
                     ]);
                     const rawManifests = [...(facManifestsRes.data || []), ...(nullManifestsRes.data || [])];
                     allRequests = Array.from(new Map(rawManifests.map(m => [m.id, m])).values());
                 }
-                const manifests = allRequests;
+                const manifests = allRequests.filter(r => r && r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault');
 
                 // Sync shift stats and logistics routing in-memory (0ms network cost)
                 loadWorkerShiftStats(queryFacilityId, allItems, allRequests);
@@ -3980,14 +3982,17 @@
                     const jobs = [];
                     const handledToteIds = new Set();
 
-                    // 1. Filter to active non-completed access requests and sort newest first
-                    const activeRequests = (requests || [])
-                        .filter(r => r && r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault')
+                    // 1. Sort all requests newest first
+                    const allReqsSorted = (requests || [])
+                        .filter(Boolean)
                         .sort((a, b) => new Date(b.requested_at || 0) - new Date(a.requested_at || 0));
 
-                    // 2. Map items to distinct active access requests (Explicit Item Matches)
-                    activeRequests.forEach(req => {
+                    const activeRequests = allReqsSorted.filter(r => r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault');
+
+                    // 2. Map items to distinct access requests with explicit item lists (both active requests & exit pulls)
+                    allReqsSorted.forEach(req => {
                         const rawItems = req.requested_items || req.requested_tote_codes || [];
+                        if (rawItems.length === 0) return;
                         const reqIdentifiers = new Set(rawItems);
                         
                         let matchingTotes = (items || []).filter(t => 
@@ -4010,7 +4015,7 @@
                                 owner: owner,
                                 customerName: owner.name,
                                 fulfillmentType: req.fulfillment_type || req.request_type || defaultFulfillment,
-                                requestType: req.request_type || 'retrieval',
+                                requestType: req.request_type || (req.delivery_notes?.toLowerCase().includes('plan reduction') ? 'exit_retrieval' : 'retrieval'),
                                 targetDate: req.target_date,
                                 timeSlot: req.time_slot || '09:00 AM - 12:00 PM',
                                 surgeTier: req.surge_tier,
@@ -4067,8 +4072,8 @@
                             const isValet = t.status === 'out-for-delivery' || t.status === 'pending-dispatch';
                             const fType = isValet ? 'valet_delivery' : defaultFulfillment;
                             
-                            // Check if tote belonged to a historical completed/exit request
-                            const histReq = (requests || []).find(r => {
+                            // Check if tote belonged to any historical completed/exit request
+                            const histReq = allReqsSorted.find(r => {
                                 const list = r.requested_items || r.requested_tote_codes || [];
                                 return list.includes(t.id) || list.includes(t.tote_code);
                             });
@@ -4087,7 +4092,7 @@
 
                         Object.entries(unlinkedMap).forEach(([key, grp]) => {
                             const owner = resolveToteOwner(grp.uid, grp.totes);
-                            const userReq = grp.histReq || (activeRequests || []).find(r => r.uid === grp.uid);
+                            const userReq = grp.histReq || activeRequests.find(r => r.uid === grp.uid);
                             const userAssignedRoom = userReq && userReq.assigned_room ? Number(userReq.assigned_room) : null;
                             const userPin = userReq && userReq.pin ? userReq.pin : (pinByUid[grp.uid] || '1517');
                             const firstTote = grp.totes[0];
@@ -4101,7 +4106,7 @@
                                 owner: owner,
                                 customerName: owner.name,
                                 fulfillmentType: grp.fulfillmentType,
-                                requestType: userReq?.request_type || (grp.histReq?.delivery_notes?.includes('Plan Reduction') ? 'exit_retrieval' : 'custody_hold'),
+                                requestType: userReq?.request_type || (grp.histReq?.delivery_notes?.toLowerCase().includes('plan reduction') ? 'exit_retrieval' : 'custody_hold'),
                                 targetDate: userReq?.target_date || null,
                                 timeSlot: userReq?.time_slot || null,
                                 surgeTier: userReq?.surge_tier || null,
