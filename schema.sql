@@ -4468,5 +4468,333 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- =========================================================================
+-- CREATOR & PROMOTIONAL ATTRIBUTION REVENUE ENGINE (GDPR & SOC-2 COMPLIANT)
+-- =========================================================================
+
+-- Extend Users table with referral tracking columns if missing
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS referred_by_promo_code TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS referred_by_creator_id UUID;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS referred_at TIMESTAMPTZ;
+
+-- 1. Creators Master Table
+CREATE TABLE IF NOT EXISTS public.creators (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    handle TEXT,
+    email TEXT NOT NULL,
+    payout_email TEXT,
+    stripe_connect_id TEXT,
+    tier VARCHAR(50) DEFAULT 'Standard Influencer',
+    default_commission_pct NUMERIC(5,2) DEFAULT 10.00,
+    commission_duration_months INT DEFAULT 6,
+    status VARCHAR(20) DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'PAUSED', 'SUSPENDED')),
+    total_attributed_revenue NUMERIC(12,2) DEFAULT 0.00,
+    total_commission_earned NUMERIC(12,2) DEFAULT 0.00,
+    total_commission_paid NUMERIC(12,2) DEFAULT 0.00,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Promotional Checkout Codes Table
+CREATE TABLE IF NOT EXISTS public.promo_codes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id UUID REFERENCES public.creators(id) ON DELETE SET NULL,
+    code TEXT NOT NULL UNIQUE,
+    stripe_coupon_id TEXT,
+    stripe_promo_code_id TEXT,
+    customer_discount_pct NUMERIC(5,2) DEFAULT 20.00,
+    customer_discount_duration_months INT DEFAULT 2,
+    commission_rate_pct NUMERIC(5,2) DEFAULT 10.00,
+    commission_duration_months INT DEFAULT 6,
+    max_redemptions INT DEFAULT NULL,
+    current_redemptions INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    expires_at TIMESTAMPTZ DEFAULT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. Promotional Attribution & Commission Redemptions Ledger
+CREATE TABLE IF NOT EXISTS public.promo_redemptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    promo_code_id UUID REFERENCES public.promo_codes(id) ON DELETE SET NULL,
+    promo_code TEXT NOT NULL,
+    creator_id UUID REFERENCES public.creators(id) ON DELETE SET NULL,
+    customer_uid UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    customer_email TEXT,
+    stripe_invoice_id TEXT,
+    invoice_gross_amount NUMERIC(10,2) NOT NULL,
+    discount_amount NUMERIC(10,2) DEFAULT 0.00,
+    net_paid_amount NUMERIC(10,2) NOT NULL,
+    commission_rate_applied NUMERIC(5,2) NOT NULL,
+    commission_amount NUMERIC(10,2) NOT NULL,
+    month_index INT DEFAULT 1,
+    is_commission_eligible BOOLEAN DEFAULT TRUE,
+    payout_status VARCHAR(20) DEFAULT 'PENDING' CHECK (payout_status IN ('PENDING', 'APPROVED', 'PAID', 'VOIDED')),
+    payout_reference TEXT,
+    paid_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. Enable Row Level Security (RLS)
+ALTER TABLE public.creators ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.promo_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.promo_redemptions ENABLE ROW LEVEL SECURITY;
+
+-- 5. RLS Policies: Executive and Warehouse Managers have full access
+DROP POLICY IF EXISTS admin_creators_policy ON public.creators;
+CREATE POLICY admin_creators_policy ON public.creators
+    FOR ALL
+    USING (
+        (auth.jwt() ->> 'role') = 'service_role'
+        OR EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role IN ('executive', 'warehouse_manager'))
+    );
+
+DROP POLICY IF EXISTS admin_promo_codes_policy ON public.promo_codes;
+CREATE POLICY admin_promo_codes_policy ON public.promo_codes
+    FOR ALL
+    USING (
+        (auth.jwt() ->> 'role') = 'service_role'
+        OR is_active = TRUE
+        OR EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role IN ('executive', 'warehouse_manager'))
+    );
+
+DROP POLICY IF EXISTS admin_promo_redemptions_policy ON public.promo_redemptions;
+CREATE POLICY admin_promo_redemptions_policy ON public.promo_redemptions
+    FOR ALL
+    USING (
+        (auth.jwt() ->> 'role') = 'service_role'
+        OR customer_uid = auth.uid()
+        OR EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role IN ('executive', 'warehouse_manager'))
+    );
+
+-- 6. RPC: Validate Promo Code For Checkout
+CREATE OR REPLACE FUNCTION public.validate_promo_code_for_checkout(
+    p_code TEXT,
+    p_user_uid UUID DEFAULT NULL,
+    p_gross_amount NUMERIC DEFAULT 0.00
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+    v_promo RECORD;
+    v_creator RECORD;
+    v_discount_amt NUMERIC(10,2) := 0.00;
+    v_net_amt NUMERIC(10,2) := p_gross_amount;
+    v_clean_code TEXT;
+BEGIN
+    IF p_code IS NULL OR TRIM(p_code) = '' THEN
+        RETURN jsonb_build_object('valid', false, 'message', 'Please enter a valid promotional code');
+    END IF;
+
+    v_clean_code := UPPER(TRIM(p_code));
+
+    SELECT * INTO v_promo
+    FROM public.promo_codes
+    WHERE UPPER(code) = v_clean_code
+    LIMIT 1;
+
+    IF v_promo.id IS NULL THEN
+        RETURN jsonb_build_object('valid', false, 'message', 'Promo code not found');
+    END IF;
+
+    IF NOT v_promo.is_active THEN
+        RETURN jsonb_build_object('valid', false, 'message', 'This promo code is currently paused or inactive');
+    END IF;
+
+    IF v_promo.expires_at IS NOT NULL AND v_promo.expires_at < NOW() THEN
+        RETURN jsonb_build_object('valid', false, 'message', 'This promo code has expired');
+    END IF;
+
+    IF v_promo.max_redemptions IS NOT NULL AND v_promo.current_redemptions >= v_promo.max_redemptions THEN
+        RETURN jsonb_build_object('valid', false, 'message', 'This promo code has reached its maximum redemption limit');
+    END IF;
+
+    -- Calculate Discount Amount
+    v_discount_amt := ROUND(p_gross_amount * (COALESCE(v_promo.customer_discount_pct, 20.00) / 100.0), 2);
+    v_net_amt := GREATEST(0.00, p_gross_amount - v_discount_amt);
+
+    SELECT name, handle INTO v_creator FROM public.creators WHERE id = v_promo.creator_id;
+
+    RETURN jsonb_build_object(
+        'valid', true,
+        'promo_id', v_promo.id,
+        'code', v_promo.code,
+        'creator_name', COALESCE(v_creator.name, 'Creator Partner'),
+        'customer_discount_pct', v_promo.customer_discount_pct,
+        'customer_discount_duration_months', v_promo.customer_discount_duration_months,
+        'gross_amount', p_gross_amount,
+        'discount_amount', v_discount_amt,
+        'net_amount', v_net_amt,
+        'message', 'Success! ' || v_promo.customer_discount_pct::text || '% off applied for your first ' || v_promo.customer_discount_duration_months::text || ' months!'
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+-- 7. RPC: Record Invoice Attribution & Calculate 6-Month Window Commission
+CREATE OR REPLACE FUNCTION public.record_invoice_promo_attribution(
+    p_code TEXT,
+    p_customer_uid UUID,
+    p_invoice_id TEXT,
+    p_gross_amount NUMERIC,
+    p_net_amount NUMERIC DEFAULT NULL
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+    v_promo RECORD;
+    v_creator RECORD;
+    v_user RECORD;
+    v_clean_code TEXT;
+    v_discount_amt NUMERIC(10,2) := 0.00;
+    v_net_paid NUMERIC(10,2);
+    v_first_ref_date TIMESTAMPTZ;
+    v_month_diff INT := 1;
+    v_commission_eligible BOOLEAN := true;
+    v_comm_rate NUMERIC(5,2) := 10.00;
+    v_comm_amount NUMERIC(10,2) := 0.00;
+    v_redemption_id UUID;
+BEGIN
+    IF p_code IS NULL OR TRIM(p_code) = '' THEN
+        RETURN jsonb_build_object('success', false, 'message', 'No promo code provided');
+    END IF;
+
+    v_clean_code := UPPER(TRIM(p_code));
+
+    SELECT * INTO v_promo FROM public.promo_codes WHERE UPPER(code) = v_clean_code LIMIT 1;
+    IF v_promo.id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Promo code not recognized');
+    END IF;
+
+    SELECT * INTO v_creator FROM public.creators WHERE id = v_promo.creator_id LIMIT 1;
+    SELECT * INTO v_user FROM public.users WHERE id = p_customer_uid LIMIT 1;
+
+    -- Calculate Discount applied
+    v_discount_amt := ROUND(p_gross_amount * (COALESCE(v_promo.customer_discount_pct, 20.00) / 100.0), 2);
+    v_net_paid := COALESCE(p_net_amount, GREATEST(0.00, p_gross_amount - v_discount_amt));
+
+    -- Determine month index & commission attribution window (Default: 6 months)
+    v_first_ref_date := COALESCE(v_user.referred_at, NOW());
+
+    -- Month difference calculation
+    v_month_diff := GREATEST(1, (EXTRACT(YEAR FROM NOW()) - EXTRACT(YEAR FROM v_first_ref_date)) * 12 + 
+                                (EXTRACT(MONTH FROM NOW()) - EXTRACT(MONTH FROM v_first_ref_date)) + 1);
+
+    v_comm_rate := COALESCE(v_promo.commission_rate_pct, v_creator.default_commission_pct, 10.00);
+
+    -- Only grant commission if within the creator's commission duration (default 6 months)
+    IF v_month_diff <= COALESCE(v_promo.commission_duration_months, 6) THEN
+        v_commission_eligible := true;
+        v_comm_amount := ROUND(p_gross_amount * (v_comm_rate / 100.0), 2);
+    ELSE
+        v_commission_eligible := false;
+        v_comm_amount := 0.00;
+    END IF;
+
+    -- Insert Redemption Ledger Record
+    INSERT INTO public.promo_redemptions (
+        promo_code_id,
+        promo_code,
+        creator_id,
+        customer_uid,
+        customer_email,
+        stripe_invoice_id,
+        invoice_gross_amount,
+        discount_amount,
+        net_paid_amount,
+        commission_rate_applied,
+        commission_amount,
+        month_index,
+        is_commission_eligible,
+        payout_status
+    ) VALUES (
+        v_promo.id,
+        v_promo.code,
+        v_creator.id,
+        p_customer_uid,
+        v_user.email,
+        p_invoice_id,
+        p_gross_amount,
+        v_discount_amt,
+        v_net_paid,
+        v_comm_rate,
+        v_comm_amount,
+        v_month_diff,
+        v_commission_eligible,
+        'PENDING'
+    ) RETURNING id INTO v_redemption_id;
+
+    -- Update Promo Code Stats
+    UPDATE public.promo_codes
+    SET current_redemptions = current_redemptions + 1,
+        updated_at = NOW()
+    WHERE id = v_promo.id;
+
+    -- Update Creator Lifetime Stats
+    IF v_creator.id IS NOT NULL THEN
+        UPDATE public.creators
+        SET total_attributed_revenue = total_attributed_revenue + p_gross_amount,
+            total_commission_earned = total_commission_earned + v_comm_amount,
+            updated_at = NOW()
+        WHERE id = v_creator.id;
+    END IF;
+
+    -- Update User Record with Referral Association
+    IF p_customer_uid IS NOT NULL THEN
+        UPDATE public.users
+        SET referred_by_promo_code = COALESCE(referred_by_promo_code, v_promo.code),
+            referred_by_creator_id = COALESCE(referred_by_creator_id, v_creator.id),
+            referred_at = COALESCE(referred_at, NOW())
+        WHERE id = p_customer_uid;
+    END IF;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'redemption_id', v_redemption_id,
+        'creator_id', v_creator.id,
+        'creator_name', v_creator.name,
+        'gross_amount', p_gross_amount,
+        'discount_amount', v_discount_amt,
+        'commission_rate', v_comm_rate,
+        'commission_amount', v_comm_amount,
+        'month_index', v_month_diff,
+        'is_commission_eligible', v_commission_eligible
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+-- 8. RPC: Settle Creator Payout
+CREATE OR REPLACE FUNCTION public.settle_creator_payout(
+    p_creator_id UUID,
+    p_amount NUMERIC,
+    p_payout_ref TEXT DEFAULT 'MANUAL_ACH_SETTLEMENT'
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+    v_updated_count INT := 0;
+BEGIN
+    -- Mark all pending redemptions for creator as PAID up to settled amount
+    UPDATE public.promo_redemptions
+    SET payout_status = 'PAID',
+        payout_reference = p_payout_ref,
+        paid_at = NOW()
+    WHERE creator_id = p_creator_id AND payout_status IN ('PENDING', 'APPROVED');
+
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+
+    -- Update Creator Total Paid
+    UPDATE public.creators
+    SET total_commission_paid = total_commission_paid + p_amount,
+        updated_at = NOW()
+    WHERE id = p_creator_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'creator_id', p_creator_id,
+        'settled_amount', p_amount,
+        'redemptions_settled', v_updated_count,
+        'reference', p_payout_ref
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+
 
 

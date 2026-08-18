@@ -942,6 +942,237 @@
                 </div>
             </div>
 
+            <!-- ========================================================================= -->
+            <!-- Executive Creator & Promotional Attribution Hub (Stripe + Supabase) -->
+            <!-- ========================================================================= -->
+            <div id="executive-creator-promo-hub" class="glass-panel p-6 sm:p-8 rounded-3xl border border-emerald-500/30 space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-5 gap-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-lg font-bold">
+                            🎟️
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-extrabold text-white flex items-center gap-2">
+                                Creator &amp; Promotional Attribution Hub
+                                <span class="text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Revenue Governance</span>
+                            </h3>
+                            <p class="text-xs text-gray-400 font-mono">Stripe-synced promotional codes, 20% (2 mo) customer discount, customizable creator revenue share (6-month window)</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="openCreateCreatorPromoModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-600/20">
+                            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> + New Creator Code
+                        </button>
+                        <button onclick="loadCreatorGovernanceHub()" class="px-3.5 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-850 text-gray-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-emerald-400"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Metrics Overview Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-gray-950/70 border border-gray-800 rounded-2xl p-4 space-y-1">
+                        <p class="text-[11px] font-mono uppercase text-gray-400">Attributed Gross Volume</p>
+                        <p id="promo-metric-revenue" class="text-2xl font-black text-white font-mono">$0.00</p>
+                        <p class="text-[10px] text-emerald-400 flex items-center gap-1"><span>📈</span> Customer payments via codes</p>
+                    </div>
+                    <div class="bg-gray-950/70 border border-gray-800 rounded-2xl p-4 space-y-1">
+                        <p class="text-[11px] font-mono uppercase text-gray-400">Active Creator Codes</p>
+                        <p id="promo-metric-active-codes" class="text-2xl font-black text-emerald-400 font-mono">0</p>
+                        <p class="text-[10px] text-gray-500 flex items-center gap-1"><span>🏷️</span> Live in Stripe checkout</p>
+                    </div>
+                    <div class="bg-gray-950/70 border border-gray-800 rounded-2xl p-4 space-y-1">
+                        <p class="text-[11px] font-mono uppercase text-gray-400">Lifetime Commission Accrued</p>
+                        <p id="promo-metric-commission" class="text-2xl font-black text-purple-400 font-mono">$0.00</p>
+                        <p class="text-[10px] text-purple-400/80 flex items-center gap-1"><span>💰</span> 6-month revenue cut</p>
+                    </div>
+                    <div class="bg-gray-950/70 border border-gray-800 rounded-2xl p-4 space-y-1">
+                        <p class="text-[11px] font-mono uppercase text-gray-400">Pending Payouts</p>
+                        <p id="promo-metric-pending" class="text-2xl font-black text-amber-400 font-mono">$0.00</p>
+                        <p class="text-[10px] text-amber-400/80 flex items-center gap-1"><span>⏳</span> Owed to creators</p>
+                    </div>
+                </div>
+
+                <!-- Tabs: Creator Codes vs. Redemptions Ledger -->
+                <div class="space-y-4">
+                    <div class="flex items-center space-x-2 border-b border-gray-800 pb-2">
+                        <button id="promo-tab-codes-btn" onclick="switchPromoHubTab('codes')" class="px-4 py-2 text-xs font-bold rounded-xl border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 flex items-center gap-1.5 cursor-pointer font-mono">
+                            <span>🏷️</span> Creator Promo Codes
+                        </button>
+                        <button id="promo-tab-ledger-btn" onclick="switchPromoHubTab('ledger')" class="px-4 py-2 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white flex items-center gap-1.5 cursor-pointer font-mono">
+                            <span>📋</span> Attribution &amp; Redemptions Ledger
+                        </button>
+                    </div>
+
+                    <!-- Panel 1: Creator Codes Table -->
+                    <div id="promo-tab-codes-panel" class="space-y-3">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead>
+                                    <tr class="border-b border-gray-800 text-gray-400 font-mono text-[10px] uppercase bg-gray-950/50">
+                                        <th class="py-3 px-3">Promo Code</th>
+                                        <th class="py-3 px-3">Creator / Influencer</th>
+                                        <th class="py-3 px-3">Customer Offer</th>
+                                        <th class="py-3 px-3">Creator Commission</th>
+                                        <th class="py-3 px-3 text-center">Redemptions</th>
+                                        <th class="py-3 px-3 text-right">Attributed Gross</th>
+                                        <th class="py-3 px-3 text-right">Commission Accrued</th>
+                                        <th class="py-3 px-3 text-center">Status</th>
+                                        <th class="py-3 px-3 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="promo-codes-table-body" class="divide-y divide-gray-800/60 font-mono">
+                                    <tr>
+                                        <td colspan="9" class="py-8 text-center text-gray-500">Loading promotional codes...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Panel 2: Redemptions & Invoicing Ledger -->
+                    <div id="promo-tab-ledger-panel" class="hidden space-y-3">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead>
+                                    <tr class="border-b border-gray-800 text-gray-400 font-mono text-[10px] uppercase bg-gray-950/50">
+                                        <th class="py-3 px-3">Timestamp</th>
+                                        <th class="py-3 px-3">Code / Creator</th>
+                                        <th class="py-3 px-3">Customer</th>
+                                        <th class="py-3 px-3">Invoice ID</th>
+                                        <th class="py-3 px-3 text-right">Gross $</th>
+                                        <th class="py-3 px-3 text-right">Discount $</th>
+                                        <th class="py-3 px-3 text-center">Month #</th>
+                                        <th class="py-3 px-3 text-right">Commission $</th>
+                                        <th class="py-3 px-3 text-center">Payout Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="promo-ledger-table-body" class="divide-y divide-gray-800/60 font-mono">
+                                    <tr>
+                                        <td colspan="9" class="py-8 text-center text-gray-500">Loading attribution ledger...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: Create New Creator Promo Code -->
+            <div id="create-creator-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                <div class="bg-gray-900 border border-emerald-500/40 rounded-3xl p-6 sm:p-8 max-w-xl w-full space-y-5 shadow-2xl">
+                    <div class="flex justify-between items-center border-b border-gray-800 pb-4">
+                        <div class="flex items-center space-x-2.5">
+                            <div class="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold">
+                                🏷️
+                            </div>
+                            <h3 class="text-base font-extrabold text-white">Create Creator Promo Code</h3>
+                        </div>
+                        <button onclick="closeCreateCreatorPromoModal()" class="text-gray-400 hover:text-white text-sm font-bold cursor-pointer">✕</button>
+                    </div>
+
+                    <form id="create-creator-form" onsubmit="submitCreateCreatorPromo(event)" class="space-y-4 text-xs font-mono">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[11px] uppercase text-gray-400 mb-1">Creator / Partner Name *</label>
+                                <input type="text" id="cc-name" required placeholder="e.g. Alex Rivera" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] uppercase text-gray-400 mb-1">Social Handle / Channel</label>
+                                <input type="text" id="cc-handle" placeholder="e.g. @alextech" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[11px] uppercase text-gray-400 mb-1">Contact Email *</label>
+                                <input type="email" id="cc-email" required placeholder="alex@creators.com" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] uppercase text-gray-400 mb-1">Promo Code String *</label>
+                                <input type="text" id="cc-code" required placeholder="e.g. ALEX20" class="w-full bg-gray-950 border border-emerald-500/40 rounded-xl px-3 py-2 text-emerald-400 font-bold uppercase outline-none focus:border-emerald-400">
+                            </div>
+                        </div>
+
+                        <div class="p-3 bg-gray-950/80 border border-gray-800 rounded-2xl space-y-3">
+                            <p class="text-[10px] font-bold uppercase text-emerald-400">🎁 Customer Discount Configuration</p>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[10px] uppercase text-gray-400 mb-1">Discount %</label>
+                                    <input type="number" id="cc-cust-discount-pct" value="20" min="1" max="100" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 text-white outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase text-gray-400 mb-1">Duration (Months)</label>
+                                    <input type="number" id="cc-cust-discount-months" value="2" min="1" max="12" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 text-white outline-none">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-3 bg-gray-950/80 border border-purple-500/30 rounded-2xl space-y-3">
+                            <div class="flex justify-between items-center">
+                                <p class="text-[10px] font-bold uppercase text-purple-400">💰 Creator Commission &amp; Revenue Share</p>
+                                <span class="text-[9px] text-gray-500">Customizable per tier</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[10px] uppercase text-gray-400 mb-1">Commission % (Revenue Share)</label>
+                                    <input type="number" id="cc-comm-pct" value="10" min="1" max="50" step="0.5" class="w-full bg-gray-900 border border-purple-500/40 rounded-xl px-3 py-1.5 text-purple-300 font-bold outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase text-gray-400 mb-1">Commission Window (Months)</label>
+                                    <input type="number" id="cc-comm-months" value="6" min="1" max="24" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 text-white outline-none">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end items-center space-x-2 pt-2 border-t border-gray-800">
+                            <button type="button" onclick="closeCreateCreatorPromoModal()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl font-bold transition cursor-pointer">Cancel</button>
+                            <button type="submit" id="cc-submit-btn" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition cursor-pointer flex items-center gap-1.5 shadow-lg shadow-emerald-600/20">
+                                <span>Create &amp; Sync to Stripe</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Modal: Settle Creator Commission Payout -->
+            <div id="settle-payout-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                <div class="bg-gray-900 border border-purple-500/40 rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-5 shadow-2xl">
+                    <div class="flex justify-between items-center border-b border-gray-800 pb-3">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-7 h-7 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 font-bold">
+                                💸
+                            </div>
+                            <h3 class="text-sm font-extrabold text-white">Settle Creator Commission Payout</h3>
+                        </div>
+                        <button onclick="closeSettlePayoutModal()" class="text-gray-400 hover:text-white text-xs font-bold cursor-pointer">✕</button>
+                    </div>
+
+                    <form id="settle-payout-form" onsubmit="submitSettleCreatorPayout(event)" class="space-y-3.5 text-xs font-mono">
+                        <input type="hidden" id="payout-creator-id">
+                        <div>
+                            <p class="text-gray-400">Creator:</p>
+                            <p id="payout-creator-name" class="text-sm font-bold text-white"></p>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] uppercase text-gray-400 mb-1">Settlement Amount ($ USD) *</label>
+                            <input type="number" id="payout-amount" step="0.01" required class="w-full bg-gray-950 border border-purple-500/40 rounded-xl px-3 py-2 text-purple-300 font-bold text-base outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] uppercase text-gray-400 mb-1">Payout Method / Reference Note *</label>
+                            <input type="text" id="payout-ref" value="STRIPE_CONNECT_ACH_PAYOUT" required class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-white outline-none">
+                        </div>
+
+                        <div class="flex justify-end items-center space-x-2 pt-2 border-t border-gray-800">
+                            <button type="button" onclick="closeSettlePayoutModal()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl font-bold transition cursor-pointer">Cancel</button>
+                            <button type="submit" id="payout-submit-btn" class="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold transition cursor-pointer flex items-center gap-1.5 shadow-lg shadow-purple-600/20">
+                                <span>Confirm Settlement</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <!-- Tote Master Control & Search Console (Manager & Executive Only) -->
             <div class="glass-panel p-6 rounded-3xl space-y-6 border border-indigo-500/30">
                 <div
@@ -6729,6 +6960,292 @@
                 console.error("Failed to load audit logs:", err);
                 list.innerHTML = `<div class="text-center text-red-400 py-2">Error loading audit logs: ${escapeHtml(err.message)}</div>`;
             }
+        }
+
+        // =========================================================================
+        // Executive Creator & Promotional Attribution Hub Controllers
+        // =========================================================================
+
+        let currentPromoData = { creators: [], promoCodes: [], redemptions: [], metrics: {} };
+
+        async function loadCreatorGovernanceHub() {
+            try {
+                if (typeof StripeBillingIntegration === 'undefined') return;
+
+                const data = await StripeBillingIntegration.fetchCreatorGovernanceData();
+                currentPromoData = data;
+
+                const revEl = document.getElementById('promo-metric-revenue');
+                const activeCodesEl = document.getElementById('promo-metric-active-codes');
+                const commEl = document.getElementById('promo-metric-commission');
+                const pendingEl = document.getElementById('promo-metric-pending');
+
+                if (revEl) revEl.textContent = `$${(data.metrics.totalRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                if (activeCodesEl) activeCodesEl.textContent = data.metrics.activeCodes || 0;
+                if (commEl) commEl.textContent = `$${(data.metrics.totalCommission || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                if (pendingEl) pendingEl.textContent = `$${(data.metrics.pendingPayouts || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+                renderPromoCodesTable(data.promoCodes);
+                renderPromoLedgerTable(data.redemptions);
+            } catch (err) {
+                console.error("Failed to load Creator Governance Hub:", err);
+            }
+        }
+
+        function renderPromoCodesTable(promoCodes) {
+            const tbody = document.getElementById('promo-codes-table-body');
+            if (!tbody) return;
+
+            if (!promoCodes || promoCodes.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="py-8 text-center text-gray-500">
+                            No creator promotional codes active yet. Click <strong class="text-emerald-400">+ New Creator Code</strong> above to issue your first influencer partnership code.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = promoCodes.map(p => {
+                const creator = p.creators || {};
+                const creatorName = escapeHtml(creator.name || 'Affiliate Partner');
+                const creatorHandle = escapeHtml(creator.handle || '@influencer');
+                const code = escapeHtml(p.code);
+                const discountText = `${p.customer_discount_pct || 20}% off (${p.customer_discount_duration_months || 2} mo)`;
+                const commText = `${p.commission_rate_pct || 10}% rev share (${p.commission_duration_months || 6} mo)`;
+                const redemptions = p.current_redemptions || 0;
+                
+                // Calculate attributed gross & commission for this specific code
+                const matchingRedemptions = (currentPromoData.redemptions || []).filter(r => r.promo_code_id === p.id || r.promo_code === p.code);
+                const attributedGross = matchingRedemptions.reduce((sum, r) => sum + Number(r.invoice_gross_amount || 0), 0);
+                const commissionEarned = matchingRedemptions.reduce((sum, r) => sum + Number(r.commission_amount || 0), 0);
+                const pendingPayout = matchingRedemptions.filter(r => r.payout_status === 'PENDING').reduce((sum, r) => sum + Number(r.commission_amount || 0), 0);
+
+                const isActive = Boolean(p.is_active);
+
+                return `
+                    <tr class="hover:bg-gray-900/50 transition">
+                        <td class="py-3 px-3">
+                            <span class="px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-bold font-mono text-[11px] tracking-wider uppercase">
+                                ${code}
+                            </span>
+                        </td>
+                        <td class="py-3 px-3">
+                            <p class="font-bold text-white">${creatorName}</p>
+                            <p class="text-[10px] text-gray-500">${creatorHandle}</p>
+                        </td>
+                        <td class="py-3 px-3 text-emerald-400 font-medium">${discountText}</td>
+                        <td class="py-3 px-3 text-purple-300 font-medium">${commText}</td>
+                        <td class="py-3 px-3 text-center text-white font-bold">${redemptions}</td>
+                        <td class="py-3 px-3 text-right font-bold text-white">$${attributedGross.toFixed(2)}</td>
+                        <td class="py-3 px-3 text-right font-bold text-purple-300">$${commissionEarned.toFixed(2)}</td>
+                        <td class="py-3 px-3 text-center">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" class="sr-only peer" ${isActive ? 'checked' : ''} onchange="togglePromoCodeStatusAction('${p.id}', this.checked)">
+                                <div class="w-8 h-4 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600"></div>
+                            </label>
+                        </td>
+                        <td class="py-3 px-3 text-right space-x-1.5 whitespace-nowrap">
+                            <button onclick="copyPromoCodeLink('${code}')" class="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-[10px] transition cursor-pointer" title="Copy Promo Link">
+                                🔗 Link
+                            </button>
+                            ${pendingPayout > 0 ? `
+                                <button onclick="openSettlePayoutModal('${p.creator_id}', '${creatorName}', ${pendingPayout})" class="px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[10px] font-bold transition cursor-pointer shadow-sm">
+                                    💸 Pay ($${pendingPayout.toFixed(2)})
+                                </button>
+                            ` : ''}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderPromoLedgerTable(redemptions) {
+            const tbody = document.getElementById('promo-ledger-table-body');
+            if (!tbody) return;
+
+            if (!redemptions || redemptions.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="py-8 text-center text-gray-500">
+                            No attribution transactions recorded yet. When customers redeem codes during checkout or pay storage bills, invoice ledgers will appear here.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = redemptions.map(r => {
+                const dateStr = new Date(r.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const code = escapeHtml(r.promo_code);
+                const creatorName = escapeHtml(r.creators?.name || 'Creator Partner');
+                const customerEmail = escapeHtml(r.customer_email || 'Customer');
+                const invoiceId = escapeHtml(r.stripe_invoice_id || 'in_simulated');
+                const gross = Number(r.invoice_gross_amount || 0);
+                const discount = Number(r.discount_amount || 0);
+                const monthIndex = r.month_index || 1;
+                const commission = Number(r.commission_amount || 0);
+                const isEligible = Boolean(r.is_commission_eligible);
+                const status = r.payout_status || 'PENDING';
+
+                const statusBadge = status === 'PAID'
+                    ? `<span class="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">PAID</span>`
+                    : `<span class="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold">PENDING</span>`;
+
+                return `
+                    <tr class="hover:bg-gray-900/50 transition">
+                        <td class="py-2.5 px-3 text-gray-400 text-[10px]">${dateStr}</td>
+                        <td class="py-2.5 px-3">
+                            <span class="font-bold text-emerald-300 font-mono">${code}</span>
+                            <span class="text-gray-500 text-[10px] block">${creatorName}</span>
+                        </td>
+                        <td class="py-2.5 px-3 text-gray-300">${customerEmail}</td>
+                        <td class="py-2.5 px-3 font-mono text-gray-400 text-[10px]">${invoiceId.slice(0, 12)}...</td>
+                        <td class="py-2.5 px-3 text-right font-bold text-white">$${gross.toFixed(2)}</td>
+                        <td class="py-2.5 px-3 text-right text-emerald-400">-$${discount.toFixed(2)}</td>
+                        <td class="py-2.5 px-3 text-center">
+                            <span class="px-2 py-0.5 rounded bg-gray-800 text-gray-300 text-[10px] font-mono">
+                                Mo ${monthIndex} / 6
+                            </span>
+                        </td>
+                        <td class="py-2.5 px-3 text-right font-bold ${isEligible ? 'text-purple-300' : 'text-gray-500'}">
+                            ${isEligible ? `$${commission.toFixed(2)}` : '$0.00 (Expired)'}
+                        </td>
+                        <td class="py-2.5 px-3 text-center">${statusBadge}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function switchPromoHubTab(tab) {
+            const codesBtn = document.getElementById('promo-tab-codes-btn');
+            const ledgerBtn = document.getElementById('promo-tab-ledger-btn');
+            const codesPanel = document.getElementById('promo-tab-codes-panel');
+            const ledgerPanel = document.getElementById('promo-tab-ledger-panel');
+
+            if (tab === 'codes') {
+                codesBtn.className = "px-4 py-2 text-xs font-bold rounded-xl border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 flex items-center gap-1.5 cursor-pointer font-mono";
+                ledgerBtn.className = "px-4 py-2 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white flex items-center gap-1.5 cursor-pointer font-mono";
+                codesPanel.classList.remove('hidden');
+                ledgerPanel.classList.add('hidden');
+            } else {
+                ledgerBtn.className = "px-4 py-2 text-xs font-bold rounded-xl border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 flex items-center gap-1.5 cursor-pointer font-mono";
+                codesBtn.className = "px-4 py-2 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white flex items-center gap-1.5 cursor-pointer font-mono";
+                ledgerPanel.classList.remove('hidden');
+                codesPanel.classList.add('hidden');
+            }
+        }
+
+        function openCreateCreatorPromoModal() {
+            const modal = document.getElementById('create-creator-modal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeCreateCreatorPromoModal() {
+            const modal = document.getElementById('create-creator-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        async function submitCreateCreatorPromo(e) {
+            e.preventDefault();
+            const btn = document.getElementById('cc-submit-btn');
+            const name = document.getElementById('cc-name').value.trim();
+            const handle = document.getElementById('cc-handle').value.trim();
+            const email = document.getElementById('cc-email').value.trim();
+            const code = document.getElementById('cc-code').value.trim().toUpperCase();
+            const custDiscountPct = document.getElementById('cc-cust-discount-pct').value;
+            const custDiscountMonths = document.getElementById('cc-cust-discount-months').value;
+            const commPct = document.getElementById('cc-comm-pct').value;
+            const commMonths = document.getElementById('cc-comm-months').value;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span>Creating &amp; Syncing Stripe...</span>';
+
+            try {
+                const res = await StripeBillingIntegration.createCreatorWithPromoCode(
+                    { name, handle, email, defaultCommissionPct: commPct, commissionMonths: commMonths },
+                    { code, customerDiscountPct: custDiscountPct, customerDiscountMonths: custDiscountMonths, commissionRatePct: commPct, commissionMonths: commMonths }
+                );
+
+                alert(`Creator Promo Code "${code}" successfully created and synchronized with Stripe!`);
+                closeCreateCreatorPromoModal();
+                document.getElementById('create-creator-form').reset();
+                loadCreatorGovernanceHub();
+            } catch (err) {
+                console.error("Failed to create creator promo code:", err);
+                alert("Error creating promo code: " + (err.message || "Unknown error"));
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Create &amp; Sync to Stripe</span>';
+            }
+        }
+
+        async function togglePromoCodeStatusAction(promoId, isChecked) {
+            try {
+                await StripeBillingIntegration.togglePromoCodeStatus(promoId, isChecked);
+                loadCreatorGovernanceHub();
+            } catch (err) {
+                alert("Failed to update status: " + err.message);
+                loadCreatorGovernanceHub();
+            }
+        }
+
+        function openSettlePayoutModal(creatorId, creatorName, pendingAmount) {
+            const modal = document.getElementById('settle-payout-modal');
+            document.getElementById('payout-creator-id').value = creatorId;
+            document.getElementById('payout-creator-name').textContent = creatorName;
+            document.getElementById('payout-amount').value = (Number(pendingAmount) || 0).toFixed(2);
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeSettlePayoutModal() {
+            const modal = document.getElementById('settle-payout-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        async function submitSettleCreatorPayout(e) {
+            e.preventDefault();
+            const btn = document.getElementById('payout-submit-btn');
+            const creatorId = document.getElementById('payout-creator-id').value;
+            const amount = document.getElementById('payout-amount').value;
+            const ref = document.getElementById('payout-ref').value;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span>Processing Settlement...</span>';
+
+            try {
+                await StripeBillingIntegration.settleCreatorPayout(creatorId, amount, ref);
+                alert(`Successfully recorded settlement of $${Number(amount).toFixed(2)}!`);
+                closeSettlePayoutModal();
+                loadCreatorGovernanceHub();
+            } catch (err) {
+                console.error("Payout settlement failed:", err);
+                alert("Settlement error: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Confirm Settlement</span>';
+            }
+        }
+
+        function copyPromoCodeLink(code) {
+            const link = `${window.location.origin}/index.html?promo=${encodeURIComponent(code)}`;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(link).then(() => {
+                    alert(`Promo link copied to clipboard!\n${link}`);
+                });
+            } else {
+                prompt("Copy this promo link:", link);
+            }
+        }
+
+        // Initialize Creator Hub during executive data loads
+        if (typeof window !== 'undefined') {
+            window.addEventListener('DOMContentLoaded', () => {
+                setTimeout(() => {
+                    loadCreatorGovernanceHub();
+                }, 1000);
+            });
         }
 
         // =========================================================================

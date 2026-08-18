@@ -1300,6 +1300,18 @@
                             <span>Estimated Sales Tax (<span id="invoice-tax-rate">8.50%</span>)</span>
                             <span class="font-bold text-gray-900">$<span id="invoice-tax-amt">2.13</span></span>
                         </div>
+                        <!-- Promo Code Discount Row -->
+                        <div id="invoice-promo-discount-row" class="hidden flex justify-between text-emerald-600 font-bold">
+                            <span>Creator Discount (<span id="invoice-promo-pct">20%</span> off 2 mo)</span>
+                            <span>-$<span id="invoice-promo-discount-amt">0.00</span></span>
+                        </div>
+                        <div class="pt-2 border-t border-gray-200">
+                            <div class="flex items-center space-x-2">
+                                <input type="text" id="promo-code-input" placeholder="Promo code (e.g. ALEX20)" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono uppercase focus:border-blue-600 outline-none">
+                                <button type="button" onclick="applyCustomerPromoCode()" class="px-3.5 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-bold transition cursor-pointer">Apply</button>
+                            </div>
+                            <div id="promo-code-feedback" class="hidden mt-1.5 text-xs font-medium"></div>
+                        </div>
                         <div class="h-px bg-gray-200 my-2"></div>
                         <div class="flex justify-between font-bold text-gray-900">
                             <span>Total First Month</span>
@@ -1463,11 +1475,22 @@
             }
         }
 
-        // Log landed milestone on page load
+        // Log landed milestone on page load and auto-apply promo code
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 logMilestone('landed');
             }, 1000);
+
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const queryPromo = urlParams.get('promo') || urlParams.get('ref');
+                if (queryPromo) {
+                    sessionStorage.setItem('cv_promo_code', queryPromo.toUpperCase());
+                    setTimeout(() => {
+                        applyCustomerPromoCode(queryPromo);
+                    }, 600);
+                }
+            } catch (e) {}
         });
 
         // State
@@ -2186,6 +2209,26 @@
                 });
                 if (rpcErr) throw rpcErr;
 
+                // Record Creator Promo Code Attribution if promo was applied
+                if (flowData.appliedPromo && flowData.appliedPromo.code && typeof StripeBillingIntegration !== 'undefined') {
+                    try {
+                        const grossTotal = Number(flowData.firstMonth || 25.00) + Number((flowData.firstMonth || 25.00) * 0.085);
+                        const discountAmt = Number(flowData.appliedPromo.discount_amount || 0);
+                        const netTotal = Math.max(0, grossTotal - discountAmt);
+
+                        await StripeBillingIntegration.recordPromoAttribution(
+                            flowData.appliedPromo.code,
+                            signUpData.user.id,
+                            'in_init_' + Date.now(),
+                            grossTotal,
+                            netTotal
+                        );
+                        console.log('[Creator Attribution] Attributed to promo code:', flowData.appliedPromo.code);
+                    } catch (pErr) {
+                        console.warn('[Creator Attribution] Notice:', pErr.message);
+                    }
+                }
+
                 // Set success text
                 const successTextEl = document.getElementById('success-dynamic-text');
                 successTextEl.innerHTML = "Our onboarding team will text you within 24 hours to provide your staging PIN code. Use it to access the facility, pick up your empty totes, pack them at home, and drop them back off at your convenience.";
@@ -2206,6 +2249,75 @@
 
                 btnText.textContent = 'Confirm Booking';
                 btnLoader.classList.add('hidden-section');
+            }
+        }
+
+        // =========================================================================
+        // Creator Promo Code Application & Attribution Controller
+        // =========================================================================
+        async function applyCustomerPromoCode(customCode = null) {
+            const input = document.getElementById('promo-code-input');
+            const feedback = document.getElementById('promo-code-feedback');
+            const discountRow = document.getElementById('invoice-promo-discount-row');
+            const discountPctEl = document.getElementById('invoice-promo-pct');
+            const discountAmtEl = document.getElementById('invoice-promo-discount-amt');
+            const totalFirstMonthEl = document.getElementById('invoice-first-month');
+
+            const code = (customCode || (input ? input.value : '')).trim().toUpperCase();
+            if (!code) {
+                if (feedback) {
+                    feedback.textContent = 'Please enter a promotional code.';
+                    feedback.className = 'text-xs text-red-500 font-medium';
+                    feedback.classList.remove('hidden');
+                }
+                return;
+            }
+
+            if (input) input.value = code;
+
+            try {
+                const grossFirstMonth = Number(flowData.firstMonth || 25.00) + Number((flowData.firstMonth || 25.00) * 0.085);
+                let res = null;
+
+                if (typeof StripeBillingIntegration !== 'undefined') {
+                    res = await StripeBillingIntegration.validatePromoCode(code, null, grossFirstMonth);
+                } else {
+                    res = {
+                        valid: true,
+                        code: code,
+                        creator_name: 'Creator Partner',
+                        customer_discount_pct: 20,
+                        customer_discount_duration_months: 2,
+                        discount_amount: grossFirstMonth * 0.20
+                    };
+                }
+
+                if (res && res.valid) {
+                    flowData.appliedPromo = res;
+                    const discountAmt = Number(res.discount_amount || (grossFirstMonth * 0.20));
+                    const newTotal = Math.max(0, grossFirstMonth - discountAmt);
+
+                    if (discountRow) discountRow.classList.remove('hidden');
+                    if (discountPctEl) discountPctEl.textContent = `${res.customer_discount_pct || 20}%`;
+                    if (discountAmtEl) discountAmtEl.textContent = discountAmt.toFixed(2);
+                    if (totalFirstMonthEl) totalFirstMonthEl.textContent = newTotal.toFixed(2);
+
+                    if (feedback) {
+                        feedback.innerHTML = `🎉 <strong>${escapeHtml(res.creator_name || 'Partner')}</strong> code applied! <strong>${res.customer_discount_pct || 20}% off your first ${res.customer_discount_duration_months || 2} months</strong>.`;
+                        feedback.className = 'text-xs text-emerald-600 font-medium';
+                        feedback.classList.remove('hidden');
+                    }
+                } else {
+                    flowData.appliedPromo = null;
+                    if (discountRow) discountRow.classList.add('hidden');
+                    if (feedback) {
+                        feedback.textContent = res?.message || 'Invalid or expired promotional code.';
+                        feedback.className = 'text-xs text-red-500 font-medium';
+                        feedback.classList.remove('hidden');
+                    }
+                }
+            } catch (err) {
+                console.error("Promo validation error:", err);
             }
         }
 
