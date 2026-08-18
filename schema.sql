@@ -106,6 +106,10 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS price_lock_rates JSONB DEFAULT
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS price_lock_expires_at TIMESTAMPTZ DEFAULT NULL;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS deposit_paid_amount NUMERIC(10,2) DEFAULT 0.00;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_overdue BOOLEAN DEFAULT false;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'incomplete';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS default_payment_method_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_users_stripe_customer_id ON public.users(stripe_customer_id);
 
 -- Inventory (Totes)
 CREATE TABLE public.inventory (
@@ -208,6 +212,14 @@ ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS price_lock_expires_at 
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS last_billed_at TIMESTAMPTZ;
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS next_billing_date TIMESTAMPTZ;
 ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS cancel_at TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS stripe_price_id TEXT;
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS quantity INTEGER DEFAULT 1;
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS current_period_start TIMESTAMPTZ;
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN DEFAULT false;
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS canceled_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_sub_id ON public.subscriptions(stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_customer_id ON public.subscriptions(stripe_customer_id);
 
 -- Migration fallbacks for tax & interest
 ALTER TABLE public.service_areas ADD COLUMN IF NOT EXISTS tax_rate NUMERIC(5,4) DEFAULT NULL;
@@ -407,17 +419,48 @@ ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS due_date TIMESTAMPTZ DEFAUL
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS stripe_invoice_id TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS stripe_hosted_invoice_url TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS stripe_invoice_pdf TEXT;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS amount_due NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS amount_paid NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS amount_remaining NUMERIC(10,2) DEFAULT 0.00;
 ALTER TABLE public.invoices DROP CONSTRAINT IF EXISTS invoices_payment_status_check;
-ALTER TABLE public.invoices ADD CONSTRAINT invoices_payment_status_check CHECK (payment_status IN ('paid', 'pending', 'overdue', 'failed', 'refunded', 'deposit_received'));
+ALTER TABLE public.invoices ADD CONSTRAINT invoices_payment_status_check CHECK (payment_status IN ('paid', 'pending', 'overdue', 'failed', 'refunded', 'deposit_received', 'open', 'void', 'uncollectible', 'draft'));
 
 -- Indexes for invoices
 CREATE INDEX IF NOT EXISTS idx_invoices_uid ON public.invoices(uid);
 CREATE INDEX IF NOT EXISTS idx_invoices_customer_email ON public.invoices(customer_email);
 CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON public.invoices(invoice_number);
+CREATE INDEX IF NOT EXISTS idx_invoices_stripe_invoice_id ON public.invoices(stripe_invoice_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_stripe_customer_id ON public.invoices(stripe_customer_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_payment_status ON public.invoices(payment_status);
 CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON public.invoices(created_at);
 CREATE INDEX IF NOT EXISTS idx_invoices_uid_created ON public.invoices(uid, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_invoices_email_created ON public.invoices(customer_email, created_at DESC);
+
+-- Safe migration fallbacks for charges
+ALTER TABLE public.charges ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT;
+ALTER TABLE public.charges ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
+ALTER TABLE public.charges ADD COLUMN IF NOT EXISTS receipt_url TEXT;
+ALTER TABLE public.charges ADD COLUMN IF NOT EXISTS payment_method_brand TEXT;
+ALTER TABLE public.charges ADD COLUMN IF NOT EXISTS payment_method_last4 TEXT;
+CREATE INDEX IF NOT EXISTS idx_charges_stripe_charge_id ON public.charges(stripe_charge_id);
+
+-- Stripe Webhook Events (Idempotency Ledger)
+CREATE TABLE IF NOT EXISTS public.stripe_webhook_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    stripe_event_id TEXT UNIQUE NOT NULL,
+    event_type TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    status TEXT DEFAULT 'processed',
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_event_id ON public.stripe_webhook_events(stripe_event_id);
+CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_type ON public.stripe_webhook_events(event_type);
+ALTER TABLE public.stripe_webhook_events ENABLE ROW LEVEL SECURITY;
 
 -- System Metadata / Financials (Singleton row)
 CREATE TABLE public.metadata (

@@ -8718,9 +8718,23 @@
             const lockBadge = isPriceLock ? ' 🔒 3-Year Price Lock Active' : ' (Standard Rate)';
             document.getElementById('cbd-customer-rate').textContent = `$${toteRate.toFixed(2)}/tote/mo ($${recurringTotal.toFixed(2)} total — Tier ${tierNum}${lockBadge})`;
 
-            const cardBrand = user.card_brand || user.payment_method_brand || 'Visa';
-            const cardLast4 = user.card_last4 || user.payment_method_last4 || '4242';
-            document.getElementById('cbd-customer-payment-card').textContent = `💳 ${cardBrand} •••• ${cardLast4}`;
+            const cardBrand = user.card_brand || user.payment_method_brand || 'Stripe';
+            const cardLast4 = user.card_last4 || user.payment_method_last4 || 'Active';
+            document.getElementById('cbd-customer-payment-card').textContent = cardLast4 !== 'Active' ? `💳 ${cardBrand} •••• ${cardLast4}` : '💳 Stripe Verified';
+
+            const stripeCustIdEl = document.getElementById('cbd-stripe-customer-id');
+            const stripeDashBtn = document.getElementById('cbd-stripe-dashboard-btn');
+            if (stripeCustIdEl) {
+                stripeCustIdEl.textContent = user.stripe_customer_id || 'Not Synced';
+            }
+            if (stripeDashBtn) {
+                if (user.stripe_customer_id) {
+                    stripeDashBtn.href = `https://dashboard.stripe.com/test/customers/${encodeURIComponent(user.stripe_customer_id)}`;
+                    stripeDashBtn.classList.remove('hidden');
+                } else {
+                    stripeDashBtn.classList.add('hidden');
+                }
+            }
 
             // Evaluate Overdue Account Banner (Exceeding 3-Day Grace Period)
             const overdueBanner = document.getElementById('cbd-overdue-alert-banner');
@@ -9078,6 +9092,11 @@
                                     ? `<span class="text-rose-400 font-mono font-bold">-$${Math.abs(totalVal).toFixed(2)}</span>`
                                     : `<span class="text-emerald-400 font-mono font-bold">$${totalVal.toFixed(2)}</span>`;
 
+                                const stripeUrl = inv.stripe_hosted_invoice_url || inv.stripe_invoice_pdf;
+                                const stripeBtnHtml = stripeUrl
+                                    ? `<a href="${escapeHtml(stripeUrl)}" target="_blank" class="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition inline-flex items-center gap-1 cursor-pointer min-h-[36px]">🔗 Stripe</a>`
+                                    : '';
+
                                 const refundBtnHtml = isPaid
                                     ? `<button onclick="triggerOneClickRefund('${invId}', ${totalVal})" class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition inline-flex items-center gap-1 cursor-pointer min-h-[36px]">💸 Refund</button>`
                                     : '';
@@ -9098,6 +9117,7 @@
                                                     class="bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition inline-flex items-center gap-1 cursor-pointer min-h-[36px]">
                                                     📄 Inspect &amp; Print
                                                 </button>
+                                                ${stripeBtnHtml}
                                                 ${refundBtnHtml}
                                             </div>
                                         </td>
@@ -12019,7 +12039,7 @@
             </div>
 
             <!-- Customer Summary Telemetry Bar -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 text-xs">
                 <div class="bg-gray-900/80 p-3 rounded-2xl border border-gray-800 space-y-0.5">
                     <span class="text-[10px] font-bold text-gray-400 uppercase">Active Totes</span>
                     <p id="cbd-customer-totes-count" class="font-black text-white font-mono text-base">0 Totes</p>
@@ -12029,8 +12049,17 @@
                     <p id="cbd-customer-rate" class="font-black text-indigo-400 font-mono text-xs font-bold">$5.00/tote/mo</p>
                 </div>
                 <div class="bg-gray-900/80 p-3 rounded-2xl border border-gray-800 space-y-0.5">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase">Payment Card (Stripe)</span>
-                    <p id="cbd-customer-payment-card" class="font-bold text-emerald-400 font-mono text-xs flex items-center gap-1">💳 Visa •••• 4242</p>
+                    <span class="text-[10px] font-bold text-gray-400 uppercase">Payment Method</span>
+                    <p id="cbd-customer-payment-card" class="font-bold text-emerald-400 font-mono text-xs flex items-center gap-1">💳 Stripe Verified</p>
+                </div>
+                <div class="bg-gray-900/80 p-3 rounded-2xl border border-gray-800 space-y-0.5">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase">Stripe Customer</span>
+                    <div class="flex items-center justify-between gap-1">
+                        <span id="cbd-stripe-customer-id" class="font-bold text-cyan-400 font-mono text-xs truncate">cus_...</span>
+                        <a id="cbd-stripe-dashboard-btn" href="#" target="_blank" class="text-[10px] bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500 hover:text-white px-2 py-0.5 rounded-lg font-mono font-bold transition flex items-center gap-0.5">
+                            <span>Open</span> ↗
+                        </a>
+                    </div>
                 </div>
             </div>
 
