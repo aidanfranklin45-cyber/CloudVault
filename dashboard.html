@@ -961,12 +961,17 @@
                 <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-gray-600 transition"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
 
-            <!-- Home Facility Selector -->
+            <!-- Home Storage Facility Display -->
             <div class="space-y-2">
-                <label class="block text-sm font-bold text-gray-800">Home Storage Facility</label>
-                <select id="settings-facility-select" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-blue-500 transition cursor-pointer">
-                </select>
-                <p class="text-[11px] text-gray-500 font-medium">All new totes added to your account will be stored at your selected home facility.</p>
+                <label class="block text-sm font-bold text-gray-800">Assigned Storage Facility</label>
+                <div class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 flex items-center justify-between">
+                    <div class="flex items-center space-x-2.5 overflow-hidden">
+                        <i data-lucide="map-pin" class="w-4 h-4 text-blue-600 flex-shrink-0"></i>
+                        <span id="settings-facility-name" class="truncate">Yakima Fulfillment Center</span>
+                    </div>
+                    <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono flex-shrink-0">Assigned</span>
+                </div>
+                <p class="text-[11px] text-gray-500 font-medium">Facility assignments are managed by CloudVault warehouse logistics. Contact support to request a transfer.</p>
             </div>
 
             <!-- Avatar Color Selector -->
@@ -5254,19 +5259,22 @@
             document.getElementById('settings-modal').classList.remove('hidden');
             if (currentUserColor) selectColor(currentUserColor);
 
-            // Populate Home Facility selector from database
+            // Display current assigned Home Facility
             try {
-                const { data: facs } = await supabase.from('facilities').select('*');
-                const select = document.getElementById('settings-facility-select');
-                if (select && facs && facs.length > 0) {
-                    select.innerHTML = facs.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
-                    if (currentUserProfile && currentUserProfile.assigned_facility_id) {
-                        select.value = currentUserProfile.assigned_facility_id;
-                    }
+                const facNameEl = document.getElementById('settings-facility-name');
+                const userFacId = (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
+                                  (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility));
+                
+                if (window.currentActiveFacility && window.currentActiveFacility.name) {
+                    if (facNameEl) facNameEl.textContent = window.currentActiveFacility.name;
+                } else if (userFacId) {
+                    const { data: fac } = await supabase.from('facilities').select('name').eq('id', userFacId).maybeSingle();
+                    if (fac && facNameEl) facNameEl.textContent = fac.name;
                 }
             } catch (e) {
-                console.error("Failed to load facilities in settings:", e);
+                console.error("Failed to load facility in settings:", e);
             }
+            if (window.lucide) lucide.createIcons();
         }
         function closeSettingsModal() {
             document.getElementById('settings-modal').classList.add('hidden');
@@ -5295,18 +5303,13 @@
             btn.disabled = true;
             btn.textContent = 'Saving...';
             try {
-                const selectedFac = document.getElementById('settings-facility-select')?.value;
-                const updatePayload = { avatar_color: tempColor };
-                if (selectedFac) updatePayload.assigned_facility_id = selectedFac;
-
-                const { error } = await supabase.from('users').update(updatePayload).eq('id', currentUser.id);
+                const { error } = await supabase.from('users').update({ avatar_color: tempColor }).eq('id', currentUser.id);
                 if (error) throw error;
 
                 currentUserColor = tempColor;
-                if (currentUserProfile && selectedFac) currentUserProfile.assigned_facility_id = selectedFac;
                 applyAvatarColor(currentUserColor);
                 closeSettingsModal();
-                showToast("Profile & Home Facility updated!");
+                showToast("Profile settings saved!");
             } catch (err) {
                 console.error("Failed to update settings", err);
                 alert("Failed to update settings: " + err.message);
