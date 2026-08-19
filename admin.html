@@ -10211,9 +10211,26 @@
             focusQuickSlotInput();
         }
 
-        function triggerPrintCurrentShelfBarcode() {
+        async function triggerPrintCurrentShelfBarcode() {
             const targetLoc = window.currentInspectedShelfCode || 'A1-B01-S1';
             const isStaging = targetLoc.startsWith('ROOM');
+            const isBayCluster = !targetLoc.includes('-S') && !isStaging;
+
+            let capacity = window.currentInspectedShelfCapacity;
+            if (!capacity) {
+                try {
+                    const { data: locRec } = await supabase.from('warehouse_locations')
+                        .select('capacity')
+                        .or(`identifier.eq.${targetLoc},location_code.eq.${targetLoc},identifier.ilike.%${targetLoc}%,location_code.ilike.%${targetLoc}%`)
+                        .maybeSingle();
+                    if (locRec && locRec.capacity) {
+                        capacity = Number(locRec.capacity);
+                    }
+                } catch (e) {}
+            }
+            if (!capacity) {
+                capacity = isStaging ? 1 : (isBayCluster ? 12 : 3);
+            }
 
             let iframe = document.getElementById('print-label-iframe');
             if (!iframe) {
@@ -10338,12 +10355,12 @@
                     <div class="tag-card">
                         <div class="tag-header">
                             <div class="brand">⚡ CLOUDVAULT WAREHOUSE</div>
-                            <div class="zone-pill">${isStaging ? 'STAGING LOCKER' : 'VAULT SHELF'}</div>
+                            <div class="zone-pill">${isStaging ? 'STAGING LOCKER' : (isBayCluster ? 'VAULT BAY' : 'VAULT SHELF')}</div>
                         </div>
                         <div class="tag-body">
                             <div>
                                 <div class="loc-code">${targetLoc}</div>
-                                <div class="loc-meta">MAX CAPACITY: 4 TOTES • VAULT SECTOR</div>
+                                <div class="loc-meta">MAX CAPACITY: ${capacity} TOTE${capacity !== 1 ? 'S' : ''} • ${isStaging ? 'STAGING SECTOR' : (isBayCluster ? 'BAY CLUSTER SECTOR' : 'VAULT SECTOR')}</div>
                             </div>
                             <div class="qr-wrap">
                                 <div id="print-loc-qr"></div>
