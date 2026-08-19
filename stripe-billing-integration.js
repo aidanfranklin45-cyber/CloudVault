@@ -1059,17 +1059,20 @@
         const promoCodes = promosRes.data || [];
         const redemptions = redemptionsRes.data || [];
 
-        let totalRevenue = 0;
-        let totalCommission = 0;
-        let totalPaid = 0;
+        let totalRevenue = redemptions.reduce((sum, r) => sum + Number(r.invoice_gross_amount || 0), 0);
+        let totalCommission = redemptions.reduce((sum, r) => sum + Number(r.commission_amount || 0), 0);
+        let totalPaid = redemptions.filter(r => r.payout_status === 'PAID').reduce((sum, r) => sum + Number(r.commission_amount || 0), 0);
+        let pendingPayouts = redemptions.filter(r => r.payout_status === 'PENDING').reduce((sum, r) => sum + Number(r.commission_amount || 0), 0);
 
-        creators.forEach(c => {
-          totalRevenue += Number(c.total_attributed_revenue || 0);
-          totalCommission += Number(c.total_commission_earned || 0);
-          totalPaid += Number(c.total_commission_paid || 0);
-        });
+        if (totalRevenue === 0 && creators.length > 0) {
+          creators.forEach(c => {
+            totalRevenue += Number(c.total_attributed_revenue || 0);
+            totalCommission += Number(c.total_commission_earned || 0);
+            totalPaid += Number(c.total_commission_paid || 0);
+          });
+          pendingPayouts = Math.max(0, totalCommission - totalPaid);
+        }
 
-        const pendingPayouts = Math.max(0, totalCommission - totalPaid);
         const activeCodes = promoCodes.filter(p => p.is_active).length;
 
         return {
