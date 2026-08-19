@@ -990,6 +990,11 @@ DECLARE
   v_tax_rate NUMERIC := 0.00;
   v_valet_tax NUMERIC := 0.00;
   v_valet_total NUMERIC := 0.00;
+  v_recycled_ids UUID[];
+  v_recycled_count INT := 0;
+  v_needed_new INT := 0;
+  v_rec_id UUID;
+  v_idx INT := 0;
 BEGIN
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
@@ -1115,18 +1120,22 @@ BEGIN
   IF v_recycled_ids IS NOT NULL THEN
     v_recycled_count := cardinality(v_recycled_ids);
     
-    -- Claim and assign recycled totes to this customer
-    UPDATE public.inventory
-    SET uid = v_uid,
-        label = 'Additional Tote #' || (v_current_totes + 1),
-        status = (CASE WHEN p_logistics_type = 'valet_pickup' THEN 'with-customer' ELSE 'stored' END)::public.inventory_status,
-        activated = false,
-        location_code = 'INTAKE-BAY-1',
-        location_type = 'intake',
-        photo_url = NULL,
-        notes = NULL,
-        last_scanned_at = now()
-    WHERE id = ANY(v_recycled_ids);
+    -- Claim and assign recycled totes to this customer sequentially
+    v_idx := 1;
+    FOREACH v_rec_id IN ARRAY v_recycled_ids LOOP
+      UPDATE public.inventory
+      SET uid = v_uid,
+          label = 'Additional Tote #' || (COALESCE(v_current_totes, 0) + v_idx),
+          status = (CASE WHEN p_logistics_type = 'valet_pickup' THEN 'with-customer' ELSE 'stored' END)::public.inventory_status,
+          activated = false,
+          location_code = 'INTAKE-BAY-1',
+          location_type = 'intake',
+          photo_url = NULL,
+          notes = NULL,
+          last_scanned_at = now()
+      WHERE id = v_rec_id;
+      v_idx := v_idx + 1;
+    END LOOP;
   END IF;
 
   -- 2. If additional totes are still needed beyond recycled pool, insert new barcode rows
@@ -1164,24 +1173,37 @@ BEGIN
       total_mrr = total_mrr + v_delta
   WHERE id = 'financials';
 
-  -- If valet, create access request and charge upfront valet logistics dispatch fee only
-  IF p_logistics_type = 'valet_pickup' THEN
-    v_pin := floor(1000 + random() * 9000)::text;
-    v_expires_at := now() + interval '24 hours';
-    INSERT INTO public.access_requests (uid, request_type, additional_totes, fulfillment_type, pin, pin_expires_at, valet_fee, facility_id, status)
-    VALUES (
-      v_uid,
-      'new_tote_delivery',
-      p_additional_totes,
-      'valet_delivery',
-      v_pin,
-      v_expires_at,
-      v_valet_fee,
-      v_facility_id,
-      'pending'
-    );
+  -- Create access request for BOTH valet and self-service so workers have the task in Admin Hub
+  v_pin := floor(1000 + random() * 9000)::text;
+  v_expires_at := now() + interval '48 hours';
+  INSERT INTO public.access_requests (
+    uid, 
+    request_type, 
+    additional_totes, 
+    fulfillment_type, 
+    pin, 
+    pin_expires_at, 
+    valet_fee, 
+    facility_id, 
+    status,
+    target_date,
+    time_slot
+  ) VALUES (
+    v_uid,
+    'new_tote_delivery',
+    p_additional_totes,
+    CASE WHEN p_logistics_type = 'valet_pickup' THEN 'valet_delivery' ELSE 'staging' END,
+    v_pin,
+    v_expires_at,
+    v_valet_fee,
+    v_facility_id,
+    'pending',
+    COALESCE(p_target_date, CURRENT_DATE + INTERVAL '1 day'),
+    COALESCE(p_time_slot, '09:00 AM - 12:00 PM')
+  );
 
-    -- Generate immediate invoice for Valet Logistics Dispatch ONLY (Storage is billed pro-rata at month end)
+  -- If valet, generate immediate invoice for Valet Logistics Dispatch ONLY (Storage is billed pro-rata at month end)
+  IF p_logistics_type = 'valet_pickup' THEN
     v_inv_number := 'INV-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(FLOOR(RANDOM() * 900000 + 100000)::TEXT, 6, '0');
     v_txn_ref := 'TXN-VALET-' || LPAD(FLOOR(RANDOM() * 900000 + 100000)::TEXT, 6, '0');
 
@@ -1267,6 +1289,108 @@ BEGIN
     'valetTotal', v_valet_total,
     'immediateBilled', v_valet_total,
     'message', 'Added ' || p_additional_totes::text || ' totes. Storage will be billed pro-rata on your monthly renewal date.'
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Inventory & Subscription Auto-Reconciliation Function
+CREATE OR REPLACE FUNCTION public.reconcile_user_inventory(p_uid UUID DEFAULT NULL)
+RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+  v_rec RECORD;
+  v_inv_count INT;
+  v_deficit INT;
+  v_created_total INT := 0;
+  v_facility_id TEXT;
+  v_pin TEXT;
+BEGIN
+  FOR v_rec IN 
+    SELECT s.uid, s.total_totes, s.logistics_type, u.assigned_facility_id, u.active_zone
+    FROM public.subscriptions s
+    JOIN public.users u ON s.uid = u.id
+    WHERE s.status = 'active'
+      AND (p_uid IS NULL OR s.uid = p_uid)
+  LOOP
+    SELECT COUNT(*) INTO v_inv_count
+    FROM public.inventory
+    WHERE uid = v_rec.uid;
+
+    v_facility_id := COALESCE(v_rec.assigned_facility_id, 'facility_yakima');
+
+    IF v_rec.total_totes > v_inv_count THEN
+      v_deficit := v_rec.total_totes - v_inv_count;
+      
+      -- Provision unactivated intake inventory totes
+      FOR i IN 0..(v_deficit - 1) LOOP
+        INSERT INTO public.inventory (
+          uid,
+          tote_code,
+          label,
+          status,
+          facility_id,
+          activated,
+          location_code,
+          location_type
+        ) VALUES (
+          v_rec.uid,
+          public.generate_tote_code(v_facility_id),
+          'Additional Tote #' || (v_inv_count + i + 1),
+          (CASE WHEN v_rec.logistics_type = 'valet_pickup' THEN 'with-customer' ELSE 'stored' END)::public.inventory_status,
+          v_facility_id,
+          false,
+          'INTAKE-BAY-1',
+          'intake'
+        );
+      END LOOP;
+
+      -- Update user active totes held
+      UPDATE public.users
+      SET active_totes_held = v_rec.total_totes
+      WHERE id = v_rec.uid;
+
+      -- Check if pending intake delivery request exists, create if not
+      IF NOT EXISTS (
+        SELECT 1 FROM public.access_requests 
+        WHERE uid = v_rec.uid 
+          AND request_type = 'new_tote_delivery' 
+          AND status = 'pending'
+      ) THEN
+        v_pin := floor(1000 + random() * 9000)::text;
+        INSERT INTO public.access_requests (
+          uid,
+          request_type,
+          additional_totes,
+          fulfillment_type,
+          pin,
+          pin_expires_at,
+          valet_fee,
+          facility_id,
+          status,
+          target_date,
+          time_slot
+        ) VALUES (
+          v_rec.uid,
+          'new_tote_delivery',
+          v_deficit,
+          CASE WHEN v_rec.logistics_type = 'valet_pickup' THEN 'valet_delivery' ELSE 'staging' END,
+          v_pin,
+          now() + interval '48 hours',
+          0.00,
+          v_facility_id,
+          'pending',
+          CURRENT_DATE + INTERVAL '1 day',
+          '09:00 AM - 12:00 PM'
+        );
+      END IF;
+
+      v_created_total := v_created_total + v_deficit;
+    END IF;
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'provisionedTotes', v_created_total,
+    'message', 'Inventory reconciled successfully'
   );
 END;
 $$ LANGUAGE plpgsql;
@@ -2031,6 +2155,7 @@ BEGIN
     SELECT COUNT(*) INTO v_current_count
     FROM public.inventory
     WHERE (location_code = p_location_code OR (v_target_loc.id IS NOT NULL AND location_id = v_target_loc.id))
+      AND (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
       AND status IN ('stored', 'staged', 'pending-stage')
       AND id != v_item.id;
 
@@ -2371,6 +2496,7 @@ BEGIN
     SELECT COUNT(*) INTO v_current_count
     FROM public.inventory
     WHERE location_code = v_next_location_code
+      AND (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
       AND status IN ('stored', 'staged', 'pending-stage')
       AND id != v_item.id;
 
@@ -2613,6 +2739,7 @@ BEGIN
   SELECT COUNT(*) INTO v_current_count
   FROM public.inventory
   WHERE location_code = v_assigned_location_code
+    AND (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
     AND status IN ('stored', 'staged', 'pending-stage')
     AND id != v_item.id;
 

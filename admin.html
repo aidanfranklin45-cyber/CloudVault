@@ -6391,10 +6391,12 @@
 
                     // Dynamically look up location capacity attribute from warehouse_locations table
                     let maxCapacity = 3;
+                    const activeFacId = getSafeSavedFacilityId() || 'facility_yakima';
                     try {
                         const { data: locRecord } = await supabase
                             .from('warehouse_locations')
                             .select('capacity')
+                            .eq('facility_id', activeFacId)
                             .or(`identifier.eq.${targetLoc},location_code.eq.${targetLoc}`)
                             .maybeSingle();
 
@@ -6405,10 +6407,11 @@
                         console.warn("Dynamic capacity lookup warning:", e);
                     }
 
-                    // Enforce Shelf Capacity / Overfill Prevention from dynamic capacity attribute
+                    // Enforce Shelf Capacity / Overfill Prevention from dynamic capacity attribute (Facility-Scoped)
                     const { count: storedCount } = await supabase
                         .from('inventory')
                         .select('id', { count: 'exact', head: true })
+                        .or(`facility_id.eq.${activeFacId},facility_id.is.null`)
                         .eq('location_code', targetLoc)
                         .in('status', ['stored', 'staged', 'pending-stage'])
                         .neq('tote_code', barcode);
@@ -9813,9 +9816,11 @@
             document.getElementById('slm-subtitle').textContent = `Facility: ${facName} • ${isBayCluster ? 'Bay Level Coordinates' : 'Shelf Slot Coordinate'}`;
 
             try {
-                // Query all inventory totes assigned to this shelf or matching this bay prefix
+                const facId = getSafeSavedFacilityId() || 'facility_yakima';
+                // Query all inventory totes assigned to this shelf or matching this bay prefix (Facility-Scoped)
                 let query = supabase.from('inventory')
                     .select('*, users!uid(id, name, email, phone, active_totes_held, created_at)')
+                    .or(`facility_id.eq.${facId},facility_id.is.null`)
                     .order('created_at', { ascending: false });
 
                 if (isBayCluster) {
