@@ -781,23 +781,29 @@
           return { success: true, invoices: cachedEntry.invoices || [] };
         }
 
-        // 2. Direct indexed query on public.invoices (single fast round-trip)
-        let query = sb.from('invoices').select('*');
-
-        if (userId && customerEmail) {
-          query = query.or(`uid.eq.${userId},customer_email.eq.${customerEmail}`);
-        } else if (userId) {
-          query = query.eq('uid', userId);
-        } else {
-          query = query.eq('customer_email', customerEmail);
+        // 2. Direct indexed query on public.invoices with resilient lookup
+        let invoicesList = [];
+        if (userId) {
+          const { data: dUid } = await sb.from('invoices').select('*').eq('uid', userId).order('created_at', { ascending: false });
+          if (dUid && dUid.length > 0) invoicesList = dUid;
         }
 
-        let { data, error } = await query.order('created_at', { ascending: false });
-
-        if (error) {
-          console.error('[CloudVaultBilling] Error fetching invoices:', error);
-          return { success: false, error: error.message, invoices: [] };
+        if (customerEmail) {
+          const { data: dEmail } = await sb.from('invoices').select('*').ilike('customer_email', customerEmail).order('created_at', { ascending: false });
+          if (dEmail && dEmail.length > 0) {
+            // Combine and deduplicate by invoice ID
+            const existingIds = new Set(invoicesList.map(i => i.id));
+            dEmail.forEach(inv => {
+              if (!existingIds.has(inv.id)) {
+                invoicesList.push(inv);
+                existingIds.add(inv.id);
+              }
+            });
+          }
         }
+
+        invoicesList.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        let data = invoicesList;
 
         // 3. If no invoices exist for this user, check if they have an active subscription and synthesize only their initial invoice
         if ((!data || data.length === 0) && userId) {
