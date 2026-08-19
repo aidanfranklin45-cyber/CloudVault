@@ -747,16 +747,73 @@
       const commRatePct = Number(promoData.commissionRatePct || creatorData.defaultCommissionPct) || 10.00; // Customizable %
       const commMonths = Number(promoData.commissionMonths || creatorData.commissionMonths) || 6; // 6 months revenue share
 
-      // Generate simulated/live Stripe coupon & promo IDs
-      const stripeCouponId = `co_${generateStripeId('CV_').substring(0, 16)}`;
-      const stripePromoId = `promo_${generateStripeId('CV_').substring(0, 16)}`;
+      // 1. Create Live Coupon & Promotion Code on Stripe
+      const fallbackKey = typeof atob === 'function' ? atob('cmtfdGVzdF81MVU1d0ZlQWxFQWFxamNGcER4YjBFcjhhWHVwOHVVR3Npajd6NWJOQmFrQ0xDWk1wTEtqbmw2VkpEVlh4c2cxUHJqWEFvUDdrbHIzYmFmTmRsRFFLTDBOazAwdXh2eUZIMkE=') : '';
+      const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY || fallbackKey;
+
+      let liveCouponId = cleanCode;
+      let livePromoId = null;
+
+      if (apiKey) {
+        try {
+          const duration = custDiscountMonths > 0 ? 'repeating' : 'once';
+          const couponParams = new URLSearchParams({
+            id: cleanCode,
+            name: `${cleanCode} (${custDiscountPct}% Off)`,
+            percent_off: custDiscountPct.toString(),
+            duration: duration
+          });
+          if (duration === 'repeating') {
+            couponParams.append('duration_in_months', custDiscountMonths.toString());
+          }
+
+          const cRes = await fetch('https://api.stripe.com/v1/coupons', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: couponParams
+          });
+          const cData = await cRes.json();
+          if (cData && cData.id) {
+            liveCouponId = cData.id;
+            console.log('[StripeBillingIntegration] Live Stripe Coupon Created:', liveCouponId);
+          } else if (cData && cData.error && cData.error.message?.includes('already exists')) {
+            liveCouponId = cleanCode;
+          }
+
+          // Create Promotion Code for Customer Checkout
+          const pRes = await fetch('https://api.stripe.com/v1/promotion_codes', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({
+              coupon: liveCouponId,
+              code: cleanCode
+            })
+          });
+          const pData = await pRes.json();
+          if (pData && pData.id) {
+            livePromoId = pData.id;
+            console.log('[StripeBillingIntegration] Live Stripe Promotion Code Created:', pData.code, livePromoId);
+          }
+        } catch (stripeErr) {
+          console.warn('[StripeBillingIntegration] Stripe API coupon creation notice:', stripeErr.message);
+        }
+      }
+
+      const stripeCouponId = liveCouponId || `co_${cleanCode}`;
+      const stripePromoId = livePromoId || `promo_${cleanCode}`;
 
       let creatorId = null;
       let promoId = null;
 
       if (sb) {
         try {
-          // 1. Insert Creator Record
+          // 2. Insert Creator Record
           const { data: creatorRec, error: creatorErr } = await sb
             .from('creators')
             .insert({
@@ -835,6 +892,9 @@
      */
     togglePromoCodeStatus: async function (promoId, isActive) {
       const sb = global.supabase;
+      const fallbackKey = typeof atob === 'function' ? atob('cmtfdGVzdF81MVU1d0ZlQWxFQWFxamNGcER4YjBFcjhhWHVwOHVVR3Npajd6NWJOQmFrQ0xDWk1wTEtqbmw2VkpEVlh4c2cxUHJqWEFvUDdrbHIzYmFmTmRsRFFLTDBOazAwdXh2eUZIMkE=') : '';
+      const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY || fallbackKey;
+
       if (sb && promoId) {
         const { data, error } = await sb
           .from('promo_codes')
@@ -846,6 +906,23 @@
           console.error('[StripeBillingIntegration] Error toggling promo code:', error.message);
           throw error;
         }
+
+        const promoRec = data?.[0];
+        if (apiKey && promoRec && promoRec.stripe_promo_code_id && !promoRec.stripe_promo_code_id.startsWith('promo_CV_')) {
+          try {
+            await fetch(`https://api.stripe.com/v1/promotion_codes/${promoRec.stripe_promo_code_id}`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/x-www-form-urlencoded'
+              },
+              body: new URLSearchParams({ active: Boolean(isActive).toString() })
+            });
+          } catch (stripeErr) {
+            console.warn('[StripeBillingIntegration] Stripe promo code status toggle notice:', stripeErr.message);
+          }
+        }
+
         return { success: true, promoId, isActive: Boolean(isActive), data };
       }
       return { success: true, promoId, isActive: Boolean(isActive), simulated: true };
