@@ -2549,6 +2549,13 @@
                 </span>
                 <h2 class="text-xl font-black font-mono text-slate-900 tracking-wider">${invoiceNum}</h2>
                 <p class="text-xs text-slate-500 font-mono">Issued: ${createdAt}</p>
+                ${invoiceObj.stripe_invoice_id ? `
+                  <div class="pt-0.5">
+                    <span class="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
+                      💳 Stripe: ${invoiceObj.stripe_invoice_id}
+                    </span>
+                  </div>
+                ` : ''}
               </div>
             </div>
           </div>
@@ -2640,9 +2647,15 @@
           </div>
 
           <!-- Printable Modal Footer Controls -->
-          <div class="no-print bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-between items-center">
+          <div class="no-print bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-between items-center flex-wrap gap-3">
             <p class="text-xs text-slate-500 font-medium font-mono">CloudVault Automated Invoice Engine &bull; Official Statement</p>
-            <div class="flex space-x-3">
+            <div class="flex items-center space-x-2.5">
+              ${(invoiceObj.stripe_invoice_pdf || invoiceObj.stripe_hosted_invoice_url) ? `
+                <a href="${invoiceObj.stripe_invoice_pdf || invoiceObj.stripe_hosted_invoice_url}" target="_blank" download class="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
+                  <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                  <span>Stripe PDF</span>
+                </a>
+              ` : ''}
               <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center space-x-1.5 cursor-pointer">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                 <span>Print Invoice</span>
