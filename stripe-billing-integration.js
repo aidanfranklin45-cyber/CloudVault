@@ -784,6 +784,7 @@
           }
 
           // Create Promotion Code for Customer Checkout
+          const cleanPromoCode = cleanCode.replace(/[^a-zA-Z0-9_-]/g, '');
           const pRes = await fetch('https://api.stripe.com/v1/promotion_codes', {
             method: 'POST',
             headers: {
@@ -791,8 +792,9 @@
               'Content-Type': 'application/x-www-form-urlencoded'
             },
             body: new URLSearchParams({
-              coupon: liveCouponId,
-              code: cleanCode
+              'promotion[type]': 'coupon',
+              'promotion[coupon]': liveCouponId,
+              'code': cleanPromoCode
             })
           });
           const pData = await pRes.json();
@@ -1015,6 +1017,52 @@
 
           if (!error && data) {
             console.log('[StripeBillingIntegration] Attribution recorded successfully:', data);
+
+            // Sync discount to Stripe Customer / Subscription if Stripe key available
+            const fallbackKey = typeof atob === 'function' ? atob('cmtfdGVzdF81MVU1d0ZlQWxFQWFxamNGcER4YjBFcjhhWHVwOHVVR3Npajd6NWJOQmFrQ0xDWk1wTEtqbmw2VkpEVlh4c2cxUHJqWEFvUDdrbHIzYmFmTmRsRFFLTDBOazAwdXh2eUZIMkE=') : '';
+            const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY || fallbackKey;
+            if (apiKey && customerUid) {
+              try {
+                const { data: u } = await sb.from('users').select('email, stripe_customer_id').eq('id', customerUid).maybeSingle();
+                const cleanPromoCode = promoCode.replace(/[^a-zA-Z0-9_-]/g, '');
+                let custId = u?.stripe_customer_id;
+
+                if (!custId && u?.email) {
+                  const sRes = await fetch(`https://api.stripe.com/v1/customers?email=${encodeURIComponent(u.email)}&limit=1`, {
+                    headers: { 'Authorization': `Bearer ${apiKey}` }
+                  });
+                  const sData = await sRes.json();
+                  if (sData.data && sData.data.length > 0) {
+                    custId = sData.data[0].id;
+                  }
+                }
+
+                if (custId) {
+                  // Attach coupon discount to active subscriptions in Stripe
+                  const subRes = await fetch(`https://api.stripe.com/v1/subscriptions?customer=${custId}&limit=5`, {
+                    headers: { 'Authorization': `Bearer ${apiKey}` }
+                  });
+                  const subData = await subRes.json();
+                  if (subData.data && subData.data.length > 0) {
+                    for (const subItem of subData.data) {
+                      await fetch(`https://api.stripe.com/v1/subscriptions/${subItem.id}`, {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${apiKey}`,
+                          'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        body: new URLSearchParams({
+                          'discounts[0][coupon]': cleanPromoCode
+                        })
+                      });
+                    }
+                  }
+                }
+              } catch (sSyncErr) {
+                console.warn('[StripeBillingIntegration] Live Stripe customer promo sync notice:', sSyncErr.message);
+              }
+            }
+
             return data;
           }
         } catch (rpcErr) {

@@ -2059,6 +2059,47 @@
     },
 
     /**
+     * Checks if a user has an active creator promotional discount (e.g. 20% off for 2 months from signup).
+     * @param {string} userId - Customer User UUID
+     * @returns {Promise<Object|null>} Promo info or null if ineligible/expired
+     */
+    getUserActivePromo: async function (userId) {
+      const sb = global.supabase;
+      if (!userId || !sb) return null;
+      try {
+        const { data: usr } = await sb.from('users').select('referred_by_promo_code, referred_at, created_at').eq('id', userId).maybeSingle();
+        if (!usr || !usr.referred_by_promo_code) return null;
+
+        const promoCode = usr.referred_by_promo_code.trim().toUpperCase();
+        const refDate = new Date(usr.referred_at || usr.created_at || Date.now());
+
+        // Fetch promo code duration and discount pct
+        const cleanBase = promoCode.replace('%', '');
+        const { data: promo } = await sb.from('promo_codes').select('*').or(`code.eq.${cleanBase},code.eq.${cleanBase}%`).maybeSingle();
+        const durationMonths = Number(promo?.customer_discount_duration_months || 2);
+        const discountPct = Number(promo?.customer_discount_pct || 20.00);
+
+        const now = new Date();
+        const elapsedMonths = (now.getFullYear() - refDate.getFullYear()) * 12 + (now.getMonth() - refDate.getMonth()) + 1;
+
+        if (elapsedMonths <= durationMonths) {
+          return {
+            active: true,
+            promoCode: promoCode,
+            discountPct: discountPct,
+            durationMonths: durationMonths,
+            currentMonthIndex: elapsedMonths,
+            creatorId: promo?.creator_id
+          };
+        }
+        return { active: false, promoCode: promoCode, expired: true, durationMonths: durationMonths };
+      } catch (e) {
+        console.warn('[CloudVaultBilling] getUserActivePromo notice:', e);
+        return null;
+      }
+    },
+
+    /**
      * Renders and displays the official Stripe statement modal in-app.
      * @param {Object} invoiceObj - Invoice record object
      */
@@ -2122,20 +2163,15 @@
       const computedServiceSubtotal = serviceLines.reduce((sum, item) => sum + Number(item.amount || ((item.qty || 1) * (item.unit_price || 0)) || 0), 0);
       const effectiveSubtotal = Number(invoiceObj.subtotal) > 0 ? Number(invoiceObj.subtotal) : (computedServiceSubtotal > 0 ? computedServiceSubtotal : 35.00);
 
-      // Discount Resolution
+      // Discount Resolution: strictly use recorded discount from invoiceObj or discount line items (no fake fallbacks)
       let discountAmount = Number(invoiceObj.discount || invoiceObj.discount_amount || 0);
       if (discountAmount === 0 && discountLines.length > 0) {
         discountAmount = discountLines.reduce((sum, item) => sum + Math.abs(Number(item.amount || item.unit_price || 0)), 0);
       }
-      
-      const userPromo = invoiceObj.promo_code || window.currentUserProfile?.referred_by_promo_code || (invoiceObj.notes && (invoiceObj.notes.includes('%') || invoiceObj.notes.toLowerCase().includes('promo')) ? 'ROSS20%' : null);
-      if (discountAmount === 0 && userPromo) {
-        discountAmount = Math.round(effectiveSubtotal * 0.20 * 100) / 100;
-      }
 
-      let promoLabel = 'Creator Promo Discount (20% off 2 mo)';
-      if (userPromo) {
-        promoLabel = `Creator Promo Discount (${userPromo} — 20% off Month 1 of 2)`;
+      let promoLabel = 'Creator Promo Discount';
+      if (invoiceObj.promo_code) {
+        promoLabel = `Creator Promo Discount (${invoiceObj.promo_code} — 20% off)`;
       } else if (discountLines.length > 0 && discountLines[0].description) {
         promoLabel = discountLines[0].description.replace(/^[-–—\s]+/, '');
       }

@@ -4899,8 +4899,50 @@
                             lineItems.push({ description: `Expedited Staging Access (${selectedReservationSurge.title || 'Surge Tier'})`, qty: 1, unit_price: surgeFee, amount: surgeFee });
                         }
 
-                        if (finalDeliveryFee > 0 || surgeFee > 0) {
-                            await window.CloudVaultBilling.createInvoiceRecord({
+                        const grossDeliveryAndSurge = finalDeliveryFee + surgeFee;
+                        let promoDiscountAmt = 0;
+                        let appliedPromoCode = null;
+                        let promoInfo = null;
+
+                        if (grossDeliveryAndSurge > 0 && window.CloudVaultBilling && typeof window.CloudVaultBilling.getUserActivePromo === 'function') {
+                            try {
+                                promoInfo = await window.CloudVaultBilling.getUserActivePromo(currentUser.id);
+                                if (promoInfo && promoInfo.active) {
+                                    appliedPromoCode = promoInfo.promoCode;
+                                    promoDiscountAmt = Math.round(grossDeliveryAndSurge * (promoInfo.discountPct / 100.0) * 100) / 100;
+                                }
+                            } catch (pCheckErr) {
+                                console.warn('[CloudVault Billing] Promo check notice:', pCheckErr);
+                            }
+                        }
+
+                        const netTaxable = Math.max(0, grossDeliveryAndSurge - promoDiscountAmt);
+                        const userTaxRate = (userFac === 'facility_seattle_north' ? 0.1025 : (userFac === 'facility_portland_central' ? 0.00 : 0.085));
+                        const taxAmt = Math.round(netTaxable * userTaxRate * 100) / 100;
+                        const totalCharged = Math.max(0, Math.round((netTaxable + taxAmt) * 100) / 100);
+
+                        if (promoDiscountAmt > 0) {
+                            lineItems.push({
+                                description: `Creator Promo Discount (${appliedPromoCode} — ${promoInfo.discountPct}% off Month ${promoInfo.currentMonthIndex} of ${promoInfo.durationMonths})`,
+                                qty: 1,
+                                unit_price: -promoDiscountAmt,
+                                amount: -promoDiscountAmt,
+                                is_discount: true,
+                                promo_code: appliedPromoCode
+                            });
+                        }
+                        if (taxAmt > 0) {
+                            lineItems.push({
+                                description: `State/Local Sales Tax (${(userTaxRate * 100).toFixed(2)}%)`,
+                                qty: 1,
+                                unit_price: taxAmt,
+                                amount: taxAmt,
+                                is_tax: true
+                            });
+                        }
+
+                        if (grossDeliveryAndSurge > 0) {
+                            const invCreated = await window.CloudVaultBilling.createInvoiceRecord({
                                 uid: currentUser.id,
                                 customer_name: currentUser.user_metadata?.name || (currentProfile && currentProfile.name) || currentUser.email.split('@')[0],
                                 customer_email: currentUser.email,
@@ -4911,10 +4953,28 @@
                                 subtotal: 0.00,
                                 delivery_fee: finalDeliveryFee,
                                 surge_fee: surgeFee,
+                                discount: promoDiscountAmt,
+                                promo_code: appliedPromoCode,
+                                tax: taxAmt,
+                                total_amount: totalCharged,
                                 payment_method: 'card_on_file',
                                 line_items: lineItems,
-                                notes: `Access retrieval request for ${toteCount} totes (${retrievalLogisticsType === 'valet_delivery' ? 'Valet Delivery' : 'Self-Service Staging'}). Target Date: ${targetDate || 'Standard'}.${isNextDayPromo ? ' (Free Next-Day Promo Applied)' : ''}`
+                                notes: `Access retrieval request for ${toteCount} totes (${retrievalLogisticsType === 'valet_delivery' ? 'Valet Delivery' : 'Self-Service Staging'}). Target Date: ${targetDate || 'Standard'}.${promoDiscountAmt > 0 ? ` (Applied active promo ${appliedPromoCode} discount: -$${promoDiscountAmt.toFixed(2)})` : ''}`
                             });
+
+                            if (appliedPromoCode && typeof StripeBillingIntegration !== 'undefined') {
+                                try {
+                                    await StripeBillingIntegration.recordPromoAttribution(
+                                        appliedPromoCode,
+                                        currentUser.id,
+                                        invCreated?.data?.id ? `in_${invCreated.data.id}` : ('in_valet_' + Date.now()),
+                                        grossDeliveryAndSurge,
+                                        netTaxable
+                                    );
+                                } catch (attErr) {
+                                    console.warn('[Creator Attribution] Access request attribution notice:', attErr);
+                                }
+                            }
                         }
                     } catch (invErr) {
                         console.warn('[CloudVault Billing] Access request invoice creation notice:', invErr);
