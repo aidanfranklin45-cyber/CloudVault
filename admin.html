@@ -8130,10 +8130,16 @@
                 `).join('');
             }
 
-            // Update Facility Composition Doughnut Chart
-            if (facilityCompositionChartObj && facDataList.length > 0) {
-                facilityCompositionChartObj.data.labels = facDataList.map(f => f.name.replace(' Fulfillment Center', '').replace(' Hub', ''));
-                facilityCompositionChartObj.data.datasets[0].data = facDataList.map(f => Math.max(1, f.totes));
+            // Update Facility Composition Doughnut Chart (Only plot facilities with real totes > 0)
+            if (facilityCompositionChartObj) {
+                const activeWithTotes = facDataList.filter(f => f.totes > 0);
+                if (activeWithTotes.length > 0) {
+                    facilityCompositionChartObj.data.labels = activeWithTotes.map(f => f.name.replace(' Fulfillment Center', '').replace(' Hub', ''));
+                    facilityCompositionChartObj.data.datasets[0].data = activeWithTotes.map(f => f.totes);
+                } else {
+                    facilityCompositionChartObj.data.labels = ['No Active Storage'];
+                    facilityCompositionChartObj.data.datasets[0].data = [0];
+                }
                 facilityCompositionChartObj.update();
 
                 const legendEl = document.getElementById('facility-composition-legend');
@@ -8142,7 +8148,7 @@
                     const sumTotes = facDataList.reduce((sum, f) => sum + f.totes, 0) || 1;
                     legendEl.innerHTML = facDataList.map((f, idx) => {
                         const color = colors[idx % colors.length];
-                        const pct = ((f.totes / sumTotes) * 100).toFixed(1);
+                        const pct = sumTotes > 0 ? ((f.totes / sumTotes) * 100).toFixed(1) : "0.0";
                         return `
                             <div class="flex items-center justify-between font-mono">
                                 <div class="flex items-center gap-1.5">
@@ -8156,7 +8162,7 @@
                 }
             }
 
-            // 6. Month-over-Month (MoM) Logistics Movement & Access Requests
+            // 6. Month-over-Month (MoM) Logistics Movement & Access Requests (100% Real DB Records)
             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             const pastMonths = [];
             for (let i = 5; i >= 0; i--) {
@@ -8201,20 +8207,14 @@
                 }
             });
 
-            // Fallback baseline for initial clean display
-            if (curMonthMoved === 0 && totalActiveTotes > 0) {
-                curMonthMoved = Math.round(totalActiveTotes * 0.35);
-                curMonthValet = Math.round(curMonthMoved * 0.60);
-                curMonthSelf = curMonthMoved - curMonthValet;
-                priorMonthMoved = Math.round(curMonthMoved * 0.85);
-            }
-
-            const momDelta = priorMonthMoved > 0 ? (((curMonthMoved - priorMonthMoved) / priorMonthMoved) * 100).toFixed(1) : "+100";
+            const momDelta = priorMonthMoved > 0
+                ? (((curMonthMoved - priorMonthMoved) / priorMonthMoved) * 100).toFixed(1)
+                : (curMonthMoved > 0 ? '+100.0' : '0.0');
             const isPositive = Number(momDelta) >= 0;
 
             const momBadge = document.getElementById('exec-mom-totes-badge');
             if (momBadge) {
-                momBadge.textContent = `${isPositive ? '+' : ''}${momDelta}% MoM`;
+                momBadge.textContent = priorMonthMoved === 0 && curMonthMoved > 0 ? 'New Growth' : `${isPositive ? '+' : ''}${momDelta}% MoM`;
                 momBadge.className = `text-[10px] font-mono px-2 py-0.5 rounded-full border ${isPositive ? 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20'}`;
             }
 
@@ -8226,15 +8226,15 @@
             if (valetVsStagingEl) valetVsStagingEl.textContent = `${curMonthValet} / ${curMonthSelf}`;
             const valetRatioEl = document.getElementById('exec-valet-ratio');
             if (valetRatioEl) {
-                const vPct = curMonthMoved > 0 ? Math.round((curMonthValet / curMonthMoved) * 100) : 60;
+                const vPct = curMonthMoved > 0 ? Math.round((curMonthValet / curMonthMoved) * 100) : 0;
                 valetRatioEl.textContent = `${vPct}% Valet Share`;
             }
 
-            // Update Logistics Velocity Chart
+            // Update Logistics Velocity Chart with 100% Real Pure Database Counts (0s for unpopulated months)
             if (logisticsVelocityChartObj) {
                 logisticsVelocityChartObj.data.labels = pastMonths.map(m => m.label);
-                logisticsVelocityChartObj.data.datasets[0].data = pastMonths.map(m => m.stagedTotes || (m.totalTotes ? Math.round(m.totalTotes * 0.4) : Math.round(curMonthSelf * 0.8)));
-                logisticsVelocityChartObj.data.datasets[1].data = pastMonths.map(m => m.valetTotes || (m.totalTotes ? Math.round(m.totalTotes * 0.6) : Math.round(curMonthValet * 0.8)));
+                logisticsVelocityChartObj.data.datasets[0].data = pastMonths.map(m => m.stagedTotes);
+                logisticsVelocityChartObj.data.datasets[1].data = pastMonths.map(m => m.valetTotes);
                 logisticsVelocityChartObj.update();
             }
 
