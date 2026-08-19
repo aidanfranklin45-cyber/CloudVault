@@ -777,31 +777,31 @@
                 <!-- Divider -->
                 <div class="border-t border-gray-800/80 my-2"></div>
 
-                <!-- Generator Sub-Panel 2: Staging Room Builder (Secondary UI) -->
+                <!-- Generator Sub-Panel 2: Staging Rooms Builder (Secondary UI) -->
                 <div class="space-y-4">
                     <div class="flex items-center justify-between">
                         <h4 class="text-xs font-extrabold uppercase text-white tracking-wider flex items-center gap-2">
-                            <i data-lucide="door-open" class="w-3.5 h-3.5 text-emerald-400"></i> Staging Room Builder
+                            <i data-lucide="door-open" class="w-3.5 h-3.5 text-emerald-400"></i> Staging Rooms Builder
                         </h4>
-                        <span class="text-[10px] text-gray-500 font-mono">Format: Room-Bay</span>
+                        <span class="text-[10px] text-gray-500 font-mono">Format: ROOM-{n}</span>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Room Identifier</label>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Room Prefix</label>
                             <input type="text" id="conf-staging-room-id" oninput="updateStagingPreviewText()"
-                                class="fspec-input w-full font-mono text-emerald-300" placeholder="ROOM-1" value="ROOM-1">
+                                class="fspec-input w-full font-mono text-emerald-300" placeholder="ROOM" value="ROOM">
                         </div>
                         <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Total Bays / Lockers</label>
-                            <input type="number" min="1" max="100" id="conf-staging-room-bays"
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Total Staging Rooms</label>
+                            <input type="number" min="1" max="50" id="conf-staging-room-bays"
                                 oninput="updateStagingPreviewText()" class="fspec-input w-full font-mono text-emerald-300"
-                                placeholder="—" value="">
+                                placeholder="3" value="3">
                         </div>
                     </div>
                     <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                         <p class="text-[11px] text-gray-400 font-mono" id="conf-staging-preview-text">
-                            Preview: <strong class="text-white">—</strong> staging locations (Format: <span
-                                class="text-emerald-400 font-bold">ROOM-1-BAY-01</span>)
+                            Preview: <strong class="text-white">3</strong> staging rooms (Format: <span
+                                class="text-emerald-400 font-bold">ROOM-1, ROOM-2, ROOM-3</span>)
                         </p>
                         <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                             <button type="button" id="btn-print-staging-barcodes" onclick="window.openPrintLocationLabelModal('STAGING')"
@@ -811,7 +811,7 @@
                             </button>
                             <button onclick="generateStagingLocationsUI()" id="btn-generate-staging-locations"
                                 class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider">
-                                <i data-lucide="plus-circle" class="w-4 h-4"></i> Generate &amp; Sync Staging Locations
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i> Generate &amp; Sync Staging Rooms
                             </button>
                         </div>
                     </div>
@@ -1579,15 +1579,16 @@
                 }
 
                 function updateStagingPreviewText() {
-                    const roomId = (document.getElementById('conf-staging-room-id').value || 'ROOM-1').trim().toUpperCase();
-                    const bays = parseInt(document.getElementById('conf-staging-room-bays').value);
+                    const prefix = (document.getElementById('conf-staging-room-id')?.value || 'ROOM').trim().toUpperCase().replace(/[-_]+$/, '');
+                    const rooms = parseInt(document.getElementById('conf-staging-room-bays')?.value);
 
                     const el = document.getElementById('conf-staging-preview-text');
                     if (el) {
-                        if (bays !== null && !isNaN(bays)) {
-                            el.innerHTML = `Preview: <strong class="text-white">${bays}</strong> staging location${bays === 1 ? '' : 's'} (Format: <span class="text-emerald-400 font-bold">${escapeHtml(roomId)}-BAY-01</span>)`;
+                        if (rooms !== null && !isNaN(rooms) && rooms > 0) {
+                            const sample = rooms > 1 ? `${prefix}-1, ${prefix}-2... ${prefix}-${rooms}` : `${prefix}-1`;
+                            el.innerHTML = `Preview: <strong class="text-white">${rooms}</strong> staging room${rooms === 1 ? '' : 's'} (Format: <span class="text-emerald-400 font-bold">${escapeHtml(sample)}</span>)`;
                         } else {
-                            el.innerHTML = `Preview: <strong class="text-white">—</strong> staging locations (Format: <span class="text-emerald-400 font-bold">${escapeHtml(roomId)}-BAY-01</span>)`;
+                            el.innerHTML = `Preview: <strong class="text-white">—</strong> staging rooms (Format: <span class="text-emerald-400 font-bold">${escapeHtml(prefix)}-1</span>)`;
                         }
                     }
                 }
@@ -1636,22 +1637,18 @@
                             }
                         }
 
-                        // Dynamically extract staging room ID and bay count
+                        // Dynamically extract staging room prefix and room count
                         if (stagingList.length > 0) {
-                            let roomId = 'ROOM-1';
-                            let maxStagingBay = stagingList.length;
-                            stagingList.forEach(l => {
-                                const m = (l.identifier || '').match(/^(ROOM-\d+)-BAY-(\d+)$/i);
-                                if (m) {
-                                    roomId = m[1];
-                                    maxStagingBay = Math.max(maxStagingBay, parseInt(m[2], 10));
-                                }
-                            });
+                            let prefix = 'ROOM';
+                            let totalStagingRooms = stagingList.length;
+                            const sampleIdentifier = stagingList[0]?.identifier || '';
+                            const matchPrefix = sampleIdentifier.match(/^([A-Z]+)/i);
+                            if (matchPrefix) prefix = matchPrefix[1];
 
                             const roomInput = document.getElementById('conf-staging-room-id');
-                            const stagingBaysInput = document.getElementById('conf-staging-room-bays');
-                            if (roomInput) roomInput.value = roomId;
-                            if (stagingBaysInput) stagingBaysInput.value = maxStagingBay;
+                            const stagingRoomsInput = document.getElementById('conf-staging-room-bays');
+                            if (roomInput) roomInput.value = prefix;
+                            if (stagingRoomsInput) stagingRoomsInput.value = totalStagingRooms;
                         }
 
                         updateVaultPreviewText();
@@ -1723,32 +1720,35 @@
                         return;
                     }
 
-                    const roomId = (document.getElementById('conf-staging-room-id').value || 'ROOM-1').trim().toUpperCase();
-                    const bays = parseInt(document.getElementById('conf-staging-room-bays').value) || 0;
+                    const prefix = (document.getElementById('conf-staging-room-id')?.value || 'ROOM').trim().toUpperCase().replace(/[-_]+$/, '');
+                    const rooms = parseInt(document.getElementById('conf-staging-room-bays')?.value) || 0;
 
-                    if (bays <= 0) {
-                        alert("Please enter a positive number of bays/lockers.");
+                    if (rooms <= 0) {
+                        alert("Please enter a positive number of staging rooms.");
                         return;
                     }
 
-                    if (!confirm(`Generate and sync ${bays} Staging locations (${roomId}) for ${currentLoadedFac.name}?`)) {
+                    if (!confirm(`Generate and sync ${rooms} Staging Rooms (${prefix}-1 to ${prefix}-${rooms}) for ${currentLoadedFac.name}?`)) {
                         return;
                     }
 
                     const btn = document.getElementById('btn-generate-staging-locations');
                     const originalText = btn.innerHTML;
                     btn.disabled = true;
-                    btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Syncing ${bays} Lockers...`;
+                    btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Syncing ${rooms} Rooms...`;
                     if (typeof lucide !== 'undefined') lucide.createIcons();
 
                     try {
                         const locations = [];
-                        for (let b = 1; b <= bays; b++) {
-                            const bayStr = String(b).padStart(2, '0');
+                        for (let r = 1; r <= rooms; r++) {
+                            const roomCode = `${prefix}-${r}`;
                             locations.push({
                                 facility_id: currentLoadedFac.id,
                                 zone_type: 'STAGING',
-                                identifier: `${roomId}-BAY-${bayStr}`,
+                                location_type: 'STAGING',
+                                identifier: roomCode,
+                                location_code: roomCode,
+                                capacity: 1,
                                 is_occupied: false
                             });
                         }
@@ -1759,7 +1759,7 @@
 
                         if (error) throw error;
 
-                        // Clean up excess unoccupied staging lockers for this room if scaling down
+                        // Clean up excess unoccupied staging locations for this facility
                         try {
                             const validIdentifiers = locations.map(l => l.identifier);
                             const { data: excessLocs } = await supabase
@@ -1778,24 +1778,24 @@
 
                             // Also persist staging_rooms count to facilities table
                             await supabase.from('facilities').update({
-                                staging_rooms: bays,
-                                num_staging_rooms: bays
+                                staging_rooms: rooms,
+                                num_staging_rooms: rooms
                             }).eq('id', currentLoadedFac.id);
                         } catch (cleanErr) {
                             console.warn("Notice during staging room pruning:", cleanErr);
                         }
 
                         const confStgInput = document.getElementById('conf-staging-rooms');
-                        if (confStgInput) confStgInput.value = bays;
+                        if (confStgInput) confStgInput.value = rooms;
                         if (currentLoadedFac) {
-                            currentLoadedFac.num_staging_rooms = bays;
-                            currentLoadedFac.staging_rooms = bays;
+                            currentLoadedFac.num_staging_rooms = rooms;
+                            currentLoadedFac.staging_rooms = rooms;
                         }
 
                         if (typeof showToast === 'function') {
-                            showToast(`✅ Successfully synced ${bays} Staging Room locations (${roomId})!`);
+                            showToast(`✅ Successfully synced ${rooms} Staging Rooms (${prefix}-1 to ${prefix}-${rooms})!`);
                         } else {
-                            alert(`✅ Successfully synced ${bays} Staging Room locations (${roomId})!`);
+                            alert(`✅ Successfully synced ${rooms} Staging Rooms (${prefix}-1 to ${prefix}-${rooms})!`);
                         }
                         await loadWarehouseLocationCount(currentLoadedFac.id);
                         await loadStagingRoomSchedule(currentLoadedFac.id, selectedStagingDate);
@@ -3392,14 +3392,13 @@
                                 }
                             }
                         } else {
-                            const roomId = document.getElementById('conf-staging-room-id')?.value.trim() || 'ROOM-1';
+                            const prefix = (document.getElementById('conf-staging-room-id')?.value || 'ROOM').trim().toUpperCase().replace(/[-_]+$/, '');
                             const numStgRooms = currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || parseInt(document.getElementById('conf-staging-rooms')?.value || '0', 10);
-                            const baysInput = document.getElementById('conf-staging-room-bays')?.value;
-                            const bays = baysInput ? parseInt(baysInput, 10) : (numStgRooms || 0);
-                            const maxPrint = Math.min(bays, 100);
-                            for (let b = 1; b <= maxPrint; b++) {
-                                const bayStr = b < 10 ? '0' + b : '' + b;
-                                generatedCodes.push(`${roomId}-BAY-${bayStr}`);
+                            const roomsInput = document.getElementById('conf-staging-room-bays')?.value;
+                            const rooms = roomsInput ? parseInt(roomsInput, 10) : (numStgRooms || 3);
+                            const maxPrint = Math.min(rooms, 50);
+                            for (let r = 1; r <= maxPrint; r++) {
+                                generatedCodes.push(`${prefix}-${r}`);
                             }
                         }
 
@@ -3520,7 +3519,7 @@
 
                         const rawVal = input ? input.value.trim() : '';
                         let codes = rawVal.split(',').map(c => c.trim()).filter(Boolean);
-                        if (codes.length === 0) codes = [window.currentPrintedLocationType === 'VAULT' ? 'V-A01-S01' : 'ROOM-1-BAY-01'];
+                        if (codes.length === 0) codes = [window.currentPrintedLocationType === 'VAULT' ? 'V-A01-S01' : 'ROOM-1'];
 
                         if (counter) {
                             const sheetCount = Math.ceil(codes.length / 4);
@@ -3785,7 +3784,7 @@
                                 Separated)</label>
                             <textarea id="print-loc-code-input" oninput="renderLocationLabelPreview()" rows="3"
                                 class="w-full bg-gray-900 border border-gray-800 rounded-xl p-3 text-xs font-mono text-cyan-300 focus:border-cyan-500 outline-none transition"
-                                placeholder="V-A01-S01, V-A01-S02, ROOM-1-BAY-01..."></textarea>
+                                placeholder="A1-B01-S1, A1-B01-S2, ROOM-1, ROOM-2..."></textarea>
                             <p class="text-[10px] text-gray-500 mt-1 font-mono" id="loc-sheet-counter">0 Locations
                                 Selected</p>
                         </div>
