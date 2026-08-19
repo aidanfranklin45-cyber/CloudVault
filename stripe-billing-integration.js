@@ -102,6 +102,82 @@
     },
 
     /**
+     * Synchronizes subscription quantity and rate tiers between Supabase and Stripe with automatic mid-month proration.
+     * @param {string} userId - Customer user ID
+     * @param {number} [forcedQuantity] - Optional new quantity to set
+     */
+    syncSubscriptionQuantityWithStripe: async function (userId, forcedQuantity) {
+      if (!userId || !global.supabase) return { success: false, error: 'Missing userId or Supabase client' };
+
+      try {
+        const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
+        if (!apiKey) return { success: false, error: 'Missing Stripe API key' };
+
+        // 1. Fetch current subscription from Supabase
+        const { data: sub } = await global.supabase.from('subscriptions').select('*').eq('uid', userId).maybeSingle();
+        if (!sub || !sub.stripe_subscription_id) {
+          return { success: true, message: 'No Stripe subscription linked' };
+        }
+
+        const subId = sub.stripe_subscription_id;
+        const targetQty = forcedQuantity != null ? Number(forcedQuantity) : Number(sub.total_totes || sub.tote_count || 1);
+
+        // 2. Fetch live subscription from Stripe
+        const getRes = await fetch(`https://api.stripe.com/v1/subscriptions/${subId}`, {
+          headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        const stripeSub = await getRes.json();
+
+        if (stripeSub.error) {
+          console.warn('[StripeBillingIntegration] Stripe subscription lookup error:', stripeSub.error.message);
+          return { success: false, error: stripeSub.error.message };
+        }
+
+        const item = stripeSub.items?.data?.[0];
+        if (item && item.quantity !== targetQty && targetQty > 0) {
+          console.log(`[StripeBillingIntegration] Prorating Stripe subscription ${subId} from ${item.quantity} to ${targetQty} totes...`);
+
+          const updateRes = await fetch(`https://api.stripe.com/v1/subscriptions/${subId}`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({
+              'items[0][id]': item.id,
+              'items[0][quantity]': targetQty.toString(),
+              'proration_behavior': 'create_prorations'
+            })
+          });
+
+          const updatedSub = await updateRes.json();
+          console.log('[StripeBillingIntegration] Stripe subscription prorated successfully:', updatedSub.id, 'New Qty:', updatedSub.items?.data?.[0]?.quantity);
+        }
+
+        // 3. Clean up loose pending customer invoice items
+        if (sub.stripe_customer_id) {
+          const pRes = await fetch(`https://api.stripe.com/v1/invoiceitems?customer=${sub.stripe_customer_id}&pending=true`, {
+            headers: { 'Authorization': `Bearer ${apiKey}` }
+          });
+          const pending = await pRes.json();
+          if (pending.data && Array.isArray(pending.data)) {
+            for (const it of pending.data) {
+              await fetch(`https://api.stripe.com/v1/invoiceitems/${it.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${apiKey}` }
+              });
+            }
+          }
+        }
+
+        return { success: true, quantity: targetQty };
+      } catch (err) {
+        console.error('[StripeBillingIntegration] Exception in syncSubscriptionQuantityWithStripe:', err);
+        return { success: false, error: err.message };
+      }
+    },
+
+    /**
      * Formats the invoice due date as a user-friendly string (e.g. "Due: Aug 15, 2026").
      * @param {Object} invoice - Invoice object
      * @returns {string}

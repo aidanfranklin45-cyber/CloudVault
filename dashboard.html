@@ -1741,6 +1741,11 @@
                 const newMo = data?.newMonthly ? Number(data.newMonthly).toFixed(2) : '0.00';
                 showToast(`✓ ${additionalToteCount} containers added! Pro-rata storage will be billed on your monthly statement ($${newMo}/mo tier).`);
 
+                // Real-time two-way synchronization with Stripe subscription & proration
+                if (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.syncSubscriptionQuantityWithStripe === 'function' && currentUser?.id) {
+                    window.StripeBillingIntegration.syncSubscriptionQuantityWithStripe(currentUser.id).catch(e => console.warn('[Stripe Sync Notice]', e));
+                }
+
                 if (typeof globalFetchSubscription === 'function') await globalFetchSubscription();
                 if (typeof globalFetchInventory === 'function') await globalFetchInventory();
                 if (typeof globalFetchRequests === 'function') await globalFetchRequests();
