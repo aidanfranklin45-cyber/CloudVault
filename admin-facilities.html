@@ -1759,6 +1759,32 @@
 
                         if (error) throw error;
 
+                        // Clean up excess unoccupied staging lockers for this room if scaling down
+                        try {
+                            const validIdentifiers = locations.map(l => l.identifier);
+                            const { data: excessLocs } = await supabase
+                                .from('warehouse_locations')
+                                .select('id, identifier, is_occupied')
+                                .eq('facility_id', currentLoadedFac.id)
+                                .ilike('identifier', `${roomId}-BAY-%`)
+                                .eq('is_occupied', false);
+
+                            if (excessLocs && excessLocs.length > 0) {
+                                const idsToDelete = excessLocs.filter(l => !validIdentifiers.includes(l.identifier)).map(l => l.id);
+                                if (idsToDelete.length > 0) {
+                                    await supabase.from('warehouse_locations').delete().in('id', idsToDelete);
+                                }
+                            }
+
+                            // Also persist staging_rooms count to facilities table
+                            await supabase.from('facilities').update({
+                                staging_rooms: bays,
+                                num_staging_rooms: bays
+                            }).eq('id', currentLoadedFac.id);
+                        } catch (cleanErr) {
+                            console.warn("Notice during staging room pruning:", cleanErr);
+                        }
+
                         const confStgInput = document.getElementById('conf-staging-rooms');
                         if (confStgInput) confStgInput.value = bays;
                         if (currentLoadedFac) {
