@@ -2491,6 +2491,100 @@
         }
       `;
       document.head.appendChild(style);
+    },
+
+    /**
+     * Initializes periodic authorization and credential re-validation (defaults to 30-minute cycles).
+     * @param {number} intervalMinutes - Validation interval in minutes (default: 30)
+     */
+    initPeriodicAuthValidator: function (intervalMinutes = 30) {
+      if (typeof window === 'undefined' || window._hasSetupPeriodicAuthValidator) return;
+      window._hasSetupPeriodicAuthValidator = true;
+
+      const INTERVAL_MS = intervalMinutes * 60 * 1000;
+      sessionStorage.setItem('cv_last_auth_validation', Date.now().toString());
+
+      const performAuthCheck = async () => {
+        const sb = (typeof supabase !== 'undefined' ? supabase : (global.supabase || window.supabase));
+        if (!sb || !sb.auth) return;
+
+        try {
+          console.log(`[Security Guard] Executing periodic credential re-validation (${intervalMinutes}-min cycle)...`);
+
+          // 1. Validate active session with Supabase Auth
+          const { data: sessionData, error: sessionErr } = await sb.auth.getSession();
+          const session = sessionData?.session;
+
+          if (sessionErr || !session || !session.user) {
+            let badgeUser = null;
+            try { badgeUser = JSON.parse(sessionStorage.getItem('cv_active_badge_user')); } catch (e) {}
+
+            if (!badgeUser) {
+              console.warn('[Security Guard] Active session expired or invalid. Redirecting to login.');
+              sessionStorage.clear();
+              localStorage.removeItem('cv_active_badge_user');
+              window.location.href = 'login.html?reason=session_expired';
+              return;
+            }
+          }
+
+          const uid = session ? session.user.id : (JSON.parse(sessionStorage.getItem('cv_active_badge_user'))?.id);
+          if (!uid) {
+            window.location.href = 'login.html?reason=unauthorized';
+            return;
+          }
+
+          // 2. Query user profile to verify active authorization & roles
+          const { data: profile, error: profileErr } = await sb
+            .from('users')
+            .select('id, role, status, is_active, email')
+            .eq('id', uid)
+            .maybeSingle();
+
+          if (profileErr || !profile) {
+            console.warn('[Security Guard] User profile verification failed. Logging out.');
+            sessionStorage.clear();
+            await sb.auth.signOut().catch(() => {});
+            window.location.href = 'login.html?reason=invalid_credentials';
+            return;
+          }
+
+          if (profile.status === 'suspended' || profile.is_active === false) {
+            console.warn('[Security Guard] User account is suspended or inactive. Logging out.');
+            sessionStorage.clear();
+            await sb.auth.signOut().catch(() => {});
+            window.location.href = 'login.html?reason=account_suspended';
+            return;
+          }
+
+          // 3. For admin portals, ensure role has not been demoted to customer
+          const isStaffPage = window.location.pathname.includes('admin');
+          if (isStaffPage && profile.role === 'customer') {
+            console.warn('[Security Guard] Staff clearance revoked. Redirecting to customer dashboard.');
+            window.location.href = 'dashboard.html';
+            return;
+          }
+
+          // 4. Update validation timestamp
+          sessionStorage.setItem('cv_last_auth_validation', Date.now().toString());
+          console.log('[Security Guard] Periodic credential validation passed.');
+        } catch (err) {
+          console.warn('[Security Guard] Periodic authorization verification notice:', err);
+        }
+      };
+
+      // Run check every 30 minutes
+      setInterval(performAuthCheck, INTERVAL_MS);
+
+      // Re-check when window regains focus if 30 minutes have elapsed while idle
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          const last = Number(sessionStorage.getItem('cv_last_auth_validation') || 0);
+          if (Date.now() - last >= INTERVAL_MS) {
+            performAuthCheck();
+          }
+        }
+      });
     }
   };
 
@@ -2498,4 +2592,14 @@
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = CloudVaultBilling;
   }
+
+  // Automatically start 30-minute periodic authorization check on page load
+  if (typeof window !== 'undefined' && window.document) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => CloudVaultBilling.initPeriodicAuthValidator(30));
+    } else {
+      CloudVaultBilling.initPeriodicAuthValidator(30);
+    }
+  }
 })(typeof window !== 'undefined' ? window : this);
+

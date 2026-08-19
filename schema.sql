@@ -522,53 +522,119 @@ $$ LANGUAGE sql SECURITY DEFINER;
 -- ------------------------------------------------------------
 -- USERS Policies
 -- ------------------------------------------------------------
+DROP POLICY IF EXISTS "Users can view own profile" ON public.users;
 CREATE POLICY "Users can view own profile" ON public.users
-    FOR SELECT USING (auth.uid() = id);
+    FOR SELECT USING ((SELECT auth.uid()) = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
 CREATE POLICY "Users can update own profile" ON public.users
-    FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+    FOR UPDATE USING ((SELECT auth.uid()) = id) WITH CHECK ((SELECT auth.uid()) = id);
 
+DROP POLICY IF EXISTS "Staff can view all users" ON public.users;
 CREATE POLICY "Staff can view all users" ON public.users
     FOR SELECT USING (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive'));
 
 -- ------------------------------------------------------------
 -- INVENTORY Policies
 -- ------------------------------------------------------------
+DROP POLICY IF EXISTS "Users view own inventory" ON public.inventory;
 CREATE POLICY "Users view own inventory" ON public.inventory
-    FOR SELECT USING (uid = auth.uid());
+    FOR SELECT USING (uid = (SELECT auth.uid()));
 
+DROP POLICY IF EXISTS "Staff view all inventory" ON public.inventory;
 CREATE POLICY "Staff view all inventory" ON public.inventory
     FOR SELECT USING (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive'));
 
+DROP POLICY IF EXISTS "Users update own inventory labels" ON public.inventory;
 CREATE POLICY "Users update own inventory labels" ON public.inventory
-    FOR UPDATE USING (uid = auth.uid());
+    FOR UPDATE USING (uid = (SELECT auth.uid()));
     
 -- ------------------------------------------------------------
 -- SUBSCRIPTIONS, CANCELLATIONS, CHARGES, ACCESS_REQUESTS
 -- ------------------------------------------------------------
-CREATE POLICY "Users view own records" ON public.subscriptions FOR SELECT USING (uid = auth.uid());
+DROP POLICY IF EXISTS "Users view own records" ON public.subscriptions;
+CREATE POLICY "Users view own records" ON public.subscriptions FOR SELECT USING (uid = (SELECT auth.uid()));
+
+DROP POLICY IF EXISTS "Staff view all records" ON public.subscriptions;
 CREATE POLICY "Staff view all records" ON public.subscriptions FOR SELECT USING (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive'));
 
-CREATE POLICY "Users view own cancellations" ON public.cancellations FOR SELECT USING (uid = auth.uid());
+DROP POLICY IF EXISTS "Users view own cancellations" ON public.cancellations;
+CREATE POLICY "Users view own cancellations" ON public.cancellations FOR SELECT USING (uid = (SELECT auth.uid()));
+
+DROP POLICY IF EXISTS "Staff view all cancellations" ON public.cancellations;
 CREATE POLICY "Staff view all cancellations" ON public.cancellations FOR SELECT USING (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive'));
 
-CREATE POLICY "Users view own charges" ON public.charges FOR SELECT USING (uid = auth.uid());
+DROP POLICY IF EXISTS "Users view own charges" ON public.charges;
+CREATE POLICY "Users view own charges" ON public.charges FOR SELECT USING (uid = (SELECT auth.uid()));
+
+DROP POLICY IF EXISTS "Staff view all charges" ON public.charges;
 CREATE POLICY "Staff view all charges" ON public.charges FOR SELECT USING (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive'));
 
-CREATE POLICY "Users view own invoices" ON public.invoices FOR SELECT USING (uid = auth.uid() OR customer_email = auth.email());
-CREATE POLICY "Users insert own invoices" ON public.invoices FOR INSERT WITH CHECK (uid = auth.uid() OR auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "Users view own invoices" ON public.invoices;
+CREATE POLICY "Users view own invoices" ON public.invoices FOR SELECT USING (uid = (SELECT auth.uid()) OR customer_email = (SELECT auth.email()));
+
+DROP POLICY IF EXISTS "Users insert own invoices" ON public.invoices;
+CREATE POLICY "Users insert own invoices" ON public.invoices FOR INSERT WITH CHECK (uid = (SELECT auth.uid()) OR (SELECT auth.uid()) IS NOT NULL);
+
+DROP POLICY IF EXISTS "Staff manage all invoices" ON public.invoices;
 CREATE POLICY "Staff manage all invoices" ON public.invoices FOR ALL USING (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive')) WITH CHECK (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive'));
 
-CREATE POLICY "Users view own access requests" ON public.access_requests FOR SELECT USING (uid = auth.uid());
+DROP POLICY IF EXISTS "Users view own access requests" ON public.access_requests;
+CREATE POLICY "Users view own access requests" ON public.access_requests FOR SELECT USING (uid = (SELECT auth.uid()));
+
+DROP POLICY IF EXISTS "Staff view all access requests" ON public.access_requests;
 CREATE POLICY "Staff view all access requests" ON public.access_requests FOR SELECT USING (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive'));
 
-CREATE POLICY "Users view own reservations" ON public.staging_reservations FOR SELECT USING (uid = auth.uid());
+DROP POLICY IF EXISTS "Users view own reservations" ON public.staging_reservations;
+CREATE POLICY "Users view own reservations" ON public.staging_reservations FOR SELECT USING (uid = (SELECT auth.uid()));
+
+DROP POLICY IF EXISTS "Staff view all reservations" ON public.staging_reservations;
 CREATE POLICY "Staff view all reservations" ON public.staging_reservations FOR SELECT USING (public.get_user_role() IN ('warehouse_worker', 'warehouse_manager', 'executive'));
 
+DROP POLICY IF EXISTS "Managers update access requests" ON public.access_requests;
 CREATE POLICY "Managers update access requests" ON public.access_requests
     FOR UPDATE USING (
         public.get_user_role() = 'executive' OR 
         (public.get_user_role() = 'warehouse_manager' AND facility_id = public.get_user_facility_id())
+    );
+
+-- ------------------------------------------------------------
+-- SETTINGS Policies (Optimized InitPlan Caching)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.settings (
+    id TEXT PRIMARY KEY,
+    valet_base NUMERIC(10,2) DEFAULT 15.00,
+    valet_tote_adder NUMERIC(10,2) DEFAULT 2.00,
+    settings_data JSONB DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_by UUID REFERENCES public.users(id) ON DELETE SET NULL
+);
+
+ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public Read Access for Settings" ON public.settings;
+CREATE POLICY "Public Read Access for Settings" ON public.settings
+    FOR SELECT
+    TO authenticated, anon
+    USING (true);
+
+DROP POLICY IF EXISTS "Executive Write Access for Settings" ON public.settings;
+CREATE POLICY "Executive Write Access for Settings" ON public.settings
+    FOR ALL
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.users
+            WHERE users.id = (SELECT auth.uid())
+              AND users.role IN ('executive', 'warehouse_manager')
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM public.users
+            WHERE users.id = (SELECT auth.uid())
+              AND users.role IN ('executive', 'warehouse_manager')
+        )
     );
 
 -- ------------------------------------------------------------
@@ -4719,31 +4785,31 @@ ALTER TABLE public.creators ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.promo_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.promo_redemptions ENABLE ROW LEVEL SECURITY;
 
--- 5. RLS Policies: Executive and Warehouse Managers have full access
+-- 5. RLS Policies: Executive and Warehouse Managers have full access (Optimized InitPlan Caching)
 DROP POLICY IF EXISTS admin_creators_policy ON public.creators;
 CREATE POLICY admin_creators_policy ON public.creators
     FOR ALL
     USING (
-        (auth.jwt() ->> 'role') = 'service_role'
-        OR EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role IN ('executive', 'warehouse_manager'))
+        (SELECT (auth.jwt() ->> 'role')) = 'service_role'
+        OR EXISTS (SELECT 1 FROM public.users u WHERE u.id = (SELECT auth.uid()) AND u.role IN ('executive', 'warehouse_manager'))
     );
 
 DROP POLICY IF EXISTS admin_promo_codes_policy ON public.promo_codes;
 CREATE POLICY admin_promo_codes_policy ON public.promo_codes
     FOR ALL
     USING (
-        (auth.jwt() ->> 'role') = 'service_role'
+        (SELECT (auth.jwt() ->> 'role')) = 'service_role'
         OR is_active = TRUE
-        OR EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role IN ('executive', 'warehouse_manager'))
+        OR EXISTS (SELECT 1 FROM public.users u WHERE u.id = (SELECT auth.uid()) AND u.role IN ('executive', 'warehouse_manager'))
     );
 
 DROP POLICY IF EXISTS admin_promo_redemptions_policy ON public.promo_redemptions;
 CREATE POLICY admin_promo_redemptions_policy ON public.promo_redemptions
     FOR ALL
     USING (
-        (auth.jwt() ->> 'role') = 'service_role'
-        OR customer_uid = auth.uid()
-        OR EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role IN ('executive', 'warehouse_manager'))
+        (SELECT (auth.jwt() ->> 'role')) = 'service_role'
+        OR customer_uid = (SELECT auth.uid())
+        OR EXISTS (SELECT 1 FROM public.users u WHERE u.id = (SELECT auth.uid()) AND u.role IN ('executive', 'warehouse_manager'))
     );
 
 -- 6. RPC: Validate Promo Code For Checkout
