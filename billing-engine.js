@@ -805,19 +805,24 @@
         invoicesList.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
         let data = invoicesList;
 
-        // 3. If no invoices exist for this user, check if they have an active subscription and synthesize only their initial invoice
-        if ((!data || data.length === 0) && userId) {
+        // 3. If no invoices exist for this user, check if they are a real customer with an active subscription
+        const isEmployeeAccount = (customerEmail && (customerEmail.includes('@cloudvault.com') || customerEmail === 'ellie@test.com'));
+        if ((!data || data.length === 0) && userId && !isEmployeeAccount) {
           try {
-            const { data: sub } = await sb.from('subscriptions').select('*').eq('uid', userId).maybeSingle();
-            if (sub) {
-              const { data: usr } = await sb.from('users').select('active_zone, assigned_facility_id').eq('id', userId).maybeSingle();
-              const custZip = usr?.active_zone || null;
-              const custFac = sub.facility_id || usr?.assigned_facility_id || 'facility_yakima';
-              const toteCount = Number(sub.total_totes || sub.tote_count || 1);
-              const toteRate = Number(sub.tote_rate || 5.00);
-              const storageAmt = Number(sub.recurring_storage || (toteCount * toteRate));
-              const valetFee = Number(sub.valet_fee || 0);
-              const subtotal = storageAmt + valetFee;
+            const { data: usr } = await sb.from('users').select('role, active_zone, assigned_facility_id').eq('id', userId).maybeSingle();
+            const role = (usr?.role || '').toLowerCase();
+            const isStaffRole = ['admin', 'manager', 'driver', 'worker', 'executive', 'support'].includes(role);
+
+            if (!isStaffRole) {
+              const { data: sub } = await sb.from('subscriptions').select('*').eq('uid', userId).maybeSingle();
+              if (sub) {
+                const custZip = usr?.active_zone || null;
+                const custFac = sub.facility_id || usr?.assigned_facility_id || 'facility_yakima';
+                const toteCount = Number(sub.total_totes || sub.tote_count || 1);
+                const toteRate = Number(sub.tote_rate || 5.00);
+                const storageAmt = Number(sub.recurring_storage || (toteCount * toteRate));
+                const valetFee = Number(sub.valet_fee || 0);
+                const subtotal = storageAmt + valetFee;
 
               const taxInfo = await this.resolveCustomerTaxRate(userId, custFac, custZip);
               const taxRate = Number(taxInfo.taxRate || 0);
