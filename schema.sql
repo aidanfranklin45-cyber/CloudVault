@@ -2949,13 +2949,14 @@ BEGIN
     v_next_location_code := COALESCE(p_target_staging_code, 'ROOM-1');
     v_next_location_type := 'staging';
 
-    -- Strict Staging Room Conflict Check: Prevent staging into a room currently occupied by another access request/event
+    -- Strict Staging Room Conflict Check: Scoped strictly to THIS facility!
     IF v_next_location_code ~* '^ROOM-[0-9]+' THEN
       IF EXISTS (
         SELECT 1 
         FROM public.inventory i
         LEFT JOIN public.access_requests ar ON (i.tote_code = ANY(ar.requested_tote_codes) OR i.id = ANY(ar.requested_items))
         WHERE i.location_code = v_next_location_code
+          AND (i.facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
           AND i.status IN ('staged', 'pending-stage')
           AND i.id <> v_item.id
           AND (
@@ -2963,7 +2964,7 @@ BEGIN
             OR (v_req_id IS NULL AND i.uid <> v_item.uid)
           )
       ) THEN
-        RAISE EXCEPTION 'Staging Room Conflict: % is already occupied by another retrieval order! Please select a vacant room.', v_next_location_code;
+        RAISE EXCEPTION 'Staging Room Conflict: % is already occupied by another retrieval order in this facility! Please select a vacant room.', v_next_location_code;
       END IF;
     END IF;
   END IF;
@@ -3353,9 +3354,11 @@ DECLARE
   v_old_count INTEGER;
   v_tote_code TEXT;
   v_is_occupied BOOLEAN;
+  v_item_facility_id TEXT;
 BEGIN
-  -- 1. Verify tote exists and fetch current location
-  SELECT location_id, tote_code INTO v_old_location_id, v_tote_code
+  -- 1. Verify tote exists and fetch current location & facility
+  SELECT location_id, tote_code, facility_id 
+  INTO v_old_location_id, v_tote_code, v_item_facility_id
   FROM public.inventory
   WHERE id = p_tote_id;
 
@@ -3374,12 +3377,13 @@ BEGIN
       RAISE EXCEPTION 'Target location with ID % not found', p_new_location_id;
     END IF;
 
-    -- Count active totes assigned to target location or matching identifier (excluding current tote if re-slotting)
+    -- Count active totes assigned to target location strictly within THIS facility
     SELECT COUNT(*) INTO v_current_count 
     FROM public.inventory 
-    WHERE (location_id = p_new_location_id OR location_code = v_new_identifier) AND id != p_tote_id;
+    WHERE (location_id = p_new_location_id OR (location_code = v_new_identifier AND (facility_id = v_item_facility_id OR v_item_facility_id IS NULL)))
+      AND id != p_tote_id;
 
-    -- Fail-Fast Logic: Check if at/above capacity limit or if location is marked full (default max 3 totes per shelf)
+    -- Fail-Fast Logic: Check if at/above capacity limit
     IF (v_old_location_id IS NULL OR v_old_location_id != p_new_location_id) AND (v_current_count >= COALESCE(v_capacity, 3)) THEN
       RAISE EXCEPTION 'Location % is already full (%/% totes occupied). Shelves hold maximum % totes.', v_new_identifier, v_current_count, COALESCE(v_capacity, 3), COALESCE(v_capacity, 3);
     END IF;
@@ -3417,8 +3421,10 @@ BEGIN
     'old_location_id', v_old_location_id,
     'new_location_id', p_new_location_id,
     'new_identifier', v_new_identifier,
+    'location_code', v_new_identifier,
     'totes_at_location', v_current_count,
-    'location_capacity', v_capacity
+    'location_capacity', v_capacity,
+    'message', 'Tote moved successfully'
   );
 END;
 $$ LANGUAGE plpgsql;
