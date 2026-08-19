@@ -55,8 +55,7 @@ function supabaseRequest(endpoint, method = 'GET', body = null) {
   });
 }
 
-// Ensure standard Washington / Regional tax rates exist in Stripe
-async function getOrCreateStripeTaxRate(ratePercent = 8.5, displayName = 'Washington State Sales Tax') {
+async function getOrCreateStripeTaxRate(ratePercent = 8.5, displayName = 'Washington State & Local Sales Tax (8.5%)') {
   const search = await stripeRequest('tax_rates?limit=20');
   const existing = (search.data?.data || []).find(t => Math.abs(t.percentage - ratePercent) < 0.01 && t.active);
   if (existing) return existing.id;
@@ -79,7 +78,7 @@ async function runItemizedSync() {
   console.log('\n=== Step 2: Fetching All Historical Invoices ===');
   const invRes = await supabaseRequest('invoices?select=*');
   const invoices = invRes.data || [];
-  console.log(`Processing ${invoices.length} invoices for granular Stripe itemization...`);
+  console.log(`Processing ${invoices.length} invoices with enhanced styling and tax placement...`);
 
   for (const inv of invoices) {
     let custId = inv.stripe_customer_id;
@@ -99,27 +98,43 @@ async function runItemizedSync() {
 
     console.log(`\nItemizing Invoice ${inv.invoice_number} (${inv.invoice_type}) for ${inv.customer_email}...`);
 
-    // 1. Create Draft Invoice in Stripe
+    // 1. Create Draft Invoice in Stripe with custom fields, footer, and tax settings
     const invParams = new URLSearchParams();
     invParams.append('customer', custId);
     invParams.append('auto_advance', 'false');
     invParams.append('collection_method', 'send_invoice');
     invParams.append('days_until_due', '3');
+    invParams.append('description', 'CloudVault Automated Invoice Engine • Official Statement');
+    invParams.append('footer', 'CloudVault Storage & Logistics Solutions • Selah, WA 98942 • support@cloudvault.io');
+    invParams.append('rendering[amount_tax_display]', 'exclude_tax'); // Keeps tax cleanly in footer summary, NOT on individual line items
     invParams.append('metadata[original_invoice_number]', inv.invoice_number);
     invParams.append('metadata[supabase_invoice_id]', inv.id);
+
+    // Custom Fields on PDF
+    const facilityLabel = inv.facility_id === 'facility_seattle_north' ? 'Seattle North Fulfillment Center' :
+                          inv.facility_id === 'facility_portland_central' ? 'Portland Central Hub' :
+                          'Yakima Fulfillment Center (Selah Hub)';
+    invParams.append('custom_fields[0][name]', 'Facility Hub');
+    invParams.append('custom_fields[0][value]', facilityLabel);
+
+    const serviceLabel = inv.invoice_type === 'valet_delivery' ? 'White-Glove Valet Delivery' :
+                         inv.invoice_type === 'surge_delivery' ? 'Expedited Staging Retrieval' :
+                         'Vault Storage Subscription';
+    invParams.append('custom_fields[1][name]', 'Service Plan');
+    invParams.append('custom_fields[1][value]', serviceLabel);
+
+    if (inv.transaction_reference) {
+      invParams.append('custom_fields[2][name]', 'Txn Reference');
+      invParams.append('custom_fields[2][value]', inv.transaction_reference);
+    }
 
     // Apply default tax rate if tax > 0
     const taxAmt = Number(inv.tax || 0);
     const subtotalAmt = Number(inv.subtotal || 0) + Number(inv.delivery_fee || 0) + Number(inv.surge_fee || 0);
-    let assignedTaxRateId = null;
 
     if (taxAmt > 0 && subtotalAmt > 0) {
       const calculatedRate = (taxAmt / subtotalAmt) * 100;
-      if (calculatedRate > 9.5) {
-        assignedTaxRateId = taxRate1025;
-      } else {
-        assignedTaxRateId = taxRate85;
-      }
+      const assignedTaxRateId = calculatedRate > 9.5 ? taxRate1025 : taxRate85;
       invParams.append('default_tax_rates[0]', assignedTaxRateId);
     }
 
@@ -131,36 +146,29 @@ async function runItemizedSync() {
       continue;
     }
 
-    // 2. Parse Line Items from original invoice
+    // 2. Parse Line Items
     let lines = inv.line_items;
     if (typeof lines === 'string') {
       try { lines = JSON.parse(lines); } catch (e) { lines = []; }
     }
     if (!Array.isArray(lines) || lines.length === 0) {
-      // Reconstruct lines from fee columns
       lines = [];
       const sub = Number(inv.subtotal || 0);
       const del = Number(inv.delivery_fee || 0);
       const srg = Number(inv.surge_fee || 0);
 
-      if (sub > 0) {
-        lines.push({ description: 'CloudVault Monthly Vault Storage', qty: 1, amount: sub });
-      }
-      if (del > 0) {
-        lines.push({ description: 'Valet Doorstep Delivery Service Fee', qty: 1, amount: del });
-      }
-      if (srg > 0) {
-        lines.push({ description: 'Expedited Staging / Surge Access Fee', qty: 1, amount: srg });
-      }
+      if (sub > 0) lines.push({ description: 'CloudVault Monthly Vault Storage Plan', qty: 1, amount: sub });
+      if (del > 0) lines.push({ description: 'Valet Doorstep Delivery Service Fee', qty: 1, amount: del });
+      if (srg > 0) lines.push({ description: 'Expedited Staging / Surge Priority Access Fee', qty: 1, amount: srg });
       if (lines.length === 0) {
         lines.push({ description: inv.notes || 'CloudVault Storage Service', qty: 1, amount: Number(inv.total_amount || 10.00) });
       }
     }
 
-    // Filter out tax-only lines since Stripe Tax handles them natively
+    // Filter out tax-only lines
     const feeLines = lines.filter(l => {
       const desc = (l.description || '').toLowerCase();
-      return !desc.includes('sales tax') && !desc.includes('state tax') && Number(l.amount || 0) > 0;
+      return !desc.includes('sales tax') && !desc.includes('state tax') && Number(l.amount || (l.unit_price * (l.qty || 1)) || 0) > 0;
     });
 
     // 3. Push each discrete line item to Stripe
@@ -173,7 +181,7 @@ async function runItemizedSync() {
       itemParams.append('invoice', stripeInvoiceId);
       itemParams.append('amount', itemAmountCents.toString());
       itemParams.append('currency', 'usd');
-      itemParams.append('description', item.description || 'CloudVault Service');
+      itemParams.append('description', item.description || 'CloudVault Service Item');
 
       const itemRes = await stripeRequest('invoiceitems', 'POST', itemParams.toString());
       if (itemRes.data?.id) {
@@ -199,20 +207,25 @@ async function runItemizedSync() {
       pdfUrl = payRes.data.invoice_pdf;
     }
 
-    console.log(`   -> Finalized & Paid: ${stripeInvoiceId} (Total: $${((payRes.data?.total || payRes.data?.amount_paid || 0) / 100).toFixed(2)}, Tax: $${((payRes.data?.tax || 0) / 100).toFixed(2)})`);
-    console.log(`   -> PDF URL: ${pdfUrl}`);
+    const totalPaid = ((payRes.data?.total || payRes.data?.amount_paid || 0) / 100);
+    const taxPaid = ((payRes.data?.tax || 0) / 100);
 
-    // 6. Update Supabase public.invoices
+    console.log(`   -> Finalized & Paid: ${stripeInvoiceId} (Total: $${totalPaid.toFixed(2)}, Tax: $${taxPaid.toFixed(2)})`);
+    console.log(`   -> PDF: ${pdfUrl}`);
+
+    // 6. Update Supabase public.invoices with real total & tax calculated by Stripe
     await supabaseRequest(`invoices?id=eq.${inv.id}`, 'PATCH', {
       stripe_invoice_id: stripeInvoiceId,
       stripe_customer_id: custId,
       stripe_hosted_invoice_url: hostedUrl,
       stripe_invoice_pdf: pdfUrl,
-      payment_status: 'paid'
+      payment_status: 'paid',
+      tax: taxPaid,
+      total_amount: totalPaid
     });
   }
 
-  console.log('\n=== All Invoices Successfully Re-Itemized with Native Stripe Tax Breakdown! ===');
+  console.log('\n=== All Invoices Successfully Upgraded with Beautiful Styling & Clean Tax Placement! ===');
 }
 
 runItemizedSync().catch(console.error);
