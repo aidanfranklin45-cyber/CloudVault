@@ -14,10 +14,18 @@
     <link rel="dns-prefetch" href="https://xbxvebnrjryvksvtufqj.supabase.co">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- PostHog Analytics -->
+    <link rel="preconnect" href="https://wzepocpfxuxvffbcvbcl.supabase.co" crossorigin>
+    <link rel="dns-prefetch" href="https://wzepocpfxuxvffbcvbcl.supabase.co">
+    <!-- PostHog Analytics (Optimized for Fast Sub-800ms Admin Load) -->
     <script>
         !function (t, e) { var o, n, p, r; e.__SV || (window.posthog = e, e._i = [], e.init = function (i, s, a) { function g(t, e) { var o = e.split("."); 2 == o.length && (t = t[o[0]], e = o[1]), t[e] = function () { t.push([e].concat(Array.prototype.slice.call(arguments, 0))) } } var c = e; for (void 0 !== a ? c = e[a] = [] : a = "posthog", c.people = c.people || [], c.toString = function (t) { var e = "posthog"; return "posthog" !== a && (e += "." + a), t || (e += " (stub)"), e }, c.people.toString = function () { return c.toString(1) + ".people (stub)" }, p = "capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures onSessionId".split(" "), r = 0; r < p.length; r++)g(c, p[r]); e._i.push([i, s, a]) }, e.__SV = 1.0, o = t.createElement("script"), o.type = "text/javascript", o.async = !0, o.src = "https://us-assets.i.posthog.com/static/array.js", n = t.getElementsByTagName("script")[0], n.parentNode.insertBefore(o, n)) }(document, window.posthog || []);
-        posthog.init('phc_njX2MWz7DdzYxHY87sdEtymMMmA2kHK9oxyG8T4XwWzb', { api_host: 'https://us.posthog.com', person_profiles: 'identified_only' });
+        posthog.init('phc_njX2MWz7DdzYxHY87sdEtymMMmA2kHK9oxyG8T4XwWzb', {
+            api_host: 'https://us.posthog.com',
+            person_profiles: 'identified_only',
+            disable_session_recording: true,
+            autocapture: false,
+            disable_surveys: true
+        });
     </script>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -4085,6 +4093,8 @@
                 let allItems = [];
                 if (preloadedItems) {
                     allItems = preloadedItems.filter(i => matchesFacilityTarget(i, queryFacilityId));
+                } else if (window._masterAdminData && window._masterAdminData.inventory && window._masterAdminData.inventory.length > 0) {
+                    allItems = window._masterAdminData.inventory.filter(i => matchesFacilityTarget(i, queryFacilityId));
                 } else {
                     const statuses = ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer'];
                     const [facRes, nullRes] = await Promise.all([
@@ -4099,6 +4109,8 @@
                 let allRequests = [];
                 if (preloadedRequests) {
                     allRequests = preloadedRequests.filter(r => matchesFacilityTarget(r, queryFacilityId));
+                } else if (window._masterAdminData && window._masterAdminData.accessRequests && window._masterAdminData.accessRequests.length > 0) {
+                    allRequests = window._masterAdminData.accessRequests.filter(r => matchesFacilityTarget(r, queryFacilityId));
                 } else {
                     const [facManifestsRes, nullManifestsRes] = await Promise.all([
                         supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room, delivery_notes, users!uid(name, assigned_facility_id)')
