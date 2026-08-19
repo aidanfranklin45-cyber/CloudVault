@@ -1980,7 +1980,7 @@
             }
             activeRole = selectedVal;
             switchRoleView();
-            loadManagerFacilityData();
+            loadManagerLiveData();
             loadWorkerQueues();
         }
 
@@ -2380,7 +2380,7 @@
                     await Promise.all([
                         fetchAndRenderFacilitySpecs(facId),
                         loadRegionalPricing(facId),
-                        loadManagerFacilityData(facId),
+                        loadManagerLiveData(facId),
                         loadWorkerQueues(facId)
                     ]);
                 }
@@ -2889,6 +2889,10 @@
             loadManagerLiveData(facilityId);
         }
 
+        async function loadManagerFacilityData(facilityId = null, preloadedItems = null, preloadedRequests = null, preloadedStaff = null, preloadedBadges = null) {
+            return loadManagerLiveData(facilityId, preloadedItems, preloadedRequests, preloadedStaff, preloadedBadges);
+        }
+
         async function loadManagerLiveData(facilityId = null, preloadedItems = null, preloadedRequests = null, preloadedStaff = null, preloadedBadges = null) {
             try {
                 let facId = facilityId || window.currentSelectedFacilityId;
@@ -3248,7 +3252,7 @@
                 const { error } = await supabase.from('access_requests').update({ status: 'completed' }).eq('id', requestId);
                 if (error) throw error;
                 alert(`Access request PIN override completed.`);
-                loadManagerFacilityData();
+                loadManagerLiveData();
             } catch (err) {
                 alert("Override failed: " + err.message);
             }
@@ -7940,7 +7944,7 @@
                 document.getElementById('override-result').classList.add('hidden');
                 document.getElementById('override-tote-search').value = "";
                 loadWorkerQueues();
-                loadManagerFacilityData();
+                loadManagerLiveData();
             } catch (err) {
                 alert("Override failed: " + err.message);
             }
@@ -8355,7 +8359,7 @@
 
                 alert(`Valet Door Delivery Route Dispatched successfully! Orders transitioned to "Out for Delivery".`);
                 loadWorkerQueues();
-                loadManagerFacilityData();
+                loadManagerLiveData();
             } catch (err) {
                 alert("Dispatch failed: " + err.message);
             }
@@ -8423,7 +8427,7 @@
 
                 alert(`Transfer complete! Reassigned to ${newFacilityId}.${extraInfo}`);
                 closeStaffTransferModal();
-                loadManagerFacilityData();
+                loadManagerLiveData();
             } catch (err) {
                 alert("Transfer failed: " + err.message);
             }
@@ -11062,7 +11066,7 @@
                 issueBtn.textContent = 'Re-Issue New Badge Token';
 
                 showBadgeScanToast(`✓ 2D Badge generated for ${activeBadgeTarget.userName}`, 'success');
-                loadManagerFacilityData();
+                loadManagerLiveData();
             } catch (err) {
                 console.error("Badge issuance error:", err);
                 alert("Failed to issue badge: " + (err.message || err));
@@ -11091,7 +11095,7 @@
 
                 showBadgeScanToast(`✓ Badge revoked for ${activeBadgeTarget.userName}`, 'error');
                 closeEmployeeBadgeModal();
-                loadManagerFacilityData();
+                loadManagerLiveData();
             } catch (err) {
                 alert("Revocation failed: " + (err.message || err));
             }
