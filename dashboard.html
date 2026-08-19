@@ -11,7 +11,13 @@
     <!-- PostHog Analytics -->
     <script>
         !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}var c=e;for(void 0!==a?c=e[a]=[]:a="posthog",c.people=c.people||[],c.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},c.people.toString=function(){return c.toString(1)+".people (stub)"},p="capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures onSessionId".split(" "),r=0;r<p.length;r++)g(c,p[r]);e._i.push([i,s,a])},e.__SV=1.0,o=t.createElement("script"),o.type="text/javascript",o.async=!0,o.src="https://us-assets.i.posthog.com/static/array.js",n=t.getElementsByTagName("script")[0],n.parentNode.insertBefore(o,n))}(document,window.posthog||[]);
-        posthog.init('phc_njX2MWz7DdzYxHY87sdEtymMMmA2kHK9oxyG8T4XwWzb', {api_host: 'https://us.posthog.com', person_profiles: 'identified_only'});
+        posthog.init('phc_njX2MWz7DdzYxHY87sdEtymMMmA2kHK9oxyG8T4XwWzb', {
+            api_host: 'https://us.posthog.com',
+            person_profiles: 'identified_only',
+            disable_session_recording: true,
+            autocapture: false,
+            disable_surveys: true
+        });
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
