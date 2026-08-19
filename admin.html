@@ -3912,14 +3912,16 @@
             const gridBody = document.getElementById('cal-grid-body');
             if (!gridBody || !calendarLoadedData.days) return;
 
-            const { days, reservations, accessRequests } = calendarLoadedData;
+            const { days, reservations, accessRequests, facId } = calendarLoadedData;
             const slots = [
                 { id: 'Morning (9 AM - 12 PM)', label: 'Morning (9-12)' },
                 { id: 'Afternoon (12 PM - 3 PM)', label: 'Afternoon (12-3)' },
                 { id: 'Evening Peak (3 PM - 6 PM)', label: 'Evening (3-6)' }
             ];
 
-            const DEFAULT_MAX_CAPACITY_TOTES = 12; // Default limit per slot for heatmap filling
+            // Dynamic capacity: based on facility staging rooms (default 3 concurrent bookings per window)
+            const numRooms = Number(currentLoadedFac?.staging_rooms || currentLoadedFac?.num_staging_rooms || 3);
+            const MAX_BOOKINGS_CAPACITY = Math.max(1, numRooms);
 
             let html = '';
             slots.forEach(slot => {
@@ -3941,49 +3943,80 @@
                         return resYmd === dayYmd;
                     });
 
-                    // Aggregate tote count & customer bookings count
+                    // Separate Active vs Completed requests
+                    const activeRequests = matchedRequests.filter(r => r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault');
+                    const completedRequests = matchedRequests.filter(r => r.status === 'completed');
+
+                    // Aggregate tote count
                     let totalTotes = 0;
+                    let activeTotes = 0;
                     matchedRequests.forEach(r => {
                         const items = r.requested_items || r.requested_tote_codes || [];
-                        totalTotes += (Array.isArray(items) && items.length > 0) ? items.length : Number(r.additional_totes || 1);
+                        const count = (Array.isArray(items) && items.length > 0) ? items.length : Number(r.additional_totes || 1);
+                        totalTotes += count;
+                        if (r.status !== 'completed') activeTotes += count;
                     });
                     matchedReservations.forEach(sr => {
                         const totes = sr.tote_ids || [];
-                        totalTotes += (Array.isArray(totes) && totes.length > 0) ? totes.length : 1;
+                        const count = (Array.isArray(totes) && totes.length > 0) ? totes.length : 1;
+                        totalTotes += count;
+                        activeTotes += count;
                     });
 
                     const totalBookings = Math.max(matchedRequests.length, matchedReservations.length);
-                    const fillPercent = Math.min(100, Math.round((totalTotes / DEFAULT_MAX_CAPACITY_TOTES) * 100));
+                    const activeBookings = activeRequests.length + matchedReservations.length;
+                    const completedBookings = completedRequests.length;
 
-                    // Heatmap badge color calculation
+                    // Dynamic Capacity percentage based on Active Bookings vs Max Staging Capacity (3)
+                    const activeFillPercent = Math.min(100, Math.round((activeBookings / MAX_BOOKINGS_CAPACITY) * 100));
+
+                    // Heatmap styling based on active load & completion status
                     let badgeClass = "bg-gray-900/60 border-gray-800 text-gray-500 hover:border-blue-500/40";
                     let fillBarClass = "bg-blue-500";
-                    
-                    if (totalBookings > 0) {
-                        if (fillPercent >= 80) {
-                            badgeClass = "bg-red-950/60 border-red-500/50 text-red-300 shadow-sm shadow-red-900/30";
+                    let capLabel = "0% Load";
+                    let statusPill = "";
+
+                    if (activeBookings > 0) {
+                        if (activeFillPercent >= 100) {
+                            badgeClass = "bg-red-950/60 border-red-500/60 text-red-200 shadow-sm shadow-red-900/40";
                             fillBarClass = "bg-red-500";
-                        } else if (fillPercent >= 45) {
-                            badgeClass = "bg-amber-950/60 border-amber-500/50 text-amber-300 shadow-sm shadow-amber-900/30";
+                            capLabel = `${activeBookings}/${MAX_BOOKINGS_CAPACITY} Full`;
+                        } else if (activeFillPercent >= 60) {
+                            badgeClass = "bg-amber-950/60 border-amber-500/60 text-amber-200 shadow-sm shadow-amber-900/40";
                             fillBarClass = "bg-amber-500";
+                            capLabel = `${activeBookings}/${MAX_BOOKINGS_CAPACITY} Active`;
                         } else {
-                            badgeClass = "bg-emerald-950/60 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-900/30";
-                            fillBarClass = "bg-emerald-500";
+                            badgeClass = "bg-blue-950/60 border-blue-500/60 text-blue-200 shadow-sm shadow-blue-900/40";
+                            fillBarClass = "bg-blue-500";
+                            capLabel = `${activeBookings}/${MAX_BOOKINGS_CAPACITY} Active`;
                         }
+                    } else if (completedBookings > 0) {
+                        // All bookings completed in this slot!
+                        badgeClass = "bg-emerald-950/40 border-emerald-500/40 text-emerald-300 hover:border-emerald-400";
+                        fillBarClass = "bg-emerald-500";
+                        capLabel = `✓ ${completedBookings} Fulfilled`;
+                        statusPill = `<span class="text-[8px] font-bold text-emerald-400 bg-emerald-500/10 px-1 py-0.2 rounded border border-emerald-500/20">Done</span>`;
                     }
 
                     html += `
                     <div onclick="onCalendarCellClick('${dayYmd}', '${slot.id}')"
                         class="p-2 rounded-2xl border ${badgeClass} transition flex flex-col justify-between min-h-[64px] cursor-pointer group hover:scale-[1.02]">
                         <div class="flex items-center justify-between">
-                            <span class="text-[10px] font-bold font-mono ${totalBookings > 0 ? 'text-white' : 'text-gray-600'}">${totalBookings} Booking${totalBookings !== 1 ? 's' : ''}</span>
-                            <span class="text-[9px] font-bold font-mono px-1.5 py-0.2 rounded bg-black/40 text-gray-300">${totalTotes} Totes</span>
+                            <span class="text-[10px] font-bold font-mono ${totalBookings > 0 ? 'text-white' : 'text-gray-600'}">
+                                ${totalBookings} Booking${totalBookings !== 1 ? 's' : ''}
+                            </span>
+                            <span class="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded bg-black/50 text-gray-300">
+                                ${totalTotes} Tote${totalTotes !== 1 ? 's' : ''}
+                            </span>
                         </div>
-                        <div class="space-y-1 mt-2">
+                        <div class="space-y-1 mt-1.5">
                             <div class="w-full bg-gray-950 rounded-full h-1.5 overflow-hidden">
-                                <div class="${fillBarClass} h-full transition-all duration-500" style="width: ${fillPercent}%;"></div>
+                                <div class="${fillBarClass} h-full transition-all duration-500" style="width: ${activeBookings > 0 ? activeFillPercent : (completedBookings > 0 ? 100 : 0)}%;"></div>
                             </div>
-                            <div class="text-[9px] text-right font-mono font-bold text-gray-400 group-hover:text-white">${fillPercent}% Cap</div>
+                            <div class="flex items-center justify-between text-[9px] font-mono font-bold">
+                                <span class="${activeBookings > 0 ? 'text-amber-300' : (completedBookings > 0 ? 'text-emerald-400' : 'text-gray-500')}">${capLabel}</span>
+                                ${statusPill}
+                            </div>
                         </div>
                     </div>`;
                 });
@@ -4018,35 +4051,81 @@
             });
 
             const dateObj = new Date(dateYmd + 'T12:00:00');
-            const dateFormatted = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            const dateFormatted = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
             title.textContent = `Scheduled Reservations: ${dateFormatted} (${slotId})`;
 
             if (matchedRequests.length === 0) {
-                content.innerHTML = `<div class="p-3 text-center text-gray-500">No customer staging reservations scheduled for this slot.</div>`;
+                content.innerHTML = `<div class="p-6 text-center text-gray-500 font-mono text-xs">No customer staging or delivery reservations scheduled for this time window.</div>`;
             } else {
                 content.innerHTML = matchedRequests.map(r => {
                     const custName = r.users?.name || "Customer " + (r.uid || '').substring(0, 8);
-                    const toteCount = Array.isArray(r.requested_items) ? r.requested_items.length : 1;
+                    const items = r.requested_items || r.requested_tote_codes || [];
+                    const toteCount = (Array.isArray(items) && items.length > 0) ? items.length : Number(r.additional_totes || 1);
                     const pin = r.pin || r.access_pin || "----";
-                    const fulType = (r.fulfillment_type || 'self_serve_pickup').replace(/_/g, ' ').toUpperCase();
+                    const isValet = r.fulfillment_type === 'valet_delivery';
+                    const isCompleted = r.status === 'completed';
+
+                    // Operation Type Badge
+                    let opTypeBadge = '<span class="text-blue-400 bg-blue-500/10 border border-blue-500/30 px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase font-mono">📦 Vault Retrieval</span>';
+                    if (r.request_type === 'new_tote_delivery' || r.request_type === 'intake') {
+                        opTypeBadge = '<span class="text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase font-mono">📥 New Tote Intake</span>';
+                    } else if (r.request_type === 'exit_retrieval' || r.request_type === 'retrieval_exit') {
+                        opTypeBadge = '<span class="text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase font-mono">🚪 Plan Exit Pull</span>';
+                    }
+
+                    // Method Badge
+                    const methodBadge = isValet 
+                        ? '<span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase font-mono">🚚 Valet Delivery</span>'
+                        : `<span class="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase font-mono">🚪 Self-Serve (Room #${r.assigned_room || 1})</span>`;
+
+                    // Status Notation
+                    let statusBadge = `<span class="text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-xl text-xs font-bold uppercase font-mono">⏳ PENDING PULL</span>`;
+                    if (isCompleted) {
+                        statusBadge = `<span class="text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-xl text-xs font-bold uppercase font-mono flex items-center gap-1"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-400"></i> COMPLETED</span>`;
+                    } else if (r.status === 'staged') {
+                        statusBadge = `<span class="text-blue-300 bg-blue-500/10 border border-blue-500/30 px-2.5 py-1 rounded-xl text-xs font-bold uppercase font-mono">📍 STAGED IN ROOM #${r.assigned_room || 1}</span>`;
+                    } else if (r.status === 'out-for-delivery') {
+                        statusBadge = `<span class="text-orange-300 bg-orange-500/10 border border-orange-500/30 px-2.5 py-1 rounded-xl text-xs font-bold uppercase font-mono">🚚 ON DELIVERY TRUCK</span>`;
+                    }
+
+                    const toteCodesList = (r.requested_tote_codes && r.requested_tote_codes.length > 0)
+                        ? `<div class="mt-2 text-[10px] font-mono text-gray-400 flex items-center gap-1.5 flex-wrap">
+                             <span class="text-gray-500 font-bold">Barcodes:</span> 
+                             ${r.requested_tote_codes.map(c => `<span class="bg-gray-950 border border-gray-800 text-gray-300 px-1.5 py-0.5 rounded font-mono">${escapeHtml(c)}</span>`).join('')}
+                           </div>`
+                        : '';
+
+                    const notesHtml = r.delivery_notes 
+                        ? `<div class="mt-1.5 text-[10px] text-gray-400 italic font-mono bg-gray-950/60 p-2 rounded-lg border border-gray-850">"${escapeHtml(r.delivery_notes)}"</div>` 
+                        : '';
 
                     return `
-                    <div class="p-3 bg-gray-900 border border-gray-800 rounded-xl flex items-center justify-between gap-2">
-                        <div>
-                            <div class="font-bold text-white text-sm">${escapeHtml(custName)}</div>
-                            <div class="text-[10px] text-blue-300 font-mono">${toteCount} Tote(s) &bull; ${fulType}</div>
+                    <div class="p-4 bg-gray-950 border ${isCompleted ? 'border-emerald-500/20' : 'border-gray-800'} rounded-2xl space-y-3 hover:border-gray-700 transition">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-850/70 pb-2.5">
+                            <div class="space-y-0.5">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h4 class="font-extrabold text-white text-sm">${escapeHtml(custName)}</h4>
+                                    ${opTypeBadge}
+                                    ${methodBadge}
+                                </div>
+                                <p class="text-[11px] font-mono text-gray-400">Order ID: <span class="text-blue-300 font-bold">${r.id ? r.id.substring(0, 8) : '—'}</span> &bull; ${toteCount} Container(s)</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-mono font-bold text-cyan-300 bg-cyan-950/80 border border-cyan-500/40 px-3 py-1 rounded-xl">PIN: ${escapeHtml(pin)}</span>
+                                ${statusBadge}
+                            </div>
                         </div>
-                        <div class="text-right">
-                            <span class="text-xs font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded-lg font-mono">PIN: ${pin}</span>
-                            <span class="block text-[10px] text-gray-400 mt-1 uppercase font-bold">${r.status || 'pending'}</span>
-                        </div>
+
+                        ${toteCodesList}
+                        ${notesHtml}
                     </div>`;
                 }).join('');
             }
 
             panel.classList.remove('hidden');
             panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function closeCalendarSlotDetail() {
