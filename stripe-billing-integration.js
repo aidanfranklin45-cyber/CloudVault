@@ -138,12 +138,46 @@
         if (item && (item.quantity !== targetQty || Math.abs(Number(item.price?.unit_amount || 0) - Math.round(Number(sub.tote_rate || 3.50) * 100)) > 1) && targetQty > 0) {
           console.log(`[StripeBillingIntegration] Syncing subscription quantity for ${subId}: ${item.quantity} -> ${targetQty} totes @ $${Number(sub.tote_rate || 3.50).toFixed(2)}/mo (Roll-over to Renewal)...`);
 
-          // 1. Calculate exact mid-month prorated rollover difference
-          const deltaTotes = targetQty - item.quantity;
-          const toteRate = Number(sub.tote_rate || 3.50);
-          const renewalMs = new Date(sub.next_billing_date || sub.current_period_end || Date.now() + 30 * 86400000).getTime();
-          const remainingDays = Math.max(1, Math.min(31, Math.ceil((renewalMs - Date.now()) / (1000 * 60 * 60 * 24))));
-          const prorateCents = Math.round(deltaTotes * toteRate * (remainingDays / 31) * 100);
+          // 1. Clean up any previous pending prorated adjustment items so multiple events do not stack stale deltas
+          if (sub.stripe_customer_id) {
+            try {
+              const pRes = await fetch(`https://api.stripe.com/v1/invoiceitems?customer=${sub.stripe_customer_id}&pending=true`, {
+                headers: { 'Authorization': `Bearer ${apiKey}` }
+              });
+              const pData = await pRes.json();
+              if (pData.data && Array.isArray(pData.data)) {
+                for (const it of pData.data) {
+                  if ((it.description || '').includes('Prorated Storage Adjustment')) {
+                    await fetch(`https://api.stripe.com/v1/invoiceitems/${it.id}`, {
+                      method: 'DELETE',
+                      headers: { 'Authorization': `Bearer ${apiKey}` }
+                    });
+                  }
+                }
+              }
+            } catch (pErr) {
+              console.warn('[StripeBillingIntegration] Pending items prune notice:', pErr.message);
+            }
+          }
+
+          // 2. Calculate cumulative segment proration based on total month usage vs prepaid base
+          const startMs = new Date(sub.last_billed_at || sub.current_period_start || Date.now() - 14 * 86400000).getTime();
+          const renewalMs = new Date(sub.next_billing_date || sub.current_period_end || Date.now() + 17 * 86400000).getTime();
+          const totalCycleDays = Math.max(28, Math.min(31, Math.round((renewalMs - startMs) / (1000 * 60 * 60 * 24)))) || 31;
+          const remainingDays = Math.max(1, Math.min(totalCycleDays, Math.ceil((renewalMs - Date.now()) / (1000 * 60 * 60 * 24))));
+          const elapsedDays = Math.max(0, totalCycleDays - remainingDays);
+
+          const initialTotes = Number(sub.tote_count || 10);
+          const initialRate = initialTotes >= 25 ? 2.00 : (initialTotes >= 10 ? 3.50 : 5.00);
+          const segment1Incurred = (initialTotes * initialRate) * (elapsedDays / totalCycleDays);
+
+          const newRate = Number(sub.tote_rate || (targetQty >= 25 ? 2.00 : (targetQty >= 10 ? 3.50 : 5.00)));
+          const segment2Incurred = (targetQty * newRate) * (remainingDays / totalCycleDays);
+
+          const totalMonthIncurred = segment1Incurred + segment2Incurred;
+          const prepaidBase = initialTotes * initialRate;
+          const netProrateDelta = totalMonthIncurred - prepaidBase;
+          const prorateCents = Math.round(netProrateDelta * 100);
 
           if (prorateCents !== 0 && sub.stripe_customer_id) {
             const taxRateId = sub.facility_id === 'facility_seattle_north' ? 'txr_1U5xC4AlEAaqjcFpgROOt8aR' :
@@ -153,7 +187,7 @@
               subscription: subId,
               amount: prorateCents.toString(),
               currency: 'usd',
-              description: `Prorated Storage Adjustment: ${deltaTotes > 0 ? '+' : ''}${deltaTotes} Container${Math.abs(deltaTotes) > 1 ? 's' : ''} (${remainingDays} days remaining @ $${toteRate.toFixed(2)}/mo)`
+              description: `Prorated Storage Adjustment: Mid-month tier update to ${targetQty} Totes ($${newRate.toFixed(2)}/mo rate for ${remainingDays} days remaining)`
             });
             if (taxRateId) itemBody.append('tax_rates[0]', taxRateId);
 
