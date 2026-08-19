@@ -161,39 +161,8 @@
             }
           }
 
-          // 2. Calculate Whole-Month Tier Upgrade Benefit
-          const initialTotes = Number(sub.tote_count || 10);
-          const initialRate = initialTotes >= 25 ? 2.00 : (initialTotes >= 10 ? 3.50 : 5.00);
-          const prepaidBase = initialTotes * initialRate;
-
-          const newRate = Number(sub.tote_rate || (targetQty >= 25 ? 2.00 : (targetQty >= 10 ? 3.50 : 5.00)));
-          const newWholeMonthBase = targetQty * newRate;
-          const upgradeBenefitDelta = Math.max(0, newWholeMonthBase - prepaidBase);
-          const prorateCents = Math.round(upgradeBenefitDelta * 100);
-
-          if (prorateCents > 0 && sub.stripe_customer_id) {
-            const taxRateId = sub.facility_id === 'facility_seattle_north' ? 'txr_1U5xC4AlEAaqjcFpgROOt8aR' :
-                              sub.facility_id === 'facility_portland_central' ? null : 'txr_1U5xC3AlEAaqjcFprESkZcDM';
-            const itemBody = new URLSearchParams({
-              customer: sub.stripe_customer_id,
-              subscription: subId,
-              amount: prorateCents.toString(),
-              currency: 'usd',
-              description: `Tier Upgrade Benefit: Full-month discounted volume rate applied across all ${targetQty} Containers ($${newRate.toFixed(2)}/tote/mo)`
-            });
-            if (taxRateId) itemBody.append('tax_rates[0]', taxRateId);
-
-            await fetch('https://api.stripe.com/v1/invoiceitems', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/x-www-form-urlencoded'
-              },
-              body: itemBody
-            });
-          }
-
-          // 2. Update recurring subscription quantity and price tier for the next renewal cycle
+          // 2. Update recurring subscription quantity and price tier for the next renewal cycle ($0 upgrade fees)
+          const toteRate = Number(sub.tote_rate || (targetQty >= 25 ? 2.00 : (targetQty >= 10 ? 3.50 : 5.00)));
           const unitCents = Math.round(toteRate * 100);
           const updateBody = new URLSearchParams({
             'items[0][id]': item.id,
