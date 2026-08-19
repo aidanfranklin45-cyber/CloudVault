@@ -824,38 +824,59 @@
                 const valetFee = Number(sub.valet_fee || 0);
                 const subtotal = storageAmt + valetFee;
 
-              const taxInfo = await this.resolveCustomerTaxRate(userId, custFac, custZip);
-              const taxRate = Number(taxInfo.taxRate || 0);
-              const taxAmt = Math.round(subtotal * taxRate * 100) / 100;
-              const total = Math.round((subtotal + taxAmt) * 100) / 100;
-              const createdAt = sub.created_at || new Date().toISOString();
+                // Check if user has active promo redemption or referral
+                let discountAmt = 0;
+                let promoCode = null;
+                try {
+                  const { data: promoRed } = await sb.from('promo_redemptions').select('*').eq('customer_uid', userId).maybeSingle();
+                  if (promoRed) {
+                    promoCode = promoRed.promo_code;
+                    discountAmt = Number(promoRed.discount_amount) || Math.round(subtotal * 0.20 * 100) / 100;
+                  }
+                } catch (pErr) {}
 
-              const created = await this.createInvoiceRecord({
-                uid: userId,
-                customer_name: customerEmail ? customerEmail.split('@')[0] : 'Valued Customer',
-                customer_email: customerEmail || null,
-                facility_id: custFac,
-                invoice_type: 'subscription',
-                payment_status: 'paid',
-                subtotal: storageAmt,
-                delivery_fee: valetFee,
-                tax: taxAmt,
-                total_amount: total,
-                payment_method: 'card',
-                notes: 'Initial subscription signup invoice receipt',
-                line_items: [
+                const taxInfo = await this.resolveCustomerTaxRate(userId, custFac, custZip);
+                const taxRate = Number(taxInfo.taxRate || 0);
+                const taxAmt = Math.round(subtotal * taxRate * 100) / 100;
+                const total = Math.max(0, Math.round((subtotal - discountAmt + taxAmt) * 100) / 100);
+                const createdAt = sub.created_at || new Date().toISOString();
+
+                const lineItems = [
                   {
                     description: `CloudVault Storage Subscription (${toteCount} totes @ $${toteRate.toFixed(2)}/mo)`,
                     qty: toteCount,
                     unit_price: toteRate,
                     amount: storageAmt
-                  },
-                  ...(valetFee > 0 ? [{ description: 'Valet Delivery Service Fee', qty: 1, unit_price: valetFee, amount: valetFee }] : []),
-                  ...(taxAmt > 0 ? [{ description: `State/Local Sales Tax (${(taxRate * 100).toFixed(2)}%)`, qty: 1, unit_price: taxAmt, amount: taxAmt, tax_rate: taxRate }] : [])
-                ],
-                created_at: createdAt,
-                paid_at: createdAt
-              });
+                  }
+                ];
+                if (valetFee > 0) {
+                  lineItems.push({ description: 'Valet Delivery Service Fee', qty: 1, unit_price: valetFee, amount: valetFee });
+                }
+                if (discountAmt > 0) {
+                  lineItems.push({ description: `Creator Discount (${promoCode || '20% off 2 mo'})`, qty: 1, unit_price: -discountAmt, amount: -discountAmt, is_discount: true, promo_code: promoCode });
+                }
+                if (taxAmt > 0) {
+                  lineItems.push({ description: `State/Local Sales Tax (${(taxRate * 100).toFixed(2)}%)`, qty: 1, unit_price: taxAmt, amount: taxAmt, tax_rate: taxRate, is_tax: true });
+                }
+
+                const created = await this.createInvoiceRecord({
+                  uid: userId,
+                  customer_name: customerEmail ? customerEmail.split('@')[0] : 'Valued Customer',
+                  customer_email: customerEmail || null,
+                  facility_id: custFac,
+                  invoice_type: 'subscription',
+                  payment_status: 'paid',
+                  subtotal: storageAmt,
+                  delivery_fee: valetFee,
+                  discount: discountAmt,
+                  tax: taxAmt,
+                  total_amount: total,
+                  payment_method: 'card',
+                  notes: promoCode ? `Initial subscription invoice with promo ${promoCode}` : 'Initial subscription signup invoice receipt',
+                  line_items: lineItems,
+                  created_at: createdAt,
+                  paid_at: createdAt
+                });
                 if (created && created.success && created.data) {
                   data = [created.data];
                 }
@@ -2054,8 +2075,6 @@
       const invNum = invoiceObj.invoice_number || invoiceObj.invoiceNumber || (invoiceObj.id ? String(invoiceObj.id).substring(0, 12) : 'INV-2026-0000');
       const stripeId = invoiceObj.stripe_invoice_id || 'in_live_stripe_sync';
       const pdfUrl = invoiceObj.stripe_invoice_pdf || invoiceObj.stripe_hosted_invoice_url;
-      const totalAmount = Number(invoiceObj.total_amount || invoiceObj.totalAmount || 0).toFixed(2);
-      const tax = Number(invoiceObj.tax || 0);
       const createdAt = invoiceObj.created_at ? new Date(invoiceObj.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const dueDate = invoiceObj.due_date ? new Date(invoiceObj.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : createdAt;
 
@@ -2073,27 +2092,79 @@
       if (typeof lineItems === 'string') {
         try { lineItems = JSON.parse(lineItems); } catch (e) { lineItems = []; }
       }
-      if (!Array.isArray(lineItems) || lineItems.length === 0) {
-        lineItems = [
-          {
-            description: invoiceObj.notes || 'CloudVault Storage Service',
-            qty: 1,
-            unit_price: effectiveSubtotal || Number(totalAmount),
-            amount: effectiveSubtotal || Number(totalAmount)
-          }
-        ];
+      if (!Array.isArray(lineItems)) {
+        lineItems = [];
       }
 
-      // Filter out raw tax strings from line items table
-      const filteredLines = lineItems.filter(l => {
+      // Filter line items into service lines, discount lines, and tax lines
+      const isTaxItem = l => {
         const d = (l.description || '').toLowerCase();
-        return !d.includes('sales tax') && !d.includes('state tax');
-      });
+        return l.is_tax === true || d.includes('sales tax') || d.includes('state tax') || d.includes('local tax');
+      };
+      const isDiscountItem = l => {
+        const d = (l.description || '').toLowerCase();
+        return l.is_discount === true || Number(l.amount || l.unit_price || 0) < 0 || d.includes('discount') || d.includes('promo') || d.includes('coupon');
+      };
 
-      const computedLineItemsSubtotal = filteredLines.reduce((sum, item) => sum + Number(item.amount || ((item.qty || 1) * (item.unit_price || 0)) || 0), 0);
-      const effectiveSubtotal = computedLineItemsSubtotal > 0 ? computedLineItemsSubtotal : Math.max(0, Number(totalAmount) - tax);
+      const serviceLines = lineItems.filter(l => !isTaxItem(l) && !isDiscountItem(l));
+      const discountLines = lineItems.filter(isDiscountItem);
+      const taxLines = lineItems.filter(isTaxItem);
 
-      const linesHtml = filteredLines.map(item => `
+      if (serviceLines.length === 0) {
+        serviceLines.push({
+          description: invoiceObj.notes || 'CloudVault Storage Service',
+          qty: 1,
+          unit_price: Number(invoiceObj.subtotal || invoiceObj.total_amount || 35.00),
+          amount: Number(invoiceObj.subtotal || invoiceObj.total_amount || 35.00)
+        });
+      }
+
+      const computedServiceSubtotal = serviceLines.reduce((sum, item) => sum + Number(item.amount || ((item.qty || 1) * (item.unit_price || 0)) || 0), 0);
+      const effectiveSubtotal = Number(invoiceObj.subtotal) > 0 ? Number(invoiceObj.subtotal) : (computedServiceSubtotal > 0 ? computedServiceSubtotal : 35.00);
+
+      // Discount Resolution
+      let discountAmount = Number(invoiceObj.discount || invoiceObj.discount_amount || 0);
+      if (discountAmount === 0 && discountLines.length > 0) {
+        discountAmount = discountLines.reduce((sum, item) => sum + Math.abs(Number(item.amount || item.unit_price || 0)), 0);
+      }
+      
+      const userPromo = invoiceObj.promo_code || window.currentUserProfile?.referred_by_promo_code || (invoiceObj.notes && (invoiceObj.notes.includes('%') || invoiceObj.notes.toLowerCase().includes('promo')) ? 'ROSS20%' : null);
+      if (discountAmount === 0 && userPromo) {
+        discountAmount = Math.round(effectiveSubtotal * 0.20 * 100) / 100;
+      }
+
+      let promoLabel = 'Creator Promo Discount (20% off 2 mo)';
+      if (userPromo) {
+        promoLabel = `Creator Promo Discount (${userPromo} — 20% off Month 1 of 2)`;
+      } else if (discountLines.length > 0 && discountLines[0].description) {
+        promoLabel = discountLines[0].description.replace(/^[-–—\s]+/, '');
+      }
+
+      const netTaxable = Math.max(0, effectiveSubtotal - discountAmount);
+
+      // Tax Resolution: strictly calculated on post-discount net taxable subtotal
+      const facilityId = invoiceObj.facility_id || window.currentUserProfile?.assigned_facility_id || 'facility_seattle_north';
+      const taxRatePct = facilityId === 'facility_seattle_north' ? 10.25 :
+                         facilityId === 'facility_portland_central' ? 0.00 : 8.50;
+      const taxRegionName = facilityId === 'facility_seattle_north' ? 'Seattle North Sales Tax (10.25%)' :
+                            facilityId === 'facility_portland_central' ? 'Oregon Sales Tax (0.00%)' :
+                            'Washington State & Local Sales Tax (8.50%)';
+
+      let taxAmount = Number(invoiceObj.tax || 0);
+      if (taxAmount === 0 && taxLines.length > 0) {
+        taxAmount = taxLines.reduce((sum, item) => sum + Number(item.amount || item.unit_price || 0), 0);
+      }
+      if (taxAmount === 0 || Math.abs(taxAmount - Math.round(effectiveSubtotal * (taxRatePct / 100.0) * 100) / 100) < 0.02) {
+        taxAmount = Math.round(netTaxable * (taxRatePct / 100.0) * 100) / 100;
+      }
+
+      const computedGrandTotal = Math.max(0, Math.round((netTaxable + taxAmount) * 100) / 100);
+      const rawTotalAmount = Number(invoiceObj.total_amount || invoiceObj.totalAmount || 0);
+      const totalAmount = (rawTotalAmount > 0 && Math.abs(rawTotalAmount - computedGrandTotal) < 0.05)
+                          ? rawTotalAmount.toFixed(2)
+                          : computedGrandTotal.toFixed(2);
+
+      const linesHtml = serviceLines.map(item => `
         <tr class="border-b border-slate-100 text-xs">
           <td class="py-3 px-4 font-semibold text-slate-800">${item.description || 'Service Line'}</td>
           <td class="py-3 px-4 text-center font-mono text-slate-600">${item.qty || 1}</td>
@@ -2101,10 +2172,6 @@
           <td class="py-3 px-4 text-right font-mono font-bold text-slate-900">$${Number(item.amount || ((item.qty || 1) * (item.unit_price || 0))).toFixed(2)}</td>
         </tr>
       `).join('');
-
-      const taxRegionName = invoiceObj.facility_id === 'facility_seattle_north' ? 'Seattle North Sales Tax (10.25%)' :
-                            invoiceObj.facility_id === 'facility_portland_central' ? 'Oregon Sales Tax (0.00%)' :
-                            'Washington State & Local Sales Tax (8.50%)';
 
       modalEl.innerHTML = `
         <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-auto border border-slate-200 overflow-hidden text-slate-800 my-6">
@@ -2206,14 +2273,28 @@
                   <span>Subtotal</span>
                   <span class="font-mono font-medium">$${effectiveSubtotal.toFixed(2)}</span>
                 </div>
-                <div class="flex justify-between text-slate-600">
-                  <span>Total excluding tax</span>
-                  <span class="font-mono font-medium">$${effectiveSubtotal.toFixed(2)}</span>
-                </div>
-                ${tax > 0 ? `
+                ${discountAmount > 0 ? `
+                  <div class="flex justify-between text-emerald-600 font-bold">
+                    <span class="flex items-center gap-1">
+                      <svg class="w-3.5 h-3.5 inline text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+                      ${promoLabel}
+                    </span>
+                    <span class="font-mono font-bold">-$${discountAmount.toFixed(2)}</span>
+                  </div>
+                  <div class="flex justify-between text-slate-500 text-[11px]">
+                    <span>Total excluding tax</span>
+                    <span class="font-mono font-medium">$${netTaxable.toFixed(2)}</span>
+                  </div>
+                ` : `
+                  <div class="flex justify-between text-slate-600">
+                    <span>Total excluding tax</span>
+                    <span class="font-mono font-medium">$${effectiveSubtotal.toFixed(2)}</span>
+                  </div>
+                `}
+                ${taxAmount > 0 ? `
                   <div class="flex justify-between text-slate-600">
                     <span>${taxRegionName}</span>
-                    <span class="font-mono font-medium">$${tax.toFixed(2)}</span>
+                    <span class="font-mono font-medium">$${taxAmount.toFixed(2)}</span>
                   </div>
                 ` : ''}
                 <div class="border-t-2 border-slate-200 pt-3 flex justify-between items-center">

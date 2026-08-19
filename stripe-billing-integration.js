@@ -945,13 +945,25 @@
 
       if (sb) {
         try {
-          const { data, error } = await sb.rpc('validate_promo_code_for_checkout', {
+          let { data, error } = await sb.rpc('validate_promo_code_for_checkout', {
             p_code: cleanCode,
             p_user_uid: userUid || null,
             p_gross_amount: Number(grossAmount) || 0.00
           });
 
-          if (!error && data) {
+          if ((error || !data || !data.valid) && !cleanCode.endsWith('%')) {
+            const r2 = await sb.rpc('validate_promo_code_for_checkout', {
+              p_code: cleanCode + '%',
+              p_user_uid: userUid || null,
+              p_gross_amount: Number(grossAmount) || 0.00
+            });
+            if (!r2.error && r2.data && r2.data.valid) {
+              data = r2.data;
+              error = null;
+            }
+          }
+
+          if (!error && data && data.valid) {
             return data;
           }
         } catch (rpcErr) {
