@@ -2227,7 +2227,7 @@
                     const input = document.getElementById('scan-barcode');
                     if (input) {
                         sanitizeBarcodeAutofill(input);
-                        input.focus();
+                        input.focus({ preventScroll: true });
                         sanitizeBarcodeAutofill(input);
                     }
                 }, 100);
@@ -3648,11 +3648,12 @@
             const overlay = document.getElementById('scan-overlay');
             if (overlay) overlay.classList.add('hidden');
             const input = document.getElementById('scan-barcode');
-            if (input) input.focus();
+            if (input && activeRole === 'worker') input.focus({ preventScroll: true });
         }
 
         function focusDefaultScanner() {
-            // Only auto-focus in worker mode if worker view is visible and not in modal/manager/exec search
+            // ONLY auto-focus in pure worker mode (activeRole === 'worker')
+            if (activeRole !== 'worker') return;
             const workerView = document.getElementById('view-worker');
             if (!workerView || workerView.classList.contains('hidden')) return;
 
@@ -3661,17 +3662,18 @@
             const active = document.activeElement;
             const isOtherInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT' || active.isContentEditable);
             if (!isOtherInput && active !== input) {
-                input.focus();
+                input.focus({ preventScroll: true });
             }
         }
 
-        // Global background click handler: Return focus to Instant Tote Scanner ONLY in Worker View
+        // Global background click handler: NEVER steal focus or jump scroll for executive/manager views
         window.addEventListener('click', (e) => {
+            if (activeRole !== 'worker') return;
             const workerView = document.getElementById('view-worker');
             if (!workerView || workerView.classList.contains('hidden')) return;
 
             const tag = e.target ? (e.target.tagName || '') : '';
-            if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A', 'OPTION'].includes(tag) || e.target.closest('button, a, input, select, textarea, [contenteditable="true"], modal, .modal, #tmm-modal, #facmap-modal, #master-tote-search-input')) {
+            if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A', 'OPTION'].includes(tag) || e.target.closest('button, a, input, select, textarea, [contenteditable="true"], modal, .modal, #tmm-modal, #facmap-modal, #master-tote-search-input, .glass-panel, table, canvas')) {
                 return;
             }
             focusDefaultScanner();
@@ -3680,7 +3682,8 @@
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') dismissScanOverlay();
 
-            // Keystroke capture: ONLY funnel keystrokes to Instant Tote Scanner if actively in Worker View
+            // Keystroke capture: ONLY funnel keystrokes to Instant Tote Scanner if actively in pure Worker View
+            if (activeRole !== 'worker') return;
             const workerView = document.getElementById('view-worker');
             if (!workerView || workerView.classList.contains('hidden')) return;
 
@@ -3689,7 +3692,7 @@
             const barcodeInput = document.getElementById('scan-barcode');
 
             if (!isOtherInput && barcodeInput && active !== barcodeInput && e.key && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-                barcodeInput.focus();
+                barcodeInput.focus({ preventScroll: true });
             }
         });
 
