@@ -2267,6 +2267,48 @@
             }
         } catch (e) {}
 
+        function matchesFacilityTarget(itemOrReq, targetFacId, userLookup = null) {
+            if (!targetFacId) return true;
+            const cleanTarget = targetFacId.toLowerCase().replace('facility_', '').replace(/[^a-z0-9]/g, '');
+
+            // 1. Direct facility_id match
+            const directFac = itemOrReq.facility_id;
+            if (directFac) {
+                const cleanDirect = directFac.toLowerCase().replace('facility_', '').replace(/[^a-z0-9]/g, '');
+                if (cleanDirect === cleanTarget || directFac === targetFacId) return true;
+                return false;
+            }
+
+            // 2. User assigned facility match
+            const userFac = itemOrReq.users?.assigned_facility_id || (userLookup && (userLookup[itemOrReq.uid]?.assigned_facility_id || userLookup[itemOrReq.user_id]?.assigned_facility_id));
+            if (userFac) {
+                const cleanUserFac = userFac.toLowerCase().replace('facility_', '').replace(/[^a-z0-9]/g, '');
+                if (cleanUserFac === cleanTarget || userFac === targetFacId) return true;
+                return false;
+            }
+
+            // 3. Barcode prefix heuristic (e.g., CV-YAK -> Yakima, CV-SEA -> Seattle, CV-PDX -> Portland, etc.)
+            const code = itemOrReq.tote_code || (itemOrReq.requested_tote_codes && itemOrReq.requested_tote_codes[0]);
+            if (code && typeof code === 'string') {
+                const codeUpper = code.toUpperCase();
+                if (codeUpper.startsWith('CV-YAK') && cleanTarget.includes('yakima')) return true;
+                if (codeUpper.startsWith('CV-SEA') && (cleanTarget.includes('seattle') || cleanTarget.includes('sea'))) return true;
+                if (codeUpper.startsWith('CV-PDX') && (cleanTarget.includes('portland') || cleanTarget.includes('pdx'))) return true;
+                if (codeUpper.startsWith('CV-AUS') && (cleanTarget.includes('austin') || cleanTarget.includes('aus'))) return true;
+                if (codeUpper.startsWith('CV-BOI') && (cleanTarget.includes('boise') || cleanTarget.includes('boi'))) return true;
+                if (codeUpper.startsWith('CV-DEN') && (cleanTarget.includes('denver') || cleanTarget.includes('den'))) return true;
+                if (codeUpper.startsWith('CV-SFO') && (cleanTarget.includes('sanfrancisco') || cleanTarget.includes('sfo'))) return true;
+                
+                // If it explicitly belongs to another market by code prefix, do not bleed across facilities
+                if (codeUpper.startsWith('CV-YAK') || codeUpper.startsWith('CV-SEA') || codeUpper.startsWith('CV-PDX') || codeUpper.startsWith('CV-AUS') || codeUpper.startsWith('CV-BOI') || codeUpper.startsWith('CV-DEN') || codeUpper.startsWith('CV-SFO')) {
+                    return false;
+                }
+            }
+
+            // Fallback: If completely unassigned and no market prefix, allow on primary default market
+            return cleanTarget.includes('seattle') || cleanTarget.includes('sea') || cleanTarget.includes('yakima');
+        }
+
         async function loadMasterAdminData(forceRefresh = false) {
             try {
                 if (!forceRefresh && window._masterAdminData) {
@@ -2276,8 +2318,8 @@
                 const [facsRes, zonesRes, invRes, reqsRes, subsRes, usersRes, badgesRes, funnelRes] = await Promise.all([
                     supabase.from('facilities').select('*'),
                     supabase.from('operational_zones').select('*'),
-                    supabase.from('inventory').select('*, users!uid(name, email, onboarding_status)'),
-                    supabase.from('access_requests').select('*, users!uid(name, active_zone)'),
+                    supabase.from('inventory').select('*, users!uid(name, email, onboarding_status, assigned_facility_id)'),
+                    supabase.from('access_requests').select('*, users!uid(name, active_zone, assigned_facility_id)'),
                     supabase.from('subscriptions').select('uid, recurring_storage, logistics_type, status'),
                     supabase.from('users').select('*').neq('role', 'customer'),
                     supabase.from('employee_badges').select('*').eq('is_active', true),
@@ -2367,8 +2409,8 @@
                     }
                     loadRegionalPricing(facId);
 
-                    const facItems = master.inventory.filter(i => i.facility_id === facId || !i.facility_id);
-                    const facRequests = master.accessRequests.filter(r => r.facility_id === facId || !r.facility_id);
+                    const facItems = master.inventory.filter(i => matchesFacilityTarget(i, facId));
+                    const facRequests = master.accessRequests.filter(r => matchesFacilityTarget(r, facId));
 
                     loadWorkerShiftStats(facId, facItems, facRequests);
                     loadWorkerLogisticsRouting(facId, facRequests, facItems);
@@ -4026,32 +4068,34 @@
 
                 let allItems = [];
                 if (preloadedItems) {
-                    allItems = preloadedItems;
+                    allItems = preloadedItems.filter(i => matchesFacilityTarget(i, queryFacilityId));
                 } else {
                     const statuses = ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer'];
                     const [facRes, nullRes] = await Promise.all([
-                        supabase.from('inventory').select('*, users!uid(name, onboarding_status)').eq('facility_id', queryFacilityId).in('status', statuses),
-                        supabase.from('inventory').select('*, users!uid(name, onboarding_status)').is('facility_id', null).in('status', statuses)
+                        supabase.from('inventory').select('*, users!uid(name, onboarding_status, assigned_facility_id)').eq('facility_id', queryFacilityId).in('status', statuses),
+                        supabase.from('inventory').select('*, users!uid(name, onboarding_status, assigned_facility_id)').is('facility_id', null).in('status', statuses)
                     ]);
-                    const combinedItems = [...(facRes.data || []), ...(nullRes.data || [])];
+                    const matchingNullItems = (nullRes.data || []).filter(item => matchesFacilityTarget(item, queryFacilityId));
+                    const combinedItems = [...(facRes.data || []), ...matchingNullItems];
                     allItems = Array.from(new Map(combinedItems.map(item => [item.id, item])).values());
                 }
 
                 let allRequests = [];
                 if (preloadedRequests) {
-                    allRequests = preloadedRequests;
+                    allRequests = preloadedRequests.filter(r => matchesFacilityTarget(r, queryFacilityId));
                 } else {
                     const [facManifestsRes, nullManifestsRes] = await Promise.all([
-                        supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room, delivery_notes')
+                        supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room, delivery_notes, users!uid(name, assigned_facility_id)')
                             .eq('facility_id', queryFacilityId)
                             .order('requested_at', { ascending: false })
                             .limit(200),
-                        supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room, delivery_notes')
+                        supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room, delivery_notes, users!uid(name, assigned_facility_id)')
                             .is('facility_id', null)
                             .order('requested_at', { ascending: false })
                             .limit(100)
                     ]);
-                    const rawManifests = [...(facManifestsRes.data || []), ...(nullManifestsRes.data || [])];
+                    const matchingNullManifests = (nullManifestsRes.data || []).filter(req => matchesFacilityTarget(req, queryFacilityId));
+                    const rawManifests = [...(facManifestsRes.data || []), ...matchingNullManifests];
                     allRequests = Array.from(new Map(rawManifests.map(m => [m.id, m])).values());
                 }
                 const manifests = allRequests.filter(r => r && r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault');
