@@ -45,6 +45,63 @@
     },
 
     /**
+     * Redirects customer directly to Stripe's hosted Billing Portal for 100% PCI-compliant card updates.
+     * Zero credit card numbers or sensitive credentials are ever touched or stored locally.
+     * @param {string} customerId - Stripe Customer ID (cus_...)
+     */
+    launchCustomerPortal: async function (customerId) {
+      let custId = customerId;
+      if (!custId && global.currentUser) {
+        custId = global.currentUser.stripe_customer_id;
+      }
+
+      if (!custId) {
+        // Try fetching user from Supabase if currentUser exists
+        if (global.currentUser && global.currentUser.id && global.supabase) {
+          const { data: u } = await global.supabase.from('users').select('stripe_customer_id').eq('id', global.currentUser.id).maybeSingle();
+          if (u && u.stripe_customer_id) custId = u.stripe_customer_id;
+        }
+      }
+
+      if (!custId) {
+        alert("No active Stripe customer record linked to this account yet. Please contact support.");
+        return;
+      }
+
+      if (typeof global.showToast === 'function') {
+        global.showToast("🔒 Redirecting to secure Stripe Billing Portal (Zero Card Storage)...");
+      }
+
+      try {
+        const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
+        const returnUrl = window.location.href;
+
+        const res = await fetch('https://api.stripe.com/v1/billing_portal/sessions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: new URLSearchParams({
+            customer: custId,
+            return_url: returnUrl
+          })
+        });
+
+        const session = await res.json();
+        if (session && session.url) {
+          window.location.href = session.url;
+        } else {
+          console.error('[StripeBillingIntegration] Portal session error:', session);
+          alert('Failed to initialize Stripe Customer Portal: ' + (session.error?.message || 'Unknown error'));
+        }
+      } catch (err) {
+        console.error('[StripeBillingIntegration] Failed to launch Stripe portal:', err);
+        alert('Stripe Connection Error: ' + err.message);
+      }
+    },
+
+    /**
      * Formats the invoice due date as a user-friendly string (e.g. "Due: Aug 15, 2026").
      * @param {Object} invoice - Invoice object
      * @returns {string}

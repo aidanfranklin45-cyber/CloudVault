@@ -5675,7 +5675,11 @@
 
 
         function launchStripePortalMock() {
-            showToast("Opening Stripe Customer Portal... (Integration Ready)");
+            if (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.launchCustomerPortal === 'function') {
+                window.StripeBillingIntegration.launchCustomerPortal(currentUser?.stripe_customer_id);
+            } else {
+                showToast("Opening Stripe Customer Portal...");
+            }
         }
 
         function closeBillingModal() {
