@@ -135,8 +135,38 @@
 
         const item = stripeSub.items?.data?.[0];
         if (item && item.quantity !== targetQty && targetQty > 0) {
-          console.log(`[StripeBillingIntegration] Prorating Stripe subscription ${subId} from ${item.quantity} to ${targetQty} totes...`);
+          console.log(`[StripeBillingIntegration] Syncing subscription quantity for ${subId}: ${item.quantity} -> ${targetQty} totes (Roll-over to Renewal)...`);
 
+          // 1. Calculate exact mid-month prorated rollover difference
+          const deltaTotes = targetQty - item.quantity;
+          const toteRate = Number(sub.tote_rate || 3.50);
+          const renewalMs = new Date(sub.next_billing_date || sub.current_period_end || Date.now() + 30 * 86400000).getTime();
+          const remainingDays = Math.max(1, Math.min(31, Math.ceil((renewalMs - Date.now()) / (1000 * 60 * 60 * 24))));
+          const prorateCents = Math.round(deltaTotes * toteRate * (remainingDays / 31) * 100);
+
+          if (prorateCents !== 0 && sub.stripe_customer_id) {
+            const taxRateId = sub.facility_id === 'facility_seattle_north' ? 'txr_1U5xC4AlEAaqjcFpgROOt8aR' :
+                              sub.facility_id === 'facility_portland_central' ? null : 'txr_1U5xC3AlEAaqjcFprESkZcDM';
+            const itemBody = new URLSearchParams({
+              customer: sub.stripe_customer_id,
+              subscription: subId,
+              amount: prorateCents.toString(),
+              currency: 'usd',
+              description: `Prorated Storage Adjustment: ${deltaTotes > 0 ? '+' : ''}${deltaTotes} Container${Math.abs(deltaTotes) > 1 ? 's' : ''} (${remainingDays} days remaining @ $${toteRate.toFixed(2)}/mo)`
+            });
+            if (taxRateId) itemBody.append('tax_rates[0]', taxRateId);
+
+            await fetch('https://api.stripe.com/v1/invoiceitems', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/x-www-form-urlencoded'
+              },
+              body: itemBody
+            });
+          }
+
+          // 2. Update recurring subscription quantity for the next renewal cycle
           const updateRes = await fetch(`https://api.stripe.com/v1/subscriptions/${subId}`, {
             method: 'POST',
             headers: {
@@ -146,28 +176,12 @@
             body: new URLSearchParams({
               'items[0][id]': item.id,
               'items[0][quantity]': targetQty.toString(),
-              'proration_behavior': 'create_prorations'
+              'proration_behavior': 'none'
             })
           });
 
           const updatedSub = await updateRes.json();
-          console.log('[StripeBillingIntegration] Stripe subscription prorated successfully:', updatedSub.id, 'New Qty:', updatedSub.items?.data?.[0]?.quantity);
-        }
-
-        // 3. Clean up loose pending customer invoice items
-        if (sub.stripe_customer_id) {
-          const pRes = await fetch(`https://api.stripe.com/v1/invoiceitems?customer=${sub.stripe_customer_id}&pending=true`, {
-            headers: { 'Authorization': `Bearer ${apiKey}` }
-          });
-          const pending = await pRes.json();
-          if (pending.data && Array.isArray(pending.data)) {
-            for (const it of pending.data) {
-              await fetch(`https://api.stripe.com/v1/invoiceitems/${it.id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${apiKey}` }
-              });
-            }
-          }
+          console.log('[StripeBillingIntegration] Stripe subscription quantity updated to:', updatedSub.items?.data?.[0]?.quantity);
         }
 
         return { success: true, quantity: targetQty };
