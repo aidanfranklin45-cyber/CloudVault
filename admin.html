@@ -3567,11 +3567,16 @@
         // =========================================================================
 
         async function printAllIntakeLabels() {
-            await selectBatchPreset('activate');
-            openPrintLabelModal();
-            setTimeout(() => {
-                triggerPrintLabels();
-            }, 400);
+            const codes = (window._currentActivateToteCodes && window._currentActivateToteCodes.length > 0)
+                ? window._currentActivateToteCodes.join(', ')
+                : null;
+
+            if (codes) {
+                openPrintLabelModal(codes);
+            } else {
+                await selectBatchPreset('activate');
+                openPrintLabelModal();
+            }
         }
 
         // =========================================================================
@@ -4448,6 +4453,7 @@
                     (i.activated === false && i.uid != null) || 
                     i.status === 'intake'
                 );
+                window._currentActivateToteCodes = activateItems.map(i => i.tote_code).filter(Boolean);
                 document.getElementById('wtab-activate-count').textContent = activateItems.length;
                 const printIntakeBadge = document.getElementById('print-intake-count');
                 if (printIntakeBadge) printIntakeBadge.textContent = activateItems.length;
@@ -4689,6 +4695,7 @@
 
                 // ── Tab 3: IN STAGING ROOM CARDS (Self-Serve only — staged) ──
                 const stagedItems = (allItems || []).filter(i => i.status === 'staged');
+                window._currentCustomerToteCodes = stagedItems.map(i => i.tote_code).filter(Boolean);
                 document.getElementById('wtab-customer-count').textContent = stagedItems.length;
                 const bodyCustomer = document.getElementById('wbody-customer');
 
@@ -10594,34 +10601,48 @@
             const facId = document.getElementById('global-facility-select')?.value || document.getElementById('manager-facility-select')?.value || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
 
             try {
-                if (presetKey === 'all') {
-                    let q = supabase.from('inventory').select('tote_code');
-                    if (facId) q = q.eq('facility_id', facId);
-                    const { data: totes } = await q;
-                    codes = (totes || []).map(t => t.tote_code);
-                } else if (presetKey === 'activate') {
-                    let q = supabase.from('inventory').select('tote_code');
-                    if (facId) q = q.eq('facility_id', facId);
-                    const { data: totes } = await q.or('activated.eq.false,status.eq.intake');
-                    if (totes && totes.length > 0) {
-                        codes = totes.map(t => t.tote_code);
+                if (presetKey === 'activate') {
+                    if (window._currentActivateToteCodes && window._currentActivateToteCodes.length > 0) {
+                        codes = [...window._currentActivateToteCodes];
                     } else {
-                        let reqQ = supabase.from('access_requests').select('requested_tote_codes').eq('status', 'pending');
-                        if (facId) reqQ = reqQ.eq('facility_id', facId);
-                        const { data: reqs } = await reqQ;
-                        codes = (reqs || []).flatMap(r => r.requested_tote_codes || []);
+                        let q = supabase.from('inventory').select('tote_code, facility_id, activated, status');
+                        if (facId) {
+                            q = q.or(`facility_id.eq.${facId},facility_id.is.null`);
+                        }
+                        const { data: totes } = await q.or('activated.eq.false,status.eq.intake');
+                        if (totes && totes.length > 0) {
+                            codes = totes.map(t => t.tote_code);
+                        } else {
+                            let reqQ = supabase.from('access_requests').select('requested_tote_codes').eq('status', 'pending');
+                            if (facId) reqQ = reqQ.or(`facility_id.eq.${facId},facility_id.is.null`);
+                            const { data: reqs } = await reqQ;
+                            codes = (reqs || []).flatMap(r => r.requested_tote_codes || []);
+                        }
                     }
                     codes = Array.from(new Set(codes.filter(Boolean)));
+                } else if (presetKey === 'all') {
+                    let q = supabase.from('inventory').select('tote_code');
+                    if (facId) q = q.or(`facility_id.eq.${facId},facility_id.is.null`);
+                    const { data: totes } = await q;
+                    codes = (totes || []).map(t => t.tote_code);
                 } else if (presetKey === 'stage') {
-                    let q = supabase.from('inventory').select('tote_code').eq('status', 'pending-stage');
-                    if (facId) q = q.eq('facility_id', facId);
-                    const { data: totes } = await q;
-                    if (totes) codes = totes.map(t => t.tote_code);
+                    if (window._currentStageToteCodes && window._currentStageToteCodes.length > 0) {
+                        codes = [...window._currentStageToteCodes];
+                    } else {
+                        let q = supabase.from('inventory').select('tote_code').in('status', ['stored', 'pending-stage']);
+                        if (facId) q = q.or(`facility_id.eq.${facId},facility_id.is.null`);
+                        const { data: totes } = await q;
+                        if (totes) codes = totes.map(t => t.tote_code);
+                    }
                 } else if (presetKey === 'customer') {
-                    let q = supabase.from('inventory').select('tote_code').eq('status', 'staged');
-                    if (facId) q = q.eq('facility_id', facId);
-                    const { data: totes } = await q;
-                    if (totes) codes = totes.map(t => t.tote_code);
+                    if (window._currentCustomerToteCodes && window._currentCustomerToteCodes.length > 0) {
+                        codes = [...window._currentCustomerToteCodes];
+                    } else {
+                        let q = supabase.from('inventory').select('tote_code').eq('status', 'staged');
+                        if (facId) q = q.or(`facility_id.eq.${facId},facility_id.is.null`);
+                        const { data: totes } = await q;
+                        if (totes) codes = totes.map(t => t.tote_code);
+                    }
                 }
             } catch (e) {
                 console.error("Batch preset load failed:", e);
