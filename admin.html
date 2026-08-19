@@ -1886,18 +1886,28 @@
                 }
             }
 
-            if (actualAssignedFacilityId) {
+            const isWorker = (actualUserRole === 'warehouse_worker');
+            const savedFac = localStorage.getItem('cloudvault_selected_facility');
+
+            if (isWorker && actualAssignedFacilityId) {
                 localStorage.setItem('cloudvault_selected_facility', actualAssignedFacilityId);
                 window.currentSelectedFacilityId = actualAssignedFacilityId;
+            } else if (savedFac) {
+                window.currentSelectedFacilityId = savedFac;
+            } else if (actualAssignedFacilityId) {
+                localStorage.setItem('cloudvault_selected_facility', actualAssignedFacilityId);
+                window.currentSelectedFacilityId = actualAssignedFacilityId;
+            }
 
+            const activeTargetFac = window.currentSelectedFacilityId || actualAssignedFacilityId;
+            if (activeTargetFac) {
                 ['global-facility-select', 'pricing-facility-select', 'manager-facility-select', 'exec-facility-select', 'emp-facility', 'transfer-facility-select', 'tmm-reassign-facility-select'].forEach(id => {
                     const facSel = document.getElementById(id);
-                    if (facSel) facSel.value = actualAssignedFacilityId;
+                    if (facSel) facSel.value = activeTargetFac;
                 });
             }
 
             // Only workers are locked to their assigned facility; Managers and Executives can freely change facilities
-            const isWorker = (actualUserRole === 'warehouse_worker');
             lockFacilityDropdown(isWorker);
 
             switchRoleView();
@@ -2485,7 +2495,10 @@
 
             // Populate Facilities Selectors Dynamically First
             if (facilities && facilities.length > 0) {
-                const defaultFacId = actualAssignedFacilityId || localStorage.getItem('cloudvault_selected_facility') || facilities[0].id;
+                const isWorker = (actualUserRole === 'warehouse_worker');
+                const defaultFacId = (isWorker && actualAssignedFacilityId)
+                    ? actualAssignedFacilityId
+                    : (localStorage.getItem('cloudvault_selected_facility') || window.currentSelectedFacilityId || actualAssignedFacilityId || facilities[0].id);
 
                 ['global-facility-select', 'pricing-facility-select', 'manager-facility-select', 'exec-facility-select', 'emp-facility', 'transfer-facility-select', 'tmm-reassign-facility-select'].forEach(id => {
                     const el = document.getElementById(id);
@@ -2564,7 +2577,10 @@
             }
 
             // Render current facility views using in-memory master data
-            const currentFac = actualAssignedFacilityId || localStorage.getItem('cloudvault_selected_facility') || (facilities && facilities[0]?.id ? facilities[0].id : null);
+            const isWorker = (actualUserRole === 'warehouse_worker');
+            const currentFac = (isWorker && actualAssignedFacilityId)
+                ? actualAssignedFacilityId
+                : (window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility') || actualAssignedFacilityId || (facilities && facilities[0]?.id ? facilities[0].id : null));
             if (currentFac) {
                 await onGlobalFacilityChange(currentFac, master);
             }
@@ -2941,7 +2957,7 @@
                 if (!facId) {
                     const globalSel = document.getElementById('global-facility-select');
                     const mgrSel = document.getElementById('manager-facility-select');
-                    facId = globalSel?.value || mgrSel?.value || actualAssignedFacilityId;
+                    facId = globalSel?.value || mgrSel?.value || localStorage.getItem('cloudvault_selected_facility') || actualAssignedFacilityId;
                 }
                 if (!facId) return;
 
@@ -3677,7 +3693,7 @@
                     const globalSel = document.getElementById('global-facility-select');
                     const execSel = document.getElementById('exec-facility-select');
                     const mgrSel = document.getElementById('manager-facility-select');
-                    facId = globalSel?.value || execSel?.value || mgrSel?.value || actualAssignedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+                    facId = globalSel?.value || execSel?.value || mgrSel?.value || localStorage.getItem('cloudvault_selected_facility') || actualAssignedFacilityId;
                 }
                 if (!facId) return;
 
@@ -4046,7 +4062,7 @@
                     const globalSel = document.getElementById('global-facility-select');
                     const execSel = document.getElementById('exec-facility-select');
                     const mgrSel = document.getElementById('manager-facility-select');
-                    facId = globalSel?.value || execSel?.value || mgrSel?.value || actualAssignedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+                    facId = globalSel?.value || execSel?.value || mgrSel?.value || localStorage.getItem('cloudvault_selected_facility') || actualAssignedFacilityId;
                 }
                 if (!facId) return;
                 const queryFacilityId = facId;
@@ -7323,7 +7339,7 @@
                     const globalSel = document.getElementById('global-facility-select');
                     const execSel = document.getElementById('exec-facility-select');
                     const mgrSel = document.getElementById('manager-facility-select');
-                    facId = globalSel?.value || execSel?.value || mgrSel?.value || actualAssignedFacilityId;
+                    facId = globalSel?.value || execSel?.value || mgrSel?.value || localStorage.getItem('cloudvault_selected_facility') || actualAssignedFacilityId;
                 }
                 if (!facId) return;
                 const queryFacilityId = facId;

@@ -1794,7 +1794,24 @@
             const subtotal = monthly + upfront;
             const taxRate = flowData.taxRate != null ? flowData.taxRate : 0.085;
             const taxAmt = Math.round(subtotal * taxRate * 100) / 100;
-            const firstMonth = Math.round((subtotal + taxAmt) * 100) / 100;
+
+            let discountAmt = 0;
+            const discountRow = document.getElementById('invoice-promo-discount-row');
+            const discountPctEl = document.getElementById('invoice-promo-pct');
+            const discountAmtEl = document.getElementById('invoice-promo-discount-amt');
+
+            if (flowData.appliedPromo && flowData.appliedPromo.customer_discount_pct) {
+                const discountPct = Number(flowData.appliedPromo.customer_discount_pct) || 20;
+                discountAmt = Math.round(subtotal * (discountPct / 100.0) * 100) / 100;
+                flowData.appliedPromo.discount_amount = discountAmt;
+                if (discountRow) discountRow.classList.remove('hidden');
+                if (discountPctEl) discountPctEl.textContent = `${discountPct}%`;
+                if (discountAmtEl) discountAmtEl.textContent = discountAmt.toFixed(2);
+            } else {
+                if (discountRow) discountRow.classList.add('hidden');
+            }
+
+            const firstMonth = Math.max(0, Math.round((subtotal - discountAmt + taxAmt) * 100) / 100);
 
             // Update Step 1 UI elements
             document.getElementById('flow-tier-badge').textContent = label;
@@ -1820,6 +1837,7 @@
             flowData.toteRate = rate;
             flowData.upfront = upfront;
             flowData.tax = taxAmt;
+            flowData.discount = discountAmt;
             flowData.firstMonth = firstMonth;
 
             // Sync Summary Ribbon
@@ -2210,20 +2228,95 @@
                 // Record Creator Promo Code Attribution if promo was applied
                 if (flowData.appliedPromo && flowData.appliedPromo.code && typeof StripeBillingIntegration !== 'undefined') {
                     try {
-                        const grossTotal = Number(flowData.firstMonth || 25.00) + Number((flowData.firstMonth || 25.00) * 0.085);
+                        const subtotal = Number(flowData.price || 0) + Number(flowData.upfront || 0);
                         const discountAmt = Number(flowData.appliedPromo.discount_amount || 0);
+                        const taxAmt = Number(flowData.tax || 0);
+                        const grossTotal = subtotal + taxAmt;
                         const netTotal = Math.max(0, grossTotal - discountAmt);
 
                         await StripeBillingIntegration.recordPromoAttribution(
                             flowData.appliedPromo.code,
                             signUpData.user.id,
                             'in_init_' + Date.now(),
-                            grossTotal,
+                            subtotal,
                             netTotal
                         );
                         console.log('[Creator Attribution] Attributed to promo code:', flowData.appliedPromo.code);
                     } catch (pErr) {
                         console.warn('[Creator Attribution] Notice:', pErr.message);
+                    }
+                }
+
+                // Automatic Invoice Record Creation for initial subscription with coupon & tax breakdown
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
+                    try {
+                        const subtotal = Number(flowData.price || 0);
+                        const valetFee = Number(flowData.upfront || 0);
+                        const grossSubtotal = subtotal + valetFee;
+                        const discountAmt = Number(flowData.discount || (flowData.appliedPromo ? flowData.appliedPromo.discount_amount : 0) || 0);
+                        const taxAmt = Number(flowData.tax || 0);
+                        const totalCharged = Math.max(0, Math.round((grossSubtotal - discountAmt + taxAmt) * 100) / 100);
+                        const promoCode = flowData.appliedPromo?.code || null;
+                        const promoPct = flowData.appliedPromo?.customer_discount_pct || 20;
+
+                        const lineItems = [
+                            {
+                                description: `CloudVault Storage Subscription (${flowData.totes} totes @ $${Number(flowData.toteRate || 3.50).toFixed(2)}/mo)`,
+                                qty: flowData.totes,
+                                unit_price: Number(flowData.toteRate || 3.50),
+                                amount: subtotal
+                            }
+                        ];
+                        if (valetFee > 0) {
+                            lineItems.push({
+                                description: 'White-Glove Valet Pickup Logistics Fee',
+                                qty: 1,
+                                unit_price: valetFee,
+                                amount: valetFee
+                            });
+                        }
+                        if (discountAmt > 0) {
+                            lineItems.push({
+                                description: `Creator Promo Discount (${promoCode || 'PROMO'} — ${promoPct}% off 2 mo)`,
+                                qty: 1,
+                                unit_price: -discountAmt,
+                                amount: -discountAmt,
+                                is_discount: true,
+                                promo_code: promoCode
+                            });
+                        }
+                        if (taxAmt > 0) {
+                            lineItems.push({
+                                description: `Estimated Sales Tax (${((flowData.taxRate || 0.085) * 100).toFixed(2)}%)`,
+                                qty: 1,
+                                unit_price: taxAmt,
+                                amount: taxAmt,
+                                is_tax: true
+                            });
+                        }
+
+                        await window.CloudVaultBilling.createInvoiceRecord({
+                            uid: signUpData.user.id,
+                            customer_name: name,
+                            customer_email: email,
+                            facility_id: flowData.facilityId || 'facility_seattle_north',
+                            invoice_type: 'subscription',
+                            payment_status: 'paid',
+                            subtotal: grossSubtotal,
+                            delivery_fee: valetFee,
+                            tax: taxAmt,
+                            discount: discountAmt,
+                            promo_code: promoCode,
+                            total_amount: totalCharged,
+                            payment_method: 'card',
+                            notes: promoCode ? `Initial subscription order with applied promo coupon ${promoCode} (${promoPct}% off)` : 'Initial subscription order',
+                            line_items: lineItems,
+                            created_at: new Date().toISOString(),
+                            paid_at: new Date().toISOString()
+                        });
+                        console.log('[CloudVault Billing] Initial onboarding invoice created successfully with coupon & tax');
+                    } catch (invErr) {
+                        console.warn('[CloudVault Billing] Initial invoice creation notice:', invErr);
                     }
                 }
 
@@ -2257,9 +2350,6 @@
             const input = document.getElementById('promo-code-input');
             const feedback = document.getElementById('promo-code-feedback');
             const discountRow = document.getElementById('invoice-promo-discount-row');
-            const discountPctEl = document.getElementById('invoice-promo-pct');
-            const discountAmtEl = document.getElementById('invoice-promo-discount-amt');
-            const totalFirstMonthEl = document.getElementById('invoice-first-month');
 
             const code = (customCode || (input ? input.value : '')).trim().toUpperCase();
             if (!code) {
@@ -2274,11 +2364,11 @@
             if (input) input.value = code;
 
             try {
-                const grossFirstMonth = Number(flowData.firstMonth || 25.00) + Number((flowData.firstMonth || 25.00) * 0.085);
+                const subtotal = Number(flowData.price || 0) + Number(flowData.upfront || 0);
                 let res = null;
 
                 if (typeof StripeBillingIntegration !== 'undefined') {
-                    res = await StripeBillingIntegration.validatePromoCode(code, null, grossFirstMonth);
+                    res = await StripeBillingIntegration.validatePromoCode(code, null, subtotal);
                 } else {
                     res = {
                         valid: true,
@@ -2286,22 +2376,20 @@
                         creator_name: 'Creator Partner',
                         customer_discount_pct: 20,
                         customer_discount_duration_months: 2,
-                        discount_amount: grossFirstMonth * 0.20
+                        discount_amount: Math.round(subtotal * 0.20 * 100) / 100
                     };
                 }
 
                 if (res && res.valid) {
                     flowData.appliedPromo = res;
-                    const discountAmt = Number(res.discount_amount || (grossFirstMonth * 0.20));
-                    const newTotal = Math.max(0, grossFirstMonth - discountAmt);
+                    const discountPct = Number(res.customer_discount_pct || 20);
+                    const discountAmt = Number(res.discount_amount != null ? res.discount_amount : (subtotal * (discountPct / 100.0)));
+                    flowData.appliedPromo.discount_amount = discountAmt;
 
-                    if (discountRow) discountRow.classList.remove('hidden');
-                    if (discountPctEl) discountPctEl.textContent = `${res.customer_discount_pct || 20}%`;
-                    if (discountAmtEl) discountAmtEl.textContent = discountAmt.toFixed(2);
-                    if (totalFirstMonthEl) totalFirstMonthEl.textContent = newTotal.toFixed(2);
+                    calculateFlowTotal();
 
                     if (feedback) {
-                        feedback.innerHTML = `🎉 <strong>${escapeHtml(res.creator_name || 'Partner')}</strong> code applied! <strong>${res.customer_discount_pct || 20}% off your first ${res.customer_discount_duration_months || 2} months</strong>.`;
+                        feedback.innerHTML = `🎉 <strong>${escapeHtml(res.creator_name || 'Partner')}</strong> code applied! <strong>${discountPct}% off your first ${res.customer_discount_duration_months || 2} months</strong>.`;
                         feedback.className = 'text-xs text-emerald-600 font-medium';
                         feedback.classList.remove('hidden');
                     }
@@ -2313,6 +2401,7 @@
                         feedback.className = 'text-xs text-red-500 font-medium';
                         feedback.classList.remove('hidden');
                     }
+                    calculateFlowTotal();
                 }
             } catch (err) {
                 console.error("Promo validation error:", err);

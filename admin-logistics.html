@@ -305,9 +305,17 @@
             actualUserRole = profile.role;
             actualUserName = profile.name || profile.email || 'Staff Member';
             actualAssignedFacilityId = profile.assigned_facility_id || null;
-            activeRole = profile.role === 'warehouse_worker' ? 'worker' : profile.role === 'warehouse_manager' ? 'manager' : 'executive';
+            const isWorker = (actualUserRole === 'warehouse_worker');
+            const savedFac = localStorage.getItem('cloudvault_selected_facility');
 
-            if (actualAssignedFacilityId) {
+            if (isWorker && actualAssignedFacilityId) {
+                localStorage.setItem('cloudvault_selected_facility', actualAssignedFacilityId);
+                const globalSel = document.getElementById('global-facility-select');
+                if (globalSel) globalSel.value = actualAssignedFacilityId;
+            } else if (savedFac) {
+                const globalSel = document.getElementById('global-facility-select');
+                if (globalSel) globalSel.value = savedFac;
+            } else if (actualAssignedFacilityId) {
                 localStorage.setItem('cloudvault_selected_facility', actualAssignedFacilityId);
                 const globalSel = document.getElementById('global-facility-select');
                 if (globalSel) globalSel.value = actualAssignedFacilityId;
@@ -500,7 +508,8 @@
                     cachedFacilitiesMap = {};
                     facs.forEach(f => { cachedFacilitiesMap[f.id] = f; });
 
-                    const preferredFacId = actualAssignedFacilityId || savedFacility;
+                    const isWorker = (actualUserRole === 'warehouse_worker');
+                    const preferredFacId = (isWorker && actualAssignedFacilityId) ? actualAssignedFacilityId : (savedFacility || actualAssignedFacilityId);
                     const matchedFac = facs.find(f => f.id === preferredFacId);
                     const activeFacId = matchedFac ? matchedFac.id : facs[0].id;
 
