@@ -55,11 +55,30 @@ function supabaseRequest(endpoint, method = 'GET', body = null) {
   });
 }
 
-async function runCleanSync() {
-  console.log('Fetching all invoices from Supabase...');
+async function getOrCreateStripeTaxRate(ratePercent = 8.5, displayName = 'Washington State & Local Sales Tax (8.5%)') {
+  const search = await stripeRequest('tax_rates?limit=20');
+  const existing = (search.data?.data || []).find(t => Math.abs(t.percentage - ratePercent) < 0.01 && t.active);
+  if (existing) return existing.id;
+
+  const params = new URLSearchParams();
+  params.append('display_name', displayName);
+  params.append('percentage', ratePercent.toString());
+  params.append('inclusive', 'false');
+  params.append('jurisdiction', 'WA, US');
+  const createRes = await stripeRequest('tax_rates', 'POST', params.toString());
+  return createRes.data?.id;
+}
+
+async function runOfficialSync() {
+  console.log('=== Step 1: Initialize Regional Tax Rates in Stripe ===');
+  const taxRate85 = await getOrCreateStripeTaxRate(8.5, 'Washington State & Local Sales Tax (8.5%)');
+  const taxRate1025 = await getOrCreateStripeTaxRate(10.25, 'Seattle North Sales Tax (10.25%)');
+  console.log(`Stripe Tax Rates: 8.5% (${taxRate85}), 10.25% (${taxRate1025})`);
+
+  console.log('\n=== Step 2: Fetching All Historical Invoices ===');
   const invRes = await supabaseRequest('invoices?select=*');
   const invoices = invRes.data || [];
-  console.log(`Processing ${invoices.length} invoices for clean, spruced-up Stripe PDF and in-app viewing...`);
+  console.log(`Processing ${invoices.length} invoices with proper sales tax below subtotal...`);
 
   for (const inv of invoices) {
     let custId = inv.stripe_customer_id;
@@ -79,7 +98,7 @@ async function runCleanSync() {
 
     console.log(`\nItemizing Invoice ${inv.invoice_number} (${inv.invoice_type}) for ${inv.customer_email}...`);
 
-    // 1. Create Draft Invoice in Stripe with custom fields, description, and footer
+    // 1. Create Draft Invoice in Stripe
     const invParams = new URLSearchParams();
     invParams.append('customer', custId);
     invParams.append('auto_advance', 'false');
@@ -106,6 +125,16 @@ async function runCleanSync() {
     if (inv.transaction_reference) {
       invParams.append('custom_fields[2][name]', 'Txn Reference');
       invParams.append('custom_fields[2][value]', inv.transaction_reference);
+    }
+
+    // Attach Sales Tax Rate by Region
+    if (inv.facility_id === 'facility_seattle_north') {
+      invParams.append('default_tax_rates[0]', taxRate1025);
+    } else if (inv.facility_id === 'facility_portland_central') {
+      // 0% Tax (Oregon)
+    } else {
+      // Default to Selah/Yakima, WA (8.5%)
+      invParams.append('default_tax_rates[0]', taxRate85);
     }
 
     const draftRes = await stripeRequest('invoices', 'POST', invParams.toString());
@@ -135,20 +164,16 @@ async function runCleanSync() {
       }
     }
 
-    // Filter out existing raw tax strings to prevent duplicates
+    // Filter out tax lines from line items array
     const feeLines = lines.filter(l => {
       const desc = (l.description || '').toLowerCase();
       return !desc.includes('sales tax') && !desc.includes('state tax') && Number(l.amount || (l.unit_price * (l.qty || 1)) || 0) > 0;
     });
 
-    let calculatedFeeSubtotal = 0;
-
-    // 3. Push each service line item to Stripe (without per-line tax flags)
+    // 3. Push each service line item to Stripe
     for (const item of feeLines) {
       const itemAmountCents = Math.round(Number(item.amount || (item.unit_price * (item.qty || 1)) || 0) * 100);
       if (itemAmountCents <= 0) continue;
-
-      calculatedFeeSubtotal += (itemAmountCents / 100);
 
       const itemParams = new URLSearchParams();
       itemParams.append('customer', custId);
@@ -165,29 +190,11 @@ async function runCleanSync() {
       }
     }
 
-    // 4. Add Tax as dedicated clean summary line item (no per-line tax rate tags)
-    const taxAmt = Number(inv.tax || 0);
-    if (taxAmt > 0) {
-      const taxRatePct = calculatedFeeSubtotal > 0 ? ((taxAmt / calculatedFeeSubtotal) * 100) : 8.5;
-      const taxLabel = taxRatePct > 9.5 ? `Seattle North Sales Tax (${taxRatePct.toFixed(2)}%)` : `Washington State & Local Sales Tax (${taxRatePct.toFixed(2)}%)`;
-      const taxCents = Math.round(taxAmt * 100);
-
-      const taxParams = new URLSearchParams();
-      taxParams.append('customer', custId);
-      taxParams.append('invoice', stripeInvoiceId);
-      taxParams.append('amount', taxCents.toString());
-      taxParams.append('currency', 'usd');
-      taxParams.append('description', taxLabel);
-
-      await stripeRequest('invoiceitems', 'POST', taxParams.toString());
-      console.log(`   + Tax Line Added: "${taxLabel}" ($${taxAmt.toFixed(2)})`);
-    }
-
-    // 5. Finalize Invoice
+    // 4. Finalize Invoice
     const finalizeRes = await stripeRequest(`invoices/${stripeInvoiceId}/finalize`, 'POST', '');
     const finalized = finalizeRes.data;
 
-    // 6. Mark Paid Out-of-Band
+    // 5. Mark Paid Out-of-Band
     let hostedUrl = finalized.hosted_invoice_url;
     let pdfUrl = finalized.invoice_pdf;
 
@@ -200,22 +207,24 @@ async function runCleanSync() {
     }
 
     const totalPaid = ((payRes.data?.total || payRes.data?.amount_paid || 0) / 100);
+    const taxSummary = ((payRes.data?.tax || (payRes.data?.total_taxes?.[0]?.amount) || 0) / 100);
 
-    console.log(`   -> Finalized & Paid: ${stripeInvoiceId} (Total: $${totalPaid.toFixed(2)})`);
+    console.log(`   -> Finalized & Paid: ${stripeInvoiceId} (Total: $${totalPaid.toFixed(2)}, Tax: $${taxSummary.toFixed(2)})`);
     console.log(`   -> PDF: ${pdfUrl}`);
 
-    // 7. Update Supabase public.invoices
+    // 6. Update Supabase public.invoices
     await supabaseRequest(`invoices?id=eq.${inv.id}`, 'PATCH', {
       stripe_invoice_id: stripeInvoiceId,
       stripe_customer_id: custId,
       stripe_hosted_invoice_url: hostedUrl,
       stripe_invoice_pdf: pdfUrl,
       payment_status: 'paid',
+      tax: taxSummary,
       total_amount: totalPaid
     });
   }
 
-  console.log('\n=== All Invoices Cleanly Synchronized with Spruced-up Styling and Zero Line-Item Tax Columns! ===');
+  console.log('\n=== All Invoices Successfully Re-Synced with Proper Sales Tax Below Subtotal! ===');
 }
 
-runCleanSync().catch(console.error);
+runOfficialSync().catch(console.error);
