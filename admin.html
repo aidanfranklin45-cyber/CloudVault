@@ -2985,6 +2985,8 @@
                 let active = 0;
                 if (preloadedItems) {
                     active = preloadedItems.filter(i => (i.facility_id === facId || !i.facility_id) && i.status === 'stored').length;
+                } else if (window._masterAdminData && window._masterAdminData.inventory && window._masterAdminData.inventory.length > 0) {
+                    active = window._masterAdminData.inventory.filter(i => (i.facility_id === facId || !i.facility_id) && i.status === 'stored').length;
                 } else {
                     const { count: activeCount } = await supabase.from('inventory').select('*', { count: 'exact', head: true })
                         .eq('facility_id', facId)
@@ -3199,6 +3201,8 @@
                 let missingItems = [];
                 if (preloadedItems) {
                     missingItems = preloadedItems.filter(i => i.status === 'missing-tote');
+                } else if (window._masterAdminData && window._masterAdminData.inventory && window._masterAdminData.inventory.length > 0) {
+                    missingItems = window._masterAdminData.inventory.filter(i => i.status === 'missing-tote');
                 } else {
                     let query = supabase.from('inventory')
                         .select('*, users!uid(name, email)')
@@ -3867,6 +3871,8 @@
                 let accessRequests = [];
                 if (preloadedRequests) {
                     accessRequests = preloadedRequests.filter(r => (r.facility_id === facId || !r.facility_id) && r.target_date >= startDateYmd && r.target_date <= endDateYmd && r.status !== 'cancelled');
+                } else if (window._masterAdminData && window._masterAdminData.accessRequests && window._masterAdminData.accessRequests.length > 0) {
+                    accessRequests = window._masterAdminData.accessRequests.filter(r => (r.facility_id === facId || !r.facility_id) && r.target_date >= startDateYmd && r.target_date <= endDateYmd && r.status !== 'cancelled');
                 } else {
                     const { data: reqs, error: reqErr } = await supabase.from('access_requests')
                         .select('*, users!uid(name)')
@@ -7549,8 +7555,17 @@
                     const zips = stops.map(s => s.users?.zip || s.users?.active_zone).filter(Boolean);
                     const mapQuery = zips.length > 0 ? `${hubAddress}` : hubAddress;
                     const targetSrc = `https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=&z=13&ie=UTF8&iwloc=&output=embed`;
-                    if (mapIframe.getAttribute('src') !== targetSrc && mapIframe.src !== targetSrc) {
-                        mapIframe.src = targetSrc;
+                    
+                    // Lazy-load map on idle to keep initial dashboard render sub-800ms
+                    const loadMapDeferred = () => {
+                        if (mapIframe.getAttribute('src') !== targetSrc && mapIframe.src !== targetSrc) {
+                            mapIframe.src = targetSrc;
+                        }
+                    };
+                    if ('requestIdleCallback' in window) {
+                        requestIdleCallback(loadMapDeferred, { timeout: 3000 });
+                    } else {
+                        setTimeout(loadMapDeferred, 1500);
                     }
                 }
 
