@@ -2055,10 +2055,6 @@
       const stripeId = invoiceObj.stripe_invoice_id || 'in_live_stripe_sync';
       const pdfUrl = invoiceObj.stripe_invoice_pdf || invoiceObj.stripe_hosted_invoice_url;
       const totalAmount = Number(invoiceObj.total_amount || invoiceObj.totalAmount || 0).toFixed(2);
-      const subtotal = Number(invoiceObj.subtotal || invoiceObj.total_amount || 0);
-      const deliveryFee = Number(invoiceObj.delivery_fee || 0);
-      const surgeFee = Number(invoiceObj.surge_fee || 0);
-      const effectiveSubtotal = subtotal + deliveryFee + surgeFee;
       const tax = Number(invoiceObj.tax || 0);
       const createdAt = invoiceObj.created_at ? new Date(invoiceObj.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const dueDate = invoiceObj.due_date ? new Date(invoiceObj.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : createdAt;
@@ -2093,6 +2089,9 @@
         const d = (l.description || '').toLowerCase();
         return !d.includes('sales tax') && !d.includes('state tax');
       });
+
+      const computedLineItemsSubtotal = filteredLines.reduce((sum, item) => sum + Number(item.amount || ((item.qty || 1) * (item.unit_price || 0)) || 0), 0);
+      const effectiveSubtotal = computedLineItemsSubtotal > 0 ? computedLineItemsSubtotal : Math.max(0, Number(totalAmount) - tax);
 
       const linesHtml = filteredLines.map(item => `
         <tr class="border-b border-slate-100 text-xs">
