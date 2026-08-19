@@ -10643,10 +10643,15 @@
 
                 if (error) throw error;
 
+                const locIdent = data?.new_identifier || data?.location_code || 'Assigned Shelf';
+                const occCount = data?.totes_at_location != null ? data.totes_at_location : 1;
+                const occCap = data?.location_capacity != null ? data.location_capacity : 3;
+                const successMsg = `${locIdent} (Occupancy: ${occCount}/${occCap} Totes)`;
+
                 if (typeof triggerScanFeedbackOverlay === 'function') {
-                    triggerScanFeedbackOverlay(true, `Slotted to ${newLocationText}`, currentMasterTote.tote_code);
+                    triggerScanFeedbackOverlay(true, `Slotted to ${successMsg}`, currentMasterTote.tote_code);
                 }
-                alert(`🚀 Successfully slotted tote ${currentMasterTote.tote_code} to location: ${newLocationText}!`);
+                alert(`🚀 Successfully slotted tote ${currentMasterTote.tote_code} to location: ${successMsg}!`);
                 closeToteMasterModal();
                 refreshDashboard();
             } catch (err) {
