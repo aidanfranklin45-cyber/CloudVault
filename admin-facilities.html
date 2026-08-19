@@ -1766,7 +1766,7 @@
                                 .from('warehouse_locations')
                                 .select('id, identifier, is_occupied')
                                 .eq('facility_id', currentLoadedFac.id)
-                                .ilike('identifier', `${roomId}-BAY-%`)
+                                .eq('zone_type', 'STAGING')
                                 .eq('is_occupied', false);
 
                             if (excessLocs && excessLocs.length > 0) {
