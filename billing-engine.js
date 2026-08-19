@@ -2511,162 +2511,79 @@
           }
           return 'Expedited Staging Access';
         }
-
-        if (rawType === 'subscription' || rawType === 'monthly_subscription' || hasStorageLine || subtotal > 0) {
-          return 'Monthly Storage Plan';
-        }
-
-        return rawType ? rawType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Service Invoice';
+pe ? rawType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Service Invoice';
       };
 
       const resolvedInvoiceTypeTitle = resolveInvoiceTypeLabel(invoiceObj);
 
-      modalEl.innerHTML = `
-        <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-auto border border-slate-200/80 overflow-hidden text-slate-800 my-8">
-          <!-- Top Gradient Accent Bar -->
-          <div class="h-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600"></div>
+    /**
+     * Renders and displays the official Stripe statement modal in-app.
+     * @param {Object} invoiceObj - Invoice record object
+     */
+    renderPrintableInvoiceModal: async function (invoiceObj = {}) {
+      let modalEl = document.getElementById('printable-invoice-modal');
+      if (!modalEl) {
+        modalEl = document.createElement('div');
+        modalEl.id = 'printable-invoice-modal';
+        document.body.appendChild(modalEl);
+      }
 
-          <!-- Printable Invoice Header -->
-          <div class="p-6 sm:p-8 bg-white border-b border-slate-100">
-            <div class="flex justify-between items-start flex-wrap gap-6">
-              <!-- Logo & Brand Header -->
-              <div class="space-y-2">
-                <div class="flex items-center space-x-3">
-                  <img src="logo.png" alt="CloudVault Logo" class="w-10 h-10 object-contain rounded-xl shadow-xs" />
-                  <div>
-                    <h1 class="text-2xl font-black text-slate-900 tracking-tight leading-none">CloudVault</h1>
-                    <span class="text-[9px] font-extrabold text-blue-600 uppercase tracking-[0.2em] block mt-1">Storage &amp; Logistics Solutions</span>
-                    <span class="text-xs font-bold font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full inline-block mt-2">${resolvedInvoiceTypeTitle}</span>
-                  </div>
+      modalEl.className = 'fixed inset-0 bg-gray-950/80 backdrop-blur-md z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-hidden';
+
+      const invNum = invoiceObj.invoice_number || invoiceObj.invoiceNumber || (invoiceObj.id ? String(invoiceObj.id).substring(0, 12) : 'INV-2026-0000');
+      const stripeUrl = invoiceObj.stripe_hosted_invoice_url || invoiceObj.stripe_invoice_pdf;
+      const pdfUrl = invoiceObj.stripe_invoice_pdf || invoiceObj.stripe_hosted_invoice_url;
+      const totalAmount = Number(invoiceObj.total_amount || invoiceObj.totalAmount || 0).toFixed(2);
+
+      if (stripeUrl) {
+        modalEl.innerHTML = `
+          <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full mx-auto border border-slate-200 overflow-hidden text-slate-800 flex flex-col h-[92vh] max-h-[950px]">
+            <!-- Top Controls Bar -->
+            <div class="p-3.5 sm:p-4 bg-slate-900 text-white flex justify-between items-center px-5 sm:px-6 border-b border-slate-800">
+              <div class="flex items-center space-x-3">
+                <img src="logo.png" alt="CloudVault Logo" class="w-7 h-7 object-contain rounded-lg" />
+                <div>
+                  <h3 class="text-sm font-black tracking-tight flex items-center gap-2">
+                    <span>Official Stripe Statement</span>
+                    <span class="text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded">${invNum}</span>
+                    <span class="text-[10px] font-mono font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded">$${totalAmount}</span>
+                  </h3>
                 </div>
-                <p class="text-[11px] text-slate-500 font-mono">CloudVault Storage Inc. &bull; support@cloudvault.io</p>
               </div>
-
-              <!-- Invoice Status & Number Meta -->
-              <div class="text-right space-y-1">
-                <span class="inline-block px-3 py-1 text-xs font-extrabold rounded-full border ${statusBadgeClasses} font-mono tracking-wider">
-                  ${status}
-                </span>
-                <h2 class="text-xl font-black font-mono text-slate-900 tracking-wider">${invoiceNum}</h2>
-                <p class="text-xs text-slate-500 font-mono">Issued: ${createdAt}</p>
-                ${invoiceObj.stripe_invoice_id ? `
-                  <div class="pt-0.5">
-                    <span class="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
-                      💳 Stripe: ${invoiceObj.stripe_invoice_id}
-                    </span>
-                  </div>
+              <div class="flex items-center space-x-2">
+                ${pdfUrl ? `
+                  <a href="${pdfUrl}" target="_blank" download class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    <span>Download PDF</span>
+                  </a>
                 ` : ''}
+                <button onclick="window.CloudVaultBilling.closePrintableInvoiceModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold px-3 py-1.5 rounded-xl transition cursor-pointer">
+                  ✕ Close
+                </button>
               </div>
+            </div>
+
+            <!-- Embedded Stripe Official Statement -->
+            <div class="flex-1 w-full bg-slate-50 relative overflow-hidden">
+              <iframe src="${stripeUrl}" class="w-full h-full border-0" title="Official Stripe Statement"></iframe>
             </div>
           </div>
-
-          <!-- Body Container -->
-          <div class="p-6 sm:p-8 space-y-6">
-            <!-- Customer & Payment Details Grid -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 bg-slate-50/80 p-5 rounded-2xl border border-slate-200/70 text-xs">
-              <div class="space-y-1">
-                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Billed To</span>
-                <p class="font-extrabold text-sm text-slate-900">${customerName}</p>
-                <p class="text-slate-600 font-mono text-[11px]">${customerEmail}</p>
-                <p class="text-slate-500 pt-1"><span class="font-semibold text-slate-700">Facility Hub:</span> ${facilityDisplay}</p>
-              </div>
-              <div class="space-y-1">
-                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Payment Information</span>
-                <p class="font-semibold text-slate-800"><span class="text-slate-500">Method:</span> ${paymentMethod}</p>
-                <p class="text-slate-600 text-[11px]"><span class="text-slate-500">Txn Ref:</span> <span class="font-mono bg-slate-200/70 px-1.5 py-0.5 rounded text-slate-800">${txnRef}</span></p>
-                <p class="text-slate-600"><span class="text-slate-500">Paid Date:</span> ${paidAt}</p>
-              </div>
-            </div>
-
-            <!-- Itemized Line Items Table -->
-            <div class="overflow-x-auto rounded-xl border border-slate-200/80">
-              <table class="w-full text-left border-collapse">
-                <thead>
-                  <tr class="border-b border-slate-200 text-[10px] font-black uppercase tracking-wider text-slate-500 bg-slate-100/70">
-                    <th class="py-3 px-4">Item Description</th>
-                    <th class="py-3 px-4 text-center">Qty</th>
-                    <th class="py-3 px-4 text-right">Unit Price</th>
-                    <th class="py-3 px-4 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                  ${lineItemsRowsHtml}
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Smart Volume Expansion & Tier Savings Metric Banner -->
-            ${upsellBannerHtml}
-
-            <!-- Financial Summary Breakdown -->
-            <div class="flex justify-end pt-2">
-              <div class="w-full sm:w-80 space-y-2 text-xs">
-                <div class="flex justify-between text-slate-600">
-                  <span>Subtotal</span>
-                  <span class="font-bold text-slate-900 font-mono">${formatMoney(subtotal)}</span>
-                </div>
-                ${deliveryFee > 0 ? `
-                <div class="flex justify-between text-slate-600">
-                  <span>Valet Delivery Fee</span>
-                  <span class="font-bold text-slate-900 font-mono">${formatMoney(deliveryFee)}</span>
-                </div>` : ''}
-                ${surgeFee > 0 ? `
-                <div class="flex justify-between text-slate-600">
-                  <span>Surge / Priority Fee</span>
-                  <span class="font-bold text-slate-900 font-mono">${formatMoney(surgeFee)}</span>
-                </div>` : ''}
-                ${tax > 0 ? `
-                <div class="flex justify-between text-slate-600">
-                  <span>Sales Tax (${taxRegionLabel})</span>
-                  <span class="font-bold text-slate-900 font-mono">${formatMoney(tax)}</span>
-                </div>` : (taxRegionLabel && (taxRegionLabel.includes('0.00%') || taxRegionLabel.includes('Oregon') || taxRegionLabel.includes('0%')) ? `
-                <div class="flex justify-between text-slate-600">
-                  <span>Sales Tax (${taxRegionLabel})</span>
-                  <span class="font-bold text-slate-500 font-mono">$0.00</span>
-                </div>` : '')}
-                ${discount > 0 ? `
-                <div class="flex justify-between text-emerald-600 font-medium">
-                  <span>Discount Applied</span>
-                  <span class="font-bold font-mono">-${formatMoney(discount)}</span>
-                </div>` : ''}
-                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-4 rounded-2xl flex justify-between items-center mt-3 shadow-xs">
-                  <span class="text-sm font-black text-slate-900 uppercase tracking-wider">Grand Total</span>
-                  <span class="text-xl font-black font-mono text-blue-700">${formatMoney(grandTotal)}</span>
-                </div>
-              </div>
-            </div>
-
-            ${notes ? `
-            <div class="p-4 bg-amber-50/80 rounded-2xl border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
-              <span class="text-base">📝</span>
-              <div>
-                <span class="font-extrabold uppercase text-[10px] tracking-wider text-amber-800 block mb-0.5">Invoice Notes</span>
-                <p class="font-medium">${notes}</p>
-              </div>
-            </div>` : ''}
-          </div>
-
-          <!-- Printable Modal Footer Controls -->
-          <div class="no-print bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-between items-center flex-wrap gap-3">
-            <p class="text-xs text-slate-500 font-medium font-mono">CloudVault Automated Invoice Engine &bull; Official Statement</p>
-            <div class="flex items-center space-x-2.5">
-              ${(invoiceObj.stripe_invoice_pdf || invoiceObj.stripe_hosted_invoice_url) ? `
-                <a href="${invoiceObj.stripe_invoice_pdf || invoiceObj.stripe_hosted_invoice_url}" target="_blank" download class="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
-                  <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                  <span>Stripe PDF</span>
-                </a>
-              ` : ''}
-              <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center space-x-1.5 cursor-pointer">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-                <span>Print Invoice</span>
-              </button>
-              <button onclick="window.CloudVaultBilling.closePrintableInvoiceModal()" class="bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl transition cursor-pointer">
+        `;
+      } else {
+        modalEl.innerHTML = `
+          <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full mx-auto border border-slate-200 overflow-hidden text-slate-800 p-8 text-center space-y-4">
+            <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto text-xl">💳</div>
+            <h3 class="text-lg font-black text-slate-900">Official Stripe Statement</h3>
+            <p class="text-xs text-slate-500 font-mono">Invoice ${invNum} • Amount: $${totalAmount}</p>
+            <p class="text-xs text-slate-600">The official statement is currently synchronizing with Stripe.</p>
+            <div class="pt-2">
+              <button onclick="window.CloudVaultBilling.closePrintableInvoiceModal()" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition cursor-pointer">
                 Close
               </button>
             </div>
           </div>
-        </div>
-      `;
+        `;
+      }
 
       modalEl.classList.remove('hidden');
     },
