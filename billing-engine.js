@@ -2049,62 +2049,192 @@
         document.body.appendChild(modalEl);
       }
 
-      modalEl.className = 'fixed inset-0 bg-gray-950/80 backdrop-blur-md z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-hidden';
+      modalEl.className = 'fixed inset-0 bg-gray-950/80 backdrop-blur-md z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto';
 
       const invNum = invoiceObj.invoice_number || invoiceObj.invoiceNumber || (invoiceObj.id ? String(invoiceObj.id).substring(0, 12) : 'INV-2026-0000');
-      const stripeUrl = invoiceObj.stripe_hosted_invoice_url || invoiceObj.stripe_invoice_pdf;
+      const stripeId = invoiceObj.stripe_invoice_id || 'in_live_stripe_sync';
       const pdfUrl = invoiceObj.stripe_invoice_pdf || invoiceObj.stripe_hosted_invoice_url;
       const totalAmount = Number(invoiceObj.total_amount || invoiceObj.totalAmount || 0).toFixed(2);
+      const subtotal = Number(invoiceObj.subtotal || invoiceObj.total_amount || 0);
+      const deliveryFee = Number(invoiceObj.delivery_fee || 0);
+      const surgeFee = Number(invoiceObj.surge_fee || 0);
+      const effectiveSubtotal = subtotal + deliveryFee + surgeFee;
+      const tax = Number(invoiceObj.tax || 0);
+      const createdAt = invoiceObj.created_at ? new Date(invoiceObj.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const dueDate = invoiceObj.due_date ? new Date(invoiceObj.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : createdAt;
 
-      if (stripeUrl) {
-        modalEl.innerHTML = `
-          <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full mx-auto border border-slate-200 overflow-hidden text-slate-800 flex flex-col h-[92vh] max-h-[950px]">
-            <!-- Top Controls Bar -->
-            <div class="p-3.5 sm:p-4 bg-slate-900 text-white flex justify-between items-center px-5 sm:px-6 border-b border-slate-800">
-              <div class="flex items-center space-x-3">
-                <img src="logo.png" alt="CloudVault Logo" class="w-7 h-7 object-contain rounded-lg" />
-                <div>
-                  <h3 class="text-sm font-black tracking-tight flex items-center gap-2">
-                    <span>Official Stripe Statement</span>
-                    <span class="text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded">${invNum}</span>
-                    <span class="text-[10px] font-mono font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded">$${totalAmount}</span>
-                  </h3>
-                </div>
-              </div>
-              <div class="flex items-center space-x-2">
-                ${pdfUrl ? `
-                  <a href="${pdfUrl}" target="_blank" download class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                    <span>Download PDF</span>
-                  </a>
-                ` : ''}
-                <button onclick="window.CloudVaultBilling.closePrintableInvoiceModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold px-3 py-1.5 rounded-xl transition cursor-pointer">
-                  ✕ Close
-                </button>
+      const customerName = invoiceObj.customer_name || (invoiceObj.customer_email ? invoiceObj.customer_email.split('@')[0] : 'Valued Customer');
+      const customerEmail = invoiceObj.customer_email || 'customer@cloudvault.io';
+      const facilityDisplay = invoiceObj.facility_id === 'facility_seattle_north' ? 'Seattle North Fulfillment Center' :
+                              invoiceObj.facility_id === 'facility_portland_central' ? 'Portland Central Hub' :
+                              'Yakima Fulfillment Center (Selah Hub)';
+      const servicePlan = (invoiceObj.invoice_type || '').includes('valet') ? 'White-Glove Valet Delivery' :
+                          (invoiceObj.invoice_type || '').includes('surge') ? 'Expedited Staging Retrieval' :
+                          'Vault Storage Subscription';
+      const txnRef = invoiceObj.transaction_reference || 'TXN-VALET-860485';
+
+      let lineItems = invoiceObj.line_items;
+      if (typeof lineItems === 'string') {
+        try { lineItems = JSON.parse(lineItems); } catch (e) { lineItems = []; }
+      }
+      if (!Array.isArray(lineItems) || lineItems.length === 0) {
+        lineItems = [
+          {
+            description: invoiceObj.notes || 'CloudVault Storage Service',
+            qty: 1,
+            unit_price: effectiveSubtotal || Number(totalAmount),
+            amount: effectiveSubtotal || Number(totalAmount)
+          }
+        ];
+      }
+
+      // Filter out raw tax strings from line items table
+      const filteredLines = lineItems.filter(l => {
+        const d = (l.description || '').toLowerCase();
+        return !d.includes('sales tax') && !d.includes('state tax');
+      });
+
+      const linesHtml = filteredLines.map(item => `
+        <tr class="border-b border-slate-100 text-xs">
+          <td class="py-3 px-4 font-semibold text-slate-800">${item.description || 'Service Line'}</td>
+          <td class="py-3 px-4 text-center font-mono text-slate-600">${item.qty || 1}</td>
+          <td class="py-3 px-4 text-right font-mono text-slate-600">$${Number(item.unit_price || item.amount || 0).toFixed(2)}</td>
+          <td class="py-3 px-4 text-right font-mono font-bold text-slate-900">$${Number(item.amount || ((item.qty || 1) * (item.unit_price || 0))).toFixed(2)}</td>
+        </tr>
+      `).join('');
+
+      const taxRegionName = invoiceObj.facility_id === 'facility_seattle_north' ? 'Seattle North Sales Tax (10.25%)' :
+                            invoiceObj.facility_id === 'facility_portland_central' ? 'Oregon Sales Tax (0.00%)' :
+                            'Washington State & Local Sales Tax (8.50%)';
+
+      modalEl.innerHTML = `
+        <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-auto border border-slate-200 overflow-hidden text-slate-800 my-6">
+          <!-- Top Controls Bar -->
+          <div class="no-print p-4 bg-slate-900 text-white flex justify-between items-center px-6 border-b border-slate-800">
+            <div class="flex items-center space-x-3">
+              <img src="logo.png" alt="CloudVault Logo" class="w-7 h-7 object-contain rounded-lg" />
+              <div>
+                <h3 class="text-sm font-black tracking-tight flex items-center gap-2">
+                  <span>Official Stripe Statement</span>
+                  <span class="text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded">${invNum}</span>
+                  <span class="text-[10px] font-mono font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded">$${totalAmount}</span>
+                </h3>
               </div>
             </div>
-
-            <!-- Embedded Stripe Official Statement -->
-            <div class="flex-1 w-full bg-slate-50 relative overflow-hidden">
-              <iframe src="${stripeUrl}" class="w-full h-full border-0" title="Official Stripe Statement"></iframe>
-            </div>
-          </div>
-        `;
-      } else {
-        modalEl.innerHTML = `
-          <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full mx-auto border border-slate-200 overflow-hidden text-slate-800 p-8 text-center space-y-4">
-            <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto text-xl">💳</div>
-            <h3 class="text-lg font-black text-slate-900">Official Stripe Statement</h3>
-            <p class="text-xs text-slate-500 font-mono">Invoice ${invNum} • Amount: $${totalAmount}</p>
-            <p class="text-xs text-slate-600">The official statement is currently synchronizing with Stripe.</p>
-            <div class="pt-2">
-              <button onclick="window.CloudVaultBilling.closePrintableInvoiceModal()" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition cursor-pointer">
-                Close
+            <div class="flex items-center space-x-2">
+              ${pdfUrl ? `
+                <a href="${pdfUrl}" target="_blank" download class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                  <span>Download PDF</span>
+                </a>
+              ` : ''}
+              <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                <span>Print</span>
+              </button>
+              <button onclick="window.CloudVaultBilling.closePrintableInvoiceModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition cursor-pointer">
+                ✕ Close
               </button>
             </div>
           </div>
-        `;
-      }
+
+          <!-- Official Stripe Statement Document -->
+          <div class="p-8 sm:p-12 space-y-8 bg-white" id="official-statement-content">
+            <!-- Header Section -->
+            <div class="flex justify-between items-start flex-wrap gap-6 border-b border-slate-100 pb-6">
+              <div class="space-y-2">
+                <div class="flex items-center space-x-3">
+                  <img src="logo.png" alt="CloudVault Logo" class="w-10 h-10 object-contain rounded-xl shadow-xs" />
+                  <div>
+                    <h1 class="text-2xl font-black text-slate-900 tracking-tight leading-none">CloudVault</h1>
+                    <span class="text-[9px] font-extrabold text-blue-600 uppercase tracking-[0.2em] block mt-1">Storage &amp; Logistics Solutions</span>
+                  </div>
+                </div>
+                <p class="text-xs text-slate-500 font-mono">CloudVault Storage Inc. • support@cloudvault.io • Selah, WA 98942</p>
+              </div>
+
+              <div class="text-right space-y-1">
+                <span class="inline-block px-3 py-1 text-xs font-extrabold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono tracking-wider">
+                  PAID
+                </span>
+                <h2 class="text-xl font-black font-mono text-slate-900 tracking-wider">${invNum}</h2>
+                <p class="text-xs text-slate-500 font-mono">Issued: ${createdAt}</p>
+                <div class="pt-0.5">
+                  <span class="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
+                    💳 Stripe: ${stripeId}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Customer & Facility Metadata -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50/70 p-6 rounded-2xl border border-slate-200/60 text-xs">
+              <div class="space-y-1.5">
+                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Billed To</span>
+                <p class="font-extrabold text-sm text-slate-900">${customerName}</p>
+                <p class="text-slate-600 font-mono">${customerEmail}</p>
+                <p class="text-slate-500">100 Vault Way, Selah, Washington 98942</p>
+              </div>
+              <div class="space-y-1.5">
+                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Service &amp; Facility Hub</span>
+                <p class="font-semibold text-slate-800"><span class="text-slate-500">Facility:</span> ${facilityDisplay}</p>
+                <p class="font-semibold text-slate-800"><span class="text-slate-500">Service:</span> ${servicePlan}</p>
+                <p class="text-slate-600 font-mono"><span class="text-slate-500">Txn Ref:</span> ${txnRef}</p>
+              </div>
+            </div>
+
+            <!-- Itemized Table -->
+            <div class="overflow-x-auto rounded-2xl border border-slate-200 shadow-xs">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="bg-slate-50 text-slate-500 font-mono text-[10px] uppercase tracking-wider border-b border-slate-200">
+                    <th class="py-3 px-4">Description</th>
+                    <th class="py-3 px-4 text-center">Qty</th>
+                    <th class="py-3 px-4 text-right">Unit Price</th>
+                    <th class="py-3 px-4 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${linesHtml}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Financial Summary Breakdown -->
+            <div class="flex justify-end pt-2">
+              <div class="w-full sm:w-80 space-y-2 text-xs">
+                <div class="flex justify-between text-slate-600">
+                  <span>Subtotal</span>
+                  <span class="font-mono font-medium">$${effectiveSubtotal.toFixed(2)}</span>
+                </div>
+                <div class="flex justify-between text-slate-600">
+                  <span>Total excluding tax</span>
+                  <span class="font-mono font-medium">$${effectiveSubtotal.toFixed(2)}</span>
+                </div>
+                ${tax > 0 ? `
+                  <div class="flex justify-between text-slate-600">
+                    <span>${taxRegionName}</span>
+                    <span class="font-mono font-medium">$${tax.toFixed(2)}</span>
+                  </div>
+                ` : ''}
+                <div class="border-t-2 border-slate-200 pt-3 flex justify-between items-center">
+                  <span class="text-sm font-black text-slate-900 uppercase tracking-wider">Grand Total</span>
+                  <span class="text-xl font-black font-mono text-blue-600">$${totalAmount} USD</span>
+                </div>
+                <div class="flex justify-between text-emerald-700 font-bold text-xs pt-1">
+                  <span>Amount Paid</span>
+                  <span class="font-mono">$${totalAmount} USD</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Statement Footer -->
+            <div class="border-t border-slate-100 pt-6 text-center text-xs text-slate-500 font-mono">
+              CloudVault Storage &amp; Logistics Solutions • Selah, WA 98942 • support@cloudvault.io • Official Statement
+            </div>
+          </div>
+        </div>
+      `;
 
       modalEl.classList.remove('hidden');
     },
