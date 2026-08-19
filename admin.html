@@ -9825,9 +9825,51 @@
 
                 const slottedTotes = totes || [];
                 const toteCount = slottedTotes.length;
-                const maxCapacity = isStaging ? 1 : (isBayCluster ? 16 : 4);
+
+                // Query warehouse_locations for dynamic capacity and operational state
+                let maxCapacity = isStaging ? 1 : (isBayCluster ? 12 : 3);
+                let shelfOperationalStatus = 'ACTIVE';
+
+                try {
+                    const facId = getSafeSavedFacilityId();
+                    let locQuery = supabase.from('warehouse_locations').select('*');
+                    if (isBayCluster) {
+                        locQuery = locQuery.or(`identifier.eq.${locCode},location_code.eq.${locCode},identifier.ilike.${locCode}-%,location_code.ilike.${locCode}-%,identifier.ilike.%${locCode}%,location_code.ilike.%${locCode}%`);
+                    } else {
+                        locQuery = locQuery.or(`identifier.eq.${locCode},location_code.eq.${locCode},identifier.ilike.%${locCode}%,location_code.ilike.%${locCode}%`);
+                    }
+                    if (facId) {
+                        locQuery = locQuery.or(`facility_id.eq.${facId},facility_id.is.null`);
+                    }
+
+                    const { data: locData } = await locQuery;
+                    if (locData && locData.length > 0) {
+                        if (isBayCluster) {
+                            const sumCap = locData.reduce((acc, l) => acc + (Number(l.capacity) || 3), 0);
+                            if (sumCap > 0) maxCapacity = sumCap;
+                            if (locData[0].zone_type === 'LOCKED') shelfOperationalStatus = 'LOCKED';
+                        } else {
+                            const exact = locData.find(l => {
+                                const id = (l.identifier || '').toUpperCase();
+                                const code = (l.location_code || '').toUpperCase();
+                                return id === locCode || code === locCode || id.endsWith(locCode) || code.endsWith(locCode);
+                            }) || locData[0];
+
+                            if (exact) {
+                                if (exact.capacity != null && Number(exact.capacity) > 0) {
+                                    maxCapacity = Number(exact.capacity);
+                                }
+                                if (exact.zone_type === 'LOCKED') shelfOperationalStatus = 'LOCKED';
+                            }
+                        }
+                    }
+                } catch (locErr) {
+                    console.warn('[Shelf Telemetry Warning] warehouse_locations query error:', locErr);
+                }
+
                 window.currentInspectedShelfCapacity = maxCapacity;
-                const occupancyPct = Math.min(100, Math.round((toteCount / maxCapacity) * 100));
+                window.currentInspectedShelfStatus = shelfOperationalStatus;
+                const occupancyPct = maxCapacity > 0 ? Math.min(100, Math.round((toteCount / maxCapacity) * 100)) : 0;
 
                 document.getElementById('slm-stat-totes').textContent = `${toteCount} / ${maxCapacity}`;
                 document.getElementById('slm-stat-occupancy').textContent = `${occupancyPct}%`;
@@ -9999,16 +10041,100 @@
             const locCode = window.currentInspectedShelfCode;
             if (!locCode) return;
 
+            const saveBtn = document.querySelector("button[onclick='saveBayConfiguration()']");
+            const originalHTML = saveBtn ? saveBtn.innerHTML : '';
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...`;
+                if (window.lucide) lucide.createIcons();
+            }
+
             const statusSelect = document.getElementById('slm-config-status-select');
             const capInput = document.getElementById('slm-config-capacity-input');
             const newStatus = statusSelect ? statusSelect.value : 'ACTIVE';
-            const newCap = capInput ? parseInt(capInput.value, 10) : 4;
+            const newCap = capInput ? parseInt(capInput.value, 10) : 3;
 
-            window.currentInspectedShelfStatus = newStatus;
-            window.currentInspectedShelfCapacity = newCap;
+            if (isNaN(newCap) || newCap < 1) {
+                alert("Please enter a valid capacity (at least 1 tote).");
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = originalHTML;
+                    if (window.lucide) lucide.createIcons();
+                }
+                return;
+            }
 
-            showBadgeScanToast(`✓ Bay ${locCode} updated: ${newStatus} (${newCap} max capacity)`, 'success');
-            await openShelfLocationMasterModal(locCode);
+            const facId = getSafeSavedFacilityId() || 'facility_yakima';
+            const isBayCluster = !locCode.includes('-S') && !locCode.startsWith('ROOM');
+            const isStaging = locCode.startsWith('ROOM');
+
+            try {
+                // 1. Search existing records in warehouse_locations
+                let locQuery = supabase.from('warehouse_locations').select('id, identifier, location_code, facility_id');
+                if (isBayCluster) {
+                    locQuery = locQuery.or(`identifier.eq.${locCode},location_code.eq.${locCode},identifier.ilike.${locCode}-%,location_code.ilike.${locCode}-%,identifier.ilike.%${locCode}%,location_code.ilike.%${locCode}%`);
+                } else {
+                    locQuery = locQuery.or(`identifier.eq.${locCode},location_code.eq.${locCode},identifier.ilike.%${locCode}%,location_code.ilike.%${locCode}%`);
+                }
+
+                const { data: existingLocs, error: searchErr } = await locQuery;
+                if (searchErr) throw searchErr;
+
+                if (existingLocs && existingLocs.length > 0) {
+                    const idsToUpdate = existingLocs.map(l => l.id);
+                    const { error: updateErr } = await supabase
+                        .from('warehouse_locations')
+                        .update({
+                            capacity: newCap,
+                            zone_type: newStatus === 'LOCKED' ? 'LOCKED' : (isStaging ? 'STAGING' : 'VAULT'),
+                            location_type: isStaging ? 'STAGING' : 'VAULT'
+                        })
+                        .in('id', idsToUpdate);
+
+                    if (updateErr) throw updateErr;
+                } else {
+                    // If location doesn't exist yet in warehouse_locations, insert it
+                    const { error: insertErr } = await supabase
+                        .from('warehouse_locations')
+                        .insert({
+                            facility_id: facId,
+                            identifier: locCode,
+                            location_code: locCode,
+                            location_type: isStaging ? 'STAGING' : 'VAULT',
+                            zone_type: newStatus === 'LOCKED' ? 'LOCKED' : (isStaging ? 'STAGING' : 'VAULT'),
+                            capacity: newCap,
+                            is_occupied: false
+                        });
+
+                    if (insertErr) throw insertErr;
+                }
+
+                // Invalidate location cache
+                window._facLocationsCache = {};
+
+                window.currentInspectedShelfStatus = newStatus;
+                window.currentInspectedShelfCapacity = newCap;
+
+                showBadgeScanToast(`✓ Saved: ${locCode} capacity set to ${newCap} totes (${newStatus})`, 'success');
+                await openShelfLocationMasterModal(locCode);
+
+                // Trigger live facility map and queues refresh
+                if (typeof loadFacilityMapData === 'function') {
+                    loadFacilityMapData(facId);
+                }
+                if (typeof loadWorkerLiveData === 'function') {
+                    loadWorkerLiveData(facId);
+                }
+            } catch (err) {
+                console.error("Save bay configuration error:", err);
+                alert("Failed to save configuration: " + (err.message || err));
+            } finally {
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = originalHTML;
+                    if (window.lucide) lucide.createIcons();
+                }
+            }
         }
 
         async function reassignSingleToteLocation(toteId, toteCode) {
