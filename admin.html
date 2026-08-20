@@ -10344,7 +10344,26 @@
                 const userInvs = existingInvoices || [];
 
                 if (userTotes.length > 0 && userInvs.length === 0) {
-                    const amount = userTotes.length * 5.00;
+                    let rate = null;
+                    if (user.has_price_lock && user.price_lock_rates) {
+                        const plr = user.price_lock_rates;
+                        rate = userTotes.length >= 50 ? Number(plr.tier4_rate || plr.tier4) :
+                               userTotes.length >= 25 ? Number(plr.tier3_rate || plr.tier3) :
+                               userTotes.length >= 10 ? Number(plr.tier2_rate || plr.tier2) :
+                               Number(plr.tier1_rate || plr.tier1);
+                    }
+                    if (rate == null) {
+                        const facId = user.assigned_facility_id || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+                        const { data: fac } = await supabase.from('facilities').select('tier1_rate, tier2_rate, tier3_rate, tier4_rate').eq('id', facId).maybeSingle();
+                        if (fac) {
+                            rate = userTotes.length >= 50 ? Number(fac.tier4_rate) :
+                                   userTotes.length >= 25 ? Number(fac.tier3_rate) :
+                                   userTotes.length >= 10 ? Number(fac.tier2_rate) :
+                                   Number(fac.tier1_rate);
+                        }
+                    }
+                    if (rate == null) rate = 0;
+                    const amount = userTotes.length * rate;
                     if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
                         await window.CloudVaultBilling.createInvoiceRecord({
                             uid: targetId,
@@ -10445,39 +10464,50 @@
                     .maybeSingle();
 
                 if (leadErr || !lead) {
-                    throw new Error(leadErr?.message || 'Waitlist record not found');
+                    throw new Error(leadErr?.message || 'Waitlist lead record not found.');
                 }
 
-                // 2. Check if a user account already exists for this email
+                // 2. Check if a user with this email already exists
                 const { data: existingUser } = await supabase
                     .from('users')
-                    .select('id, email, name')
+                    .select('id, email, onboarding_status')
                     .eq('email', lead.email)
                     .maybeSingle();
 
-                let userId;
-                if (existingUser) {
-                    userId = existingUser.id;
-                    console.log(`[convertWaitlistLead] Found existing user ${userId} for email ${lead.email}`);
-                } else {
-                    // 3. Create a stub user account with waitlist data
-                    const { data: newUser, error: createErr } = await supabase
+                let userId = existingUser?.id;
+
+                if (!userId) {
+                    // Create minimal user stub
+                    const newUid = `usr_waitlist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+                    const { error: insErr } = await supabase
                         .from('users')
                         .insert({
+                            id: newUid,
                             email: lead.email,
-                            name: lead.name || lead.full_name || (lead.email ? lead.email.split('@')[0] : 'CloudVault Customer'),
-                            subscription_status: 'waitlisted',
-                            is_active: false,
+                            name: lead.email.split('@')[0],
+                            role: 'customer',
+                            onboarding_status: 'waitlisted',
                             created_at: lead.created_at || new Date().toISOString()
-                        })
-                        .select('id')
-                        .maybeSingle();
+                        });
+                    if (insErr) throw insErr;
+                    userId = newUid;
+                }
 
-                    if (createErr || !newUser) {
-                        throw new Error(createErr?.message || 'Failed to create user account');
-                    }
-                    userId = newUser.id;
-                    console.log(`[convertWaitlistLead] Created new user ${userId} for ${lead.email}`);
+                // 3. Link unattached unlaunched_deposit invoices by matching customer_email
+                const { data: unlinkedInvs } = await supabase
+                    .from('invoices')
+                    .select('id')
+                    .eq('customer_email', lead.email)
+                    .is('uid', null);
+
+                let linkedCount = 0;
+                if (unlinkedInvs && unlinkedInvs.length > 0) {
+                    const ids = unlinkedInvs.map(i => i.id);
+                    await supabase
+                        .from('invoices')
+                        .update({ uid: userId })
+                        .in('id', ids);
+                    linkedCount = ids.length;
                 }
 
                 // 4. Link the waitlist record to the new/found user
@@ -10485,24 +10515,6 @@
                     .from('waitlist')
                     .update({ user_id: userId })
                     .eq('id', waitlistId);
-
-                // 5. Link unattached unlaunched_deposit invoices by email to the new uid
-                const { data: unlinkedInvoices } = await supabase
-                    .from('invoices')
-                    .select('id')
-                    .eq('customer_email', lead.email)
-                    .eq('invoice_type', 'unlaunched_deposit')
-                    .is('uid', null);
-
-                let linkedCount = 0;
-                if (unlinkedInvoices && unlinkedInvoices.length > 0) {
-                    const ids = unlinkedInvoices.map(i => i.id);
-                    await supabase
-                        .from('invoices')
-                        .update({ uid: userId })
-                        .in('id', ids);
-                    linkedCount = ids.length;
-                }
 
                 alert(
                     `⚡ Waitlist Lead Successfully Converted!\n\n` +
@@ -10535,6 +10547,9 @@
             try {
                 const { data: users } = await supabase.from('users').select('*');
                 const { data: totes } = await supabase.from('inventory').select('*');
+                const { data: facsList } = await supabase.from('facilities').select('id, tier1_rate, tier2_rate, tier3_rate, tier4_rate');
+                const facMap = {};
+                (facsList || []).forEach(f => { facMap[f.id] = f; });
 
                 const totesByUser = {};
                 (totes || []).forEach(t => {
@@ -10547,7 +10562,25 @@
                 for (const u of (users || [])) {
                     const userTotes = totesByUser[u.id] || [];
                     if (userTotes.length > 0) {
-                        const rate = userTotes.length >= 50 ? 1.00 : (userTotes.length >= 25 ? 2.00 : (userTotes.length >= 10 ? 3.50 : 5.00));
+                        let rate = null;
+                        if (u.has_price_lock && u.price_lock_rates) {
+                            const plr = u.price_lock_rates;
+                            rate = userTotes.length >= 50 ? Number(plr.tier4_rate || plr.tier4) :
+                                   userTotes.length >= 25 ? Number(plr.tier3_rate || plr.tier3) :
+                                   userTotes.length >= 10 ? Number(plr.tier2_rate || plr.tier2) :
+                                   Number(plr.tier1_rate || plr.tier1);
+                        }
+                        if (rate == null) {
+                            const facId = u.assigned_facility_id || (facsList && facsList[0]?.id);
+                            const fac = facMap[facId] || (facsList && facsList[0]);
+                            if (fac) {
+                                rate = userTotes.length >= 50 ? Number(fac.tier4_rate) :
+                                       userTotes.length >= 25 ? Number(fac.tier3_rate) :
+                                       userTotes.length >= 10 ? Number(fac.tier2_rate) :
+                                       Number(fac.tier1_rate);
+                            }
+                        }
+                        if (rate == null || isNaN(rate)) continue;
                         const billAmount = userTotes.length * rate;
 
                         const stripeRes = await window.CloudVaultStripe.processAutopayCharge(u.id, billAmount);
