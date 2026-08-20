@@ -56,12 +56,14 @@ CREATE TABLE public.facilities (
     tier4_rate NUMERIC(10,2) DEFAULT 1.00,
     valet_base NUMERIC(10,2) DEFAULT 15.00,
     valet_tote_adder NUMERIC(10,2) DEFAULT 1.00,
+    missing_tote_fee NUMERIC(10,2) DEFAULT 15.00,
     staging_rooms INTEGER DEFAULT 2,
     staging_config JSONB DEFAULT '{"allowed_days": [1,2,3,4,5,6,0], "allowed_slots": ["09:00 AM - 12:00 PM", "12:00 PM - 03:00 PM", "03:00 PM - 06:00 PM"]}'::jsonb
 );
 
 -- Safe migration fallback for pre-existing tables in Supabase
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS staging_rooms INTEGER DEFAULT 2;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS missing_tote_fee NUMERIC(10,2) DEFAULT 15.00;
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS tier1_rate NUMERIC(10,2) DEFAULT 5.00;
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS tier2_rate NUMERIC(10,2) DEFAULT 3.50;
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS tier3_rate NUMERIC(10,2) DEFAULT 2.00;

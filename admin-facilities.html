@@ -553,8 +553,8 @@
                             </div>
 
                             <div class="pt-3 border-t border-gray-850 space-y-3">
-                                <p class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Regional Valet Delivery Fees</p>
-                                <div class="grid grid-cols-2 gap-3">
+                                <p class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Regional Valet &amp; Exception Penalty Fees</p>
+                                <div class="grid grid-cols-3 gap-3">
                                     <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
                                         <label class="block text-[10px] font-bold text-gray-400">Valet Base Fee ($)</label>
                                         <input type="number" id="conf-valet-base" oninput="calculatePnL()"
@@ -564,6 +564,11 @@
                                         <label class="block text-[10px] font-bold text-gray-400">Valet Tote Adder ($)</label>
                                         <input type="number" id="conf-valet-adder" oninput="calculatePnL()"
                                             class="fspec-input w-full py-1 text-sm text-amber-400 font-bold" placeholder="1.00">
+                                    </div>
+                                    <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1">
+                                        <label class="block text-[10px] font-bold text-gray-400">Missing Tote Fee ($)</label>
+                                        <input type="number" step="0.50" id="conf-missing-tote-fee"
+                                            class="fspec-input w-full py-1 text-sm text-rose-400 font-bold" placeholder="15.00">
                                     </div>
                                 </div>
                             </div>
@@ -1584,6 +1589,7 @@
                     document.getElementById('conf-tier4').value = (fac.tier4_rate !== null && fac.tier4_rate !== undefined) ? Number(fac.tier4_rate).toFixed(2) : '1.00';
                     document.getElementById('conf-valet-base').value = (fac.valet_base !== null && fac.valet_base !== undefined) ? Number(fac.valet_base) : 17.00;
                     document.getElementById('conf-valet-adder').value = (fac.valet_tote_adder !== null && fac.valet_tote_adder !== undefined) ? Number(fac.valet_tote_adder) : 1.00;
+                    document.getElementById('conf-missing-tote-fee').value = (fac.missing_tote_fee !== null && fac.missing_tote_fee !== undefined) ? Number(fac.missing_tote_fee).toFixed(2) : '15.00';
                     document.getElementById('conf-next-day-surge').value = (fac.next_day_surge_fee !== null && fac.next_day_surge_fee !== undefined) ? Number(fac.next_day_surge_fee) : 0;
                     document.getElementById('conf-next-day-peak-surge').value = (fac.next_day_peak_surge_fee !== null && fac.next_day_peak_surge_fee !== undefined) ? Number(fac.next_day_peak_surge_fee) : 14.99;
                     document.getElementById('conf-same-day-surge').value = (fac.same_day_surge_fee !== null && fac.same_day_surge_fee !== undefined) ? Number(fac.same_day_surge_fee) : 19.99;
@@ -3007,6 +3013,7 @@
                         tier4_rate: getNumVal('conf-tier4', 1.00),
                         valet_base: getNumVal('conf-valet-base', 17.00),
                         valet_tote_adder: getNumVal('conf-valet-adder', 1.00),
+                        missing_tote_fee: getNumVal('conf-missing-tote-fee', 15.00),
                         next_day_surge_fee: getNumVal('conf-next-day-surge', 0.00),
                         next_day_peak_surge_fee: getNumVal('conf-next-day-peak-surge', 14.99),
                         same_day_surge_fee: getNumVal('conf-same-day-surge', 19.99),
@@ -3308,7 +3315,7 @@
                         'conf-name', 'conf-manager-name', 'conf-manager-email', 'conf-address', 'conf-city', 'conf-state', 'conf-zip',
                         'conf-sqft', 'conf-sqft-per-tote', 'conf-tote-capacity', 'conf-staging-rooms',
                         'conf-rent', 'conf-labor', 'conf-utilities', 'conf-insurance',
-                        'conf-tier1', 'conf-tier2', 'conf-tier3', 'conf-tier4', 'conf-valet-base', 'conf-valet-adder',
+                        'conf-tier1', 'conf-tier2', 'conf-tier3', 'conf-tier4', 'conf-valet-base', 'conf-valet-adder', 'conf-missing-tote-fee',
                         'conf-market-active-select'
                     ];
 

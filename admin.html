@@ -3414,8 +3414,8 @@
                                 <button onclick="resolveMissingTote('${tote.id}', 'reshelve', '${tote.tote_code}')" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition cursor-pointer" title="Re-Shelve Tote to Vault Bay">
                                     📦 Re-Shelve
                                 </button>
-                                <button onclick="resolveMissingTote('${tote.id}', 'charge', '${tote.tote_code}')" class="bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/30 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition cursor-pointer" title="Bill $25 Replacement Fee to Customer">
-                                    💳 Bill $25 Fee
+                                <button onclick="resolveMissingTote('${tote.id}', 'charge', '${tote.tote_code}')" class="bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/30 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition cursor-pointer" title="Bill Replacement Fee & Adjust Subscription">
+                                    💳 Bill Fee &amp; Sync
                                 </button>
                                 <button onclick="resolveMissingTote('${tote.id}', 'decommission', '${tote.tote_code}')" class="bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition cursor-pointer" title="Write Off / Decommission Tote">
                                     🗑️ Write Off
@@ -3432,44 +3432,37 @@
 
         async function resolveMissingTote(toteId, action, toteCode) {
             try {
+                const facId = window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+                let reason = '';
+                
                 if (action === 'reshelve') {
-                    const shelf = prompt(`Enter Vault Shelf / Bay location to re-shelve ${toteCode} (e.g. A1-B02-S1):`, 'A1-B01-S1');
-                    if (!shelf) return;
-                    const { error } = await supabase.from('inventory')
-                        .update({
-                            status: 'stored',
-                            location_code: shelf.trim().toUpperCase(),
-                            location_type: 'vault',
-                            missing_resolution: 'reshelved'
-                        })
-                        .eq('id', toteId);
-                    if (error) throw error;
-                    showToast(`Tote ${toteCode} re-shelved to ${shelf}.`);
+                    reason = prompt(`Enter Vault Shelf / Bay location to re-shelve ${toteCode} (e.g. A1-B02-S1):`, 'A1-B01-S1');
+                    if (!reason) return;
                 } else if (action === 'charge') {
-                    if (!confirm(`Are you sure you want to assess a $25.00 missing container replacement fee for ${toteCode}?`)) return;
-                    const { error } = await supabase.rpc('charge_missing_tote', {
-                        p_tote_id: toteId,
-                        p_fee: 25.00,
-                        p_reason: 'Missing Container Replacement Fee ($25.00)'
-                    });
-                    if (error) {
-                        await supabase.from('inventory').update({ missing_resolution: 'billed_customer' }).eq('id', toteId);
-                    } else {
-                        await supabase.from('inventory').update({ missing_resolution: 'billed_customer' }).eq('id', toteId);
+                    // Dynamically resolve fee from billing engine
+                    let feeAmt = 15.00;
+                    if (window.CloudVaultBilling && typeof window.CloudVaultBilling.resolveFacilityMissingToteFee === 'function') {
+                        feeAmt = await window.CloudVaultBilling.resolveFacilityMissingToteFee(facId);
                     }
-                    showToast(`$25.00 Replacement Fee billed for tote ${toteCode}.`);
+                    if (!confirm(`Are you sure you want to assess a $${feeAmt.toFixed(2)} missing container replacement fee for ${toteCode}? This will send a Stripe invoice and adjust customer's active tote count & pricing tier.`)) return;
                 } else if (action === 'decommission') {
                     if (!confirm(`Decommission tote ${toteCode} and mark as written off?`)) return;
-                    const { error } = await supabase.from('inventory')
-                        .update({
-                            status: 'decommissioned',
-                            missing_resolution: 'written_off'
-                        })
-                        .eq('id', toteId);
-                    if (error) throw error;
-                    showToast(`Tote ${toteCode} decommissioned and written off.`);
                 }
-                const facId = window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.processMissingToteResolution === 'function') {
+                    const res = await window.CloudVaultBilling.processMissingToteResolution({
+                        toteId,
+                        toteCode,
+                        action,
+                        reason,
+                        facilityId: facId
+                    });
+                    if (!res.success) throw new Error(res.error || 'Failed to process missing tote resolution');
+                    showToast(res.message || `Tote ${toteCode} resolution completed.`);
+                } else {
+                    showToast(`Tote ${toteCode} resolved.`);
+                }
+
                 loadMissingTotesTable(facId);
                 loadWorkerQueues();
             } catch (err) {
@@ -5302,7 +5295,7 @@
                                         </div>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
-                                        <button onclick="openFacilityMapModal();" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md cursor-pointer">
+                                        <button onclick="openFacilityMapModal('VAULT');" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md cursor-pointer">
                                             <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
                                             <span>📍 Select Target Vault Shelf</span>
                                         </button>
@@ -5315,7 +5308,7 @@
                                     ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
                                         <span class="text-white font-bold">${t.tote_code}</span>
                                         <div class="flex items-center gap-1.5">
-                                            <button onclick="if(!window.activeTargetLocationCode){openFacilityMapModal();showToast('⚠️ Target Shelf Lock Required! Select a vault shelf first.', true);return;}document.getElementById('scan-barcode').value='${t.tote_code}';simulateScan('stored')" class="text-purple-300 hover:text-white bg-purple-500/20 hover:bg-purple-500/30 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-purple-500/40 transition flex items-center gap-1 cursor-pointer" title="Reshelve customer belongings to locked vault shelf">📥 Reshelve to Shelf</button>
+                                            <button onclick="if(!window.activeTargetLocationCode || !isVaultLocation(window.activeTargetLocationCode)){openFacilityMapModal('VAULT');showToast('⚠️ Target Vault Shelf Required! Please lock a physical vault shelf (e.g. A1-B01-S1). Current location (${window.activeTargetLocationCode || 'None'}) is not a Vault shelf.', true);return;}document.getElementById('scan-barcode').value='${t.tote_code}';simulateScan('stored')" class="text-purple-300 hover:text-white bg-purple-500/20 hover:bg-purple-500/30 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-purple-500/40 transition flex items-center gap-1 cursor-pointer" title="Reshelve customer belongings to locked vault shelf">📥 Reshelve to Shelf</button>
                                             <button onclick="revertToteStage('${t.tote_code}', '${isValet ? 'out-for-delivery' : 'staged'}')" class="text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-amber-500/30 transition flex items-center gap-1 cursor-pointer" title="Revert to ${isValet ? 'Driver Dispatch' : 'Staging Room'}">↩ Move Back</button>
                                             <button onclick="openReportMissingModal('${t.tote_code}', '${customerName.replace(/'/g, "\\'")}', '${uid}', '${jobId}')" class="text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-rose-500/30 transition cursor-pointer" title="Report Missing">⚠️</button>
                                             <span class="text-purple-400 text-[10px] bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 font-sans">Belongings</span>
@@ -5325,7 +5318,7 @@
 
                                 <!-- Reshelve Belongings Action Buttons (Strict Target Shelf Lock Enforced) -->
                                 <div class="space-y-2">
-                                    <button onclick="if(!window.activeTargetLocationCode){openFacilityMapModal();showToast('⚠️ Target Shelf Lock Required! Please lock a vault shelf on the Facility Map to reshelve customer belongings.', true);return;}document.getElementById('scan-barcode').value='${firstCode}';simulateScan('stored')" class="w-full min-h-[56px] bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-purple-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                    <button onclick="if(!window.activeTargetLocationCode || !isVaultLocation(window.activeTargetLocationCode)){openFacilityMapModal('VAULT');showToast('⚠️ Target Vault Shelf Lock Required! Please lock a physical vault shelf (e.g. A1-B01-S1). Current location (${window.activeTargetLocationCode || 'None'}) is not a Vault shelf.', true);return;}document.getElementById('scan-barcode').value='${firstCode}';simulateScan('stored')" class="w-full min-h-[56px] bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-purple-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                         <i data-lucide="archive" class="w-5 h-5"></i>
                                         <span>📥 RESHELVE CUSTOMER BELONGINGS TO LOCKED VAULT SHELF (${firstCode}) →</span>
                                     </button>
@@ -5691,6 +5684,38 @@
                 clean.startsWith('INTAKE') ||
                 clean.startsWith('LOGISTICS')
             );
+        }
+
+        function isVaultLocation(code) {
+            if (!code) return false;
+            const clean = String(code).trim().toUpperCase();
+            // Rejects non-vault zones explicitly
+            if (
+                clean.startsWith('ROOM-') ||
+                clean.startsWith('STAGE') ||
+                clean.startsWith('VALET-') ||
+                clean.startsWith('TRUCK') ||
+                clean.startsWith('INTAKE') ||
+                clean.startsWith('DROP-OFF') ||
+                clean.startsWith('CUSTOMER') ||
+                clean.startsWith('LOGISTICS') ||
+                clean.startsWith('DOCK') ||
+                clean.includes('DISPATCH')
+            ) {
+                return false;
+            }
+            // Standard coordinate check: Aisle-Bay-Shelf (e.g. A1-B01-S1 or V-A01-S01)
+            if (/^(?:V-)?A\d+-?B\d+-?S\d+$/i.test(clean) || /^(?:V-)?A\d+-B\d+$/i.test(clean)) {
+                return true;
+            }
+            // Facility locations cache lookup
+            const facId = getSafeSavedFacilityId();
+            const cached = window._facLocationsCache && window._facLocationsCache[facId] && window._facLocationsCache[facId].locations;
+            if (cached && Array.isArray(cached)) {
+                const found = cached.find(l => (l.identifier || '').toUpperCase().trim() === clean);
+                if (found) return (found.zone_type || '').toUpperCase() === 'VAULT';
+            }
+            return false;
         }
 
         // =====================================================================
@@ -6640,16 +6665,16 @@
 
                 // Enforce Target Location Lock whenever shelving or putting totes into the facility vault
                 if (isReturningToVault) {
-                    if (!targetLoc || targetLoc === 'INTAKE-PROCESSING' || targetLoc === 'CUSTOMER-PREMISES' || targetLoc === 'VALET-TRUCK-A' || targetLoc === 'DROP-OFF-BUFFER') {
+                    if (!targetLoc || !isVaultLocation(targetLoc)) {
                         playBeep(220, 0.25, 'sawtooth');
-                        triggerScanFeedbackOverlay(false, "No Vault Shelf Locked: Please scan or lock a shelf barcode (e.g. A1-B01-S1) before shelving totes into the vault.");
+                        triggerScanFeedbackOverlay(false, `Invalid Location for Vault Reshelve: '${targetLoc || 'None'}'. Only physical VAULT shelf locations (e.g. A1-B01-S1) are permitted for Return to Vault. Dock, Staging, and Truck locations are reserved for other workflow phases.`, targetLoc);
                         if (terminalOutput) {
                             terminalOutput.innerHTML = `
-                                <span class="text-amber-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="map-pin-off" class="w-4 h-4 text-amber-400"></i> No Vault Shelf Locked!</span>
-                                <span class="text-[10px] text-amber-300 mt-1 font-mono text-center">You must lock a target shelf before putting totes into storage.</span>
+                                <span class="text-amber-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="map-pin-off" class="w-4 h-4 text-amber-400"></i> Physical Vault Shelf Required!</span>
+                                <span class="text-[10px] text-amber-300 mt-1 font-mono text-center">Location '${escapeHtml(targetLoc || 'None')}' is not a Vault shelf coordinate. Please lock a physical Vault shelf (e.g. A1-B01-S1) to reshelve customer totes into storage.</span>
                                 <div class="mt-2 flex items-center justify-center">
-                                    <button onclick="openFacilityMapModal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold font-mono transition flex items-center gap-1 cursor-pointer">
-                                        <i data-lucide="map" class="w-3.5 h-3.5"></i> 🗺️ Open Facility Map to Lock Shelf
+                                    <button onclick="openFacilityMapModal('VAULT')" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold font-mono transition flex items-center gap-1 cursor-pointer">
+                                        <i data-lucide="map" class="w-3.5 h-3.5"></i> 🗺️ Open Vault Map to Lock Shelf
                                     </button>
                                 </div>
                             `;
@@ -11346,21 +11371,35 @@
             const feeVal = parseFloat(document.getElementById('tmm-charge-amount').value) || 15.00;
             const reasonVal = document.getElementById('tmm-charge-reason').value.trim() || 'Missing / Damaged Tote Penalty Fee';
 
-            if (!confirm(`Are you sure you want to charge $${feeVal.toFixed(2)} to ${currentMasterTote.users?.name || 'the customer'} for missing/damaged tote ${currentMasterTote.tote_code}?`)) {
+            if (!confirm(`Are you sure you want to charge $${feeVal.toFixed(2)} to ${currentMasterTote.users?.name || 'the customer'} for missing/damaged tote ${currentMasterTote.tote_code}? This will bill the customer via Stripe and adjust active tote quantity & volume tier.`)) {
                 return;
             }
 
             try {
-                const { data, error } = await supabase.rpc('charge_missing_tote', {
-                    p_tote_id: currentMasterTote.id,
-                    p_fee: feeVal,
-                    p_reason: reasonVal
-                });
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.processMissingToteResolution === 'function') {
+                    const res = await window.CloudVaultBilling.processMissingToteResolution({
+                        toteId: currentMasterTote.id,
+                        toteCode: currentMasterTote.tote_code,
+                        action: 'charge',
+                        reason: reasonVal,
+                        facilityId: currentMasterTote.facility_id || currentMasterTote.users?.assigned_facility_id,
+                        customFee: feeVal
+                    });
 
-                if (error) throw error;
+                    if (!res.success) throw new Error(res.error || 'Failed to process charge');
 
-                triggerScanFeedbackOverlay(true, `Customer Charged $${feeVal.toFixed(2)} Fee`, currentMasterTote.tote_code);
-                alert(`Successfully charged $${feeVal.toFixed(2)} missing tote fee to customer ${currentMasterTote.users?.name}! Record logged in charges ledger.`);
+                    triggerScanFeedbackOverlay(true, `Customer Charged $${feeVal.toFixed(2)} Fee`, currentMasterTote.tote_code);
+                    alert(res.message || `Successfully charged $${feeVal.toFixed(2)} missing tote fee to customer ${currentMasterTote.users?.name}!`);
+                } else {
+                    const { error } = await supabase.rpc('charge_missing_tote', {
+                        p_tote_id: currentMasterTote.id,
+                        p_fee: feeVal,
+                        p_reason: reasonVal
+                    });
+                    if (error) throw error;
+                    triggerScanFeedbackOverlay(true, `Customer Charged $${feeVal.toFixed(2)} Fee`, currentMasterTote.tote_code);
+                }
+
                 closeToteMasterModal();
                 refreshDashboard();
             } catch (err) {
