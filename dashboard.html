@@ -3733,10 +3733,11 @@
                     .from('inventory')
                     .select('*')
                     .eq('uid', uid)
+                    .not('status', 'in', '("missing-tote","decommissioned")')
                     .order('tote_code', { ascending: true });
 
                 if (!error && data) {
-                    currentInventory = data;
+                    currentInventory = data.filter(item => item.status !== 'missing-tote' && item.status !== 'decommissioned');
                 } else {
                     currentInventory = [];
                 }
@@ -5870,7 +5871,8 @@
                 if (!banner) return;
 
                 const subTotal = currentSubscription ? Number(currentSubscription.total_totes || 0) : 0;
-                const storedCount = (currentInventory || []).length;
+                const activeStoredItems = (currentInventory || []).filter(item => item.status !== 'missing-tote' && item.status !== 'decommissioned');
+                const storedCount = activeStoredItems.length;
                 const excess = Math.max(0, storedCount - subTotal);
 
                 const hasPendingExitReq = (currentRequests || []).some(r => 
