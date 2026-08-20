@@ -64,11 +64,6 @@
         }
       }
 
-      if (!targetUserId && !custId) {
-        alert("No active user or Stripe customer record linked to this account yet. Please contact support.");
-        return { success: false, error: 'No user or customer ID found' };
-      }
-
       if (typeof global.showToast === 'function') {
         global.showToast("🔒 Redirecting to secure Stripe Billing Portal...");
       }
@@ -88,8 +83,19 @@
         });
 
         if (error) {
-          console.error('[StripeBillingIntegration] stripe-billing-portal function error:', error);
-          throw error;
+          let detailedMsg = error.message;
+          if (error.context && typeof error.context.json === 'function') {
+            try {
+              const errBody = await error.context.json();
+              if (errBody && errBody.error) detailedMsg = errBody.error;
+            } catch (_) {}
+          }
+          console.error('[StripeBillingIntegration] stripe-billing-portal function error:', detailedMsg);
+          throw new Error(detailedMsg || 'Edge Function returned a non-2xx status code');
+        }
+
+        if (data?.customerId && global.currentUser) {
+          global.currentUser.stripe_customer_id = data.customerId;
         }
 
         const portalUrl = data?.url || data?.portalUrl || data?.sessionUrl;
@@ -101,7 +107,11 @@
         }
       } catch (err) {
         console.error('[StripeBillingIntegration] Failed to launch Stripe customer portal:', err);
-        alert('Stripe Portal Error: ' + (err.message || err));
+        if (typeof global.showToast === 'function') {
+          global.showToast("⚠️ Billing Portal Error: " + (err.message || err), 'error');
+        } else {
+          alert('Billing Portal Error: ' + (err.message || err));
+        }
         return { success: false, error: err.message };
       }
     },
