@@ -6775,12 +6775,24 @@
 
         // Simulate Barcode Scan in Worker Dashboard (with Target Location Lock + Offline Queue)
         async function simulateScan(expectedStatus = null) {
+            if (window._isScanInProgress) {
+                console.warn("Scan execution currently in flight. Ignoring duplicate trigger.");
+                return;
+            }
+            window._isScanInProgress = true;
+
             const barcodeInput = document.getElementById('scan-barcode');
             if (barcodeInput) sanitizeBarcodeAutofill(barcodeInput);
             const barcode = barcodeInput ? barcodeInput.value.trim() : '';
             const terminalOutput = document.getElementById('terminal-output');
 
+            // Clear barcode input immediately so fast secondary clicks or keypresses cannot re-scan before state settles
+            if (barcodeInput && !isLocationBarcodeFormat(barcode)) {
+                barcodeInput.value = "";
+            }
+
             if (!barcode || barcode.includes('@')) {
+                window._isScanInProgress = false;
                 if (barcodeInput && barcode.includes('@')) barcodeInput.value = '';
                 triggerScanFeedbackOverlay(false, "Please scan or enter a valid tote barcode.");
                 if (terminalOutput) {
@@ -6795,19 +6807,23 @@
 
             // Check if scanned input is a Location Barcode (Shelf/Bay/Locker)
             if (isLocationBarcodeFormat(barcode)) {
-                const lockSuccess = await setTargetLocationLock(barcode);
-                if (lockSuccess) {
-                    triggerScanFeedbackOverlay(true, `Target Location Locked: ${window.activeTargetLocationCode}`, barcode);
-                    if (terminalOutput) {
-                        terminalOutput.innerHTML = `
-                            <span class="text-indigo-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="map-pin" class="w-4 h-4 text-indigo-400"></i> Location Locked!</span>
-                            <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">Target Bay: ${window.activeTargetLocationCode} &bull; Ready for Tote Scans</span>
-                        `;
+                try {
+                    const lockSuccess = await setTargetLocationLock(barcode);
+                    if (lockSuccess) {
+                        triggerScanFeedbackOverlay(true, `Target Location Locked: ${window.activeTargetLocationCode}`, barcode);
+                        if (terminalOutput) {
+                            terminalOutput.innerHTML = `
+                                <span class="text-indigo-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="map-pin" class="w-4 h-4 text-indigo-400"></i> Location Locked!</span>
+                                <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">Target Bay: ${window.activeTargetLocationCode} &bull; Ready for Tote Scans</span>
+                            `;
+                        }
                     }
-                }
-                if (barcodeInput) {
-                    barcodeInput.value = "";
-                    barcodeInput.focus();
+                    if (barcodeInput) {
+                        barcodeInput.value = "";
+                        barcodeInput.focus();
+                    }
+                } finally {
+                    window._isScanInProgress = false;
                 }
                 return;
             }
@@ -7087,6 +7103,8 @@
                     if (typeof lucide !== 'undefined') lucide.createIcons();
                 }
                 if (barcodeInput) barcodeInput.focus();
+            } finally {
+                window._isScanInProgress = false;
             }
         }
 

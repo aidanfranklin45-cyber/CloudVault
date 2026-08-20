@@ -2219,7 +2219,9 @@ BEGIN
 
     IF v_target_loc IS NOT NULL THEN
       v_capacity := v_target_loc.capacity;
-    ELSIF p_location_code ILIKE '%ROOM%' OR p_location_code ILIKE '%STAGE%' OR p_location_code ILIKE '%LOCKER%' THEN
+    ELSIF p_location_code ILIKE '%ROOM%' OR p_location_code ILIKE '%STAGE%' THEN
+      v_capacity := 100;
+    ELSIF p_location_code ILIKE '%LOCKER%' THEN
       v_capacity := 1;
     ELSE
       v_capacity := 3;
