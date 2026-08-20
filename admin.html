@@ -1605,30 +1605,20 @@
                 </div>
             </div>
 
-            <!-- Employee Activity Monitoring (Restricted to assigned facility) -->
-            <div class="glass-panel p-6 rounded-3xl space-y-6">
-                <div class="flex items-center space-x-2 border-b border-gray-800 pb-4">
-                    <i data-lucide="users" class="w-5 h-5 text-blue-400"></i>
-                    <h3 class="font-bold text-white text-lg">Facility Employee Roster & Activity Logs</h3>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <!-- Local employee list -->
-                    <div class="space-y-4">
-                        <h4 class="text-xs font-bold uppercase text-gray-400 tracking-wider">Facility Roster</h4>
-                        <div class="space-y-3" id="roster-list">
-                            <!-- Populated dynamically -->
-                        </div>
+            <!-- Facility Staff & Personnel Directory Shortcut -->
+            <div class="glass-panel p-5 rounded-3xl border border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold border border-indigo-500/30">
+                        <i data-lucide="users" class="w-5 h-5"></i>
                     </div>
-                    <!-- Activity Feed -->
-                    <div class="space-y-4">
-                        <h4 class="text-xs font-bold uppercase text-gray-400 tracking-wider">Activity Feed (Last 10
-                            scans/actions)</h4>
-                        <div class="space-y-3" id="activity-log-list">
-                            <!-- Populated dynamically -->
-                        </div>
+                    <div>
+                        <h4 class="text-sm font-bold text-white">Facility Employee Roster &amp; Team Badges</h4>
+                        <p class="text-xs text-gray-400">Personnel rosters, 2D barcode badge passes, and market transfers are centrally managed in Facility Configuration.</p>
                     </div>
                 </div>
+                <a href="admin-facilities.html" onclick="localStorage.setItem('cloudvault_active_tab', 'staff')" class="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-white border border-indigo-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 whitespace-nowrap">
+                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i> Open Staff Directory &rarr;
+                </a>
             </div>
 
         </div>

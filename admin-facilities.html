@@ -926,7 +926,7 @@
                     </form>
                 </div>
 
-                <!-- Right Column: Active Facility Staff Roster -->
+                <!-- Right Column: Facility Employee Roster & Activity Logs (Exact Match to Design) -->
                 <div class="lg:col-span-7 glass-panel p-6 rounded-3xl space-y-6 border border-gray-800 shadow-2xl">
                     <div class="flex items-center justify-between border-b border-gray-800 pb-4">
                         <div class="flex items-center space-x-3">
@@ -934,29 +934,29 @@
                                 <i data-lucide="users" class="w-4.5 h-4.5"></i>
                             </div>
                             <div>
-                                <h3 class="font-bold text-white text-base">Facility Employee Directory</h3>
+                                <h3 class="font-bold text-white text-base">Facility Employee Roster &amp; Activity Logs</h3>
                                 <p class="text-[10px] text-gray-400 font-mono" id="staff-facility-subtext">Active staff allocated to this location</p>
                             </div>
                         </div>
                         <span class="text-xs font-mono text-indigo-400 bg-indigo-950/60 border border-indigo-500/30 px-3 py-1 rounded-xl" id="staff-count-badge">0 Employees</span>
                     </div>
 
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse text-xs font-mono">
-                            <thead>
-                                <tr class="text-gray-400 border-b border-gray-800 text-[10px] uppercase">
-                                    <th class="py-2.5 font-bold">Name</th>
-                                    <th class="py-2.5 font-bold">Email</th>
-                                    <th class="py-2.5 font-bold">Role</th>
-                                    <th class="py-2.5 font-bold">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="facility-staff-tbody" class="divide-y divide-gray-850/60 text-gray-300">
-                                <tr>
-                                    <td colspan="4" class="py-4 text-center text-gray-500 font-mono">Loading facility staff...</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div class="space-y-6">
+                        <!-- Local employee list -->
+                        <div class="space-y-3">
+                            <h4 class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Facility Roster</h4>
+                            <div class="space-y-3" id="roster-list">
+                                <!-- Populated dynamically with rich employee cards -->
+                            </div>
+                        </div>
+
+                        <!-- Activity Feed -->
+                        <div class="space-y-3 pt-4 border-t border-gray-800">
+                            <h4 class="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Activity Feed (Recent Facility Scans &amp; Events)</h4>
+                            <div class="space-y-2.5 max-h-60 overflow-y-auto pr-1" id="activity-log-list">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1522,6 +1522,12 @@
                                 loadSelectedFacilityConfig(activeFacilityId),
                                 loadUnlaunchedMarketWaitlists()
                             ]);
+
+                            const savedTab = localStorage.getItem('cloudvault_active_tab');
+                            if (savedTab) {
+                                localStorage.removeItem('cloudvault_active_tab');
+                                switchFacilityTab(savedTab);
+                            }
                         }
                     } catch (e) {
                         console.error("Config DOMInit failure:", e);
@@ -1718,59 +1724,632 @@
                 // FACILITY STAFF & TEAM PROVISIONING ENGINE
                 // ─────────────────────────────────────────────────────────────────────
                 async function loadFacilityStaffRoster(facilityId) {
-                    const tbody = document.getElementById('facility-staff-tbody');
+                    const rosterEl = document.getElementById('roster-list');
+                    const activityLogEl = document.getElementById('activity-log-list');
                     const countBadge = document.getElementById('staff-count-badge');
                     const subtext = document.getElementById('staff-facility-subtext');
-                    if (!tbody) return;
+                    if (!rosterEl) return;
 
                     const targetFacId = facilityId || activeFacilityId;
                     if (subtext) subtext.textContent = `Active staff allocated to ${currentLoadedFac?.name || targetFacId}`;
 
                     try {
-                        const { data: users, error } = await supabase
-                            .from('users')
-                            .select('id, name, email, role, assigned_facility_id, onboarding_status, created_at')
-                            .eq('assigned_facility_id', targetFacId)
-                            .neq('role', 'customer');
+                        // 1. Fetch facility employees and active badge records in parallel
+                        const [{ data: users, error: userErr }, { data: badges, error: badgeErr }] = await Promise.all([
+                            supabase
+                                .from('users')
+                                .select('id, name, email, role, assigned_facility_id, onboarding_status, created_at')
+                                .eq('assigned_facility_id', targetFacId)
+                                .neq('role', 'customer'),
+                            supabase
+                                .from('employee_badges')
+                                .select('id, user_id, issued_at, is_active')
+                                .eq('is_active', true)
+                        ]);
 
-                        if (error) throw error;
+                        if (userErr) throw userErr;
+
+                        const badgeMap = {};
+                        if (badges && badges.length > 0) {
+                            badges.forEach(b => { badgeMap[b.user_id] = b; });
+                        }
 
                         const staffList = (users || []).filter(u => u.role && u.role !== 'customer');
                         if (countBadge) countBadge.textContent = `${staffList.length} Employee${staffList.length === 1 ? '' : 's'}`;
 
                         if (staffList.length === 0) {
-                            tbody.innerHTML = `<tr><td colspan="4" class="py-4 text-center text-gray-500 font-mono">No staff currently assigned to this facility. Use the form on the left to provision employee accounts.</td></tr>`;
-                            return;
+                            rosterEl.innerHTML = `<div class="text-xs text-gray-500 text-center py-6 font-mono border border-dashed border-gray-800 rounded-2xl bg-gray-950/40">No staff currently assigned to this facility roster. Use the form on the left to provision employee accounts.</div>`;
+                        } else {
+                            rosterEl.innerHTML = staffList.map(emp => {
+                                const empBadge = badgeMap[emp.id];
+                                const hasBadge = !!empBadge;
+                                const badgeStatusHtml = hasBadge
+                                    ? `<span class="text-[9px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded font-mono font-bold flex items-center gap-1"><i data-lucide="shield-check" class="w-3 h-3"></i> BADGE ACTIVE</span>`
+                                    : `<span class="text-[9px] text-gray-400 bg-gray-900 border border-gray-800 px-2 py-0.5 rounded font-mono font-bold">NO BADGE</span>`;
+
+                                const initials = (emp.name || 'EM').substring(0, 2).toUpperCase();
+                                const facShortName = (emp.assigned_facility_id || 'unassigned').replace('facility_', '');
+
+                                return `
+                                    <div class="bg-gray-900/40 p-3.5 border border-gray-850 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-cyan-500/30 transition shadow-sm">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-indigo-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center font-black text-xs font-mono shadow-sm">
+                                                ${initials}
+                                            </div>
+                                            <div>
+                                                <h5 class="text-xs font-bold text-white flex items-center gap-1.5">
+                                                    ${escapeHtml(emp.name || 'Unnamed Staff')}
+                                                    <span class="text-[9px] text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded font-mono border border-cyan-500/20 font-bold">${escapeHtml(facShortName)}</span>
+                                                </h5>
+                                                <div class="flex items-center gap-2 mt-1">
+                                                    <p class="text-[10px] text-gray-300 font-extrabold uppercase font-mono">${(emp.role || 'staff').replace('_', ' ')}</p>
+                                                    ${badgeStatusHtml}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center flex-wrap gap-2">
+                                            <button onclick="openEmployeeBadgeModal('${emp.id}', '${escapeHtml(emp.name || '').replace(/'/g, "\\'")}', '${emp.role || ''}', '${emp.assigned_facility_id || ''}', ${hasBadge ? `'${empBadge.id}'` : 'null'}, '${emp.created_at || ''}')"
+                                                class="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 cursor-pointer"
+                                                title="Generate or print physical 2D barcode ID badge">
+                                                <i data-lucide="qr-code" class="w-3 h-3"></i> ${hasBadge ? 'Manage Badge' : 'Issue Badge'}
+                                            </button>
+                                            <button onclick="openStaffTransferModal('${emp.id}', '${escapeHtml(emp.name || '').replace(/'/g, "\\'")}', '${emp.assigned_facility_id || ''}', '${emp.role || ''}')"
+                                                class="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 cursor-pointer"
+                                                title="Transfer personnel to any active market/facility">
+                                                <i data-lucide="arrow-left-right" class="w-3 h-3"></i> Transfer Market
+                                            </button>
+                                            <span class="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded font-mono font-bold">ON SHIFT</span>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('');
                         }
 
-                        tbody.innerHTML = staffList.map(u => {
-                            const roleBadge = u.role === 'executive'
-                                ? `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-purple-500/10 text-purple-400 border border-purple-500/20">Executive</span>`
-                                : (u.role === 'warehouse_manager'
-                                    ? `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Manager</span>`
-                                    : `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20">Worker</span>`);
-                            return `
-                                <tr class="border-b border-gray-850/60 hover:bg-gray-900/40">
-                                    <td class="py-2.5 font-bold text-white flex items-center gap-2">
-                                        <span class="w-6 h-6 rounded-full bg-gray-800 text-gray-300 flex items-center justify-center text-[10px] uppercase font-mono">${(u.name || 'E').substring(0, 2)}</span>
-                                        <span>${escapeHtml(u.name || 'Unnamed Employee')}</span>
-                                    </td>
-                                    <td class="py-2.5 font-mono text-gray-300">${escapeHtml(u.email || '—')}</td>
-                                    <td class="py-2.5">${roleBadge}</td>
-                                    <td class="py-2.5">
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1"></span> Active
-                                        </span>
-                                    </td>
-                                </tr>
-                            `;
-                        }).join('');
+                        // 2. Fetch Activity Feed (Last 10 scans / fulfillment events for this facility)
+                        if (activityLogEl) {
+                            const { data: logs, error: logErr } = await supabase
+                                .from('access_requests')
+                                .select('id, uid, fulfillment_type, status, requested_at, target_date')
+                                .eq('facility_id', targetFacId)
+                                .order('requested_at', { ascending: false })
+                                .limit(10);
+
+                            if (logErr) throw logErr;
+
+                            if (logs && logs.length > 0) {
+                                activityLogEl.innerHTML = logs.map(log => {
+                                    const timeStr = log.requested_at ? new Date(log.requested_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'Recent';
+                                    const typeStr = log.fulfillment_type || 'staging';
+                                    return `
+                                        <div class="bg-gray-950/60 p-2.5 border border-gray-850 rounded-xl flex items-center justify-between text-xs font-mono">
+                                            <div class="flex items-center gap-2">
+                                                <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                                                <span class="text-gray-200 font-semibold uppercase text-[11px]">${escapeHtml(typeStr)} request status: <strong class="text-white">${escapeHtml(log.status)}</strong></span>
+                                            </div>
+                                            <span class="text-[10px] text-gray-400 font-mono">${timeStr} &bull; User ${log.uid ? log.uid.substring(0, 6) : 'Staff'}</span>
+                                        </div>
+                                    `;
+                                }).join('');
+                            } else {
+                                activityLogEl.innerHTML = `<div class="text-xs text-gray-500 text-center py-4 font-mono">No recent activity logs for this facility.</div>`;
+                            }
+                        }
+
+                        if (window.lucide) lucide.createIcons();
                     } catch (e) {
-                        console.error("Failed to load facility staff:", e);
-                        tbody.innerHTML = `<tr><td colspan="4" class="py-4 text-center text-red-400 font-mono">Error loading staff roster: ${escapeHtml(e.message)}</td></tr>`;
+                        console.error("Failed to load facility staff roster & activity:", e);
+                        rosterEl.innerHTML = `<div class="text-xs text-red-400 text-center py-4 font-mono">Error loading staff roster: ${escapeHtml(e.message)}</div>`;
                     }
                 }
                 window.loadFacilityStaffRoster = loadFacilityStaffRoster;
+
+                // ─────────────────────────────────────────────────────────────────────
+                // EMPLOYEE 2D BARCODE BADGE ISSUANCE ENGINE
+                // ─────────────────────────────────────────────────────────────────────
+                let activeBadgeTarget = null;
+
+                async function openEmployeeBadgeModal(userId, userName, userRole, facilityId, badgeId, createdAt) {
+                    const joinedDate = createdAt ? new Date(createdAt) : new Date();
+                    const joinedDateStr = joinedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+                    activeBadgeTarget = {
+                        userId,
+                        userName,
+                        userRole,
+                        facilityId: facilityId || activeFacilityId || 'unassigned',
+                        badgeId: badgeId || null,
+                        createdAt: createdAt || new Date().toISOString(),
+                        joinedDateStr: joinedDateStr,
+                        currentToken: null
+                    };
+
+                    document.getElementById('badge-staff-name').textContent = userName;
+                    document.getElementById('badge-staff-role').textContent = userRole.replace('_', ' ');
+                    document.getElementById('badge-staff-facility').textContent = (facilityId || activeFacilityId || 'unassigned').replace('facility_', '').toUpperCase();
+                    document.getElementById('badge-staff-joined').textContent = joinedDateStr;
+
+                    const statusEl = document.getElementById('badge-modal-status');
+                    const tokenBox = document.getElementById('badge-token-box');
+                    const qrPreview = document.getElementById('badge-qr-container');
+                    const revokeBtn = document.getElementById('badge-revoke-btn');
+                    const printBtn = document.getElementById('badge-print-btn');
+                    const issueBtn = document.getElementById('badge-issue-btn');
+
+                    qrPreview.innerHTML = '';
+                    tokenBox.classList.add('hidden');
+
+                    if (badgeId) {
+                        statusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full text-xs font-mono font-bold"><i data-lucide="shield-check" class="w-3.5 h-3.5"></i> ACTIVE BADGE ON FILE</span>`;
+                        revokeBtn.classList.remove('hidden');
+                        printBtn.classList.remove('hidden');
+                        issueBtn.textContent = 'Re-Issue New Badge Token';
+
+                        qrPreview.innerHTML = `
+                            <div class="text-center p-6 space-y-2">
+                                <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 flex items-center justify-center mx-auto">
+                                    <i data-lucide="shield" class="w-6 h-6"></i>
+                                </div>
+                                <p class="text-xs text-gray-300 font-semibold">Active Credential Enrolled</p>
+                                <p class="text-[10px] text-gray-400 font-mono">To print or regenerate, click Re-Issue or Print Badge below.</p>
+                            </div>
+                        `;
+                    } else {
+                        statusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full text-xs font-mono font-bold"><i data-lucide="alert-circle" class="w-3.5 h-3.5"></i> NO ACTIVE BADGE</span>`;
+                        revokeBtn.classList.add('hidden');
+                        printBtn.classList.add('hidden');
+                        issueBtn.textContent = 'Generate & Issue Badge';
+
+                        qrPreview.innerHTML = `
+                            <div class="text-center p-6 space-y-2 text-gray-400">
+                                <i data-lucide="qr-code" class="w-10 h-10 mx-auto text-gray-500"></i>
+                                <p class="text-xs font-mono">Click "Generate & Issue Badge" to enroll physical 2D barcode credentials.</p>
+                            </div>
+                        `;
+                    }
+
+                    document.getElementById('employee-badge-modal').classList.remove('hidden');
+                    if (window.lucide) lucide.createIcons();
+                }
+                window.openEmployeeBadgeModal = openEmployeeBadgeModal;
+
+                function closeEmployeeBadgeModal() {
+                    document.getElementById('employee-badge-modal').classList.add('hidden');
+                    activeBadgeTarget = null;
+                }
+                window.closeEmployeeBadgeModal = closeEmployeeBadgeModal;
+
+                async function generateAndIssueBadge() {
+                    if (!activeBadgeTarget) return;
+
+                    const issueBtn = document.getElementById('badge-issue-btn');
+                    const originalText = issueBtn.textContent;
+                    issueBtn.disabled = true;
+                    issueBtn.textContent = 'Securing Token...';
+
+                    try {
+                        const rawToken = typeof generateBadgeToken === 'function' ? generateBadgeToken() : `CV-AUTH-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+                        const tokenHash = typeof hashBadgeToken === 'function' ? await hashBadgeToken(rawToken) : rawToken;
+
+                        const { data, error } = await supabase.rpc('issue_employee_badge', {
+                            p_user_id: activeBadgeTarget.userId,
+                            p_token_hash: tokenHash,
+                            p_badge_label: `${activeBadgeTarget.userName} Primary Badge`
+                        });
+
+                        if (error) throw error;
+
+                        activeBadgeTarget.currentToken = rawToken;
+                        activeBadgeTarget.badgeId = data?.badge_id || 'active';
+
+                        const qrContainer = document.getElementById('badge-qr-container');
+                        qrContainer.innerHTML = `
+                            <div class="w-full max-w-lg mx-auto bg-slate-900 border-2 border-cyan-400 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4">
+                                <div class="flex items-center justify-between border-b-2 border-cyan-500/40 pb-2.5">
+                                    <span class="text-sm font-black text-cyan-300 tracking-wider uppercase flex items-center gap-2.5">
+                                        <img src="logo.png" alt="CloudVault Logo" class="w-6 h-6 object-contain rounded-lg shadow-sm">
+                                        <span>CLOUDVAULT ID &bull; SECURITY PASS</span>
+                                    </span>
+                                    <span class="text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-400 px-3 py-1 rounded-full uppercase tracking-wider">
+                                        AUTHORIZED 2D PASS
+                                    </span>
+                                </div>
+                                <div class="flex items-center justify-between gap-5">
+                                    <div class="space-y-1.5 flex-1">
+                                        <p class="text-2xl font-black text-white uppercase tracking-tight leading-tight">${escapeHtml(activeBadgeTarget.userName)}</p>
+                                        <span class="inline-block text-xs font-black text-cyan-200 bg-cyan-950/80 border border-cyan-500/40 px-2.5 py-0.5 rounded-lg uppercase tracking-wider">${activeBadgeTarget.userRole.replace('_', ' ')}</span>
+                                        <div class="text-xs font-mono text-gray-200 space-y-1 pt-1.5 border-t border-gray-800">
+                                            <p>FACILITY: <span class="text-white font-bold">${(activeBadgeTarget.facilityId || 'SEA-NORTH').replace('facility_', '').toUpperCase()}</span></p>
+                                            <p>JOINED: <span class="text-emerald-300 font-bold">${activeBadgeTarget.joinedDateStr}</span></p>
+                                        </div>
+                                    </div>
+                                    <div class="bg-white p-2.5 rounded-2xl border-2 border-cyan-400 shadow-xl shrink-0 flex items-center justify-center">
+                                        <div id="modal-live-qr"></div>
+                                    </div>
+                                </div>
+                                <div class="w-full max-w-[90%] mx-auto bg-white px-3 py-2 rounded-xl border border-gray-300 flex flex-col items-center justify-center shadow-inner">
+                                    <svg id="modal-live-barcode" class="w-full h-12" style="shape-rendering: crispEdges;"></svg>
+                                    <span class="text-[10px] font-mono font-bold text-gray-800 mt-0.5 tracking-wider">${rawToken}</span>
+                                </div>
+                            </div>
+                        `;
+
+                        new QRCode(document.getElementById('modal-live-qr'), {
+                            text: rawToken,
+                            width: 120,
+                            height: 120,
+                            correctLevel: 0
+                        });
+
+                        if (typeof JsBarcode === 'function') {
+                            try {
+                                JsBarcode('#modal-live-barcode', rawToken, {
+                                    format: "CODE128",
+                                    width: 2.0,
+                                    height: 38,
+                                    displayValue: false,
+                                    margin: 8,
+                                    background: "#ffffff",
+                                    lineColor: "#000000"
+                                });
+                            } catch (e) {}
+                        }
+
+                        const tokenBox = document.getElementById('badge-token-box');
+                        const tokenText = document.getElementById('badge-token-display');
+                        tokenText.textContent = rawToken;
+                        tokenBox.classList.remove('hidden');
+
+                        const statusEl = document.getElementById('badge-modal-status');
+                        statusEl.innerHTML = `<span class="inline-flex items-center gap-1 text-emerald-300 bg-emerald-500/20 border border-emerald-400 px-3 py-1 rounded-full text-xs font-mono font-extrabold animate-pulse"><i data-lucide="shield-check" class="w-4 h-4"></i> NEW BADGE ACTIVE</span>`;
+
+                        document.getElementById('badge-revoke-btn').classList.remove('hidden');
+                        document.getElementById('badge-print-btn').classList.remove('hidden');
+                        issueBtn.textContent = 'Re-Issue New Badge Token';
+
+                        await loadFacilityStaffRoster(activeBadgeTarget.facilityId);
+                    } catch (err) {
+                        console.error("Badge issuance error:", err);
+                        alert("Failed to issue badge: " + (err.message || err));
+                    } finally {
+                        issueBtn.disabled = false;
+                        if (window.lucide) lucide.createIcons();
+                    }
+                }
+                window.generateAndIssueBadge = generateAndIssueBadge;
+
+                async function handleRevokeBadge() {
+                    if (!activeBadgeTarget || !activeBadgeTarget.badgeId) {
+                        alert("No active badge to revoke.");
+                        return;
+                    }
+
+                    if (!confirm(`Are you sure you want to revoke badge credentials for ${activeBadgeTarget.userName}?`)) {
+                        return;
+                    }
+
+                    try {
+                        const { error } = await supabase.rpc('revoke_employee_badge', {
+                            p_badge_id: activeBadgeTarget.badgeId
+                        });
+
+                        if (error) throw error;
+
+                        alert(`✓ Badge revoked for ${activeBadgeTarget.userName}`);
+                        closeEmployeeBadgeModal();
+                        await loadFacilityStaffRoster(activeBadgeTarget.facilityId);
+                    } catch (err) {
+                        alert("Revocation failed: " + (err.message || err));
+                    }
+                }
+                window.handleRevokeBadge = handleRevokeBadge;
+
+                function printEmployeeBadgeCard() {
+                    if (!activeBadgeTarget) return;
+
+                    let tokenToPrint = activeBadgeTarget.currentToken;
+                    if (!tokenToPrint) {
+                        if (confirm("To print a physical badge, a verified token must be generated. Generate and print now?")) {
+                            generateAndIssueBadge().then(() => {
+                                setTimeout(() => triggerPhysicalBadgePrint(), 300);
+                            });
+                        }
+                        return;
+                    }
+
+                    triggerPhysicalBadgePrint();
+                }
+                window.printEmployeeBadgeCard = printEmployeeBadgeCard;
+
+                function triggerPhysicalBadgePrint() {
+                    const emp = activeBadgeTarget;
+                    const token = emp.currentToken;
+                    const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                    const facilityCode = (emp.facilityId || 'SEA-NORTH').replace('facility_', '').toUpperCase();
+                    const joinedStr = emp.joinedDateStr || 'Aug 2026';
+
+                    let iframe = document.getElementById('print-label-iframe');
+                    if (!iframe) {
+                        iframe = document.createElement('iframe');
+                        iframe.id = 'print-label-iframe';
+                        iframe.style.position = 'fixed';
+                        iframe.style.right = '0';
+                        iframe.style.bottom = '0';
+                        iframe.style.width = '0';
+                        iframe.style.height = '0';
+                        iframe.style.border = '0';
+                        iframe.style.visibility = 'hidden';
+                        document.body.appendChild(iframe);
+                    }
+
+                    const printHTML = `
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>CloudVault Employee Badge - ${emp.userName}</title>
+                            <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+                            <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+                            <style>
+                                @page { size: 3.375in 2.125in; margin: 0; }
+                                body {
+                                    margin: 0;
+                                    padding: 0;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                                    background: #000000;
+                                    color: #ffffff;
+                                    -webkit-print-color-adjust: exact;
+                                    print-color-adjust: exact;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    height: 100vh;
+                                }
+                                .badge-card {
+                                    width: 3.375in;
+                                    height: 2.125in;
+                                    background: #090d16;
+                                    border-radius: 10px;
+                                    border: 2.5px solid #00f2ff;
+                                    box-sizing: border-box;
+                                    padding: 10px 12px;
+                                    position: relative;
+                                    display: flex;
+                                    flex-direction: column;
+                                    justify-content: space-between;
+                                    overflow: hidden;
+                                }
+                                .badge-header {
+                                    display: flex;
+                                    justify-content: space-between;
+                                    align-items: center;
+                                    border-bottom: 2px solid #00f2ff;
+                                    padding-bottom: 4px;
+                                }
+                                .brand {
+                                    font-size: 11px;
+                                    font-weight: 900;
+                                    letter-spacing: 1.5px;
+                                    color: #00f2ff;
+                                    text-transform: uppercase;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 5px;
+                                }
+                                .brand img {
+                                    width: 14px;
+                                    height: 14px;
+                                    object-fit: contain;
+                                    border-radius: 3px;
+                                }
+                                .clearance-pill {
+                                    font-size: 7.5px;
+                                    font-weight: 900;
+                                    background: #10b981;
+                                    color: #000000;
+                                    padding: 2px 6px;
+                                    border-radius: 4px;
+                                    text-transform: uppercase;
+                                    letter-spacing: 0.5px;
+                                }
+                                .badge-body {
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: space-between;
+                                    gap: 8px;
+                                    margin-top: 2px;
+                                }
+                                .emp-info {
+                                    flex: 1;
+                                }
+                                .emp-name {
+                                    font-size: 15px;
+                                    font-weight: 900;
+                                    color: #ffffff;
+                                    margin: 0;
+                                    line-height: 1.1;
+                                    letter-spacing: -0.2px;
+                                    text-transform: uppercase;
+                                }
+                                .emp-role {
+                                    font-size: 8px;
+                                    font-weight: 900;
+                                    color: #00f2ff;
+                                    text-transform: uppercase;
+                                    letter-spacing: 0.5px;
+                                    margin-top: 1px;
+                                }
+                                .emp-meta {
+                                    font-size: 7px;
+                                    font-family: monospace;
+                                    color: #94a3b8;
+                                    margin-top: 3px;
+                                    line-height: 1.25;
+                                }
+                                .emp-meta b {
+                                    color: #ffffff;
+                                }
+                                .qr-wrap {
+                                    background: #ffffff;
+                                    padding: 3px;
+                                    border-radius: 6px;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                }
+                                .barcode-wrap {
+                                    background: #ffffff;
+                                    padding: 2px 4px;
+                                    border-radius: 4px;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    margin-top: 2px;
+                                }
+                                .barcode-svg {
+                                    width: 100%;
+                                    height: 26px;
+                                }
+                                .badge-footer {
+                                    display: flex;
+                                    justify-content: space-between;
+                                    align-items: center;
+                                    font-size: 6.5px;
+                                    font-family: monospace;
+                                    font-weight: 700;
+                                    color: #94a3b8;
+                                    border-top: 1px dashed rgba(255,255,255,0.3);
+                                    padding-top: 2px;
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="badge-card">
+                                <div class="badge-header">
+                                    <div class="brand">
+                                        <img src="logo.png" alt="CloudVault">
+                                        <span>CLOUDVAULT</span>
+                                    </div>
+                                    <div class="clearance-pill">AUTHORIZED 2D PASS</div>
+                                </div>
+                                <div class="badge-body">
+                                    <div class="emp-info">
+                                        <div class="emp-name">${escapeHtml(emp.userName)}</div>
+                                        <div class="emp-role">${escapeHtml(emp.userRole.replace('_', ' '))}</div>
+                                        <div class="emp-meta">
+                                            FACILITY: <b>${escapeHtml(facilityCode)}</b><br>
+                                            JOINED: <b>${escapeHtml(joinedStr)}</b><br>
+                                            ISSUED: <b>${escapeHtml(todayStr)}</b><br>
+                                            UID: <b>${escapeHtml(emp.userId.substring(0, 8))}...</b>
+                                        </div>
+                                    </div>
+                                    <div class="qr-wrap">
+                                        <div id="print-qr"></div>
+                                    </div>
+                                </div>
+                                <div class="barcode-wrap">
+                                    <svg id="print-barcode" class="barcode-svg"></svg>
+                                </div>
+                                <div class="badge-footer">
+                                    <span>SCAN TO ACCESS TERMINAL</span>
+                                    <span>${escapeHtml(token)}</span>
+                                </div>
+                            </div>
+                        </body>
+                        </html>
+                    `;
+
+                    const doc = iframe.contentWindow.document;
+                    doc.open();
+                    doc.write(printHTML);
+                    doc.close();
+
+                    const win = iframe.contentWindow;
+                    const printCheck = setInterval(() => {
+                        if (typeof win.QRCode === 'function' && typeof win.JsBarcode === 'function') {
+                            clearInterval(printCheck);
+                            const qrEl = win.document.getElementById('print-qr');
+                            if (qrEl) {
+                                new win.QRCode(qrEl, {
+                                    text: token,
+                                    width: 68,
+                                    height: 68,
+                                    correctLevel: 0
+                                });
+                            }
+                            try {
+                                win.JsBarcode(win.document.getElementById('print-barcode'), token, {
+                                    format: "CODE128",
+                                    width: 1.6,
+                                    height: 26,
+                                    displayValue: false,
+                                    margin: 6,
+                                    background: "#ffffff",
+                                    lineColor: "#000000"
+                                });
+                            } catch (e) {}
+
+                            setTimeout(() => {
+                                win.focus();
+                                win.print();
+                            }, 80);
+                        }
+                    }, 15);
+                }
+
+                // ─────────────────────────────────────────────────────────────────────
+                // STAFF TRANSFER & FACILITY REASSIGNMENT ENGINE
+                // ─────────────────────────────────────────────────────────────────────
+                let activeTransferStaffId = null;
+
+                async function openStaffTransferModal(empId, empName, currentFacilityId, currentRole) {
+                    activeTransferStaffId = empId;
+                    document.getElementById('transfer-staff-name').textContent = empName;
+
+                    const facSelect = document.getElementById('transfer-facility-select');
+                    const roleSelect = document.getElementById('transfer-role-select');
+                    if (roleSelect && currentRole) roleSelect.value = currentRole;
+
+                    try {
+                        const { data: facs } = await supabase.from('facilities').select('*');
+                        if (facSelect && facs) {
+                            facSelect.innerHTML = facs.map(f => `<option value="${f.id}" ${f.id === currentFacilityId ? 'selected' : ''}>${f.name} (${f.city || 'Active Market'})</option>`).join('');
+                        }
+                    } catch (e) {
+                        console.error("Failed to populate transfer facilities:", e);
+                    }
+
+                    document.getElementById('staff-transfer-modal').classList.remove('hidden');
+                }
+                window.openStaffTransferModal = openStaffTransferModal;
+
+                function closeStaffTransferModal() {
+                    document.getElementById('staff-transfer-modal').classList.add('hidden');
+                    activeTransferStaffId = null;
+                }
+                window.closeStaffTransferModal = closeStaffTransferModal;
+
+                async function confirmStaffTransfer() {
+                    if (!activeTransferStaffId) return;
+                    const newFacilityId = document.getElementById('transfer-facility-select').value;
+                    const newRole = document.getElementById('transfer-role-select').value;
+
+                    try {
+                        const { error } = await supabase.from('users')
+                            .update({
+                                assigned_facility_id: newFacilityId,
+                                role: newRole
+                            })
+                            .eq('id', activeTransferStaffId);
+
+                        if (error) throw error;
+
+                        alert(`Transfer complete! Personnel reassigned to ${newFacilityId}.`);
+                        closeStaffTransferModal();
+                        await loadFacilityStaffRoster(activeFacilityId);
+                    } catch (err) {
+                        alert("Transfer failed: " + err.message);
+                    }
+                }
+                window.confirmStaffTransfer = confirmStaffTransfer;
 
                 async function handleCreateEmployee(e) {
                     e.preventDefault();
@@ -4296,6 +4875,128 @@
                     </div>
                 </div>
             </div>
+
+    <!-- Employee 2D Barcode Badge Issuance & Management Modal -->
+    <div id="employee-badge-modal"
+        class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div
+            class="glass-panel max-w-xl w-full p-6 sm:p-7 rounded-3xl border-2 border-indigo-500/50 shadow-[0_0_50px_rgba(99,102,241,0.3)] space-y-5 relative overflow-hidden bg-gray-950">
+            <div class="flex items-center justify-between border-b border-gray-750 pb-4">
+                <div class="flex items-center space-x-3">
+                    <img src="logo.png" alt="CloudVault Logo" class="w-9 h-9 object-contain rounded-xl border border-indigo-400/40 shadow-sm shadow-indigo-500/20">
+                    <div>
+                        <h3 class="font-extrabold text-white text-base">Employee 2D Barcode Badge ID</h3>
+                        <p class="text-xs text-gray-300 font-mono">Silent hardware scan-to-login credential management</p>
+                    </div>
+                </div>
+                <button onclick="closeEmployeeBadgeModal()" class="text-gray-300 hover:text-white p-1 transition cursor-pointer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Employee Info Header Card -->
+            <div class="bg-gray-900 p-4 rounded-2xl border border-gray-700 flex items-center justify-between">
+                <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                        <h4 class="text-lg font-black text-white uppercase tracking-tight" id="badge-staff-name">—</h4>
+                        <span class="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-400" id="badge-staff-role">—</span>
+                    </div>
+                    <div class="flex items-center gap-3 text-xs text-gray-300 font-mono">
+                        <p>Facility: <span id="badge-staff-facility" class="text-cyan-300 font-bold">—</span></p>
+                        <span>•</span>
+                        <p>Joined: <span id="badge-staff-joined" class="text-emerald-300 font-bold">—</span></p>
+                    </div>
+                </div>
+                <div id="badge-modal-status">
+                    <!-- Status pill injected here -->
+                </div>
+            </div>
+
+            <!-- QR Preview Matrix Container -->
+            <div class="bg-gray-900/60 rounded-2xl border border-gray-700 p-5 flex flex-col items-center justify-center min-h-[190px]" id="badge-qr-container">
+                <!-- Live QR or prompt injected here -->
+            </div>
+
+            <!-- Raw Token Preview Box -->
+            <div id="badge-token-box" class="hidden bg-black/80 p-3 rounded-xl border border-cyan-400 text-center space-y-1">
+                <p class="text-[10px] text-gray-300 uppercase font-extrabold tracking-wider">High-Entropy Encoded Token</p>
+                <p class="text-xs font-mono font-black text-cyan-300 tracking-wider select-all" id="badge-token-display">—</p>
+            </div>
+
+            <!-- Modal Action Buttons -->
+            <div class="space-y-3 pt-2 border-t border-gray-750">
+                <div class="grid grid-cols-2 gap-3">
+                    <button type="button" id="badge-issue-btn" onclick="generateAndIssueBadge()"
+                        class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-3 rounded-xl text-xs transition shadow-lg shadow-indigo-600/40 flex items-center justify-center gap-1.5 cursor-pointer">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i> Generate &amp; Issue Badge
+                    </button>
+                    <button type="button" id="badge-print-btn" onclick="printEmployeeBadgeCard()"
+                        class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold py-3 rounded-xl text-xs transition shadow-lg shadow-cyan-600/40 flex items-center justify-center gap-1.5 cursor-pointer">
+                        <i data-lucide="printer" class="w-4 h-4"></i> Print Badge ID Card
+                    </button>
+                </div>
+                <div class="flex items-center justify-between pt-1">
+                    <button type="button" id="badge-revoke-btn" onclick="handleRevokeBadge()"
+                        class="text-red-400 hover:text-red-300 text-xs font-extrabold transition flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-red-500/10 border border-transparent hover:border-red-500/30 cursor-pointer">
+                        <i data-lucide="shield-off" class="w-4 h-4"></i> Revoke Active Badge
+                    </button>
+                    <button type="button" onclick="closeEmployeeBadgeModal()"
+                        class="bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold px-4 py-2 rounded-xl text-xs transition border border-gray-700 cursor-pointer">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Staff Reassignment & Market Transfer Modal -->
+    <div id="staff-transfer-modal"
+        class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div
+            class="glass-panel max-w-md w-full p-6 rounded-3xl border border-cyan-500/30 shadow-[0_0_50px_rgba(0,242,255,0.15)] space-y-6 relative overflow-hidden">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="arrow-left-right" class="w-5 h-5 text-cyan-400"></i>
+                    <h3 class="font-bold text-white text-lg">Employee Facility Reassignment</h3>
+                </div>
+                <button onclick="closeStaffTransferModal()" class="text-gray-400 hover:text-white p-1 transition cursor-pointer"><i
+                        data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <div class="space-y-4">
+                <div class="bg-gray-950/60 p-3.5 rounded-2xl border border-gray-800 space-y-1">
+                    <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Personnel Name</p>
+                    <p class="text-sm font-bold text-cyan-300 font-mono" id="transfer-staff-name">—</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-400 mb-2">Destination Market /
+                        Facility</label>
+                    <select id="transfer-facility-select"
+                        class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 text-sm text-white font-semibold focus:border-cyan-500 outline-none">
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-400 mb-2">Operational Role</label>
+                    <select id="transfer-role-select"
+                        class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 text-sm text-white font-semibold focus:border-cyan-500 outline-none">
+                        <option value="warehouse_worker">Warehouse Worker</option>
+                        <option value="warehouse_manager">Warehouse Manager</option>
+                        <option value="executive">Executive</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-2 border-t border-gray-800">
+                <button type="button" onclick="closeStaffTransferModal()"
+                    class="w-1/2 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold py-3 rounded-xl text-sm transition cursor-pointer">Cancel</button>
+                <button type="button" onclick="confirmStaffTransfer()"
+                    class="w-1/2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-cyan-600/30 cursor-pointer">Confirm
+                    Transfer</button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>
