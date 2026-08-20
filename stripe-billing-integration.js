@@ -1375,41 +1375,57 @@
           creators: [],
           promoCodes: [],
           redemptions: [],
-          metrics: { totalRevenue: 0, totalCommission: 0, pendingPayouts: 0, activeCodes: 0 }
+          payouts: [],
+          metrics: { totalRevenue: 0, totalCommission: 0, pendingPayouts: 0, activeCodes: 0, totalPaid: 0 }
         };
       }
 
       try {
-        const [creatorsRes, promosRes, redemptionsRes] = await Promise.all([
+        const [creatorsRes, promosRes, redemptionsRes, payoutsRes] = await Promise.all([
           sb.from('creators').select('*').order('created_at', { ascending: false }),
           sb.from('promo_codes').select('*, creators(name, handle, email)').order('created_at', { ascending: false }),
-          sb.from('promo_redemptions').select('*, creators(name, handle)').order('created_at', { ascending: false }).limit(50)
+          sb.from('promo_redemptions').select('*, promo_codes(id, code, customer_discount_pct, commission_rate_pct, is_active), creators(id, name, handle, email)').order('created_at', { ascending: false }),
+          sb.from('creator_payouts').select('*').order('created_at', { ascending: false })
         ]);
 
         const creators = creatorsRes.data || [];
         const promoCodes = promosRes.data || [];
         const redemptions = redemptionsRes.data || [];
+        const payouts = payoutsRes.data || [];
 
-        let totalRevenue = redemptions.reduce((sum, r) => sum + Number(r.invoice_gross_amount || 0), 0);
-        let totalCommission = redemptions.reduce((sum, r) => sum + Number(r.commission_amount || 0), 0);
-        let totalPaid = redemptions.filter(r => r.payout_status === 'PAID').reduce((sum, r) => sum + Number(r.commission_amount || 0), 0);
-        let pendingPayouts = redemptions.filter(r => r.payout_status === 'PENDING').reduce((sum, r) => sum + Number(r.commission_amount || 0), 0);
+        // Attributed Gross Volume (sum of gross_amount / invoice_gross_amount from redemptions)
+        let totalRevenue = redemptions.reduce((sum, r) => sum + Number(r.gross_amount ?? r.invoice_gross_amount ?? 0), 0);
+        
+        // Lifetime Commission Accrued (sum of creator_commission_amount / commission_amount)
+        let totalCommission = redemptions.reduce((sum, r) => sum + Number(r.creator_commission_amount ?? r.commission_amount ?? 0), 0);
+        
+        // Total Commission Paid
+        let totalPaid = payouts.filter(p => p.status === 'PAID' || p.status === 'completed' || p.status === 'succeeded').reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        if (totalPaid === 0) {
+          totalPaid = redemptions.filter(r => r.payout_status === 'PAID').reduce((sum, r) => sum + Number(r.creator_commission_amount ?? r.commission_amount ?? 0), 0);
+          if (totalPaid === 0) {
+            totalPaid = creators.reduce((sum, c) => sum + Number(c.total_commission_paid || 0), 0);
+          }
+        }
 
         if (totalRevenue === 0 && creators.length > 0) {
           creators.forEach(c => {
             totalRevenue += Number(c.total_attributed_revenue || 0);
             totalCommission += Number(c.total_commission_earned || 0);
-            totalPaid += Number(c.total_commission_paid || 0);
           });
-          pendingPayouts = Math.max(0, totalCommission - totalPaid);
         }
 
-        const activeCodes = promoCodes.filter(p => p.is_active).length;
+        // Pending Payouts (accrued minus paid payouts)
+        const pendingPayouts = Math.max(0, totalCommission - totalPaid);
+
+        // Active Creator Codes count
+        const activeCodes = promoCodes.filter(p => p.is_active !== false).length;
 
         return {
           creators,
           promoCodes,
           redemptions,
+          payouts,
           metrics: {
             totalRevenue,
             totalCommission,
@@ -1426,7 +1442,86 @@
           creators: [],
           promoCodes: [],
           redemptions: [],
-          metrics: { totalRevenue: 0, totalCommission: 0, pendingPayouts: 0, activeCodes: 0 }
+          payouts: [],
+          metrics: { totalRevenue: 0, totalCommission: 0, pendingPayouts: 0, activeCodes: 0, totalPaid: 0 }
+        };
+      }
+    },
+
+    /**
+     * Fetches live Stripe telemetry: webhook events stream, failed/dunning invoices, charges, refunds.
+     */
+    fetchStripeTelemetryData: async function () {
+      const sb = global.supabase;
+      if (!sb) {
+        return {
+          events: [],
+          failedInvoices: [],
+          refunds: [],
+          charges: [],
+          metrics: { failedCount: 0, failedAmount: 0, webhookCount: 0, refundsCount: 0, refundsAmount: 0 }
+        };
+      }
+
+      try {
+        const [eventsRes, invoicesRes, chargesRes] = await Promise.all([
+          sb.from('stripe_webhook_events').select('*').order('created_at', { ascending: false }).limit(25),
+          sb.from('invoices').select('*').order('created_at', { ascending: false }),
+          sb.from('charges').select('*').order('charged_at', { ascending: false })
+        ]);
+
+        const events = eventsRes.data || [];
+        const invoices = invoicesRes.data || [];
+        const charges = chargesRes.data || [];
+
+        // Failed / Dunning invoices
+        const failedInvoices = invoices.filter(inv => {
+          const status = (inv.payment_status || '').toLowerCase();
+          return status === 'failed' || status === 'overdue' || status === 'unpaid' || status === 'requires_payment_method' || StripeBillingIntegration.isOverdue(inv);
+        });
+
+        // Also check if any failed charge events exist in webhook logs
+        const failedEvents = events.filter(e => e.event_type === 'invoice.payment_failed' || e.event_type === 'charge.failed');
+
+        const failedAmount = failedInvoices.reduce((sum, inv) => sum + Number(inv.amount_due || inv.total_amount || inv.subtotal || 0), 0);
+
+        // Refunds from charges table or charge.refunded webhook events
+        const refundCharges = charges.filter(c => (c.status || '').toLowerCase() === 'refunded');
+        const refundEvents = events.filter(e => e.event_type === 'charge.refunded' || e.event_type === 'charge.refund.updated');
+        
+        let refundsAmount = refundCharges.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+        if (refundsAmount === 0 && refundEvents.length > 0) {
+          refundEvents.forEach(e => {
+            const amt = e.payload?.data?.object?.amount_refunded || e.payload?.data?.object?.amount || 0;
+            refundsAmount += Number(amt) / 100;
+          });
+        }
+
+        const refundsCount = Math.max(refundCharges.length, refundEvents.length);
+
+        return {
+          events,
+          failedInvoices,
+          failedEvents,
+          refundCharges,
+          refundEvents,
+          charges,
+          metrics: {
+            failedCount: failedInvoices.length,
+            failedAmount,
+            webhookCount: events.length,
+            refundsCount,
+            refundsAmount
+          }
+        };
+      } catch (err) {
+        console.error('[StripeBillingIntegration] Error fetching Stripe telemetry data:', err);
+        return {
+          events: [],
+          failedInvoices: [],
+          refunds: [],
+          charges: [],
+          metrics: { failedCount: 0, failedAmount: 0, webhookCount: 0, refundsCount: 0, refundsAmount: 0 }
         };
       }
     },
