@@ -2504,6 +2504,11 @@
                     supabase.from('metadata').select('*').eq('id', 'funnel_metrics').maybeSingle()
                 ]);
 
+                const facilities = facsRes.data || [];
+                const operationalZones = zonesRes.data || [];
+                const inventory = invRes.data || [];
+                const accessRequests = reqsRes.data || [];
+                const subscriptions = subsRes.data || [];
                 const staffUsers = usersRes.data || [];
                 const badges = badgesRes.data || [];
                 const funnel = funnelRes.data || null;
@@ -8071,6 +8076,11 @@
             if (subsMoMEl) subsMoMEl.textContent = `+${subsMoMDelta}%`;
 
             // 4. Tier Revenue Contribution & Yield Breakdown (Tiers 1-4)
+            const targetFacilityId = document.getElementById('global-facility-select')?.value || 
+                                     document.getElementById('exec-facility-select')?.value || 
+                                     document.getElementById('manager-facility-select')?.value || 
+                                     window.currentSelectedFacilityId || 
+                                     (facilities[0]?.id) || '';
             const targetFac = facilities.find(f => f.id === targetFacilityId) || facilities[0] || {};
             const dynT1 = Number(targetFac.tier1_rate) || 0;
             const dynT2 = Number(targetFac.tier2_rate) || 0;
