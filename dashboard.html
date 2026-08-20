@@ -1914,11 +1914,10 @@
                         );
                     }
 
-                    // If not matched by explicit IDs, use additional_totes count or newly added totes
+                    // If not matched by explicit IDs, match genuinely unactivated or staging/dispatch totes
                     const expectedCount = Number(req.additional_totes) || (currentProfile?.active_totes_held || 25);
                     if (reqTotes.length === 0) {
                         const additionalCandidates = (currentInventory || []).filter(item => 
-                            (item.label || '').toLowerCase().includes('additional') ||
                             item.activated === false ||
                             ['pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery'].includes(item.status)
                         );
@@ -4699,6 +4698,9 @@
             const now = new Date();
             const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
             let targetDate = targetDateStr || todayStr;
+            if (targetDate < todayStr) {
+                targetDate = todayStr;
+            }
             const currentHour = now.getHours();
 
             if (targetDate === todayStr) {
