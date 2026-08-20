@@ -453,6 +453,11 @@
                                 <input type="number" id="conf-staging-rooms" oninput="onStagingRoomsInputChange()"
                                     class="fspec-input w-full" placeholder="—">
                             </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Valet Trucks / Bays</label>
+                                <input type="number" min="1" max="10" id="conf-valet-trucks" oninput="onValetTrucksInputChange()"
+                                    class="fspec-input w-full" placeholder="3">
+                            </div>
                         </div>
                     </div>
 
@@ -812,6 +817,46 @@
                             <button onclick="generateStagingLocationsUI()" id="btn-generate-staging-locations"
                                 class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider">
                                 <i data-lucide="plus-circle" class="w-4 h-4"></i> Generate &amp; Sync Staging Rooms
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Generator Sub-Panel 3: Valet Dispatch Fleet Builder (Truck Locations) -->
+                <div class="space-y-4 pt-4 border-t border-gray-800">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-extrabold uppercase text-white tracking-wider flex items-center gap-2">
+                            <i data-lucide="truck" class="w-3.5 h-3.5 text-orange-400"></i> Valet Dispatch Fleet &amp; Truck Bays Builder
+                        </h4>
+                        <span class="text-[10px] text-gray-500 font-mono">Format: VALET-TRUCK-{A, B, C...}</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Truck Location Prefix</label>
+                            <input type="text" id="conf-valet-truck-prefix" oninput="updateValetTrucksPreviewText()"
+                                class="fspec-input w-full font-mono text-orange-300" placeholder="VALET-TRUCK" value="VALET-TRUCK">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Total Active Valet Trucks / Loading Bays</label>
+                            <input type="number" min="1" max="15" id="conf-valet-truck-bays"
+                                oninput="updateValetTrucksPreviewText()" class="fspec-input w-full font-mono text-orange-300"
+                                placeholder="3" value="3">
+                        </div>
+                    </div>
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                        <p class="text-[11px] text-gray-400 font-mono" id="conf-valet-trucks-preview-text">
+                            Preview: <strong class="text-white">3</strong> valet dispatch trucks (Format: <span
+                                class="text-orange-400 font-bold">VALET-TRUCK-A, VALET-TRUCK-B, VALET-TRUCK-C</span>)
+                        </p>
+                        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                            <button type="button" id="btn-print-valet-barcodes" onclick="window.openPrintLocationLabelModal('DISPATCH')"
+                                class="w-full sm:w-auto bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 border border-orange-500/40 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md">
+                                <i data-lucide="printer" class="w-4 h-4 text-orange-400"></i>
+                                <span>🖨️ Print Truck Barcodes</span>
+                            </button>
+                            <button onclick="generateValetTruckLocationsUI()" id="btn-generate-valet-truck-locations"
+                                class="w-full sm:w-auto bg-orange-600 hover:bg-orange-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-orange-600/20 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider">
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i> Generate &amp; Sync Valet Trucks
                             </button>
                         </div>
                     </div>
@@ -1498,6 +1543,15 @@
                     }
                     updateStagingPreviewText();
 
+                    const actualValetTrucks = (fac.num_valet_trucks !== null && fac.num_valet_trucks !== undefined) ? fac.num_valet_trucks : ((fac.valet_trucks !== null && fac.valet_trucks !== undefined) ? fac.valet_trucks : 3);
+                    if (document.getElementById('conf-valet-trucks')) {
+                        document.getElementById('conf-valet-trucks').value = actualValetTrucks;
+                    }
+                    if (document.getElementById('conf-valet-truck-bays')) {
+                        document.getElementById('conf-valet-truck-bays').value = actualValetTrucks;
+                    }
+                    updateValetTrucksPreviewText();
+
                     // Populate Expenses
                     document.getElementById('conf-rent').value = (fac.monthly_rent_cost !== null && fac.monthly_rent_cost !== undefined) ? fac.monthly_rent_cost : 8500;
                     document.getElementById('conf-labor').value = (fac.monthly_labor_cost !== null && fac.monthly_labor_cost !== undefined) ? fac.monthly_labor_cost : 14000;
@@ -1609,9 +1663,10 @@
                         const totalCount = locationList.length;
                         const vaultList = locationList.filter(l => l.zone_type === 'VAULT');
                         const stagingList = locationList.filter(l => l.zone_type === 'STAGING');
+                        const dispatchList = locationList.filter(l => l.zone_type === 'DISPATCH' || (l.identifier && l.identifier.includes('TRUCK')));
 
                         if (badge) {
-                            badge.textContent = `${totalCount} Locations (${vaultList.length} Vault + ${stagingList.length} Staging)`;
+                            badge.textContent = `${totalCount} Locations (${vaultList.length} Vault + ${stagingList.length} Staging + ${dispatchList.length} Trucks)`;
                         }
 
                         // Dynamically extract actual max aisles, bays, and shelves for this facility
@@ -1822,6 +1877,107 @@
                             updateStagingPreviewText();
                         }
                         loadStagingRoomSchedule(activeFacilityId, selectedStagingDate);
+                    }
+                }
+
+                function updateValetTrucksPreviewText() {
+                    const prefix = (document.getElementById('conf-valet-truck-prefix')?.value || 'VALET-TRUCK').trim().toUpperCase().replace(/[-_]+$/, '');
+                    const count = parseInt(document.getElementById('conf-valet-truck-bays')?.value, 10);
+
+                    const el = document.getElementById('conf-valet-trucks-preview-text');
+                    if (el) {
+                        if (count !== null && !isNaN(count) && count > 0) {
+                            const letters = Array.from({ length: count }, (_, i) => `${prefix}-${String.fromCharCode(65 + i)}`);
+                            const sample = letters.slice(0, 3).join(', ') + (count > 3 ? `... ${prefix}-${String.fromCharCode(64 + count)}` : '');
+                            el.innerHTML = `Preview: <strong class="text-white">${count}</strong> valet dispatch truck${count === 1 ? '' : 's'} (Format: <span class="text-orange-400 font-bold">${escapeHtml(sample)}</span>)`;
+                        } else {
+                            el.innerHTML = `Preview: <strong class="text-white">—</strong> valet trucks (Format: <span class="text-orange-400 font-bold">${escapeHtml(prefix)}-A</span>)`;
+                        }
+                    }
+                }
+
+                function onValetTrucksInputChange() {
+                    const val = parseInt(document.getElementById('conf-valet-trucks').value, 10);
+                    if (!isNaN(val) && val >= 0) {
+                        if (currentLoadedFac) {
+                            currentLoadedFac.num_valet_trucks = val;
+                            currentLoadedFac.valet_trucks = val;
+                        }
+                        const truckBaysInput = document.getElementById('conf-valet-truck-bays');
+                        if (truckBaysInput) {
+                            truckBaysInput.value = val;
+                            updateValetTrucksPreviewText();
+                        }
+                    }
+                }
+
+                async function generateValetTruckLocationsUI() {
+                    if (!currentLoadedFac || !currentLoadedFac.id) {
+                        alert("Please select a facility first.");
+                        return;
+                    }
+
+                    const prefix = (document.getElementById('conf-valet-truck-prefix')?.value || 'VALET-TRUCK').trim().toUpperCase().replace(/[-_]+$/, '');
+                    const count = parseInt(document.getElementById('conf-valet-truck-bays')?.value, 10) || 3;
+
+                    if (count < 1 || count > 20) {
+                        alert("Please specify a valid truck count between 1 and 20.");
+                        return;
+                    }
+
+                    const btn = document.getElementById('btn-generate-valet-truck-locations');
+                    const originalText = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Generating...`;
+
+                    try {
+                        const locations = [];
+                        for (let i = 0; i < count; i++) {
+                            const letter = String.fromCharCode(65 + i);
+                            const idCode = `${prefix}-${letter}`;
+                            locations.push({
+                                facility_id: currentLoadedFac.id,
+                                identifier: idCode,
+                                location_code: idCode,
+                                zone_type: 'DISPATCH',
+                                location_type: 'DISPATCH',
+                                capacity: 40,
+                                is_occupied: false
+                            });
+                        }
+
+                        const { error } = await supabase
+                            .from('warehouse_locations')
+                            .upsert(locations, { onConflict: 'facility_id,identifier' });
+
+                        if (error) throw error;
+
+                        // Also persist count to facilities table
+                        await supabase.from('facilities').update({
+                            valet_trucks: count,
+                            num_valet_trucks: count
+                        }).eq('id', currentLoadedFac.id);
+
+                        const confValetInput = document.getElementById('conf-valet-trucks');
+                        if (confValetInput) confValetInput.value = count;
+                        if (currentLoadedFac) {
+                            currentLoadedFac.num_valet_trucks = count;
+                            currentLoadedFac.valet_trucks = count;
+                        }
+
+                        if (typeof showToast === 'function') {
+                            showToast(`✅ Successfully synced ${count} Valet Trucks (${prefix}-A to ${prefix}-${String.fromCharCode(64 + count)})!`);
+                        } else {
+                            alert(`✅ Successfully synced ${count} Valet Trucks (${prefix}-A to ${prefix}-${String.fromCharCode(64 + count)})!`);
+                        }
+                        await loadWarehouseLocationCount(currentLoadedFac.id);
+                    } catch (err) {
+                        console.error("Failed to generate valet truck locations:", err);
+                        alert(`Error syncing valet truck locations: ${err.message || err}`);
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
                     }
                 }
 
@@ -2800,6 +2956,8 @@
                         tote_capacity: getNumVal('conf-tote-capacity', 2000),
                         num_staging_rooms: getNumVal('conf-staging-rooms', 2),
                         staging_rooms: getNumVal('conf-staging-rooms', 2),
+                        num_valet_trucks: getNumVal('conf-valet-trucks', 3),
+                        valet_trucks: getNumVal('conf-valet-trucks', 3),
                         monthly_rent_cost: getNumVal('conf-rent', 0),
                         monthly_labor_cost: getNumVal('conf-labor', 0),
                         monthly_utilities_cost: getNumVal('conf-utilities', 0),

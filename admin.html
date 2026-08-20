@@ -5487,10 +5487,18 @@
             const cleanCode = locCode.toUpperCase().trim();
             const targetFacId = facilityId || getSafeSavedFacilityId();
 
-            // 1. Standard operational dock & logistics staging hubs are always globally valid
+            // 1. Standard operational dock, valet dispatch fleet, and customer zones are always valid
             const standardDocks = ['INTAKE-PROCESSING', 'INTAKE', 'LOGISTICS-STAGE', 'LOGISTICS', 'DROP-OFF-BUFFER', 'DROP-OFF'];
             if (standardDocks.includes(cleanCode)) {
                 return { isValid: true, normalizedCode: cleanCode, zoneType: 'DOCK' };
+            }
+
+            if (cleanCode === 'CUSTOMER-PREMISES' || cleanCode === 'CUSTOMER-DELIVERED' || cleanCode === 'WITH-CUSTOMER') {
+                return { isValid: true, normalizedCode: 'CUSTOMER-PREMISES', zoneType: 'CUSTOMER' };
+            }
+
+            if (cleanCode.startsWith('VALET-TRUCK') || cleanCode.startsWith('VALET-BAY') || cleanCode.startsWith('VALET-LOADING') || cleanCode.includes('DISPATCH')) {
+                return { isValid: true, normalizedCode: cleanCode, zoneType: 'DISPATCH' };
             }
 
             // 2. Fetch existing locations from warehouse_locations table for this facility
