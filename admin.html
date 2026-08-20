@@ -4953,7 +4953,7 @@
                             : 'from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 border-amber-400/40';
 
                         const actionIcon = isValet ? 'truck' : (isIntakeProcessingTote ? 'zap' : 'archive-restore');
-                        const expectedScanStatus = isValet ? 'pending-dispatch' : 'pending-stage';
+                        const expectedScanStatus = isValet ? 'out-for-delivery' : 'staged';
 
                         return `
                             <div class="border-2 ${borderColor} rounded-3xl p-5 shadow-xl space-y-4 hover:border-amber-500/60 transition">
@@ -5093,7 +5093,7 @@
                                             <span>BATCH CHECK-OUT ALL ${totes.length} TOTES →</span>
                                         </button>
                                         ` : ''}
-                                        <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('staged')" class="w-full min-h-[60px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl border-2 border-blue-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                        <button onclick="document.getElementById('scan-barcode').value='${firstCode}';simulateScan('with-customer')" class="w-full min-h-[60px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl border-2 border-blue-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                             <i data-lucide="user-check" class="w-6 h-6"></i>
                                             <span>HAND OFF SINGLE TOTE (${firstCode}) →</span>
                                         </button>
@@ -6722,7 +6722,7 @@
                     error = res.error;
                 } 
                 // Event 2: Vault Pull to Staging or Dispatch
-                else if ((expectedStatus === 'staged' || expectedStatus === 'pending-dispatch') && (currentStatus === 'stored' || currentStatus === 'pending-stage')) {
+                else if ((expectedStatus === 'staged' || expectedStatus === 'out-for-delivery' || expectedStatus === 'pending-dispatch') && (currentStatus === 'stored' || currentStatus === 'pending-stage' || currentStatus === 'pending-dispatch')) {
                     const res = await supabase.rpc('process_vault_pull', {
                         p_tote_code: barcode,
                         p_target_staging_code: targetLoc,
@@ -6761,10 +6761,10 @@
 
                 let transitionDesc = `${nextStatus} [📍 ${locCode}]`;
                 if (nextStatus === 'pending-stage') transitionDesc = `Activated — Moved to Intake Zone [📍 ${locCode}]`;
-                if (nextStatus === 'staged') transitionDesc = `Moved to Staging Room Locker [📍 ${locCode}]`;
+                if (nextStatus === 'staged') transitionDesc = `Moved to Staging Room [📍 ${locCode}]`;
                 if (nextStatus === 'pending-dispatch') transitionDesc = `Queued for Driver Dispatch [📍 ${locCode}]`;
-                if (nextStatus === 'out-for-delivery') transitionDesc = `Loaded on Driver Truck [📍 ${locCode}]`;
-                if (nextStatus === 'with-customer') transitionDesc = `Delivered — With Customer [📍 Customer's Address]`;
+                if (nextStatus === 'out-for-delivery') transitionDesc = `Loaded on Driver Van [📍 ${locCode}]`;
+                if (nextStatus === 'with-customer') transitionDesc = `Delivered / With Customer [📍 ${locCode}]`;
                 if (nextStatus === 'stored') transitionDesc = `Returned & Shelved in Vault Bay [📍 ${locCode}]`;
 
                 // Dynamic Shelf Capacity Management (Lock remains until dynamic capacity reached)
@@ -6991,9 +6991,12 @@
 
         // Vault Pull to Staging helper with Target Room assignment
         async function executeVaultPullToStaging(toteCode, targetRoomNum, expectedStatus, jobId) {
-            const targetStagingLoc = (window.activeTargetLocationCode && window.activeTargetLocationCode.startsWith('ROOM-'))
-                ? window.activeTargetLocationCode
-                : `ROOM-${targetRoomNum || 1}`;
+            const isValet = expectedStatus === 'out-for-delivery' || expectedStatus === 'pending-dispatch';
+            const targetStagingLoc = isValet
+                ? (window.activeTargetLocationCode && (window.activeTargetLocationCode.includes('TRUCK') || window.activeTargetLocationCode.includes('BAY')) ? window.activeTargetLocationCode : 'VALET-TRUCK-A')
+                : ((window.activeTargetLocationCode && window.activeTargetLocationCode.startsWith('ROOM-'))
+                    ? window.activeTargetLocationCode
+                    : `ROOM-${targetRoomNum || 1}`);
             
             const prevLock = window.activeTargetLocationCode;
             window.activeTargetLocationCode = targetStagingLoc;
@@ -7001,7 +7004,8 @@
             const barcodeInput = document.getElementById('scan-barcode');
             if (barcodeInput) barcodeInput.value = toteCode;
             
-            await simulateScan(expectedStatus);
+            const resolvedExpectedStatus = isValet ? 'out-for-delivery' : 'staged';
+            await simulateScan(resolvedExpectedStatus);
             
             if (!prevLock) window.activeTargetLocationCode = null;
         }
