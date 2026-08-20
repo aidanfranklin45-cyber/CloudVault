@@ -1270,8 +1270,13 @@ BEGIN
     COALESCE(p_time_slot, '09:00 AM - 12:00 PM')
   );
 
-  -- If valet, generate immediate invoice for Valet Logistics Dispatch ONLY (Storage is billed pro-rata at month end)
-  IF p_logistics_type = 'valet_pickup' THEN
+  -- If valet, generate immediate invoice for Valet Logistics Dispatch ONLY if not already invoiced
+  IF p_logistics_type = 'valet_pickup' AND NOT EXISTS (
+    SELECT 1 FROM public.invoices 
+    WHERE uid = v_uid 
+      AND invoice_type = 'valet_delivery' 
+      AND created_at > NOW() - INTERVAL '5 minutes'
+  ) THEN
     v_inv_number := 'INV-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(FLOOR(RANDOM() * 900000 + 100000)::TEXT, 6, '0');
     v_txn_ref := 'TXN-VALET-' || LPAD(FLOOR(RANDOM() * 900000 + 100000)::TEXT, 6, '0');
 
