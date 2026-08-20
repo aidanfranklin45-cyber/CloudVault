@@ -2668,7 +2668,7 @@
                 const inventory = invRes.data || [];
                 const accessRequests = reqsRes.data || [];
                 const subscriptions = subsRes.data || [];
-                const staffUsers = usersRes.data || [];
+                const staffUsers = (usersRes.data || []).filter(u => u.role && u.role !== 'customer');
                 const badges = badgesRes.data || [];
                 const funnel = funnelRes.data || null;
 
@@ -3444,9 +3444,9 @@
                         .select('*')
                         .neq('role', 'customer')
                         .or(`assigned_facility_id.eq.${facId},role.eq.executive,assigned_facility_id.is.null`);
-                    employees = emps || [];
+                    employees = (emps || []).filter(e => e.role && e.role !== 'customer');
                 } else {
-                    employees = employees.filter(e => e.assigned_facility_id === facId || e.role === 'executive' || !e.assigned_facility_id);
+                    employees = employees.filter(e => e.role && e.role !== 'customer' && (e.assigned_facility_id === facId || e.role === 'executive' || !e.assigned_facility_id));
                 }
 
                 let badges = preloadedBadges;
