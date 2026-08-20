@@ -2756,108 +2756,144 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION public.process_tote_return(
   p_tote_code TEXT,
   p_target_location_code TEXT DEFAULT NULL,
-  p_staff_uid UUID DEFAULT NULL
+  p_staff_uid UUID DEFAULT NULL,
+  p_request_id UUID DEFAULT NULL
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
-  v_uid UUID;
-  v_item RECORD;
-  v_user_role public.user_role;
-  v_assigned_location_code TEXT;
-  v_capacity INT := 4;
-  v_current_count INT := 0;
-  v_target_loc RECORD;
+  v_uid               UUID;
+  v_item              RECORD;
+  v_target_loc        RECORD;
+  v_shelf_code        TEXT;
+  v_capacity          INT  := 3;
+  v_current_count     INT  := 0;
+  v_requests_closed   INT  := 0;
 BEGIN
-  v_uid := COALESCE(auth.uid(), p_staff_uid);
+  -- ── 1. Auth ───────────────────────────────────────────────────────────────
+  v_uid := COALESCE(p_staff_uid, auth.uid());
   IF v_uid IS NULL THEN
-    SELECT id INTO v_uid FROM public.users WHERE role IN ('warehouse_worker', 'warehouse_manager', 'executive') LIMIT 1;
+    RAISE EXCEPTION 'process_tote_return: unauthenticated — no staff_uid or session uid available';
   END IF;
 
-  IF v_uid IS NULL THEN
-    RAISE EXCEPTION 'Unauthenticated';
-  END IF;
-
-  SELECT role INTO v_user_role FROM public.users WHERE id = v_uid;
-  IF v_user_role NOT IN ('warehouse_worker', 'warehouse_manager', 'executive') THEN
-    RAISE EXCEPTION 'Access Denied: Staff clearance required';
-  END IF;
-
-  SELECT id, tote_code, status, uid, location_code, facility_id INTO v_item 
-  FROM public.inventory 
-  WHERE tote_code = p_tote_code LIMIT 1;
-
-  IF v_item IS NULL THEN
-    RAISE EXCEPTION 'Return Error: Tote % not found in inventory system', p_tote_code;
-  END IF;
-
-  -- Require explicit locked shelf/bay location
-  IF p_target_location_code IS NULL OR trim(p_target_location_code) = '' OR p_target_location_code IN ('CUSTOMER-PREMISES', 'CUSTOMER-DELIVERED', 'VALET-TRUCK-A', 'INTAKE-PROCESSING', 'DROP-OFF-BUFFER') THEN
-    RAISE EXCEPTION 'No Vault Shelf Locked: Please scan or select a destination shelf/bay barcode (e.g. A1-B01-S1 or V-A01-S01) before putting totes into storage.';
-  END IF;
-
-  v_assigned_location_code := trim(p_target_location_code);
-
-  -- Capacity Enforcement Check (Overfill Prevention)
-  SELECT id, COALESCE(capacity, 4) as capacity INTO v_target_loc
-  FROM public.warehouse_locations
-  WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
-    AND (identifier = v_assigned_location_code OR location_code = v_assigned_location_code)
+  -- ── 2. Fetch tote ─────────────────────────────────────────────────────────
+  SELECT * INTO v_item
+  FROM public.inventory
+  WHERE tote_code = p_tote_code
   LIMIT 1;
 
-  IF v_target_loc IS NOT NULL THEN
-    v_capacity := COALESCE(v_target_loc.capacity, 4);
-  ELSIF v_assigned_location_code ILIKE '%ROOM%' OR v_assigned_location_code ILIKE '%STAGE%' OR v_assigned_location_code ILIKE '%LOCKER%' THEN
-    v_capacity := 1;
-  ELSE
-    v_capacity := 4;
+  IF v_item IS NULL THEN
+    RAISE EXCEPTION 'process_tote_return: tote % not found in inventory', p_tote_code;
   END IF;
+
+  -- ── 3. Resolve target shelf ───────────────────────────────────────────────
+  v_shelf_code := NULLIF(TRIM(COALESCE(p_target_location_code, '')), '');
+
+  -- Reject non-vault pseudo-locations that must never be used as a return shelf
+  IF v_shelf_code IS NULL
+    OR v_shelf_code ILIKE 'CUSTOMER%'
+    OR v_shelf_code ILIKE 'VALET%'
+    OR v_shelf_code ILIKE 'INTAKE%'
+    OR v_shelf_code ILIKE 'ROOM%'
+    OR v_shelf_code ILIKE 'STAGE%'
+    OR v_shelf_code ILIKE 'TRUCK%'
+    OR v_shelf_code ILIKE 'DISPATCH%'
+  THEN
+    RAISE EXCEPTION
+      'process_tote_return: a physical vault shelf code is required (got: %). '
+      'ROOM/VALET/INTAKE locations are not valid return destinations.',
+      COALESCE(v_shelf_code, 'NULL');
+  END IF;
+
+  -- ── 4. Capacity check ─────────────────────────────────────────────────────
+  SELECT id, COALESCE(capacity, 3) AS capacity INTO v_target_loc
+  FROM public.warehouse_locations
+  WHERE (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
+    AND (identifier = v_shelf_code OR location_code = v_shelf_code)
+  LIMIT 1;
+
+  v_capacity := COALESCE(v_target_loc.capacity, 3);
 
   SELECT COUNT(*) INTO v_current_count
   FROM public.inventory
-  WHERE location_code = v_assigned_location_code
+  WHERE location_code = v_shelf_code
     AND (facility_id = v_item.facility_id OR v_item.facility_id IS NULL)
     AND status IN ('stored', 'staged', 'pending-stage')
-    AND id != v_item.id;
+    AND id <> v_item.id;
 
   IF v_current_count >= v_capacity THEN
-    RAISE EXCEPTION 'Shelf % is at FULL CAPACITY (%/% totes occupied). Maximum capacity for this shelf is % totes. Please lock another shelf.', v_assigned_location_code, v_current_count, v_capacity, v_capacity;
+    RAISE EXCEPTION
+      'process_tote_return: shelf % is at FULL CAPACITY (%/% totes). Please lock a different shelf.',
+      v_shelf_code, v_current_count, v_capacity;
   END IF;
 
+  -- ── 5. Move tote to vault storage ─────────────────────────────────────────
   UPDATE public.inventory
-  SET status = 'stored'::public.inventory_status,
-      location_code = v_assigned_location_code,
+  SET status        = 'stored'::public.inventory_status,
+      location_code = v_shelf_code,
       location_type = 'vault',
-      activated = true,
+      activated     = true,
       last_scanned_at = now(),
       last_scanned_by = v_uid,
-      updated_at = now()
+      updated_at      = now()
   WHERE id = v_item.id;
 
-  IF v_item.location_code IS NOT NULL AND v_item.location_code <> v_assigned_location_code THEN
+  -- ── 6. Update warehouse_locations occupancy ────────────────────────────────
+  -- Free old shelf if tote was previously on a different shelf
+  IF v_item.location_code IS NOT NULL AND v_item.location_code <> v_shelf_code THEN
     UPDATE public.warehouse_locations
-    SET is_occupied = false, assigned_tote_id = NULL
+    SET is_occupied = (
+      (SELECT COUNT(*) FROM public.inventory
+       WHERE location_code = v_item.location_code
+         AND status IN ('stored', 'staged', 'pending-stage'))
+      >= COALESCE(capacity, 3)
+    )
     WHERE (identifier = v_item.location_code OR location_code = v_item.location_code)
       AND (facility_id = v_item.facility_id OR v_item.facility_id IS NULL);
   END IF;
 
+  -- Mark new shelf as occupied if now at capacity
   UPDATE public.warehouse_locations
-  SET is_occupied = true, assigned_tote_id = v_item.id
-  WHERE (identifier = v_assigned_location_code OR location_code = v_assigned_location_code)
+  SET is_occupied    = ((v_current_count + 1) >= COALESCE(capacity, 3)),
+      assigned_tote_id = v_item.id
+  WHERE (identifier = v_shelf_code OR location_code = v_shelf_code)
     AND (facility_id = v_item.facility_id OR v_item.facility_id IS NULL);
 
-  UPDATE public.access_requests
-  SET status = 'completed'
-  WHERE uid = v_item.uid AND status = 'pending'
-    AND (requested_items IS NULL OR cardinality(requested_items) = 0 OR v_item.id = ANY(requested_items) OR (requested_tote_codes IS NOT NULL AND v_item.tote_code = ANY(requested_tote_codes)));
+  -- ── 7. Close the linked access_request ────────────────────────────────────
+  -- Works for both valet_delivery and staging fulfillment_types.
+  -- If a specific request_id is supplied, close only that one.
+  -- Otherwise match by tote code / item id so partial multi-tote orders are
+  -- handled correctly (only the request that actually listed this tote closes).
+  IF p_request_id IS NOT NULL THEN
+    UPDATE public.access_requests
+    SET status = 'returned-to-vault'
+    WHERE id = p_request_id
+      AND uid = v_item.uid
+      AND status IN ('pending', 'staged');
 
+    GET DIAGNOSTICS v_requests_closed = ROW_COUNT;
+  ELSE
+    UPDATE public.access_requests
+    SET status = 'returned-to-vault'
+    WHERE uid = v_item.uid
+      AND status IN ('pending', 'staged')
+      AND (
+        (requested_tote_codes IS NOT NULL AND p_tote_code = ANY(requested_tote_codes))
+        OR (requested_items IS NOT NULL AND v_item.id = ANY(requested_items))
+      );
+
+    GET DIAGNOSTICS v_requests_closed = ROW_COUNT;
+  END IF;
+
+  -- ── 8. Return payload ─────────────────────────────────────────────────────
   RETURN jsonb_build_object(
-    'success', true,
-    'event', 'TOTE_RETURNED',
-    'toteCode', p_tote_code,
-    'nextStatus', 'stored',
-    'locationCode', v_assigned_location_code,
-    'locationType', 'vault',
-    'customerUid', v_item.uid,
-    'message', 'Tote successfully returned and shelved in vault'
+    'success',          true,
+    'status',           'stored',
+    'nextStatus',       'stored',
+    'locationCode',     v_shelf_code,
+    'toteCode',         p_tote_code,
+    'currentOccupancy', v_current_count + 1,
+    'maxCapacity',      v_capacity,
+    'isFull',           (v_current_count + 1 >= v_capacity),
+    'requestsClosed',   v_requests_closed
   );
 END;
 $$ LANGUAGE plpgsql;
