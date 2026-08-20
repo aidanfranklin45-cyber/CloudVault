@@ -9746,11 +9746,15 @@
                     if (typeof lineItems === 'string') {
                         try { lineItems = JSON.parse(lineItems); } catch (e) { lineItems = []; }
                     }
+                    const hasMissingLine = Array.isArray(lineItems) && lineItems.some(li => {
+                        const d = (li.description || '').toLowerCase();
+                        return d.includes('missing') || d.includes('unreturned') || d.includes('replacement');
+                    });
                     const hasValetLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('valet'));
                     const hasStagingLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('staging') || (li.description || '').toLowerCase().includes('self-service'));
                     const hasStorageLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('storage') || (li.description || '').toLowerCase().includes('subscription'));
 
-                    if (rawType === 'unreturned_tote_fee' || rawType === 'missing_tote_fee' || rawType === 'missing_tote' || notes.includes('missing tote') || notes.includes('unreturned')) {
+                    if (rawType === 'unreturned_tote_fee' || rawType === 'missing_tote_fee' || rawType === 'missing_tote' || hasMissingLine || notes.includes('missing tote') || notes.includes('missing container') || notes.includes('unreturned')) {
                         return 'Missing Container Replacement Fee';
                     }
                     if (rawType === 'unlaunched_deposit' || notes.includes('deposit')) {
@@ -9784,7 +9788,7 @@
                         return 'Expedited Staging Access';
                     }
 
-                    if (rawType === 'subscription' || rawType === 'monthly_subscription' || hasStorageLine || subtotal > 0) {
+                    if (rawType === 'subscription' || rawType === 'monthly_subscription' || hasStorageLine) {
                         return 'Monthly Storage Plan';
                     }
 

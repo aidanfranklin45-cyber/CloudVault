@@ -277,6 +277,12 @@
             });
           }
 
+          // Calculate dynamic tax for this customer & facility
+          const taxInfo = await this.resolveTaxRate({ facilityId: facId, uid: userId, zipCode: user.active_zone });
+          const taxRate = Number(taxInfo.taxRate || 0);
+          const taxAmount = Math.round(fee * taxRate * 100) / 100;
+          const totalAfterTax = Math.round((fee + taxAmount) * 100) / 100;
+
           const nowIso = new Date().toISOString();
           const invNum = this.generateInvoiceNumber();
           const stripeInvId = stripeRes.stripeInvoiceId || `in_${Date.now()}`;
@@ -293,23 +299,25 @@
             customer_name: user.name || 'CloudVault Customer',
             customer_email: user.email || '',
             facility_id: facId,
-            invoice_type: 'one_time',
+            invoice_type: 'missing_tote_fee',
             payment_status: 'paid',
             subtotal: fee,
-            tax: 0.00,
-            total_amount: fee,
+            tax: taxAmount,
+            total_amount: totalAfterTax,
             amount_due: 0.00,
-            amount_paid: fee,
+            amount_paid: totalAfterTax,
             amount_remaining: 0.00,
             payment_method: 'stripe',
             transaction_reference: stripeRes.paymentIntentId || stripeInvId,
-            line_items: [{
-              id: 'li_missing_' + Date.now(),
-              description: `Missing Container Replacement Fee — ${code}`,
-              amount: fee,
-              quantity: 1,
-              unit_amount: fee
-            }],
+            line_items: [
+              {
+                id: 'li_missing_' + Date.now(),
+                description: `Missing Container Replacement Fee — ${code}`,
+                amount: fee,
+                quantity: 1,
+                unit_amount: fee
+              }
+            ],
             paid_at: nowIso,
             created_at: nowIso
           };

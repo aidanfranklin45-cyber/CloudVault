@@ -5559,18 +5559,21 @@
                     const rawType = (inv.invoice_type || inv.invoiceType || inv.charge_type || '').toLowerCase().replace(/[\s-]/g, '_');
                     const delFee = Number(inv.delivery_fee || inv.deliveryFee || 0);
                     const surgeFee = Number(inv.surge_fee || inv.surgeFee || 0);
-                    const subtotal = Number(inv.subtotal || 0);
                     const notes = (inv.notes || '').toLowerCase();
                     
                     let lineItems = inv.line_items || inv.lineItems || [];
                     if (typeof lineItems === 'string') {
                         try { lineItems = JSON.parse(lineItems); } catch (e) { lineItems = []; }
                     }
+                    const hasMissingLine = Array.isArray(lineItems) && lineItems.some(li => {
+                        const d = (li.description || '').toLowerCase();
+                        return d.includes('missing') || d.includes('unreturned') || d.includes('replacement');
+                    });
                     const hasValetLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('valet'));
                     const hasStagingLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('staging') || (li.description || '').toLowerCase().includes('self-service'));
                     const hasStorageLine = Array.isArray(lineItems) && lineItems.some(li => (li.description || '').toLowerCase().includes('storage') || (li.description || '').toLowerCase().includes('subscription'));
 
-                    if (rawType === 'unreturned_tote_fee' || rawType === 'missing_tote_fee' || rawType === 'missing_tote' || notes.includes('missing tote') || notes.includes('unreturned')) {
+                    if (rawType === 'unreturned_tote_fee' || rawType === 'missing_tote_fee' || rawType === 'missing_tote' || hasMissingLine || notes.includes('missing tote') || notes.includes('missing container') || notes.includes('unreturned')) {
                         return 'Missing Container Replacement Fee';
                     }
                     if (rawType === 'subscription' || rawType === 'monthly_subscription' || rawType === 'initial_subscription' || hasStorageLine) {
@@ -5607,11 +5610,28 @@
                         return 'Expedited Staging Access';
                     }
 
-                    if (rawType === 'subscription' || rawType === 'monthly_subscription' || hasStorageLine || subtotal > 0) {
+                    if (rawType === 'subscription' || rawType === 'monthly_subscription' || hasStorageLine) {
                         return 'Monthly Storage Plan';
                     }
 
                     return rawType ? rawType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Service Invoice';
+                }
+
+                // Helper to resolve accurate after-tax total dynamically across all invoices
+                function resolveInvoiceAfterTaxTotal(inv) {
+                    if (!inv) return 0;
+                    const rawTotal = Number(inv.total_amount || 0);
+                    const subtotal = Number(inv.subtotal || 0);
+                    const delFee = Number(inv.delivery_fee || inv.deliveryFee || 0);
+                    const surgeFee = Number(inv.surge_fee || inv.surgeFee || 0);
+                    const tax = Number(inv.tax || 0);
+                    const discount = Number(inv.discount || 0);
+
+                    if (rawTotal > 0 && (tax === 0 || Math.abs(rawTotal - (subtotal + delFee + surgeFee + tax - discount)) < 0.05)) {
+                        return rawTotal;
+                    }
+                    const computed = (subtotal + delFee + surgeFee + tax - discount);
+                    return computed > 0 ? computed : rawTotal;
                 }
 
                 // Display official invoice records
@@ -5625,6 +5645,7 @@
                         const rawStatus = (inv.payment_status || 'paid').toLowerCase();
                         const invNum = inv.invoice_number || 'INV-2026-0000';
                         const typeLabel = resolveInvoiceTypeLabel(inv);
+                        const afterTaxTotal = resolveInvoiceAfterTaxTotal(inv);
 
                         const dueDateStr = window.StripeBillingIntegration 
                             ? window.StripeBillingIntegration.formatDueDate(inv) 
@@ -5666,7 +5687,7 @@
                                     <p class="text-[10px] text-gray-500 font-mono">Issued: ${dateStr} • ${invNum}</p>
                                 </div>
                                 <div class="text-right space-y-1.5 flex flex-col items-end">
-                                    <span class="text-sm font-black text-gray-900 block">$${Number(inv.total_amount || 0).toFixed(2)}</span>
+                                    <span class="text-sm font-black text-gray-900 block">$${afterTaxTotal.toFixed(2)}</span>
                                     <div class="flex items-center gap-1.5 flex-wrap justify-end">
                                         ${payButtonHtml}
                                         <button onclick="printUserInvoiceRecord('${invNum}')" class="text-[10px] bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold px-3 py-1.5 rounded-lg border border-indigo-200/80 transition flex items-center gap-1.5 cursor-pointer">
