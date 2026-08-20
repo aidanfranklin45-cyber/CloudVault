@@ -5985,9 +5985,7 @@
 
                 const currentFac = getSafeSavedFacilityId();
                 window.facMapState.activeFacilityId = currentFac;
-                if (preferredZone) {
-                    window.facMapState.activeTab = preferredZone;
-                }
+                const targetTab = (preferredZone || window.facMapState.activeTab || 'overview').toLowerCase();
                 window.facMapState.searchQuery = '';
                 const searchInput = document.getElementById('facmap-search-input');
                 if (searchInput) searchInput.value = '';
@@ -6003,7 +6001,7 @@
                         });
                         window.facMapState.occupiedMap = occ;
                     }
-                    renderFacilityMap();
+                    switchFacilityMapTab(targetTab);
                 } catch (e) {
                     console.error('[openFacilityMapModal] Error in initial renderFacilityMap:', e);
                 }
@@ -6079,11 +6077,12 @@
         }
 
         function switchFacilityMapTab(tabName) {
-            window.facMapState.activeTab = tabName;
+            const normalized = (tabName || 'overview').toLowerCase();
+            window.facMapState.activeTab = normalized;
             ['overview', 'vault', 'staging', 'docks'].forEach(t => {
                 const btn = document.getElementById(`facmap-tab-${t}`);
                 if (btn) {
-                    if (t === tabName) {
+                    if (t === normalized) {
                         btn.className = "px-3.5 py-1.5 text-xs font-bold rounded-xl border border-indigo-500/40 bg-indigo-600/20 text-indigo-300 transition flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap shadow-sm";
                     } else {
                         btn.className = "px-3.5 py-1.5 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white transition flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap";
@@ -6310,19 +6309,19 @@
             if (!container) return;
 
             const matrix = extractFacilityLayoutMatrix();
-            const tab = window.facMapState.activeTab;
+            const tab = (window.facMapState.activeTab || 'overview').toLowerCase();
 
-            if (tab === 'overview') {
-                container.innerHTML = renderOverviewBlueprint(matrix);
-            } else if (tab === 'vault') {
+            if (tab === 'vault') {
                 container.innerHTML = renderVaultAisleMatrix(matrix);
             } else if (tab === 'staging') {
                 container.innerHTML = renderStagingRoomsMatrix(matrix);
             } else if (tab === 'docks') {
                 container.innerHTML = renderDocksMatrix(matrix);
+            } else {
+                container.innerHTML = renderOverviewBlueprint(matrix);
             }
 
-            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
         }
 
         function renderOverviewBlueprint(matrix) {
