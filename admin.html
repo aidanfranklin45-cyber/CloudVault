@@ -2426,6 +2426,7 @@
             if (document.getElementById('rate-tier-4')) document.getElementById('rate-tier-4').value = (Number(fac.tier4_rate) || 1.00).toFixed(2);
             if (document.getElementById('valet-base')) document.getElementById('valet-base').value = Number(fac.valet_base) || 15.00;
             if (document.getElementById('valet-tote-adder')) document.getElementById('valet-tote-adder').value = Number(fac.valet_tote_adder) || 1.00;
+            if (document.getElementById('missing-tote-fee')) document.getElementById('missing-tote-fee').value = (Number(fac.missing_tote_fee) || 15.00).toFixed(2);
             if (typeof updateValetFormula === 'function') updateValetFormula();
         }
 
@@ -2637,6 +2638,7 @@
             const tier4 = parseFloat(document.getElementById('rate-tier-4')?.value) || 1.00;
             const valetBase = parseFloat(document.getElementById('valet-base')?.value) || 15.00;
             const valetAdder = parseFloat(document.getElementById('valet-tote-adder')?.value) || 1.00;
+            const missingFee = parseFloat(document.getElementById('missing-tote-fee')?.value) || 15.00;
 
             const { error } = await supabase.from('facilities').upsert({
                 id: facId,
@@ -2646,7 +2648,8 @@
                 tier3_rate: tier3,
                 tier4_rate: tier4,
                 valet_base: valetBase,
-                valet_tote_adder: valetAdder
+                valet_tote_adder: valetAdder,
+                missing_tote_fee: missingFee
             }, { onConflict: 'id' });
 
             if (error) {
