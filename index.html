@@ -1452,6 +1452,25 @@
         // Web Funnel Analytics Tracker using PostHog & Supabase Sync
         async function logMilestone(milestoneName, metadata = {}) {
             try {
+                // Check if user is staff/employee to avoid polluting customer funnel
+                if (typeof supabase !== 'undefined' && supabase) {
+                    try {
+                        const { data: sessionData } = await supabase.auth.getSession();
+                        const session = sessionData?.session;
+                        if (session?.user) {
+                            const userRole = session.user.user_metadata?.role;
+                            if (userRole && userRole !== 'customer') {
+                                return;
+                            }
+                        }
+                    } catch (authErr) {
+                        // ignore auth check error
+                    }
+                }
+                if (typeof localStorage !== 'undefined' && (localStorage.getItem('cloudvault_employee_role') || localStorage.getItem('cloudvault_is_staff'))) {
+                    return;
+                }
+
                 if (typeof posthog !== 'undefined' && posthog) {
                     posthog.capture(milestoneName, metadata);
                 }

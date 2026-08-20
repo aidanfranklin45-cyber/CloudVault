@@ -233,6 +233,10 @@
                 class="px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition text-gray-400 hover:text-white hover:bg-gray-900 border border-transparent cursor-pointer">
                 <span>🏗️</span> Location Engine
             </button>
+            <button id="tab-btn-staff" onclick="switchFacilityTab('staff')"
+                class="px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition text-gray-400 hover:text-white hover:bg-gray-900 border border-transparent cursor-pointer">
+                <span>👥</span> Staff &amp; Team Provisioning
+            </button>
         </div>
 
         <!-- Tab 1 Panel: Telemetry & Schedule -->
@@ -869,6 +873,95 @@
             </div>
         </div>
 
+        <!-- Tab 4 Panel: Staff & Team Provisioning -->
+        <div id="tab-panel-staff" class="hidden space-y-8">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <!-- Left Column: Add New Employee Form -->
+                <div class="lg:col-span-5 glass-panel p-6 rounded-3xl space-y-6 border border-blue-500/20 shadow-2xl">
+                    <div class="flex items-center space-x-3 border-b border-gray-800 pb-4">
+                        <div class="w-9 h-9 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold border border-blue-500/30">
+                            <i data-lucide="user-plus" class="w-4.5 h-4.5"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-white text-base">Provision Employee Account</h3>
+                            <p class="text-[10px] text-gray-400 font-mono">Create staff credential for active facility</p>
+                        </div>
+                    </div>
+
+                    <form id="create-employee-form" onsubmit="handleCreateEmployee(event)" class="space-y-4 text-xs font-mono">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Full Name</label>
+                            <input type="text" id="emp-name" placeholder="John Worker" required
+                                class="w-full bg-gray-950 border border-gray-800 rounded-xl py-2 px-3 text-xs text-white focus:border-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Email Address</label>
+                            <input type="email" id="emp-email" placeholder="worker@cloudvault.com" required
+                                class="w-full bg-gray-950 border border-gray-800 rounded-xl py-2 px-3 text-xs text-white focus:border-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Role / Clearance</label>
+                            <select id="emp-role"
+                                class="w-full bg-gray-950 border border-gray-800 rounded-xl py-2 px-3 text-xs text-white focus:border-blue-500 outline-none cursor-pointer">
+                                <option value="warehouse_worker">Warehouse Worker</option>
+                                <option value="warehouse_manager">Warehouse Manager</option>
+                                <option value="executive">Executive (Super Admin)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Assigned Facility</label>
+                            <select id="emp-facility"
+                                class="w-full bg-gray-950 border border-gray-800 rounded-xl py-2 px-3 text-xs text-white focus:border-blue-500 outline-none cursor-pointer">
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Temporary Password</label>
+                            <input type="password" id="emp-password" value="password123" required
+                                class="w-full bg-gray-950 border border-gray-800 rounded-xl py-2 px-3 text-xs text-white focus:border-blue-500 outline-none">
+                        </div>
+                        <button type="submit"
+                            class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold py-3 rounded-xl transition shadow-lg shadow-blue-900/30 text-xs mt-2 flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider">
+                            <i data-lucide="plus-circle" class="w-4 h-4"></i> Create Employee Account
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Right Column: Active Facility Staff Roster -->
+                <div class="lg:col-span-7 glass-panel p-6 rounded-3xl space-y-6 border border-gray-800 shadow-2xl">
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-9 h-9 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold border border-indigo-500/30">
+                                <i data-lucide="users" class="w-4.5 h-4.5"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-white text-base">Facility Employee Directory</h3>
+                                <p class="text-[10px] text-gray-400 font-mono" id="staff-facility-subtext">Active staff allocated to this location</p>
+                            </div>
+                        </div>
+                        <span class="text-xs font-mono text-indigo-400 bg-indigo-950/60 border border-indigo-500/30 px-3 py-1 rounded-xl" id="staff-count-badge">0 Employees</span>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs font-mono">
+                            <thead>
+                                <tr class="text-gray-400 border-b border-gray-800 text-[10px] uppercase">
+                                    <th class="py-2.5 font-bold">Name</th>
+                                    <th class="py-2.5 font-bold">Email</th>
+                                    <th class="py-2.5 font-bold">Role</th>
+                                    <th class="py-2.5 font-bold">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="facility-staff-tbody" class="divide-y divide-gray-850/60 text-gray-300">
+                                <tr>
+                                    <td colspan="4" class="py-4 text-center text-gray-500 font-mono">Loading facility staff...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- SECTION 5: UNLAUNCHED MARKET WAITLIST & EXPANSION DEMAND PORTAL -->
         <div class="glass-panel p-6 rounded-3xl space-y-6 border border-emerald-500/20 w-full block">
             <!-- Full Width Title Header -->
@@ -1378,7 +1471,7 @@
                 }
 
                 function switchFacilityTab(tabId) {
-                    const tabs = ['telemetry', 'specs', 'location'];
+                    const tabs = ['telemetry', 'specs', 'location', 'staff'];
                     tabs.forEach(t => {
                         const panel = document.getElementById(`tab-panel-${t}`);
                         const btn = document.getElementById(`tab-btn-${t}`);
@@ -1397,6 +1490,9 @@
                             }
                         }
                     });
+                    if (tabId === 'staff' && typeof loadFacilityStaffRoster === 'function') {
+                        loadFacilityStaffRoster(activeFacilityId);
+                    }
                 }
 
                 window.addEventListener('DOMContentLoaded', async () => {
@@ -1612,10 +1708,151 @@
                         loadFacilityTelemetry(fac.id),
                         loadStagingRoomSchedule(fac.id, selectedStagingDate),
                         loadWarehouseLocationCount(fac.id),
-                        loadTaxZipConfig(fac.id)
+                        loadTaxZipConfig(fac.id),
+                        loadFacilityStaffRoster(fac.id)
                     ]);
                     calculatePnL();
                 }
+
+                // ─────────────────────────────────────────────────────────────────────
+                // FACILITY STAFF & TEAM PROVISIONING ENGINE
+                // ─────────────────────────────────────────────────────────────────────
+                async function loadFacilityStaffRoster(facilityId) {
+                    const tbody = document.getElementById('facility-staff-tbody');
+                    const countBadge = document.getElementById('staff-count-badge');
+                    const subtext = document.getElementById('staff-facility-subtext');
+                    if (!tbody) return;
+
+                    const targetFacId = facilityId || activeFacilityId;
+                    if (subtext) subtext.textContent = `Active staff allocated to ${currentLoadedFac?.name || targetFacId}`;
+
+                    try {
+                        const { data: users, error } = await supabase
+                            .from('users')
+                            .select('id, name, email, role, assigned_facility_id, onboarding_status, created_at')
+                            .eq('assigned_facility_id', targetFacId)
+                            .neq('role', 'customer');
+
+                        if (error) throw error;
+
+                        const staffList = (users || []).filter(u => u.role && u.role !== 'customer');
+                        if (countBadge) countBadge.textContent = `${staffList.length} Employee${staffList.length === 1 ? '' : 's'}`;
+
+                        if (staffList.length === 0) {
+                            tbody.innerHTML = `<tr><td colspan="4" class="py-4 text-center text-gray-500 font-mono">No staff currently assigned to this facility. Use the form on the left to provision employee accounts.</td></tr>`;
+                            return;
+                        }
+
+                        tbody.innerHTML = staffList.map(u => {
+                            const roleBadge = u.role === 'executive'
+                                ? `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-purple-500/10 text-purple-400 border border-purple-500/20">Executive</span>`
+                                : (u.role === 'warehouse_manager'
+                                    ? `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Manager</span>`
+                                    : `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20">Worker</span>`);
+                            return `
+                                <tr class="border-b border-gray-850/60 hover:bg-gray-900/40">
+                                    <td class="py-2.5 font-bold text-white flex items-center gap-2">
+                                        <span class="w-6 h-6 rounded-full bg-gray-800 text-gray-300 flex items-center justify-center text-[10px] uppercase font-mono">${(u.name || 'E').substring(0, 2)}</span>
+                                        <span>${escapeHtml(u.name || 'Unnamed Employee')}</span>
+                                    </td>
+                                    <td class="py-2.5 font-mono text-gray-300">${escapeHtml(u.email || '—')}</td>
+                                    <td class="py-2.5">${roleBadge}</td>
+                                    <td class="py-2.5">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1"></span> Active
+                                        </span>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('');
+                    } catch (e) {
+                        console.error("Failed to load facility staff:", e);
+                        tbody.innerHTML = `<tr><td colspan="4" class="py-4 text-center text-red-400 font-mono">Error loading staff roster: ${escapeHtml(e.message)}</td></tr>`;
+                    }
+                }
+                window.loadFacilityStaffRoster = loadFacilityStaffRoster;
+
+                async function handleCreateEmployee(e) {
+                    e.preventDefault();
+                    const submitBtn = e.target.querySelector('button[type="submit"]');
+                    const origHtml = submitBtn ? submitBtn.innerHTML : '';
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Provisioning Account...';
+                        if (window.lucide) lucide.createIcons();
+                    }
+
+                    const name = document.getElementById('emp-name').value.trim();
+                    const email = document.getElementById('emp-email').value.trim();
+                    const role = document.getElementById('emp-role').value;
+                    const facility = document.getElementById('emp-facility').value;
+                    const password = document.getElementById('emp-password').value;
+
+                    try {
+                        const supabaseUrl = window.SUPABASE_URL || 'https://xbxvebnrjryvksvtufqj.supabase.co';
+                        const supabaseKey = window.SUPABASE_ANON_KEY || 'sb_publishable_-cW5neaZRGmicOHaHw1n3g_laY5yFZQ';
+
+                        const clientFactory = window.createSupabaseClient || (window.supabaseSDK && window.supabaseSDK.createClient);
+                        if (typeof clientFactory !== 'function') {
+                            throw new Error("Supabase client factory is not available.");
+                        }
+
+                        const tempAuthClient = clientFactory(supabaseUrl, supabaseKey, {
+                            auth: {
+                                persistSession: false,
+                                autoRefreshToken: false,
+                                detectSessionInUrl: false,
+                                storageKey: 'cv_emp_fac_reg_session',
+                                storage: {
+                                    getItem: () => null,
+                                    setItem: () => {},
+                                    removeItem: () => {}
+                                }
+                            }
+                        });
+
+                        const { data: authData, error: authErr } = await tempAuthClient.auth.signUp({
+                            email,
+                            password,
+                            options: {
+                                data: {
+                                    name: name,
+                                    role: role,
+                                    assigned_facility_id: facility
+                                }
+                            }
+                        });
+
+                        if (authErr) throw authErr;
+
+                        if (authData && authData.user) {
+                            const { error: dbErr } = await supabase.from('users').upsert({
+                                id: authData.user.id,
+                                email: email,
+                                name: name,
+                                role: role,
+                                assigned_facility_id: facility,
+                                onboarding_status: 'active'
+                            }, { onConflict: 'id' });
+
+                            if (dbErr) console.warn("User auth created, public.users upsert warning:", dbErr);
+                        }
+
+                        alert(`✅ Employee account for ${name} (${role.replace('_', ' ')}) successfully provisioned and assigned to ${facility}!`);
+                        document.getElementById('create-employee-form').reset();
+                        await loadFacilityStaffRoster(facility);
+                    } catch (err) {
+                        console.error("Employee provisioning failed:", err);
+                        alert("Failed to provision employee: " + (err.message || err));
+                    } finally {
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = origHtml || '<i data-lucide="plus-circle" class="w-4 h-4"></i> Create Employee Account';
+                            if (window.lucide) lucide.createIcons();
+                        }
+                    }
+                }
+                window.handleCreateEmployee = handleCreateEmployee;
 
                 // ─────────────────────────────────────────────────────────────────────
                 // WAREHOUSE LAYOUT CONFIGURATOR — Matrix Generation & Batch Sync Logic

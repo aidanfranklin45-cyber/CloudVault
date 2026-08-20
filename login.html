@@ -196,8 +196,12 @@
                     localStorage.setItem('cloudvault_selected_facility', profile.assigned_facility_id);
                 }
                 if (profile && STAFF_ROLES.includes(profile.role)) {
+                    localStorage.setItem('cloudvault_employee_role', profile.role);
+                    localStorage.setItem('cloudvault_is_staff', 'true');
                     window.location.href = 'admin.html';
                 } else {
+                    localStorage.removeItem('cloudvault_employee_role');
+                    localStorage.removeItem('cloudvault_is_staff');
                     window.location.href = 'dashboard.html';
                 }
             } catch (e) {
