@@ -2,6 +2,11 @@
  * CloudVault Stripe Webhook Handler & Event Reconciliation Service
  * Processes verified incoming Stripe webhooks and acts as the source of truth for all billing state.
  * Uses dependency-free native HTTPS requests for rock-solid portability across Node/Serverless runtimes.
+ *
+ * @deprecated SUPERSEDED — This local Node.js file has been replaced by the deployed Supabase Edge Function:
+ *   supabase/functions/stripe-webhook/index.ts
+ *   Endpoint: https://xbxvebnrjryvksvtufqj.supabase.co/functions/v1/stripe-webhook
+ * Do NOT deploy this file. Kept for reference only.
  */
 
 const https = require('https');

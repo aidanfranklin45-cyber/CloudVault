@@ -73,8 +73,8 @@
       }
 
       try {
-        const fallbackKey = typeof atob === 'function' ? atob('cmtfdGVzdF81MVU1d0ZlQWxFQWFxamNGcER4YjBFcjhhWHVwOHVVR3Npajd6NWJOQmFrQ0xDWk1wTEtqbmw2VkpEVlh4c2cxUHJqWEFvUDdrbHIzYmFmTmRsRFFLTDBOazAwdXh2eUZIMkE=') : '';
-        const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY || fallbackKey;
+        const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
+        if (!apiKey) throw new Error('[Security] Stripe API key not configured. Set window.STRIPE_RESTRICTED_KEY before calling this method.');
         const returnUrl = window.location.href;
 
         const res = await fetch('https://api.stripe.com/v1/billing_portal/sessions', {
@@ -111,8 +111,8 @@
       if (!userId || !global.supabase) return { success: false, error: 'Missing userId or Supabase client' };
 
       try {
-        const fallbackKey = typeof atob === 'function' ? atob('cmtfdGVzdF81MVU1d0ZlQWxFQWFxamNGcER4YjBFcjhhWHVwOHVVR3Npajd6NWJOQmFrQ0xDWk1wTEtqbmw2VkpEVlh4c2cxUHJqWEFvUDdrbHIzYmFmTmRsRFFLTDBOazAwdXh2eUZIMkE=') : '';
-        const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY || fallbackKey;
+        const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
+        if (!apiKey) throw new Error('[Security] Stripe API key not configured. Set window.STRIPE_RESTRICTED_KEY before calling this method.');
         if (!apiKey) return { success: false, error: 'Missing Stripe API key' };
 
         // 1. Fetch current subscription from Supabase
@@ -749,8 +749,8 @@
       const commMonths = Number(promoData.commissionMonths || creatorData.commissionMonths) || 6; // 6 months revenue share
 
       // 1. Create Live Coupon & Promotion Code on Stripe
-      const fallbackKey = typeof atob === 'function' ? atob('cmtfdGVzdF81MVU1d0ZlQWxFQWFxamNGcER4YjBFcjhhWHVwOHVVR3Npajd6NWJOQmFrQ0xDWk1wTEtqbmw2VkpEVlh4c2cxUHJqWEFvUDdrbHIzYmFmTmRsRFFLTDBOazAwdXh2eUZIMkE=') : '';
-      const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY || fallbackKey;
+      const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
+      if (!apiKey) throw new Error('[Security] Stripe API key not configured. Set window.STRIPE_RESTRICTED_KEY before calling this method.');
 
       let liveCouponId = cleanCode;
       let livePromoId = null;
@@ -895,8 +895,8 @@
      */
     togglePromoCodeStatus: async function (promoId, isActive) {
       const sb = global.supabase;
-      const fallbackKey = typeof atob === 'function' ? atob('cmtfdGVzdF81MVU1d0ZlQWxFQWFxamNGcER4YjBFcjhhWHVwOHVVR3Npajd6NWJOQmFrQ0xDWk1wTEtqbmw2VkpEVlh4c2cxUHJqWEFvUDdrbHIzYmFmTmRsRFFLTDBOazAwdXh2eUZIMkE=') : '';
-      const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY || fallbackKey;
+      const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
+      if (!apiKey) throw new Error('[Security] Stripe API key not configured. Set window.STRIPE_RESTRICTED_KEY before calling this method.');
 
       if (sb && promoId) {
         const { data, error } = await sb
@@ -1020,8 +1020,8 @@
             console.log('[StripeBillingIntegration] Attribution recorded successfully:', data);
 
             // Sync discount to Stripe Customer / Subscription if Stripe key available
-            const fallbackKey = typeof atob === 'function' ? atob('cmtfdGVzdF81MVU1d0ZlQWxFQWFxamNGcER4YjBFcjhhWHVwOHVVR3Npajd6NWJOQmFrQ0xDWk1wTEtqbmw2VkpEVlh4c2cxUHJqWEFvUDdrbHIzYmFmTmRsRFFLTDBOazAwdXh2eUZIMkE=') : '';
-            const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY || fallbackKey;
+            const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
+            if (!apiKey) throw new Error('[Security] Stripe API key not configured. Set window.STRIPE_RESTRICTED_KEY before calling this method.');
             if (apiKey && customerUid) {
               try {
                 const { data: u } = await sb.from('users').select('email, stripe_customer_id').eq('id', customerUid).maybeSingle();
