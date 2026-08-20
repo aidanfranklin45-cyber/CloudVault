@@ -1893,7 +1893,8 @@
                         if (additionalCandidates.length > 0) {
                             reqTotes = additionalCandidates.slice(-expectedCount);
                         } else {
-                            reqTotes = (currentInventory || []).slice(-expectedCount);
+                            // If all customer inventory is already activated & stored in vault, do not synthesize an intake flow
+                            return;
                         }
                     }
 
