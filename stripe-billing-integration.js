@@ -785,6 +785,15 @@
       const commRatePct = Number(promoData.commissionRatePct || creatorData.defaultCommissionPct) || 10.00; // Customizable %
       const commMonths = Number(promoData.commissionMonths || creatorData.commissionMonths) || 6; // 6 months revenue share
 
+      // Guard: reject zero, negative, or 100%+ discount — prevents division issues and Stripe coupon rejection
+      if (custDiscountPct <= 0 || custDiscountPct >= 100) {
+        throw new Error(`Invalid customer discount: ${custDiscountPct}%. Must be between 1% and 99%.`);
+      }
+      // Guard: commission rate must be a positive, reasonable percentage
+      if (commRatePct <= 0 || commRatePct > 100) {
+        throw new Error(`Invalid commission rate: ${commRatePct}%. Must be between 1% and 100%.`);
+      }
+
       // 1. Create Live Coupon & Promotion Code on Stripe
       const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
       if (!apiKey) throw new Error('[Security] Stripe API key not configured. Set window.STRIPE_RESTRICTED_KEY before calling this method.');
@@ -983,51 +992,29 @@
         return { valid: false, message: 'Please enter a promotional code' };
       }
 
-      if (sb) {
-        try {
-          let { data, error } = await sb.rpc('validate_promo_code_for_checkout', {
-            p_code: cleanCode,
-            p_user_uid: userUid || null,
-            p_gross_amount: Number(grossAmount) || 0.00
-          });
-
-          if ((error || !data || !data.valid) && !cleanCode.endsWith('%')) {
-            const r2 = await sb.rpc('validate_promo_code_for_checkout', {
-              p_code: cleanCode + '%',
-              p_user_uid: userUid || null,
-              p_gross_amount: Number(grossAmount) || 0.00
-            });
-            if (!r2.error && r2.data && r2.data.valid) {
-              data = r2.data;
-              error = null;
-            }
-          }
-
-          if (!error && data && data.valid) {
-            return data;
-          }
-        } catch (rpcErr) {
-          console.warn('[StripeBillingIntegration] RPC validate_promo_code fallback:', rpcErr.message);
-        }
+      if (!sb) {
+        return { valid: false, message: 'Service unavailable. Please try again.' };
       }
 
-      // Fallback local simulation logic
-      const discountPct = 20.00;
-      const discountAmount = Math.round(grossAmount * (discountPct / 100.0) * 100) / 100;
-      const netAmount = Math.max(0, grossAmount - discountAmount);
+      try {
+        const { data, error } = await sb.rpc('validate_promo_code_for_checkout', {
+          p_code: cleanCode,
+          p_user_uid: userUid || null,
+          p_gross_amount: Number(grossAmount) || 0.00
+        });
 
-      return {
-        valid: true,
-        code: cleanCode,
-        creator_name: 'Partner Creator',
-        customer_discount_pct: discountPct,
-        customer_discount_duration_months: 2,
-        gross_amount: grossAmount,
-        discount_amount: discountAmount,
-        net_amount: netAmount,
-        message: `Success! ${discountPct}% off applied for your first 2 months!`,
-        simulated: true
-      };
+        if (error) {
+          console.error('[StripeBillingIntegration] validatePromoCode RPC error:', error.message);
+          return { valid: false, message: 'Could not validate promo code. Please try again.' };
+        }
+
+        // RPC returns a jsonb object — return it directly (valid or invalid, database is authoritative)
+        return data || { valid: false, message: 'Promo code could not be verified' };
+
+      } catch (rpcErr) {
+        console.error('[StripeBillingIntegration] validatePromoCode exception:', rpcErr.message);
+        return { valid: false, message: 'Could not validate promo code. Please try again.' };
+      }
     },
 
     /**
