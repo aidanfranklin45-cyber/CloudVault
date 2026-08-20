@@ -1227,10 +1227,10 @@
                 </div>
                 <div class="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                     <div class="flex items-center space-x-3">
-                        <div class="w-10 h-7 bg-blue-900 text-white rounded flex items-center justify-center font-bold text-[10px] font-mono shadow-sm">VISA</div>
+                        <div id="billing-card-brand" class="w-10 h-7 bg-blue-900 text-white rounded flex items-center justify-center font-bold text-[10px] font-mono shadow-sm">VISA</div>
                         <div>
-                            <p class="text-sm font-bold text-gray-900">•••• •••• •••• 4242</p>
-                            <p class="text-[11px] text-gray-500 font-medium">Expires 12/2028</p>
+                            <p id="billing-card-last4" class="text-sm font-bold text-gray-900">•••• •••• •••• 4242</p>
+                            <p id="billing-card-exp" class="text-[11px] text-gray-500 font-medium">Expires 12/2028</p>
                         </div>
                     </div>
                     <button onclick="window.StripeBillingIntegration ? window.StripeBillingIntegration.launchCustomerPortal(currentUser?.stripe_customer_id, currentUser?.id) : launchStripePortalMock()" class="text-blue-600 hover:text-blue-700 text-xs font-bold bg-blue-50 hover:bg-blue-100 px-3.5 py-2 rounded-xl transition border border-blue-200">
@@ -3555,18 +3555,56 @@
         async function saveUpdatePaymentModal(e) {
             e.preventDefault();
             const btn = document.getElementById('save-pay-btn');
+            const cardInput = document.getElementById('pay-card');
+            const expInput = document.getElementById('pay-exp');
+            const nameInput = document.getElementById('pay-name');
+            
+            const rawCard = cardInput ? cardInput.value.replace(/\s+/g, '') : '';
+            const last4 = rawCard.length >= 4 ? rawCard.slice(-4) : '4242';
+            const exp = expInput ? expInput.value.trim() : '12/2028';
+            const cardholderName = nameInput ? nameInput.value.trim() : '';
+
             if (btn) {
                 btn.disabled = true;
                 btn.textContent = 'Updating Payment Method...';
             }
-            setTimeout(() => {
+
+            try {
+                if (window.supabase && currentUser?.id) {
+                    await window.supabase.from('users').update({
+                        default_payment_method_id: 'pm_sim_' + last4,
+                    }).eq('id', currentUser.id);
+                }
+
+                // Update visual preview on billing modal
+                const last4El = document.getElementById('billing-card-last4');
+                const expEl = document.getElementById('billing-card-exp');
+                const brandEl = document.getElementById('billing-card-brand');
+                if (last4El) last4El.textContent = `•••• •••• •••• ${last4}`;
+                if (expEl) expEl.textContent = `Expires ${exp}`;
+                if (brandEl) {
+                    if (rawCard.startsWith('5')) brandEl.textContent = 'MC';
+                    else if (rawCard.startsWith('3')) brandEl.textContent = 'AMEX';
+                    else brandEl.textContent = 'VISA';
+                }
+
+                setTimeout(() => {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Save Updated Payment Details';
+                    }
+                    closeUpdatePaymentModal();
+                    showToast('✅ Payment method updated successfully!');
+                }, 600);
+            } catch (err) {
+                console.error('[Dashboard] Error updating payment method:', err);
                 if (btn) {
                     btn.disabled = false;
                     btn.textContent = 'Save Updated Payment Details';
                 }
                 closeUpdatePaymentModal();
-                showToast('Payment method updated successfully!');
-            }, 800);
+                showToast('Payment method saved locally.');
+            }
         }
 
         // ============================================================

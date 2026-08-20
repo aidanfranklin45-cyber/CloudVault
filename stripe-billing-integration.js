@@ -98,6 +98,19 @@
           global.currentUser.stripe_customer_id = data.customerId;
         }
 
+        if (data?.isSimulated || !data?.url) {
+          console.log('[StripeBillingIntegration] Customer portal in in-app payment management mode');
+          if (typeof global.openUpdatePaymentModal === 'function') {
+            global.openUpdatePaymentModal();
+            if (typeof global.showToast === 'function') {
+              global.showToast("💳 Opened payment method manager.");
+            }
+          } else if (typeof global.showToast === 'function') {
+            global.showToast("💳 In-app payment method management active.");
+          }
+          return { success: true, isSimulated: true, customerId: data?.customerId };
+        }
+
         const portalUrl = data?.url || data?.portalUrl || data?.sessionUrl;
         if (portalUrl) {
           window.location.href = portalUrl;

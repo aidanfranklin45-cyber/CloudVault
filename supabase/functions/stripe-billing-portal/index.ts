@@ -130,7 +130,8 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    let portalUrl: string;
+    let portalUrl: string | null = null;
+    let isSimulated = false;
 
     if (stripeSecretKey && customerId && !customerId.startsWith("cus_sim_")) {
       try {
@@ -147,19 +148,18 @@ Deno.serve(async (req: Request) => {
         portalUrl = portalSession.url;
       } catch (stripePortalErr: any) {
         console.warn("[StripeBillingPortal] Stripe portal API warning:", stripePortalErr.message);
-        // If Stripe billing portal is not activated or customer not found in active environment, provide graceful mock session
-        const portalSessionId = generateRandomId("bps_test_");
-        portalUrl = `https://billing.stripe.com/p/session/${portalSessionId}`;
+        // If Stripe billing portal is not activated or customer not found in active environment, switch to simulated/in-app mode
+        isSimulated = true;
       }
     } else {
-      const portalSessionId = generateRandomId("bps_test_");
-      portalUrl = `https://billing.stripe.com/p/session/${portalSessionId}`;
+      isSimulated = true;
     }
 
     return new Response(
       JSON.stringify({
         url: portalUrl,
         customerId: customerId,
+        isSimulated: isSimulated,
       }),
       {
         status: 200,
