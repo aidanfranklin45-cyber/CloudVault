@@ -9900,50 +9900,55 @@
             }
 
             try {
+                // 1. Fetch the invoice to get the real Stripe payment_intent ID and check idempotency
+                const { data: invoice, error: invFetchErr } = await supabase
+                    .from('invoices')
+                    .select('id, invoice_number, payment_status, stripe_payment_intent_id, stripe_invoice_id, uid, customer_name, customer_email, total_amount, subtotal, tax, payment_method, line_items')
+                    .eq('id', invoiceId)
+                    .maybeSingle();
+
+                if (invFetchErr || !invoice) {
+                    throw new Error('Could not load invoice details. Refund aborted.');
+                }
+
+                // 2. Idempotency guard — block if already refunded
+                if (invoice.payment_status === 'refunded') {
+                    alert('⚠️ This invoice has already been refunded. No action taken.');
+                    return;
+                }
+
+                // 3. Validate a real Stripe payment intent ID exists
+                if (!invoice.stripe_payment_intent_id || !invoice.stripe_payment_intent_id.startsWith('pi_')) {
+                    throw new Error(`No valid Stripe payment_intent_id found on invoice #${invoice.invoice_number}. Cannot issue refund. (Found: "${invoice.stripe_payment_intent_id || 'none'}")`);
+                }
+
+                // 4. Call the real Stripe refunds API
                 let stripeRes = null;
                 if (window.CloudVaultStripe && typeof window.CloudVaultStripe.processStripeRefund === 'function') {
-                    stripeRes = await window.CloudVaultStripe.processStripeRefund(invoiceId, refundAmount);
+                    stripeRes = await window.CloudVaultStripe.processStripeRefund(
+                        invoice.stripe_payment_intent_id,
+                        refundAmount,
+                        invoice,
+                        reason
+                    );
+                } else {
+                    throw new Error('CloudVaultStripe.processStripeRefund not available.');
                 }
 
-                const refundRef = stripeRes?.refundId || `re_3M_${Math.random().toString(36).substring(2, 10)}`;
+                const refundRef = stripeRes.refundId; // Real Stripe re_ ID
 
-                // Update original invoice record in database
-                await supabase.from('invoices').update({ payment_status: 'refunded', refunded_at: new Date().toISOString() }).eq('id', invoiceId);
-                await supabase.from('charges').update({ status: 'refunded' }).eq('id', invoiceId);
+                // 5. Update original invoice record in database
+                await supabase.from('invoices').update({
+                    payment_status: 'refunded',
+                    refunded_at: new Date().toISOString()
+                }).eq('id', invoiceId);
 
-                // Call window.CloudVaultBilling.createInvoiceRecord to create an itemized refund invoice record
-                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
-                    const cust = window.currentSelectedCustomer || {};
-                    await window.CloudVaultBilling.createInvoiceRecord({
-                        uid: cust.id || null,
-                        customer_name: cust.name || 'Valued Customer',
-                        customer_email: cust.email || null,
-                        facility_id: cust.assigned_facility_id || 'facility_seattle_north',
-                        invoice_type: 'refund',
-                        payment_status: 'refunded',
-                        subtotal: -Math.abs(refundAmount),
-                        delivery_fee: 0,
-                        surge_fee: 0,
-                        tax: 0,
-                        discount: 0,
-                        total_amount: -Math.abs(refundAmount),
-                        notes: `Refund Reason: ${reason} (Original Invoice: #${invoiceId.substring(0, 8)})`,
-                        transaction_reference: refundRef,
-                        line_items: [
-                            {
-                                description: `Customer Service Refund: ${reason}`,
-                                qty: 1,
-                                unit_price: -Math.abs(refundAmount),
-                                amount: -Math.abs(refundAmount)
-                            }
-                        ]
-                    });
-                }
+                await supabase.from('charges').update({ status: 'refunded' }).eq('stripe_payment_intent_id', invoice.stripe_payment_intent_id);
 
                 if (typeof triggerScanFeedbackOverlay === 'function') {
                     triggerScanFeedbackOverlay(true, `Refund of $${refundAmount.toFixed(2)} issued successfully!`, invoiceId);
                 }
-                alert(`💸 Refund Success: $${refundAmount.toFixed(2)} refunded for Invoice #${invoiceId.substring(0, 8)}!\nStripe Refund Ref: ${refundRef}`);
+                alert(`💸 Refund Success: $${refundAmount.toFixed(2)} refunded for Invoice #${invoiceId.substring(0, 8)}!\nStripe Refund ID: ${refundRef}\nStatus: ${stripeRes.status}`);
 
                 if (window.currentSelectedCustomer) {
                     loadCustomerBillingHistory(window.currentSelectedCustomer.id);
