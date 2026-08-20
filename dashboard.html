@@ -5722,6 +5722,23 @@
                             ? `<button onclick="window.StripeBillingIntegration.triggerStripePayment('${invNum}')" class="text-[10px] bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded-lg border border-red-700 shadow-md transition flex items-center gap-1 cursor-pointer">💳 Pay Invoice Now</button>`
                             : '';
 
+                        const hostedUrl = inv.stripe_hosted_invoice_url || inv.hosted_invoice_url;
+                        const pdfUrl = inv.stripe_invoice_pdf || inv.invoice_pdf;
+
+                        const hostedLinkHtml = hostedUrl
+                            ? `<a href="${hostedUrl}" target="_blank" rel="noopener noreferrer" class="text-[10px] bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold px-2.5 py-1.5 rounded-lg border border-blue-200 transition flex items-center gap-1 cursor-pointer">
+                                <svg class="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                <span>Stripe Invoice</span>
+                              </a>`
+                            : '';
+
+                        const pdfLinkHtml = pdfUrl
+                            ? `<a href="${pdfUrl}" target="_blank" rel="noopener noreferrer" class="text-[10px] bg-slate-50 text-slate-700 hover:bg-slate-100 font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 transition flex items-center gap-1 cursor-pointer">
+                                <svg class="w-3 h-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                                <span>PDF</span>
+                              </a>`
+                            : '';
+
                         return `
                             <div class="p-4 flex justify-between items-center bg-white hover:bg-gray-50/90 transition border-b border-gray-100 last:border-0">
                                 <div class="space-y-1.5">
@@ -5740,6 +5757,8 @@
                                     <span class="text-sm font-black text-gray-900 block">$${afterTaxTotal.toFixed(2)}</span>
                                     <div class="flex items-center gap-1.5 flex-wrap justify-end">
                                         ${payButtonHtml}
+                                        ${hostedLinkHtml}
+                                        ${pdfLinkHtml}
                                         <button onclick="printUserInvoiceRecord('${invNum}')" class="text-[10px] bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold px-3 py-1.5 rounded-lg border border-indigo-200/80 transition flex items-center gap-1.5 cursor-pointer">
                                             <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                             <span>Official Statement</span>
@@ -5811,7 +5830,7 @@
 
         function launchStripePortalMock() {
             if (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.launchCustomerPortal === 'function') {
-                window.StripeBillingIntegration.launchCustomerPortal(currentUser?.stripe_customer_id);
+                window.StripeBillingIntegration.launchCustomerPortal(currentUser?.stripe_customer_id, currentUser?.id);
             } else {
                 showToast("Opening Stripe Customer Portal...");
             }

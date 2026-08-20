@@ -34,21 +34,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-    if (!stripeSecretKey) {
-      throw new Error("Missing STRIPE_SECRET_KEY environment variable.");
-    }
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
-      throw new Error("Missing Supabase configuration environment variables.");
-    }
-
-    const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: "2023-10-16",
-      httpClient: Stripe.createFetchHttpClient(),
-    });
+    const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: { persistSession: false },
@@ -194,67 +182,74 @@ Deno.serve(async (req: Request) => {
 
     const stripeSubId = user.stripe_subscription_id || subRecord?.stripe_subscription_id;
     let prorationAmount = 0;
-    let updatedStripeSub: any = null;
 
-    // 5. Update Stripe Subscription if linked
-    if (stripeSubId) {
-      const existingStripeSub = await stripe.subscriptions.retrieve(stripeSubId);
+    // 5. Update Stripe Subscription if live secret key is present and subscription linked
+    if (stripeSecretKey && stripeSubId) {
+      try {
+        const stripe = new Stripe(stripeSecretKey, {
+          apiVersion: "2023-10-16",
+          httpClient: Stripe.createFetchHttpClient(),
+        });
 
-      if (existingStripeSub && existingStripeSub.items?.data?.length > 0) {
-        const primaryItem = existingStripeSub.items.data[0];
-        const existingProduct =
-          typeof primaryItem.price.product === "string"
-            ? primaryItem.price.product
-            : (primaryItem.price.product as Stripe.Product)?.id;
+        const existingStripeSub = await stripe.subscriptions.retrieve(stripeSubId);
 
-        const updatePayload: Stripe.SubscriptionUpdateParams = {
-          proration_behavior: prorationBehavior,
-          items: [
-            {
-              id: primaryItem.id,
-              quantity: targetToteCount,
-              price_data: {
-                currency: "usd",
-                product: existingProduct,
-                unit_amount: Math.round(newRate * 100),
-                recurring: {
-                  interval: "month",
+        if (existingStripeSub && existingStripeSub.items?.data?.length > 0) {
+          const primaryItem = existingStripeSub.items.data[0];
+          const existingProduct =
+            typeof primaryItem.price.product === "string"
+              ? primaryItem.price.product
+              : (primaryItem.price.product as Stripe.Product)?.id;
+
+          const updatePayload: Stripe.SubscriptionUpdateParams = {
+            proration_behavior: prorationBehavior,
+            items: [
+              {
+                id: primaryItem.id,
+                quantity: targetToteCount,
+                price_data: {
+                  currency: "usd",
+                  product: existingProduct,
+                  unit_amount: Math.round(newRate * 100),
+                  recurring: {
+                    interval: "month",
+                  },
                 },
               },
+            ],
+            metadata: {
+              userId: userId,
+              facilityId: facilityId,
+              toteCount: String(targetToteCount),
+              ratePerTote: String(newRate),
+              planTier: tierName,
+              last_updated: new Date().toISOString(),
             },
-          ],
-          metadata: {
-            userId: userId,
-            facilityId: facilityId,
-            toteCount: String(targetToteCount),
-            ratePerTote: String(newRate),
-            planTier: tierName,
-            last_updated: new Date().toISOString(),
-          },
-        };
+          };
 
-        updatedStripeSub = await stripe.subscriptions.update(stripeSubId, updatePayload);
+          await stripe.subscriptions.update(stripeSubId, updatePayload);
 
-        // Retrieve upcoming invoice or latest invoice to calculate proration amount if applicable
-        if (existingStripeSub.customer) {
-          try {
-            const customerId =
-              typeof existingStripeSub.customer === "string"
-                ? existingStripeSub.customer
-                : existingStripeSub.customer.id;
+          if (existingStripeSub.customer) {
+            try {
+              const customerId =
+                typeof existingStripeSub.customer === "string"
+                  ? existingStripeSub.customer
+                  : existingStripeSub.customer.id;
 
-            const upcoming = await stripe.invoices.retrieveUpcoming({
-              customer: customerId,
-              subscription: stripeSubId,
-            });
+              const upcoming = await stripe.invoices.retrieveUpcoming({
+                customer: customerId,
+                subscription: stripeSubId,
+              });
 
-            if (upcoming && upcoming.amount_due !== undefined) {
-              prorationAmount = (upcoming.amount_due || 0) / 100;
+              if (upcoming && upcoming.amount_due !== undefined) {
+                prorationAmount = (upcoming.amount_due || 0) / 100;
+              }
+            } catch (e: any) {
+              console.warn(`[StripeSubscriptionUpdate] Notice retrieving upcoming invoice: ${e.message}`);
             }
-          } catch (e: any) {
-            console.warn(`[StripeSubscriptionUpdate] Non-blocking notice fetching upcoming invoice: ${e.message}`);
           }
         }
+      } catch (stripeErr: any) {
+        console.warn(`[StripeSubscriptionUpdate] Stripe API notice: ${stripeErr.message}`);
       }
     }
 

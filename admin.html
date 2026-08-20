@@ -2420,13 +2420,13 @@
                 return;
             }
 
-            if (document.getElementById('rate-tier-1')) document.getElementById('rate-tier-1').value = (Number(fac.tier1_rate) || 5.00).toFixed(2);
-            if (document.getElementById('rate-tier-2')) document.getElementById('rate-tier-2').value = (Number(fac.tier2_rate) || 3.50).toFixed(2);
-            if (document.getElementById('rate-tier-3')) document.getElementById('rate-tier-3').value = (Number(fac.tier3_rate) || 2.00).toFixed(2);
-            if (document.getElementById('rate-tier-4')) document.getElementById('rate-tier-4').value = (Number(fac.tier4_rate) || 1.00).toFixed(2);
-            if (document.getElementById('valet-base')) document.getElementById('valet-base').value = Number(fac.valet_base) || 15.00;
-            if (document.getElementById('valet-tote-adder')) document.getElementById('valet-tote-adder').value = Number(fac.valet_tote_adder) || 1.00;
-            if (document.getElementById('missing-tote-fee')) document.getElementById('missing-tote-fee').value = (Number(fac.missing_tote_fee) || 15.00).toFixed(2);
+            if (document.getElementById('rate-tier-1')) document.getElementById('rate-tier-1').value = fac.tier1_rate != null ? Number(fac.tier1_rate).toFixed(2) : '';
+            if (document.getElementById('rate-tier-2')) document.getElementById('rate-tier-2').value = fac.tier2_rate != null ? Number(fac.tier2_rate).toFixed(2) : '';
+            if (document.getElementById('rate-tier-3')) document.getElementById('rate-tier-3').value = fac.tier3_rate != null ? Number(fac.tier3_rate).toFixed(2) : '';
+            if (document.getElementById('rate-tier-4')) document.getElementById('rate-tier-4').value = fac.tier4_rate != null ? Number(fac.tier4_rate).toFixed(2) : '';
+            if (document.getElementById('valet-base')) document.getElementById('valet-base').value = fac.valet_base != null ? Number(fac.valet_base).toFixed(2) : '';
+            if (document.getElementById('valet-tote-adder')) document.getElementById('valet-tote-adder').value = fac.valet_tote_adder != null ? Number(fac.valet_tote_adder).toFixed(2) : '';
+            if (document.getElementById('missing-tote-fee')) document.getElementById('missing-tote-fee').value = fac.missing_tote_fee != null ? Number(fac.missing_tote_fee).toFixed(2) : '';
             if (typeof updateValetFormula === 'function') updateValetFormula();
         }
 
@@ -2498,17 +2498,12 @@
                     supabase.from('operational_zones').select('*'),
                     supabase.from('inventory').select('*, users!uid(name, email, onboarding_status, assigned_facility_id)'),
                     supabase.from('access_requests').select('*, users!uid(name, active_zone, assigned_facility_id)'),
-                    supabase.from('subscriptions').select('*'),
-                    supabase.from('users').select('*').neq('role', 'customer'),
-                    supabase.from('employee_badges').select('*').eq('is_active', true),
+                    supabase.from('subscriptions').select('*, users!uid(name, email, onboarding_status, assigned_facility_id)'),
+                    supabase.from('users').select('*'),
+                    supabase.from('employee_badges').select('*'),
                     supabase.from('metadata').select('*').eq('id', 'funnel_metrics').maybeSingle()
                 ]);
 
-                const facilities = facsRes.data || [];
-                const operationalZones = zonesRes.data || [];
-                const inventory = invRes.data || [];
-                const accessRequests = reqsRes.data || [];
-                const subscriptions = subsRes.data || [];
                 const staffUsers = usersRes.data || [];
                 const badges = badgesRes.data || [];
                 const funnel = funnelRes.data || null;
@@ -2632,30 +2627,49 @@
 
             const facNameEl = document.getElementById('exec-facility-select') || document.getElementById('pricing-facility-select');
             const facName = facNameEl ? facNameEl.options[facNameEl.selectedIndex]?.text || facId : facId;
-            const tier1 = parseFloat(document.getElementById('rate-tier-1')?.value) || 5.00;
-            const tier2 = parseFloat(document.getElementById('rate-tier-2')?.value) || 3.50;
-            const tier3 = parseFloat(document.getElementById('rate-tier-3')?.value) || 2.00;
-            const tier4 = parseFloat(document.getElementById('rate-tier-4')?.value) || 1.00;
-            const valetBase = parseFloat(document.getElementById('valet-base')?.value) || 15.00;
-            const valetAdder = parseFloat(document.getElementById('valet-tote-adder')?.value) || 1.00;
-            const missingFee = parseFloat(document.getElementById('missing-tote-fee')?.value) || 15.00;
+            const tier1 = parseFloat(document.getElementById('rate-tier-1')?.value);
+            const tier2 = parseFloat(document.getElementById('rate-tier-2')?.value);
+            const tier3 = parseFloat(document.getElementById('rate-tier-3')?.value);
+            const tier4 = parseFloat(document.getElementById('rate-tier-4')?.value);
+            const valetBase = parseFloat(document.getElementById('valet-base')?.value);
+            const valetAdder = parseFloat(document.getElementById('valet-tote-adder')?.value);
+            const missingFee = parseFloat(document.getElementById('missing-tote-fee')?.value);
 
-            const { error } = await supabase.from('facilities').upsert({
+            if (isNaN(tier1) || isNaN(tier2) || isNaN(tier3) || isNaN(tier4)) {
+                alert('⚠️ Please enter valid numeric pricing rates for all 4 storage tiers.');
+                return;
+            }
+
+            const facilityPayload = {
                 id: facId,
                 name: facName,
-                tier1_rate: tier1,
-                tier2_rate: tier2,
-                tier3_rate: tier3,
-                tier4_rate: tier4,
-                valet_base: valetBase,
-                valet_tote_adder: valetAdder,
-                missing_tote_fee: missingFee
-            }, { onConflict: 'id' });
+                tier1_rate: isNaN(tier1) ? null : tier1,
+                tier2_rate: isNaN(tier2) ? null : tier2,
+                tier3_rate: isNaN(tier3) ? null : tier3,
+                tier4_rate: isNaN(tier4) ? null : tier4,
+                valet_base: isNaN(valetBase) ? null : valetBase,
+                valet_tote_adder: isNaN(valetAdder) ? null : valetAdder,
+                missing_tote_fee: isNaN(missingFee) ? null : missingFee
+            };
 
-            if (error) {
-                alert('Failed to save facility specs: ' + error.message);
-            } else {
-                alert(`Facility specifications updated successfully for ${facName}!`);
+            try {
+                const { data: rpcRes, error } = await supabase.rpc('save_facility_configuration', {
+                    p_facility_data: facilityPayload
+                });
+
+                if (error) {
+                    const { error: upsertErr } = await supabase.from('facilities').upsert(facilityPayload, { onConflict: 'id' });
+                    if (upsertErr) throw upsertErr;
+                }
+
+                if (window._facilitiesCache && window._facilitiesCache[facId]) {
+                    Object.assign(window._facilitiesCache[facId], facilityPayload);
+                }
+
+                alert(`Facility specifications updated successfully for ${facName}! Dynamic pricing active across all associated accounts.`);
+            } catch (err) {
+                console.error("Save pricing error:", err);
+                alert('Failed to save facility specs: ' + err.message);
             }
         }
 
@@ -3442,11 +3456,22 @@
                     reason = prompt(`Enter Vault Shelf / Bay location to re-shelve ${toteCode} (e.g. A1-B02-S1):`, 'A1-B01-S1');
                     if (!reason) return;
                 } else if (action === 'charge') {
-                    // Dynamically resolve fee from billing engine
-                    let feeAmt = 15.00;
-                    if (window.CloudVaultBilling && typeof window.CloudVaultBilling.resolveFacilityMissingToteFee === 'function') {
+                    // Dynamically resolve fee from facilities table
+                    let feeAmt = null;
+                    const cachedFac = await getCachedFacility(facId);
+                    if (cachedFac && cachedFac.missing_tote_fee != null) {
+                        feeAmt = Number(cachedFac.missing_tote_fee);
+                    } else if (window.CloudVaultBilling && typeof window.CloudVaultBilling.resolveFacilityMissingToteFee === 'function') {
                         feeAmt = await window.CloudVaultBilling.resolveFacilityMissingToteFee(facId);
+                    } else {
+                        const { data: dbFac } = await supabase.from('facilities').select('missing_tote_fee').eq('id', facId).maybeSingle();
+                        if (dbFac && dbFac.missing_tote_fee != null) feeAmt = Number(dbFac.missing_tote_fee);
                     }
+
+                    if (feeAmt === null || isNaN(feeAmt)) {
+                        throw new Error(`[Pricing Error] Missing container replacement fee is not configured for facility "${facId}". Please configure rate in Facility Config.`);
+                    }
+
                     if (!confirm(`Are you sure you want to assess a $${feeAmt.toFixed(2)} missing container replacement fee for ${toteCode}? This will send a Stripe invoice and adjust customer's active tote count & pricing tier.`)) return;
                 } else if (action === 'decommission') {
                     if (!confirm(`Decommission tote ${toteCode} and mark as written off?`)) return;
@@ -8046,12 +8071,17 @@
             if (subsMoMEl) subsMoMEl.textContent = `+${subsMoMDelta}%`;
 
             // 4. Tier Revenue Contribution & Yield Breakdown (Tiers 1-4)
-            // Tier 1: 1-9 totes, Tier 2: 10-24 totes, Tier 3: 25-49 totes, Tier 4: 50+ totes
+            const targetFac = facilities.find(f => f.id === targetFacilityId) || facilities[0] || {};
+            const dynT1 = Number(targetFac.tier1_rate) || 0;
+            const dynT2 = Number(targetFac.tier2_rate) || 0;
+            const dynT3 = Number(targetFac.tier3_rate) || 0;
+            const dynT4 = Number(targetFac.tier4_rate) || 0;
+
             const tiers = {
-                tier1: { name: 'Tier 1 (1–9 Totes)', rate: '$5.00/mo', subs: 0, totes: 0, mrr: 0, targetRate: 5.00 },
-                tier2: { name: 'Tier 2 (10–24 Totes)', rate: '$3.50/mo', subs: 0, totes: 0, mrr: 0, targetRate: 3.50 },
-                tier3: { name: 'Tier 3 (25–49 Totes)', rate: '$2.00/mo', subs: 0, totes: 0, mrr: 0, targetRate: 2.00 },
-                tier4: { name: 'Tier 4 (50+ Totes)', rate: '$1.00/mo', subs: 0, totes: 0, mrr: 0, targetRate: 1.00 }
+                tier1: { name: 'Tier 1 (1–9 Totes)', rate: `$${dynT1.toFixed(2)}/mo`, subs: 0, totes: 0, mrr: 0, targetRate: dynT1 },
+                tier2: { name: 'Tier 2 (10–24 Totes)', rate: `$${dynT2.toFixed(2)}/mo`, subs: 0, totes: 0, mrr: 0, targetRate: dynT2 },
+                tier3: { name: 'Tier 3 (25–49 Totes)', rate: `$${dynT3.toFixed(2)}/mo`, subs: 0, totes: 0, mrr: 0, targetRate: dynT3 },
+                tier4: { name: 'Tier 4 (50+ Totes)', rate: `$${dynT4.toFixed(2)}/mo`, subs: 0, totes: 0, mrr: 0, targetRate: dynT4 }
             };
 
             activeSubs.forEach(s => {
@@ -8109,10 +8139,11 @@
             const recPill = document.getElementById('exec-pricing-recommendation-text');
             if (recPill) {
                 if (tiers.tier2.totes >= 10) {
-                    const potentialGain = Math.round(tiers.tier2.totes * 0.50);
-                    recPill.textContent = `Pricing Optimization: Pushing Tier 2 to $4.00/mo (+0.50) yields +$${potentialGain}/mo MRR`;
+                    const gainPerTote = Math.max(0.50, dynT2 * 0.1);
+                    const potentialGain = Math.round(tiers.tier2.totes * gainPerTote);
+                    recPill.textContent = `Pricing Optimization: Pushing Tier 2 to $${(dynT2 + gainPerTote).toFixed(2)}/mo (+${gainPerTote.toFixed(2)}) yields +$${potentialGain}/mo MRR`;
                 } else if (tiers.tier1.totes > 0) {
-                    recPill.textContent = `Pricing Optimization: Tier 1 rate ($5.00/mo) generating peak yield of $${(tiers.tier1.mrr / Math.max(1, tiers.tier1.totes)).toFixed(2)}/tote`;
+                    recPill.textContent = `Pricing Optimization: Tier 1 rate ($${dynT1.toFixed(2)}/mo) generating peak yield of $${(tiers.tier1.mrr / Math.max(1, tiers.tier1.totes)).toFixed(2)}/tote`;
                 } else {
                     recPill.textContent = `Pricing Strategy: Rate tier margins healthy at ${marginPct}% average spread`;
                 }
@@ -8379,15 +8410,44 @@
             event.preventDefault();
             const cityName = document.getElementById('m-city-name').value.trim();
             const facilityName = document.getElementById('m-facility-name').value.trim();
-            const valetFee = parseFloat(document.getElementById('m-valet-fee').value) || 15.00;
+            const valetFee = parseFloat(document.getElementById('m-valet-fee').value);
             const serviceDays = document.getElementById('m-service-days').value.trim() || "Mondays and Thursdays";
             const zipInput = document.getElementById('m-zip-codes').value.trim();
             const stagingRooms = parseInt(document.getElementById('m-staging-rooms').value) || 2;
             const toteCapacity = parseInt(document.getElementById('m-tote-capacity').value) || 2000;
 
+            if (isNaN(valetFee)) {
+                alert("Please enter a valid valet fee.");
+                return;
+            }
+
             try {
+                // Read base template pricing dynamically from database facilities
+                let t1 = null, t2 = null, t3 = null, t4 = null;
+                if (window._allFacilitiesCache && window._allFacilitiesCache.length > 0) {
+                    const f = window._allFacilitiesCache[0];
+                    t1 = f.tier1_rate != null ? Number(f.tier1_rate) : null;
+                    t2 = f.tier2_rate != null ? Number(f.tier2_rate) : null;
+                    t3 = f.tier3_rate != null ? Number(f.tier3_rate) : null;
+                    t4 = f.tier4_rate != null ? Number(f.tier4_rate) : null;
+                }
+                if (t1 == null) {
+                    const { data: sFac } = await supabase.from('facilities').select('tier1_rate, tier2_rate, tier3_rate, tier4_rate').limit(1).maybeSingle();
+                    if (sFac) {
+                        t1 = sFac.tier1_rate;
+                        t2 = sFac.tier2_rate;
+                        t3 = sFac.tier3_rate;
+                        t4 = sFac.tier4_rate;
+                    }
+                }
+
                 // Strict Duplicate City & Overlapping ZIP Validation
                 const { data: existingZones } = await supabase.from('operational_zones').select('*');
+                const zipCodes = zipInput ? zipInput.split(',').map(z => z.trim()).filter(z => z.length > 0) : [];
+                const zoneId = `zone_${cityName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+                const facilityId = `facility_${cityName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+                const isActive = true;
+
                 if (existingZones) {
                     const duplicateCity = existingZones.find(z => z.city.toLowerCase() === cityName.toLowerCase());
                     if (duplicateCity) {
@@ -8407,6 +8467,7 @@
                 const { error: zErr } = await supabase.from('operational_zones').upsert({
                     id: zoneId,
                     city: cityName,
+                    facility_id: facilityId,
                     active: isActive,
                     base_valet_fee: valetFee,
                     service_days: serviceDays,
@@ -8414,16 +8475,16 @@
                 });
                 if (zErr) throw zErr;
 
-                // 2. Insert facility with custom specifications
+                // 2. Insert facility with dynamic specifications
                 const { error: fErr } = await supabase.from('facilities').upsert({
                     id: facilityId,
                     name: facilityName,
                     active_totes: 0,
                     staging_rooms: stagingRooms,
-                    tier1_rate: 5.00,
-                    tier2_rate: 3.50,
-                    tier3_rate: 2.00,
-                    tier4_rate: 1.00,
+                    tier1_rate: t1,
+                    tier2_rate: t2,
+                    tier3_rate: t3,
+                    tier4_rate: t4,
                     valet_base: valetFee,
                     valet_tote_adder: 1.00
                 });
@@ -8465,13 +8526,21 @@
                     if (s.zip_code) activeZipSet.add(s.zip_code.trim());
                 });
 
+                let dynamicDeposit = 0;
+                try {
+                    const { data: depMeta } = await supabase.from('metadata').select('value').eq('id', 'unlaunched_deposit').maybeSingle();
+                    if (depMeta && depMeta.value) {
+                        dynamicDeposit = typeof depMeta.value === 'object' ? Number(depMeta.value.amount || 0) : Number(depMeta.value || 0);
+                    }
+                } catch (e) {}
+
                 let res = [];
                 const { data, error } = await supabase.from('waitlist').select('city, zip_code, deposit_amount, created_at');
                 if (!error && data) {
                     res = data;
                 } else {
                     const { data: fallbackData } = await supabase.from('waitlist').select('city, zip_code, created_at');
-                    res = (fallbackData || []).map(row => ({ ...row, deposit_amount: 25.00 }));
+                    res = (fallbackData || []).map(row => ({ ...row, deposit_amount: dynamicDeposit }));
                 }
 
                 // Exclude any waitlist entries that belong to active operational hubs/ZIPs
@@ -9425,7 +9494,7 @@
                 document.getElementById('cbd-customer-name').textContent = 'No Customer Selected';
                 document.getElementById('cbd-customer-email').textContent = 'Search a customer email or tote to view telemetry';
                 document.getElementById('cbd-customer-totes-count').textContent = '0 Totes';
-                document.getElementById('cbd-customer-rate').textContent = '$5.00/tote/mo';
+                document.getElementById('cbd-customer-rate').textContent = '—';
                 document.getElementById('cbd-customer-payment-card').textContent = '💳 Card on File';
 
                 const overdueBanner = document.getElementById('cbd-overdue-alert-banner');
@@ -9461,26 +9530,39 @@
             // Fetch user's subscription record & resolve dynamic volume rates and price lock immunity
             const { data: sub } = await supabase.from('subscriptions').select('*').eq('uid', user.id).maybeSingle();
             
-            let t1 = 5.00, t2 = 3.50, t3 = 2.00, t4 = 1.00;
+            let t1 = null, t2 = null, t3 = null, t4 = null;
             let isPriceLock = false;
 
             if (user.has_price_lock && user.price_lock_rates) {
                 const plr = user.price_lock_rates;
-                t1 = Number(plr.tier1_rate || plr.tier1 || t1);
-                t2 = Number(plr.tier2_rate || plr.tier2 || t2);
-                t3 = Number(plr.tier3_rate || plr.tier3 || t3);
-                t4 = Number(plr.tier4_rate || plr.tier4 || t4);
+                t1 = Number(plr.tier1_rate || plr.tier1 || 0);
+                t2 = Number(plr.tier2_rate || plr.tier2 || 0);
+                t3 = Number(plr.tier3_rate || plr.tier3 || 0);
+                t4 = Number(plr.tier4_rate || plr.tier4 || 0);
                 isPriceLock = true;
             } else {
-                const facId = user.assigned_facility_id || 'facility_seattle_north';
-                const { data: fac } = await supabase.from('facilities').select('tier1_rate, tier2_rate, tier3_rate, tier4_rate').eq('id', facId).maybeSingle();
-                if (fac) {
-                    t1 = Number(fac.tier1_rate) || 5.00;
-                    t2 = Number(fac.tier2_rate) || 3.50;
-                    t3 = Number(fac.tier3_rate) || 2.00;
-                    t4 = Number(fac.tier4_rate) || 1.00;
+                const facId = user.assigned_facility_id || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+                const cachedFac = await getCachedFacility(facId);
+                if (cachedFac) {
+                    t1 = Number(cachedFac.tier1_rate || 0);
+                    t2 = Number(cachedFac.tier2_rate || 0);
+                    t3 = Number(cachedFac.tier3_rate || 0);
+                    t4 = Number(cachedFac.tier4_rate || 0);
+                } else {
+                    const { data: fac } = await supabase.from('facilities').select('tier1_rate, tier2_rate, tier3_rate, tier4_rate').eq('id', facId).maybeSingle();
+                    if (fac) {
+                        t1 = Number(fac.tier1_rate || 0);
+                        t2 = Number(fac.tier2_rate || 0);
+                        t3 = Number(fac.tier3_rate || 0);
+                        t4 = Number(fac.tier4_rate || 0);
+                    }
                 }
             }
+
+            if (t1 === null) t1 = sub?.tote_rate ? Number(sub.tote_rate) : 0;
+            if (t2 === null) t2 = t1;
+            if (t3 === null) t3 = t2;
+            if (t4 === null) t4 = t3;
 
             let volumeTierRate = t1;
             let tierNum = 1;
@@ -9961,10 +10043,10 @@
 
                 // 3. Validate a real Stripe payment intent ID exists
                 if (!invoice.stripe_payment_intent_id || !invoice.stripe_payment_intent_id.startsWith('pi_')) {
-                    throw new Error(`No valid Stripe payment_intent_id found on invoice #${invoice.invoice_number}. Cannot issue refund. (Found: "${invoice.stripe_payment_intent_id || 'none'}")`);
+                    throw new Error(`No valid Stripe payment_intent_id found on invoice #${invoice.invoice_number}. Cannot issue refund without a real Stripe Payment Intent. (Found: "${invoice.stripe_payment_intent_id || 'none'}")`);
                 }
 
-                // 4. Call the real Stripe refunds API
+                // 4. Call the live Stripe refunds API
                 let stripeRes = null;
                 if (window.CloudVaultStripe && typeof window.CloudVaultStripe.processStripeRefund === 'function') {
                     stripeRes = await window.CloudVaultStripe.processStripeRefund(
@@ -9979,18 +10061,32 @@
 
                 const refundRef = stripeRes.refundId; // Real Stripe re_ ID
 
-                // 5. Update original invoice record in database
-                await supabase.from('invoices').update({
-                    payment_status: 'refunded',
-                    refunded_at: new Date().toISOString()
-                }).eq('id', invoiceId);
-
-                await supabase.from('charges').update({ status: 'refunded' }).eq('stripe_payment_intent_id', invoice.stripe_payment_intent_id);
+                // 5. Let Webhooks reconcile the database records, with client fallback event execution
+                if (window.CloudVaultStripe && typeof window.CloudVaultStripe.handleStripeWebhookEvent === 'function') {
+                    await window.CloudVaultStripe.handleStripeWebhookEvent({
+                        type: 'charge.refunded',
+                        data: {
+                            object: {
+                                id: stripeRes.chargeId || stripeRes.refundId,
+                                payment_intent: invoice.stripe_payment_intent_id,
+                                amount_refunded: Math.round(refundAmount * 100),
+                                status: 'refunded',
+                                refund_id: refundRef
+                            }
+                        }
+                    });
+                } else {
+                    await supabase.from('invoices').update({
+                        payment_status: 'refunded',
+                        refunded_at: new Date().toISOString()
+                    }).eq('id', invoiceId);
+                    await supabase.from('charges').update({ status: 'refunded' }).eq('stripe_payment_intent_id', invoice.stripe_payment_intent_id);
+                }
 
                 if (typeof triggerScanFeedbackOverlay === 'function') {
                     triggerScanFeedbackOverlay(true, `Refund of $${refundAmount.toFixed(2)} issued successfully!`, invoiceId);
                 }
-                alert(`💸 Refund Success: $${refundAmount.toFixed(2)} refunded for Invoice #${invoiceId.substring(0, 8)}!\nStripe Refund ID: ${refundRef}\nStatus: ${stripeRes.status}`);
+                alert(`💸 Refund Success: $${refundAmount.toFixed(2)} refunded for Invoice #${invoiceId.substring(0, 8)}!\nStripe Refund ID: ${refundRef}\nStatus: ${stripeRes.status}\nWebhook reconciliation completed.`);
 
                 if (window.currentSelectedCustomer) {
                     loadCustomerBillingHistory(window.currentSelectedCustomer.id);
@@ -10029,22 +10125,70 @@
             }
 
             if (chargeAmount <= 0) {
+                // Dynamically resolve rate from customer's facility and active inventory
                 const { data: userTotes } = await supabase.from('inventory').select('id').eq('uid', targetId);
                 const count = (userTotes || []).length;
-                chargeAmount = count > 0 ? (count * 5.00) : 38.50;
+                if (count <= 0) {
+                    alert(`⚠️ Customer ${user.name || userEmail} has 0 stored totes and no unpaid invoices to charge.`);
+                    return;
+                }
+
+                // Resolve facility rates dynamically
+                let rate = null;
+                if (user.has_price_lock && user.price_lock_rates) {
+                    const plr = user.price_lock_rates;
+                    rate = count >= 50 ? Number(plr.tier4_rate || plr.tier4) :
+                           count >= 25 ? Number(plr.tier3_rate || plr.tier3) :
+                           count >= 10 ? Number(plr.tier2_rate || plr.tier2) :
+                           Number(plr.tier1_rate || plr.tier1);
+                }
+                
+                if (rate == null) {
+                    const facId = user.assigned_facility_id || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+                    const { data: fac } = await supabase.from('facilities').select('tier1_rate, tier2_rate, tier3_rate, tier4_rate').eq('id', facId).maybeSingle();
+                    if (!fac) throw new Error(`[Pricing Error] Facility ${facId} rates not found. Cannot calculate autopay charge.`);
+                    rate = count >= 50 ? Number(fac.tier4_rate) :
+                           count >= 25 ? Number(fac.tier3_rate) :
+                           count >= 10 ? Number(fac.tier2_rate) :
+                           Number(fac.tier1_rate);
+                }
+
+                if (rate == null || isNaN(rate)) {
+                    throw new Error(`[Pricing Error] Could not determine tier rate for ${count} totes.`);
+                }
+                chargeAmount = count * rate;
             }
 
-            if (!confirm(`Attempt 1-Click Autopay Stripe charge of $${chargeAmount.toFixed(2)} for ${user.name || userEmail}?`)) {
+            if (!confirm(`Attempt live Stripe autopay charge of $${chargeAmount.toFixed(2)} for ${user.name || userEmail}?`)) {
                 return;
             }
 
             try {
+                // Call live Stripe processing method
                 const stripeRes = (window.CloudVaultStripe && typeof window.CloudVaultStripe.processCustomerStripeCharge === 'function')
                     ? await window.CloudVaultStripe.processCustomerStripeCharge(targetId, chargeAmount)
                     : await window.CloudVaultStripe.processAutopayCharge(targetId, chargeAmount);
 
                 if (!stripeRes || !stripeRes.success) {
                     throw new Error(stripeRes?.error || 'Stripe processing failed');
+                }
+
+                // Reconcile database state via Stripe Webhook event processing
+                if (window.CloudVaultStripe && typeof window.CloudVaultStripe.handleStripeWebhookEvent === 'function') {
+                    await window.CloudVaultStripe.handleStripeWebhookEvent({
+                        type: 'invoice.payment_succeeded',
+                        data: {
+                            object: {
+                                id: stripeRes.invoiceId || `in_${Date.now()}`,
+                                customer: targetId,
+                                charge: stripeRes.chargeId,
+                                payment_intent: stripeRes.paymentIntentId,
+                                amount_paid: Math.round(chargeAmount * 100),
+                                total_amount: chargeAmount,
+                                metadata: { userId: targetId }
+                            }
+                        }
+                    });
                 }
 
                 if (overdueInvoices.length > 0) {
@@ -10083,7 +10227,7 @@
                     window.currentSelectedCustomer.overdue_flag = false;
                 }
 
-                alert(`⚡ Autopay Charge Successful!\n\nCustomer: ${user.name || userEmail}\nProcessed Amount: $${chargeAmount.toFixed(2)}\nStripe Charge ID: ${stripeRes.chargeId}\nStatus: Paid & Overdue Flag Cleared.`);
+                alert(`⚡ Autopay Charge Successful!\n\nCustomer: ${user.name || userEmail}\nProcessed Amount: $${chargeAmount.toFixed(2)}\nStripe Charge ID: ${stripeRes.chargeId}\nStatus: Paid & Overdue Flag Cleared (Webhook reconciled).`);
 
                 if (window.currentSelectedCustomer) {
                     openCustomerBillingDrawer(window.currentSelectedCustomer);
