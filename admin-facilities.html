@@ -2523,13 +2523,14 @@
                     const ins = Number(document.getElementById('conf-insurance').value) || 0;
                     const totalOpEx = rent + labor + util + ins;
 
-                    const sqft = Number(document.getElementById('conf-sqft').value) || 20000;
-                    const capacity = Number(document.getElementById('conf-tote-capacity').value) || 2000;
-                    const tier1 = Number(document.getElementById('conf-tier1').value) || 5.00;
+                    const sqft = Number(document.getElementById('conf-sqft').value) || 0;
+                    const capacity = Number(document.getElementById('conf-tote-capacity').value) || 0;
+                    const tier1 = Number(document.getElementById('conf-tier1').value) || (currentLoadedFac ? Number(currentLoadedFac.tier1_rate || 0) : 0);
+                    const valetBase = Number(document.getElementById('conf-valet-base').value) || (currentLoadedFac ? Number(currentLoadedFac.valet_base || 0) : 0);
 
                     // Projected Monthly Revenue based on 70% average occupancy
                     const projectedTotes = Math.round(capacity * 0.7);
-                    const grossRev = (projectedTotes * tier1) + (Math.round(projectedTotes * 0.15) * 16.00);
+                    const grossRev = (projectedTotes * tier1) + (Math.round(projectedTotes * 0.15) * valetBase);
                     const noi = grossRev - totalOpEx;
                     const margin = grossRev > 0 ? Math.round((noi / grossRev) * 100) : 0;
                     const sqftEff = sqft > 0 ? (grossRev / sqft).toFixed(2) : '0.00';
@@ -2718,8 +2719,9 @@
                             console.warn('[Admin Facilities Telemetry] Deposit invoices fetch notice:', depErr);
                         }
 
-                        // Calculate Waitlist MRR Pipeline based on requested totes ($5/tote average tier)
-                        const waitlistMRRPipeline = (grandTotes * 5.00);
+                        // Calculate Waitlist MRR Pipeline dynamically based on requested totes and active facility tier1 rate
+                        const avgTierRate = currentLoadedFac && currentLoadedFac.tier1_rate != null ? Number(currentLoadedFac.tier1_rate) : (facilities[0]?.tier1_rate != null ? Number(facilities[0].tier1_rate) : 0);
+                        const waitlistMRRPipeline = (grandTotes * avgTierRate);
 
                         let overdueDepositCount = 0;
                         let overdueDepositAmount = 0;
@@ -2862,7 +2864,7 @@
                     } else {
                         tbody.innerHTML = leads.map(l => {
                             const dateStr = l.created_at ? new Date(l.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
-                            const depAmt = Number(l.deposit_amount) || 25.00;
+                            const depAmt = Number(l.deposit_amount) || Number(currentGlobalDeposit) || 0;
                             return `
                     <tr class="border-b border-gray-850 hover:bg-gray-900/40 transition">
                         <td class="py-3 text-white font-bold">${escapeHtml(l.email || 'Anonymous Lead')}</td>
@@ -2927,7 +2929,7 @@
                     const zip = document.getElementById('add-lead-zip').value.trim();
                     const email = document.getElementById('add-lead-email').value.trim();
                     const totes = parseInt(document.getElementById('add-lead-totes').value, 10) || 10;
-                    const deposit = parseFloat(document.getElementById('add-lead-deposit').value) || 25.00;
+                    const deposit = parseFloat(document.getElementById('add-lead-deposit').value) || Number(currentGlobalDeposit) || 0;
 
                     if (!city || !email) {
                         alert("Please enter both City Name and Prospect Email.");
@@ -2980,12 +2982,22 @@
                         return;
                     }
 
-                    const getNumVal = (id, fallback = 0) => {
+                    const getNumVal = (id, fallback = null) => {
                         const el = document.getElementById(id);
                         if (!el || el.value === '' || el.value === null || el.value === undefined) return fallback;
                         const n = Number(el.value);
                         return isNaN(n) ? fallback : n;
                     };
+
+                    const t1 = getNumVal('conf-tier1');
+                    const t2 = getNumVal('conf-tier2');
+                    const t3 = getNumVal('conf-tier3');
+                    const t4 = getNumVal('conf-tier4');
+
+                    if (t1 === null || t2 === null || t3 === null || t4 === null) {
+                        if (!silent) alert("⚠️ Please provide valid pricing rates for all 4 storage tiers.");
+                        return;
+                    }
 
                     const updatedFac = {
                         id: currentLoadedFac.id,
@@ -2996,45 +3008,45 @@
                         city: document.getElementById('conf-city').value.trim(),
                         state: document.getElementById('conf-state').value.trim(),
                         zip: document.getElementById('conf-zip').value.trim(),
-                        usable_warehouse_sqft: getNumVal('conf-sqft', 20000),
+                        usable_warehouse_sqft: getNumVal('conf-sqft', 0),
                         sqft_per_tote: getNumVal('conf-sqft-per-tote', 1.0),
-                        tote_capacity: getNumVal('conf-tote-capacity', 2000),
-                        num_staging_rooms: getNumVal('conf-staging-rooms', 2),
-                        staging_rooms: getNumVal('conf-staging-rooms', 2),
-                        num_valet_trucks: getNumVal('conf-valet-trucks', 3),
-                        valet_trucks: getNumVal('conf-valet-trucks', 3),
+                        tote_capacity: getNumVal('conf-tote-capacity', 0),
+                        num_staging_rooms: getNumVal('conf-staging-rooms', 0),
+                        staging_rooms: getNumVal('conf-staging-rooms', 0),
+                        num_valet_trucks: getNumVal('conf-valet-trucks', 0),
+                        valet_trucks: getNumVal('conf-valet-trucks', 0),
                         monthly_rent_cost: getNumVal('conf-rent', 0),
                         monthly_labor_cost: getNumVal('conf-labor', 0),
                         monthly_utilities_cost: getNumVal('conf-utilities', 0),
                         monthly_insurance_cost: getNumVal('conf-insurance', 0),
-                        tier1_rate: getNumVal('conf-tier1', 5.00),
-                        tier2_rate: getNumVal('conf-tier2', 3.50),
-                        tier3_rate: getNumVal('conf-tier3', 2.00),
-                        tier4_rate: getNumVal('conf-tier4', 1.00),
-                        valet_base: getNumVal('conf-valet-base', 17.00),
-                        valet_tote_adder: getNumVal('conf-valet-adder', 1.00),
-                        missing_tote_fee: getNumVal('conf-missing-tote-fee', 15.00),
-                        next_day_surge_fee: getNumVal('conf-next-day-surge', 0.00),
-                        next_day_peak_surge_fee: getNumVal('conf-next-day-peak-surge', 14.99),
-                        same_day_surge_fee: getNumVal('conf-same-day-surge', 19.99),
-                        same_day_peak_surge_fee: getNumVal('conf-same-day-peak-surge', 24.99),
+                        tier1_rate: t1,
+                        tier2_rate: t2,
+                        tier3_rate: t3,
+                        tier4_rate: t4,
+                        valet_base: getNumVal('conf-valet-base', 0),
+                        valet_tote_adder: getNumVal('conf-valet-adder', 0),
+                        missing_tote_fee: getNumVal('conf-missing-tote-fee', 0),
+                        next_day_surge_fee: getNumVal('conf-next-day-surge', 0),
+                        next_day_peak_surge_fee: getNumVal('conf-next-day-peak-surge', 0),
+                        same_day_surge_fee: getNumVal('conf-same-day-surge', 0),
+                        same_day_peak_surge_fee: getNumVal('conf-same-day-peak-surge', 0),
                         next_day_promo_free: Boolean(document.getElementById('conf-next-day-promo')?.checked),
                         max_scheduling_days_out: parseInt(document.getElementById('conf-max-days-out')?.value, 10) || 30,
                         min_lead_time_days: getNumVal('conf-min-lead-days', 0),
-                        evening_peak_slot_fee: getNumVal('conf-slot-fee-evening', getNumVal('conf-evening-peak-slot-fee', 4.99)),
+                        evening_peak_slot_fee: getNumVal('conf-slot-fee-evening', getNumVal('conf-evening-peak-slot-fee', 0)),
                         staging_config: {
                             ...(currentLoadedFac.staging_config || {}),
                             allowed_slots: ["09:00 AM - 12:00 PM", "12:00 PM - 03:00 PM", "03:00 PM - 06:00 PM"],
                             slot_surge_fees: {
-                                "09:00 AM - 12:00 PM": getNumVal('conf-slot-fee-morning', 0.00),
-                                "12:00 PM - 03:00 PM": getNumVal('conf-slot-fee-afternoon', 0.00),
-                                "03:00 PM - 06:00 PM": getNumVal('conf-slot-fee-evening', 4.99)
+                                "09:00 AM - 12:00 PM": getNumVal('conf-slot-fee-morning', 0),
+                                "12:00 PM - 03:00 PM": getNumVal('conf-slot-fee-afternoon', 0),
+                                "03:00 PM - 06:00 PM": getNumVal('conf-slot-fee-evening', 0)
                             }
                         }
                     };
 
                     const depEl = document.getElementById('conf-deposit-amount');
-                    const depositVal = depEl ? getNumVal('conf-deposit-amount', 25.00) : 25.00;
+                    const depositVal = depEl ? getNumVal('conf-deposit-amount', 0) : 0;
                     const activeVal = document.getElementById('conf-market-active-select').value === "true";
 
                     const zoneId = currentLoadedZone ? currentLoadedZone.id : `zone_${currentLoadedFac.id.replace('facility_', '')}`;
@@ -3055,7 +3067,7 @@
                                            (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.id) || null;
 
                     try {
-                        // Use SECURITY DEFINER RPC to bypass client-level RLS restrictions
+                        // Use SECURITY DEFINER RPC to persist facility config and automatically update non-price-locked subscriptions
                         const { data: rpcRes, error: rpcErr } = await supabase.rpc('save_facility_configuration', {
                             p_facility_data: updatedFac,
                             p_zone_data: zoneData,
@@ -3071,9 +3083,31 @@
                             if (zoneErr) throw zoneErr;
                         }
 
+                        // Synchronize updated subscription rates with Stripe for all affected customers in this facility
+                        try {
+                            const { data: affectedSubs } = await supabase
+                                .from('subscriptions')
+                                .select('uid, stripe_subscription_id, total_totes, tote_count')
+                                .or(`facility_id.eq.${currentLoadedFac.id}`)
+                                .eq('status', 'active')
+                                .not('stripe_subscription_id', 'is', null);
+
+                            if (affectedSubs && affectedSubs.length > 0 && window.StripeBillingIntegration) {
+                                console.log(`[Stripe Billing] Synchronizing live Stripe subscription rates for ${affectedSubs.length} customers in ${updatedFac.name}...`);
+                                for (const sub of affectedSubs) {
+                                    if (typeof window.StripeBillingIntegration.syncSubscriptionQuantityWithStripe === 'function') {
+                                        window.StripeBillingIntegration.syncSubscriptionQuantityWithStripe(sub.uid)
+                                            .catch(syncErr => console.warn(`[Stripe Sync] Customer ${sub.uid} sync notice:`, syncErr));
+                                    }
+                                }
+                            }
+                        } catch (syncErr) {
+                            console.warn("[Stripe Sync] Batch subscription sync notice:", syncErr);
+                        }
+
                         await loadFacilitiesDropdown();
                         if (!silent) {
-                            alert(`Successfully saved specifications, regional pricing rates, and deposit rules for ${updatedFac.name}!`);
+                            alert(`Successfully saved specifications, regional pricing rates, and deposit rules for ${updatedFac.name}! Rates dynamically reflected across active customers.`);
                         }
                     } catch (err) {
                         console.error("Save config failed:", err);
@@ -3082,6 +3116,7 @@
                         }
                         throw err;
                     }
+                }
                 }
 
                 // Fallback alias for legacy callers
@@ -3333,28 +3368,38 @@
                 }
 
                 // ===== LAUNCH NEW MARKET MODAL =====
-                function openLaunchModal() {
-                    document.getElementById('launch-modal-overlay').classList.add('active');
-                    lucide.createIcons();
+                function openLaunchMarketModal() {
+                    document.getElementById('launch-market-modal-overlay').classList.add('active');
                 }
 
-                function closeLaunchModal() {
-                    document.getElementById('launch-modal-overlay').classList.remove('active');
+                function closeLaunchMarketModal() {
+                    document.getElementById('launch-market-modal-overlay').classList.remove('active');
                 }
 
                 function closeLaunchModalOutside(e) {
-                    if (e.target === document.getElementById('launch-modal-overlay')) {
-                        closeLaunchModal();
-                    }
+                    if (e.target.id === 'launch-market-modal-overlay') closeLaunchMarketModal();
                 }
 
-                async function executeLaunchNewMarket() {
-                    const city = document.getElementById('launch-city').value.trim();
-                    const state = document.getElementById('launch-state').value.trim().toUpperCase();
+                async function handleLaunchMarket(event) {
+                    event.preventDefault();
+                    const city = document.getElementById('launch-market-city').value.trim();
+                    const state = document.getElementById('launch-market-state').value.trim().toUpperCase();
                     const facName = document.getElementById('launch-fac-name').value.trim();
 
                     if (!city || !state || !facName) {
                         alert('City, State, and Facility Name are required to launch a new market.');
+                        return;
+                    }
+
+                    const t1 = parseFloat(document.getElementById('launch-tier1').value);
+                    const t2 = parseFloat(document.getElementById('launch-tier2').value);
+                    const t3 = parseFloat(document.getElementById('launch-tier3').value);
+                    const t4 = parseFloat(document.getElementById('launch-tier4').value);
+                    const valetBase = parseFloat(document.getElementById('launch-valet-base').value);
+                    const valetAdder = parseFloat(document.getElementById('launch-valet-adder').value);
+
+                    if (isNaN(t1) || isNaN(t2) || isNaN(t3) || isNaN(t4)) {
+                        alert('⚠️ Please enter valid pricing rates for all storage tiers.');
                         return;
                     }
 
@@ -3364,7 +3409,6 @@
                     btn.disabled = true;
                     lucide.createIcons();
 
-                    // Generate facility ID from city name
                     const citySlug = city.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
                     const facilityId = `facility_${citySlug}_central`;
                     const zoneId = `zone_${citySlug}`;
@@ -3378,21 +3422,21 @@
                         city: city,
                         state: state,
                         zip: document.getElementById('launch-fac-zip').value.trim() || '',
-                        usable_warehouse_sqft: Number(document.getElementById('launch-sqft').value) || 15000,
+                        usable_warehouse_sqft: Number(document.getElementById('launch-sqft').value) || 0,
                         sqft_per_tote: Number(document.getElementById('launch-sqft-per-tote').value) || 1.0,
-                        tote_capacity: Number(document.getElementById('launch-capacity').value) || 1500,
-                        num_staging_rooms: Number(document.getElementById('launch-staging').value) || 2,
-                        staging_rooms: Number(document.getElementById('launch-staging').value) || 2,
-                        monthly_rent_cost: Number(document.getElementById('launch-rent').value) || 5000,
-                        monthly_labor_cost: Number(document.getElementById('launch-labor').value) || 8000,
-                        monthly_utilities_cost: Number(document.getElementById('launch-utilities').value) || 800,
-                        monthly_insurance_cost: Number(document.getElementById('launch-insurance').value) || 450,
-                        tier1_rate: Number(document.getElementById('launch-tier1').value) || 5.00,
-                        tier2_rate: Number(document.getElementById('launch-tier2').value) || 3.50,
-                        tier3_rate: Number(document.getElementById('launch-tier3').value) || 2.00,
-                        tier4_rate: Number(document.getElementById('launch-tier4').value) || 1.00,
-                        valet_base: Number(document.getElementById('launch-valet-base').value) || 15.00,
-                        valet_tote_adder: Number(document.getElementById('launch-valet-adder').value) || 1.00
+                        tote_capacity: Number(document.getElementById('launch-capacity').value) || 0,
+                        num_staging_rooms: Number(document.getElementById('launch-staging').value) || 0,
+                        staging_rooms: Number(document.getElementById('launch-staging').value) || 0,
+                        monthly_rent_cost: Number(document.getElementById('launch-rent').value) || 0,
+                        monthly_labor_cost: Number(document.getElementById('launch-labor').value) || 0,
+                        monthly_utilities_cost: Number(document.getElementById('launch-utilities').value) || 0,
+                        monthly_insurance_cost: Number(document.getElementById('launch-insurance').value) || 0,
+                        tier1_rate: t1,
+                        tier2_rate: t2,
+                        tier3_rate: t3,
+                        tier4_rate: t4,
+                        valet_base: isNaN(valetBase) ? 0 : valetBase,
+                        valet_tote_adder: isNaN(valetAdder) ? 0 : valetAdder
                     };
 
                     const zipInput = document.getElementById('launch-zips').value.trim();

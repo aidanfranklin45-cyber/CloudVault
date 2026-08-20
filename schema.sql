@@ -5039,6 +5039,231 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- 9. RPC: Save Facility Configuration & Reconcile Active Subscriptions Dynamically
+CREATE OR REPLACE FUNCTION public.save_facility_configuration(
+    p_facility_data JSONB,
+    p_zone_data JSONB DEFAULT NULL,
+    p_staff_uid TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_fac_id TEXT;
+    v_fac_name TEXT;
+    v_tier1 NUMERIC;
+    v_tier2 NUMERIC;
+    v_tier3 NUMERIC;
+    v_tier4 NUMERIC;
+    v_missing_fee NUMERIC;
+    v_valet_base NUMERIC;
+    v_valet_adder NUMERIC;
+    v_subs_updated INT := 0;
+    v_sub RECORD;
+    v_tote_count INT;
+    v_resolved_rate NUMERIC;
+    v_new_recurring NUMERIC;
+BEGIN
+    v_fac_id := p_facility_data->>'id';
+    v_fac_name := p_facility_data->>'name';
+    v_tier1 := (p_facility_data->>'tier1_rate')::NUMERIC;
+    v_tier2 := (p_facility_data->>'tier2_rate')::NUMERIC;
+    v_tier3 := (p_facility_data->>'tier3_rate')::NUMERIC;
+    v_tier4 := (p_facility_data->>'tier4_rate')::NUMERIC;
+    v_missing_fee := (p_facility_data->>'missing_tote_fee')::NUMERIC;
+    v_valet_base := (p_facility_data->>'valet_base')::NUMERIC;
+    v_valet_adder := (p_facility_data->>'valet_tote_adder')::NUMERIC;
+
+    IF v_fac_id IS NULL OR v_fac_id = '' THEN
+        RAISE EXCEPTION 'Facility ID is required';
+    END IF;
+
+    -- Upsert facility specification
+    INSERT INTO public.facilities (
+        id,
+        name,
+        manager_name,
+        manager_email,
+        address,
+        city,
+        state,
+        zip,
+        usable_warehouse_sqft,
+        sqft_per_tote,
+        tote_capacity,
+        num_staging_rooms,
+        staging_rooms,
+        num_valet_trucks,
+        valet_trucks,
+        monthly_rent_cost,
+        monthly_labor_cost,
+        monthly_utilities_cost,
+        monthly_insurance_cost,
+        tier1_rate,
+        tier2_rate,
+        tier3_rate,
+        tier4_rate,
+        valet_base,
+        valet_tote_adder,
+        missing_tote_fee,
+        next_day_surge_fee,
+        next_day_peak_surge_fee,
+        same_day_surge_fee,
+        same_day_peak_surge_fee,
+        next_day_promo_free,
+        max_scheduling_days_out,
+        min_lead_time_days,
+        evening_peak_slot_fee,
+        staging_config,
+        updated_at
+    ) VALUES (
+        v_fac_id,
+        COALESCE(v_fac_name, v_fac_id),
+        p_facility_data->>'manager_name',
+        p_facility_data->>'manager_email',
+        p_facility_data->>'address',
+        p_facility_data->>'city',
+        p_facility_data->>'state',
+        p_facility_data->>'zip',
+        COALESCE((p_facility_data->>'usable_warehouse_sqft')::NUMERIC, 0),
+        COALESCE((p_facility_data->>'sqft_per_tote')::NUMERIC, 1.0),
+        COALESCE((p_facility_data->>'tote_capacity')::INT, 0),
+        COALESCE((p_facility_data->>'num_staging_rooms')::INT, 0),
+        COALESCE((p_facility_data->>'staging_rooms')::INT, 0),
+        COALESCE((p_facility_data->>'num_valet_trucks')::INT, 0),
+        COALESCE((p_facility_data->>'valet_trucks')::INT, 0),
+        COALESCE((p_facility_data->>'monthly_rent_cost')::NUMERIC, 0),
+        COALESCE((p_facility_data->>'monthly_labor_cost')::NUMERIC, 0),
+        COALESCE((p_facility_data->>'monthly_utilities_cost')::NUMERIC, 0),
+        COALESCE((p_facility_data->>'monthly_insurance_cost')::NUMERIC, 0),
+        v_tier1,
+        v_tier2,
+        v_tier3,
+        v_tier4,
+        COALESCE(v_valet_base, 0),
+        COALESCE(v_valet_adder, 0),
+        COALESCE(v_missing_fee, 0),
+        COALESCE((p_facility_data->>'next_day_surge_fee')::NUMERIC, 0),
+        COALESCE((p_facility_data->>'next_day_peak_surge_fee')::NUMERIC, 0),
+        COALESCE((p_facility_data->>'same_day_surge_fee')::NUMERIC, 0),
+        COALESCE((p_facility_data->>'same_day_peak_surge_fee')::NUMERIC, 0),
+        COALESCE((p_facility_data->>'next_day_promo_free')::BOOLEAN, false),
+        COALESCE((p_facility_data->>'max_scheduling_days_out')::INT, 30),
+        COALESCE((p_facility_data->>'min_lead_time_days')::INT, 0),
+        COALESCE((p_facility_data->>'evening_peak_slot_fee')::NUMERIC, 0),
+        p_facility_data->'staging_config',
+        NOW()
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        manager_name = EXCLUDED.manager_name,
+        manager_email = EXCLUDED.manager_email,
+        address = EXCLUDED.address,
+        city = EXCLUDED.city,
+        state = EXCLUDED.state,
+        zip = EXCLUDED.zip,
+        usable_warehouse_sqft = EXCLUDED.usable_warehouse_sqft,
+        sqft_per_tote = EXCLUDED.sqft_per_tote,
+        tote_capacity = EXCLUDED.tote_capacity,
+        num_staging_rooms = EXCLUDED.num_staging_rooms,
+        staging_rooms = EXCLUDED.staging_rooms,
+        num_valet_trucks = EXCLUDED.num_valet_trucks,
+        valet_trucks = EXCLUDED.valet_trucks,
+        monthly_rent_cost = EXCLUDED.monthly_rent_cost,
+        monthly_labor_cost = EXCLUDED.monthly_labor_cost,
+        monthly_utilities_cost = EXCLUDED.monthly_utilities_cost,
+        monthly_insurance_cost = EXCLUDED.monthly_insurance_cost,
+        tier1_rate = EXCLUDED.tier1_rate,
+        tier2_rate = EXCLUDED.tier2_rate,
+        tier3_rate = EXCLUDED.tier3_rate,
+        tier4_rate = EXCLUDED.tier4_rate,
+        valet_base = EXCLUDED.valet_base,
+        valet_tote_adder = EXCLUDED.valet_tote_adder,
+        missing_tote_fee = EXCLUDED.missing_tote_fee,
+        next_day_surge_fee = EXCLUDED.next_day_surge_fee,
+        next_day_peak_surge_fee = EXCLUDED.next_day_peak_surge_fee,
+        same_day_surge_fee = EXCLUDED.same_day_surge_fee,
+        same_day_peak_surge_fee = EXCLUDED.same_day_peak_surge_fee,
+        next_day_promo_free = EXCLUDED.next_day_promo_free,
+        max_scheduling_days_out = EXCLUDED.max_scheduling_days_out,
+        min_lead_time_days = EXCLUDED.min_lead_time_days,
+        evening_peak_slot_fee = EXCLUDED.evening_peak_slot_fee,
+        staging_config = EXCLUDED.staging_config,
+        updated_at = NOW();
+
+    -- Upsert zone data if provided
+    IF p_zone_data IS NOT NULL AND p_zone_data->>'id' IS NOT NULL THEN
+        INSERT INTO public.operational_zones (
+            id,
+            facility_id,
+            city,
+            required_deposit,
+            active,
+            zip_codes,
+            updated_at
+        ) VALUES (
+            p_zone_data->>'id',
+            v_fac_id,
+            COALESCE(p_zone_data->>'city', v_fac_name, 'Active Market'),
+            COALESCE((p_zone_data->>'required_deposit')::NUMERIC, 0),
+            COALESCE((p_zone_data->>'active')::BOOLEAN, true),
+            CASE WHEN p_zone_data->'zip_codes' IS NOT NULL THEN ARRAY(SELECT jsonb_array_elements_text(p_zone_data->'zip_codes')) ELSE ARRAY[]::TEXT[] END,
+            NOW()
+        )
+        ON CONFLICT (id) DO UPDATE SET
+            facility_id = EXCLUDED.facility_id,
+            city = EXCLUDED.city,
+            required_deposit = EXCLUDED.required_deposit,
+            active = EXCLUDED.active,
+            zip_codes = EXCLUDED.zip_codes,
+            updated_at = NOW();
+    END IF;
+
+    -- Dynamically reconcile all non-price-locked subscriptions for this facility
+    IF v_tier1 IS NOT NULL AND v_tier2 IS NOT NULL AND v_tier3 IS NOT NULL AND v_tier4 IS NOT NULL THEN
+        FOR v_sub IN
+            SELECT s.id, s.uid, s.total_totes, s.tote_count, s.has_price_lock, u.has_price_lock AS u_lock
+            FROM public.subscriptions s
+            LEFT JOIN public.users u ON u.id = s.uid
+            WHERE (s.facility_id = v_fac_id OR u.assigned_facility_id = v_fac_id)
+              AND s.status = 'active'
+              AND COALESCE(s.has_price_lock, false) = false
+              AND COALESCE(u.has_price_lock, false) = false
+        LOOP
+            v_tote_count := COALESCE(v_sub.total_totes, v_sub.tote_count, 1);
+            IF v_tote_count >= 50 THEN
+                v_resolved_rate := v_tier4;
+            ELSIF v_tote_count >= 25 THEN
+                v_resolved_rate := v_tier3;
+            ELSIF v_tote_count >= 10 THEN
+                v_resolved_rate := v_tier2;
+            ELSE
+                v_resolved_rate := v_tier1;
+            END IF;
+
+            v_new_recurring := v_tote_count * v_resolved_rate;
+
+            UPDATE public.subscriptions
+            SET tote_rate = v_resolved_rate,
+                recurring_storage = v_new_recurring,
+                monthly_total = v_new_recurring,
+                last_updated = NOW()
+            WHERE id = v_sub.id;
+
+            v_subs_updated := v_subs_updated + 1;
+        END LOOP;
+    END IF;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'facility_id', v_fac_id,
+        'subscriptions_updated', v_subs_updated,
+        'timestamp', NOW()
+    );
+END;
+$$;
+
 
 
 

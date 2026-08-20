@@ -11450,6 +11450,25 @@
                 document.getElementById('tmm-tote-room').textContent = resolvedRoomText;
                 document.getElementById('tmm-tote-created-at').textContent = item.created_at ? new Date(item.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
+                // Populate Dynamic Missing Tote Replacement Fee from Facility
+                const feeInput = document.getElementById('tmm-charge-amount');
+                if (feeInput) {
+                    let facMissingFee = null;
+                    if (item.facilities && item.facilities.missing_tote_fee != null) {
+                        facMissingFee = Number(item.facilities.missing_tote_fee);
+                    } else if (item.facility_id) {
+                        const cachedFac = await getCachedFacility(item.facility_id);
+                        if (cachedFac && cachedFac.missing_tote_fee != null) facMissingFee = Number(cachedFac.missing_tote_fee);
+                        else {
+                            const { data: dbFac } = await supabase.from('facilities').select('missing_tote_fee').eq('id', item.facility_id).maybeSingle();
+                            if (dbFac && dbFac.missing_tote_fee != null) facMissingFee = Number(dbFac.missing_tote_fee);
+                        }
+                    }
+                    if (facMissingFee != null) {
+                        feeInput.value = facMissingFee.toFixed(2);
+                    }
+                }
+
                 // Populate Location Telemetry & Select Dropdown
                 const currentLocText = item.location_code || item.location_identifier || 'Unassigned';
                 const locBadge = document.getElementById('tmm-current-location-badge');
@@ -11554,8 +11573,13 @@
 
         async function executeChargeMissingToteFromModal() {
             if (!currentMasterTote) return;
-            const feeVal = parseFloat(document.getElementById('tmm-charge-amount').value) || 15.00;
+            const feeVal = parseFloat(document.getElementById('tmm-charge-amount').value);
             const reasonVal = document.getElementById('tmm-charge-reason').value.trim() || 'Missing / Damaged Tote Penalty Fee';
+
+            if (isNaN(feeVal) || feeVal <= 0) {
+                alert("⚠️ Please enter a valid replacement fee amount.");
+                return;
+            }
 
             if (!confirm(`Are you sure you want to charge $${feeVal.toFixed(2)} to ${currentMasterTote.users?.name || 'the customer'} for missing/damaged tote ${currentMasterTote.tote_code}? This will bill the customer via Stripe and adjust active tote quantity & volume tier.`)) {
                 return;
@@ -12856,7 +12880,7 @@
                         Level 2</span>
                 </div>
 
-                <!-- Action 1: Incident & Charge Customer ($15.00) -->
+                <!-- Action 1: Incident & Charge Customer Dynamic Fee -->
                 <div class="bg-red-950/30 border border-red-500/30 rounded-2xl p-4 space-y-3">
                     <div class="flex items-center justify-between">
                         <span
@@ -12865,15 +12889,14 @@
                             (Missing / Damaged Tote)
                         </span>
                         <span
-                            class="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 font-mono">$15.00
-                            Terms Agreement Standard</span>
+                            class="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 font-mono">Dynamic Facility Rate</span>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
                         <div class="sm:col-span-4">
                             <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Fee Amount
                                 ($)</label>
-                            <input type="number" id="tmm-charge-amount" value="15.00" step="1.00"
-                                class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white outline-none focus:border-red-500">
+                            <input type="number" id="tmm-charge-amount" step="0.50"
+                                class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white outline-none focus:border-red-500" placeholder="Fee ($)">
                         </div>
                         <div class="sm:col-span-8">
                             <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Reason / Incident
