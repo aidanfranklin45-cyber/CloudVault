@@ -252,7 +252,7 @@
 
         } else if (action === 'decommission') {
           const { error } = await sb.from('inventory').update({
-            status: 'decommissioned',
+            status: 'missing-tote',
             missing_resolution: 'written_off'
           }).eq('id', tote.id);
           if (error) throw error;
