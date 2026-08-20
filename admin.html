@@ -4596,7 +4596,7 @@
 
                     // 2. Map items to distinct access requests with explicit item lists (both active requests & exit pulls)
                     allReqsSorted.forEach(req => {
-                        const rawItems = req.requested_items || req.requested_tote_codes || [];
+                        const rawItems = [...(req.requested_items || []), ...(req.requested_tote_codes || [])];
                         if (rawItems.length === 0) return;
                         const reqIdentifiers = new Set(rawItems);
                         
@@ -4644,7 +4644,7 @@
 
                     // 2b. Map active requests with no explicit item list (e.g. new_tote_delivery or open onboarding reservations)
                     activeRequests.forEach(req => {
-                        const rawItems = req.requested_items || req.requested_tote_codes || [];
+                        const rawItems = [...(req.requested_items || []), ...(req.requested_tote_codes || [])];
                         if (rawItems.length === 0) {
                             const isValet = req.fulfillment_type === 'valet_delivery' || req.request_type === 'valet_delivery';
                             const fType = isValet ? 'valet_delivery' : defaultFulfillment;
@@ -4697,7 +4697,7 @@
                             
                             // Check if tote belonged to any historical completed/exit request
                             const histReq = allReqsSorted.find(r => {
-                                const list = r.requested_items || r.requested_tote_codes || [];
+                                const list = [...(r.requested_items || []), ...(r.requested_tote_codes || [])];
                                 return list.includes(t.id) || list.includes(t.tote_code);
                             });
 
@@ -4849,7 +4849,7 @@
                 const requestedToteIdentifiers = new Set();
                 (allRequests || []).forEach(r => {
                     if (r.status === 'pending') {
-                        const raw = r.requested_items || r.requested_tote_codes || [];
+                        const raw = [...(r.requested_items || []), ...(r.requested_tote_codes || [])];
                         raw.forEach(idOrCode => requestedToteIdentifiers.add(idOrCode));
                     }
                 });
@@ -4865,7 +4865,7 @@
 
                 function isValetItem(i) {
                     const req = allRequests.find(r => {
-                        const raw = r.requested_items || r.requested_tote_codes || [];
+                        const raw = [...(r.requested_items || []), ...(r.requested_tote_codes || [])];
                         return raw.includes(i.id) || raw.includes(i.tote_code);
                     });
                     if (req) return req.fulfillment_type === 'valet_delivery' || req.request_type === 'valet_delivery';
@@ -5430,7 +5430,7 @@
                     
                     if (reqs && reqs.length > 0) {
                         for (const r of reqs) {
-                            const reqItems = r.requested_items || r.requested_tote_codes || [];
+                            const reqItems = [...(r.requested_items || []), ...(r.requested_tote_codes || [])];
                             const hasMatch = (Array.isArray(reqItems) && reqItems.length > 0)
                                 ? reqItems.some(item => allKeys.has(item))
                                 : true;

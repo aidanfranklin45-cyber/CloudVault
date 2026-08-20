@@ -465,7 +465,13 @@
       };
     },
 
-    processStripeRefund: async function (chargeId, amount, originalInvoice) {
+    processStripeRefund: async function (stripePaymentIntentId, amount, originalInvoice, reason) {
+      const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
+      if (!apiKey) throw new Error('[Security] Stripe API key not configured. Set window.STRIPE_RESTRICTED_KEY before calling this method.');
+      if (!stripePaymentIntentId || !stripePaymentIntentId.startsWith('pi_')) {
+        throw new Error(`[StripeBillingIntegration] Invalid payment_intent ID: "${stripePaymentIntentId}". Cannot issue refund without a real Stripe pi_ ID.`);
+      }
+
       let refundSubtotal = Math.max(0, Number(amount) || 0);
       let refundTax = 0;
       let totalRefund = refundSubtotal;
@@ -480,36 +486,67 @@
           refundTax = Math.round(refundSubtotal * originalTaxRate * 100) / 100;
           totalRefund = refundSubtotal + refundTax;
         }
+      }
 
-        if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
-          try {
-            await window.CloudVaultBilling.createInvoiceRecord({
-              uid: originalInvoice.uid,
-              customer_name: originalInvoice.customer_name,
-              customer_email: originalInvoice.customer_email,
-              invoice_type: 'refund',
-              payment_status: 'refunded',
-              subtotal: -refundSubtotal,
-              tax: -Math.abs(refundTax),
-              total_amount: -totalRefund,
-              payment_method: originalInvoice.payment_method || 'card',
-              transaction_reference: chargeId || originalInvoice.transaction_reference,
-              notes: `Refund for invoice ${originalInvoice.invoice_number}`,
-              line_items: [{ description: 'Refund', qty: 1, unit_price: -refundSubtotal, amount: -refundSubtotal }],
-              created_at: new Date().toISOString()
-            });
-          } catch (e) {
-            console.warn('[StripeBillingIntegration] Failed to create refund invoice record', e);
-          }
+      // Idempotency key scoped to payment intent + amount to prevent duplicate refunds on retry
+      const idempotencyKey = `refund-${stripePaymentIntentId}-${Math.round(totalRefund * 100)}`;
+      const refundParams = new URLSearchParams({
+        payment_intent: stripePaymentIntentId,
+        amount: String(Math.round(totalRefund * 100)), // Stripe expects cents
+        reason: (reason || 'requested_by_customer').replace(/\s+/g, '_').toLowerCase().substring(0, 64),
+      });
+
+      console.log(`[StripeBillingIntegration] Calling Stripe refunds API for pi: ${stripePaymentIntentId}, amount: $${totalRefund.toFixed(2)}`);
+
+      const refundRes = await fetch('https://api.stripe.com/v1/refunds', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Idempotency-Key': idempotencyKey,
+        },
+        body: refundParams,
+      });
+
+      const refundData = await refundRes.json();
+
+      if (!refundRes.ok || refundData.error) {
+        const errMsg = refundData.error?.message || `Stripe returned HTTP ${refundRes.status}`;
+        console.error('[StripeBillingIntegration] Stripe refund API error:', errMsg, refundData);
+        throw new Error(`Stripe refund failed: ${errMsg}`);
+      }
+
+      console.log(`[StripeBillingIntegration] Stripe refund issued: ${refundData.id} status=${refundData.status}`);
+
+      // Write a refund invoice ledger record after confirmed Stripe success
+      if (originalInvoice && window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
+        try {
+          await window.CloudVaultBilling.createInvoiceRecord({
+            uid: originalInvoice.uid,
+            customer_name: originalInvoice.customer_name,
+            customer_email: originalInvoice.customer_email,
+            invoice_type: 'refund',
+            payment_status: 'refunded',
+            subtotal: -refundSubtotal,
+            tax: -Math.abs(refundTax),
+            total_amount: -totalRefund,
+            payment_method: originalInvoice.payment_method || 'card',
+            transaction_reference: refundData.id,
+            notes: `Refund for invoice ${originalInvoice.invoice_number}. Reason: ${reason || 'Customer request'}`,
+            line_items: [{ description: 'Refund', qty: 1, unit_price: -refundSubtotal, amount: -refundSubtotal }],
+            created_at: new Date().toISOString()
+          });
+        } catch (e) {
+          console.warn('[StripeBillingIntegration] Failed to create refund invoice record', e);
         }
       }
 
       return {
         success: true,
-        refundId: generateStripeId('re_3M'),
-        chargeId: chargeId || generateStripeId('ch_3M'),
+        refundId: refundData.id,           // Real Stripe re_ ID
+        chargeId: refundData.charge,        // Real Stripe ch_ ID
         amount: totalRefund,
-        status: 'succeeded',
+        status: refundData.status,          // 'succeeded' | 'pending' | 'failed'
         timestamp: new Date().toISOString()
       };
     },
