@@ -6095,6 +6095,7 @@
 
         function selectFacilityAisle(aisleKey) {
             window.facMapState.selectedAisle = aisleKey;
+            window.facMapState.activeTab = 'vault';
             renderFacilityMap();
         }
 
@@ -6326,8 +6327,8 @@
 
         function renderOverviewBlueprint(matrix) {
             const { aisleMap, roomMap, dockLocs } = matrix;
-            const aisleKeys = Object.keys(aisleMap);
-            const roomKeys = Object.keys(roomMap);
+            const aisleKeys = Object.keys(aisleMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            const roomKeys = Object.keys(roomMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
             const query = window.facMapState.searchQuery;
 
             return `
@@ -6446,7 +6447,7 @@
                                 <div class="space-y-3 max-h-[420px] overflow-y-auto pr-1">
                                     ${aisleKeys.map(ak => {
                                         const aisleData = aisleMap[ak];
-                                        const bayKeys = Object.keys(aisleData.bays || {});
+                                        const bayKeys = Object.keys(aisleData.bays || {}).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
                                         return `
                                             <div class="bg-gray-950/80 border border-gray-800/80 rounded-xl p-3 space-y-2">
                                                 <div class="flex items-center justify-between text-xs font-mono">
@@ -6499,11 +6500,11 @@
 
         function renderVaultAisleMatrix(matrix) {
             const { aisleMap } = matrix;
-            const aisleKeys = Object.keys(aisleMap);
+            const aisleKeys = Object.keys(aisleMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
             const selAisle = window.facMapState.selectedAisle || 'ALL';
             const query = window.facMapState.searchQuery;
 
-            const visibleAisles = selAisle === 'ALL' ? aisleKeys : [selAisle];
+            const visibleAisles = (selAisle === 'ALL' || !aisleMap[selAisle]) ? aisleKeys : [selAisle];
 
             return `
                 <div class="space-y-5">
@@ -6529,7 +6530,7 @@
                     <div class="space-y-6">
                         ${visibleAisles.map(ak => {
                             const aisleData = aisleMap[ak];
-                            const bayKeys = Object.keys(aisleData.bays || {});
+                            const bayKeys = Object.keys(aisleData.bays || {}).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
                             return `
                                 <div class="bg-gray-950/90 border border-gray-800 rounded-3xl p-5 space-y-4 shadow-xl">
                                     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800/80 pb-3">
