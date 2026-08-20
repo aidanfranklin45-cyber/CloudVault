@@ -1526,31 +1526,72 @@
     },
 
     /**
-     * Settles creator commission payout via Supabase RPC.
+     * Initiates Stripe Connect Express onboarding for a creator
+     * @param {string} creatorId - Creator UUID
+     * @param {string} returnUrl - Optional URL redirect on return
+     * @returns {Promise<{ url: string, account_id: string }>}
+     */
+    onboardCreatorStripeConnect: async function (creatorId, returnUrl = null) {
+      if (!creatorId) throw new Error('Creator ID required');
+      const baseUrl = (global.SUPABASE_URL || 'https://xbxvebnrjryvksvtufqj.supabase.co').replace(/\/$/, '');
+      const anonKey = global.SUPABASE_ANON_KEY || 'sb_publishable_-cW5neaZRGmicOHaHw1n3g_laY5yFZQ';
+
+      const response = await fetch(`${baseUrl}/functions/v1/stripe-connect-onboard`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': anonKey,
+          'Authorization': `Bearer ${anonKey}`
+        },
+        body: JSON.stringify({
+          creatorId,
+          returnUrl: returnUrl || window.location.href,
+          refreshUrl: window.location.href
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok || !resData.success) {
+        throw new Error(resData.error || 'Failed to initiate Stripe Connect onboarding');
+      }
+
+      return resData;
+    },
+
+    /**
+     * Settles creator commission payout via real Stripe Transfer Edge Function.
      * @param {string} creatorId - Creator UUID
      * @param {number} amount - Amount in USD
      * @param {string} reference - Payout reference note (ACH / Wire / Stripe Transfer)
      * @returns {Promise<Object>}
      */
-    settleCreatorPayout: async function (creatorId, amount, reference = 'ACH_DIRECT_DEPOSIT') {
-      const sb = global.supabase;
+    settleCreatorPayout: async function (creatorId, amount, reference = 'STRIPE_CONNECT_ACH_PAYOUT') {
       if (!creatorId || !amount) throw new Error('Creator ID and settlement amount required');
 
-      if (sb) {
-        const { data, error } = await sb.rpc('settle_creator_payout', {
-          p_creator_id: creatorId,
-          p_amount: Number(amount),
-          p_payout_ref: reference
-        });
+      const baseUrl = (global.SUPABASE_URL || 'https://xbxvebnrjryvksvtufqj.supabase.co').replace(/\/$/, '');
+      const anonKey = global.SUPABASE_ANON_KEY || 'sb_publishable_-cW5neaZRGmicOHaHw1n3g_laY5yFZQ';
 
-        if (error) {
-          console.error('[StripeBillingIntegration] Error settling payout in Supabase:', error.message);
-          throw error;
-        }
-        return data;
+      const response = await fetch(`${baseUrl}/functions/v1/stripe-creator-transfer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': anonKey,
+          'Authorization': `Bearer ${anonKey}`
+        },
+        body: JSON.stringify({
+          creatorId,
+          amount: Number(amount),
+          currency: 'usd',
+          payoutRef: reference
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok || !resData.success) {
+        throw new Error(resData.error || 'Failed to disburse Stripe transfer');
       }
 
-      return { success: true, creatorId, settledAmount: amount, simulated: true };
+      return resData;
     }
   };
 

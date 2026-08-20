@@ -1152,11 +1152,14 @@
                     </div>
                 </div>
 
-                <!-- Tabs: Creator Codes vs. Redemptions Ledger -->
+                <!-- Tabs: Creator Codes vs. Redemptions Ledger vs. Creator Partners -->
                 <div class="space-y-4">
-                    <div class="flex items-center space-x-2 border-b border-gray-800 pb-2">
+                    <div class="flex items-center space-x-2 border-b border-gray-800 pb-2 flex-wrap gap-y-2">
                         <button id="promo-tab-codes-btn" onclick="switchPromoHubTab('codes')" class="px-4 py-2 text-xs font-bold rounded-xl border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 flex items-center gap-1.5 cursor-pointer font-mono">
                             <span>🏷️</span> Creator Promo Codes
+                        </button>
+                        <button id="promo-tab-creators-btn" onclick="switchPromoHubTab('creators')" class="px-4 py-2 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white flex items-center gap-1.5 cursor-pointer font-mono">
+                            <span>👥</span> Creator Partners &amp; Payout Accounts
                         </button>
                         <button id="promo-tab-ledger-btn" onclick="switchPromoHubTab('ledger')" class="px-4 py-2 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white flex items-center gap-1.5 cursor-pointer font-mono">
                             <span>📋</span> Attribution &amp; Redemptions Ledger
@@ -1189,7 +1192,15 @@
                         </div>
                     </div>
 
-                    <!-- Panel 2: Redemptions & Invoicing Ledger -->
+                    <!-- Panel 2: Creator Partners & Stripe Connect Payout Accounts -->
+                    <div id="promo-tab-creators-panel" class="hidden space-y-4">
+                        <div id="creators-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <!-- Populated dynamically -->
+                            <div class="text-xs text-gray-500 text-center py-8 font-mono col-span-full">Loading creator accounts...</div>
+                        </div>
+                    </div>
+
+                    <!-- Panel 3: Redemptions & Invoicing Ledger -->
                     <div id="promo-tab-ledger-panel" class="hidden space-y-3">
                         <div class="overflow-x-auto">
                             <table class="w-full text-left text-xs border-collapse">
@@ -7663,11 +7674,139 @@
                 if (pendingEl) pendingEl.textContent = `$${(data.metrics.pendingPayouts || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
                 renderPromoCodesTable(data.promoCodes);
+                renderCreatorsCards(data.creators);
                 renderPromoLedgerTable(data.redemptions);
             } catch (err) {
                 console.error("Failed to load Creator Governance Hub:", err);
             }
         }
+
+        function renderCreatorsCards(creators) {
+            const grid = document.getElementById('creators-cards-grid');
+            if (!grid) return;
+
+            if (!creators || creators.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full text-center py-8 text-gray-500 font-mono">
+                        No creator partner accounts provisioned yet. Create a promo code to enroll a creator.
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = creators.map(c => {
+                const name = escapeHtml(c.name || 'Affiliate Partner');
+                const handle = escapeHtml(c.handle || '@influencer');
+                const email = escapeHtml(c.payout_email || c.email || '—');
+                const tier = (c.tier || 'standard').toUpperCase();
+
+                // Calculate metrics for this creator
+                const redemptions = (currentPromoData?.redemptions || []).filter(r => r.creator_id === c.id || r.promo_codes?.creator_id === c.id);
+                const grossRev = redemptions.reduce((sum, r) => sum + Number(r.gross_amount ?? r.invoice_gross_amount ?? 0), 0) || Number(c.total_attributed_revenue || 0);
+                const commEarned = redemptions.reduce((sum, r) => sum + Number(r.creator_commission_amount ?? r.commission_amount ?? 0), 0) || Number(c.total_commission_earned || 0);
+                const commPaid = Number(c.total_commission_paid || 0);
+                const pendingPayout = Math.max(0, commEarned - commPaid);
+
+                // Connect Status Pill
+                let statusPill = '';
+                const connectStatus = c.stripe_connect_status || (c.stripe_connect_id ? 'verified' : 'not_connected');
+
+                if (connectStatus === 'verified') {
+                    statusPill = `<span class="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-[10px] flex items-center gap-1 font-mono"><i data-lucide="check-circle" class="w-3 h-3"></i> Verified</span>`;
+                } else if (connectStatus === 'restricted') {
+                    statusPill = `<span class="px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 font-bold text-[10px] flex items-center gap-1 font-mono"><i data-lucide="alert-triangle" class="w-3 h-3"></i> Restricted</span>`;
+                } else if (connectStatus === 'pending' || connectStatus === 'pending_verification') {
+                    statusPill = `<span class="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold text-[10px] flex items-center gap-1 font-mono"><i data-lucide="clock" class="w-3 h-3"></i> In Progress</span>`;
+                } else {
+                    statusPill = `<span class="px-2.5 py-1 rounded-full bg-gray-800 border border-gray-700 text-gray-400 font-bold text-[10px] flex items-center gap-1 font-mono"><i data-lucide="link-2-off" class="w-3 h-3"></i> Not Connected</span>`;
+                }
+
+                const initials = (c.name || 'CP').substring(0, 2).toUpperCase();
+
+                return `
+                    <div class="bg-gray-950/70 border border-gray-800 rounded-3xl p-5 space-y-4 hover:border-purple-500/40 transition shadow-lg flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-300 font-black text-xs flex items-center justify-center font-mono">
+                                        ${initials}
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-bold text-white leading-tight">${name}</h4>
+                                        <p class="text-xs text-gray-500 font-mono">${handle}</p>
+                                    </div>
+                                </div>
+                                <div>${statusPill}</div>
+                            </div>
+
+                            <div class="text-[11px] text-gray-400 font-mono space-y-0.5 pt-1 border-t border-gray-850">
+                                <p class="truncate"><span class="text-gray-500">Payout Email:</span> <span class="text-gray-300">${email}</span></p>
+                                <p><span class="text-gray-500">Tier:</span> <span class="text-purple-300 font-bold">${tier}</span> &bull; <span class="text-gray-500">Rate:</span> <span class="text-emerald-400 font-bold">${c.default_commission_pct || 10}%</span></p>
+                                ${c.stripe_connect_id ? `<p class="truncate"><span class="text-gray-500">Connect ID:</span> <span class="text-gray-400">${c.stripe_connect_id}</span></p>` : ''}
+                            </div>
+
+                            <div class="grid grid-cols-3 gap-2 bg-gray-900/60 p-2.5 rounded-2xl border border-gray-850 text-center font-mono">
+                                <div>
+                                    <p class="text-[9px] uppercase text-gray-500">Gross</p>
+                                    <p class="text-xs font-bold text-white">$${grossRev.toFixed(0)}</p>
+                                </div>
+                                <div>
+                                    <p class="text-[9px] uppercase text-gray-500">Accrued</p>
+                                    <p class="text-xs font-bold text-purple-300">$${commEarned.toFixed(0)}</p>
+                                </div>
+                                <div>
+                                    <p class="text-[9px] uppercase text-gray-500">Pending</p>
+                                    <p class="text-xs font-bold ${pendingPayout > 0 ? 'text-amber-400 font-black' : 'text-gray-400'}">$${pendingPayout.toFixed(0)}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2 pt-2 border-t border-gray-850">
+                            <button onclick="initiateCreatorStripeConnect('${c.id}', this)"
+                                class="w-full py-2 px-3 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-white border border-indigo-500/40 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer font-mono">
+                                <i data-lucide="credit-card" class="w-3.5 h-3.5"></i> ${c.stripe_connect_id ? 'Update Payout Account' : 'Connect Payout Account'}
+                            </button>
+                            ${pendingPayout > 0 ? `
+                                <button onclick="openSettlePayoutModal('${c.id}', '${escapeHtml(c.name).replace(/'/g, "\\'")}', ${pendingPayout})"
+                                    class="w-full py-2 px-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-purple-600/20 font-mono">
+                                    <i data-lucide="send" class="w-3.5 h-3.5"></i> Disburse Payout ($${pendingPayout.toFixed(2)})
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (window.lucide) lucide.createIcons();
+        }
+
+        async function initiateCreatorStripeConnect(creatorId, btnEl) {
+            let origHtml = '';
+            if (btnEl) {
+                origHtml = btnEl.innerHTML;
+                btnEl.disabled = true;
+                btnEl.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Generating Stripe URL...';
+                if (window.lucide) lucide.createIcons();
+            }
+
+            try {
+                const res = await StripeBillingIntegration.onboardCreatorStripeConnect(creatorId);
+                if (res && res.url) {
+                    window.location.href = res.url;
+                } else {
+                    throw new Error("No onboarding URL returned from Stripe Connect service.");
+                }
+            } catch (err) {
+                console.error("Stripe Connect onboarding initiation failed:", err);
+                alert("Failed to initiate Stripe Connect: " + err.message);
+                if (btnEl) {
+                    btnEl.disabled = false;
+                    btnEl.innerHTML = origHtml;
+                    if (window.lucide) lucide.createIcons();
+                }
+            }
+        }
+        window.initiateCreatorStripeConnect = initiateCreatorStripeConnect;
 
         function renderPromoCodesTable(promoCodes) {
             const tbody = document.getElementById('promo-codes-table-body');
@@ -7792,23 +7931,22 @@
 
         function switchPromoHubTab(tab) {
             const codesBtn = document.getElementById('promo-tab-codes-btn');
+            const creatorsBtn = document.getElementById('promo-tab-creators-btn');
             const ledgerBtn = document.getElementById('promo-tab-ledger-btn');
             const codesPanel = document.getElementById('promo-tab-codes-panel');
+            const creatorsPanel = document.getElementById('promo-tab-creators-panel');
             const ledgerPanel = document.getElementById('promo-tab-ledger-panel');
 
-            if (!codesBtn || !ledgerBtn || !codesPanel || !ledgerPanel) return;
+            const activeClass = "px-4 py-2 text-xs font-bold rounded-xl border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 flex items-center gap-1.5 cursor-pointer font-mono";
+            const inactiveClass = "px-4 py-2 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white flex items-center gap-1.5 cursor-pointer font-mono";
 
-            if (tab === 'codes') {
-                codesBtn.className = "px-4 py-2 text-xs font-bold rounded-xl border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 flex items-center gap-1.5 cursor-pointer font-mono";
-                ledgerBtn.className = "px-4 py-2 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white flex items-center gap-1.5 cursor-pointer font-mono";
-                codesPanel.classList.remove('hidden');
-                ledgerPanel.classList.add('hidden');
-            } else {
-                ledgerBtn.className = "px-4 py-2 text-xs font-bold rounded-xl border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 flex items-center gap-1.5 cursor-pointer font-mono";
-                codesBtn.className = "px-4 py-2 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white flex items-center gap-1.5 cursor-pointer font-mono";
-                ledgerPanel.classList.remove('hidden');
-                codesPanel.classList.add('hidden');
-            }
+            if (codesBtn) codesBtn.className = tab === 'codes' ? activeClass : inactiveClass;
+            if (creatorsBtn) creatorsBtn.className = tab === 'creators' ? activeClass : inactiveClass;
+            if (ledgerBtn) ledgerBtn.className = tab === 'ledger' ? activeClass : inactiveClass;
+
+            if (codesPanel) codesPanel.classList.toggle('hidden', tab !== 'codes');
+            if (creatorsPanel) creatorsPanel.classList.toggle('hidden', tab !== 'creators');
+            if (ledgerPanel) ledgerPanel.classList.toggle('hidden', tab !== 'ledger');
         }
 
         function openCreateCreatorPromoModal() {
@@ -7889,8 +8027,9 @@
             btn.innerHTML = '<span>Processing Settlement...</span>';
 
             try {
-                await StripeBillingIntegration.settleCreatorPayout(creatorId, amount, ref);
-                alert(`Successfully recorded settlement of $${Number(amount).toFixed(2)}!`);
+                const res = await StripeBillingIntegration.settleCreatorPayout(creatorId, amount, ref);
+                const transferMsg = res?.transfer_id ? ` (Stripe Transfer ID: ${res.transfer_id})` : '';
+                alert(`✓ Successfully disbursed and settled payout of $${Number(amount).toFixed(2)}${transferMsg}!`);
                 closeSettlePayoutModal();
                 loadCreatorGovernanceHub();
             } catch (err) {

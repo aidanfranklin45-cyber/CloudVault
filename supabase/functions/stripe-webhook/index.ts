@@ -4,6 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.42.0";
 
 const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
 const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET") || "";
+const connectWebhookSecret = Deno.env.get("STRIPE_CONNECT_WEBHOOK_SECRET") || "";
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
@@ -349,14 +350,35 @@ Deno.serve(async (req: Request) => {
       cryptoProvider
     );
   } catch (err: any) {
-    console.error(`⚠️ Webhook signature verification failed: ${err.message}`);
-    return new Response(
-      JSON.stringify({ error: `Webhook signature verification failed: ${err.message}` }),
-      {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
+    if (connectWebhookSecret) {
+      try {
+        event = await stripe.webhooks.constructEventAsync(
+          rawBody,
+          signature,
+          connectWebhookSecret,
+          undefined,
+          cryptoProvider
+        );
+      } catch (err2: any) {
+        console.error(`⚠️ Webhook signature verification failed for both secrets: ${err.message} | ${err2.message}`);
+        return new Response(
+          JSON.stringify({ error: `Webhook signature verification failed: ${err.message}` }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
       }
-    );
+    } else {
+      console.error(`⚠️ Webhook signature verification failed: ${err.message}`);
+      return new Response(
+        JSON.stringify({ error: `Webhook signature verification failed: ${err.message}` }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
   }
 
   console.log(`[StripeWebhook] Processing Event ${event.id} [${event.type}]...`);
@@ -1171,6 +1193,141 @@ Deno.serve(async (req: Request) => {
           details: refundDetails,
         });
 
+        break;
+      }
+
+      // -------------------------------------------------------------
+      // Event: account.updated (Stripe Connect Express Onboarding / Verification)
+      // -------------------------------------------------------------
+      case "account.updated": {
+        const account = dataObject as Stripe.Account;
+        console.log(`[StripeWebhook] account.updated for Connect account ${account.id}, details_submitted=${account.details_submitted}, payouts_enabled=${account.payouts_enabled}`);
+
+        const creatorIdFromMeta = account.metadata?.creator_id;
+        const payoutsEnabled = Boolean(account.payouts_enabled);
+        const detailsSubmitted = Boolean(account.details_submitted);
+
+        let status = "not_connected";
+        if (payoutsEnabled && detailsSubmitted) {
+          status = "verified";
+        } else if (detailsSubmitted && !payoutsEnabled) {
+          status = "pending_verification";
+        } else if (account.requirements?.disabled_reason || (account.requirements?.currently_due && account.requirements.currently_due.length > 0)) {
+          status = "restricted";
+        } else {
+          status = "pending";
+        }
+
+        let query = supabase.from("creators").update({
+          stripe_connect_id: account.id,
+          stripe_connect_status: status,
+          updated_at: new Date().toISOString(),
+        });
+
+        if (creatorIdFromMeta) {
+          query = query.eq("id", creatorIdFromMeta);
+        } else {
+          query = query.eq("stripe_connect_id", account.id);
+        }
+
+        const { error: updateErr } = await query;
+        if (updateErr) {
+          console.warn("[StripeWebhook] Error updating creator Connect status:", updateErr);
+        } else {
+          console.log(`[StripeWebhook] Successfully updated creator Connect status to '${status}' for ${account.id}`);
+        }
+
+        eventDiagnostics = {
+          account_id: account.id,
+          status,
+          payouts_enabled: payoutsEnabled,
+          details_submitted: detailsSubmitted,
+        };
+        break;
+      }
+
+      // -------------------------------------------------------------
+      // Event: account.application.deauthorized (Stripe Connect Disconnect)
+      // -------------------------------------------------------------
+      case "account.application.deauthorized": {
+        const account = dataObject as any;
+        const accountId = account.id || (event as any).account;
+        console.log(`[StripeWebhook] account.application.deauthorized for Connect account ${accountId}`);
+
+        if (accountId) {
+          await supabase
+            .from("creators")
+            .update({
+              stripe_connect_status: "deauthorized",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("stripe_connect_id", accountId);
+        }
+
+        eventDiagnostics = {
+          account_id: accountId,
+          action: "deauthorized",
+        };
+        break;
+      }
+
+      // -------------------------------------------------------------
+      // Event: transfer.created (Stripe Connect Creator Commission Transfer)
+      // -------------------------------------------------------------
+      case "transfer.created": {
+        const transfer = dataObject as Stripe.Transfer;
+        console.log(`[StripeWebhook] transfer.created: ${transfer.id}, Amount=$${(transfer.amount / 100).toFixed(2)} to ${transfer.destination}`);
+
+        const creatorId = transfer.metadata?.creator_id;
+        const payoutRef = transfer.metadata?.payout_ref;
+
+        if (transfer.id) {
+          await supabase
+            .from("creator_payouts")
+            .update({
+              status: "completed",
+              stripe_transfer_id: transfer.id,
+              stripe_payout_id: (transfer as any).destination_payment || null,
+              updated_at: new Date().toISOString(),
+            })
+            .or(`stripe_transfer_id.eq.${transfer.id},payout_reference.eq.${payoutRef}`);
+        }
+
+        eventDiagnostics = {
+          transfer_id: transfer.id,
+          amount: transfer.amount / 100,
+          destination: transfer.destination,
+          creator_id: creatorId,
+        };
+        break;
+      }
+
+      // -------------------------------------------------------------
+      // Event: transfer.failed (Stripe Connect Creator Transfer Failed)
+      // -------------------------------------------------------------
+      case "transfer.failed": {
+        const transfer = dataObject as any;
+        console.error(`[StripeWebhook] 🚨 transfer.failed: ${transfer.id} to ${transfer.destination}`);
+
+        if (transfer.id) {
+          await supabase
+            .from("creator_payouts")
+            .update({
+              status: "failed",
+              metadata: {
+                failed_at: new Date().toISOString(),
+                failure_reason: transfer.failure_message || "Transfer failed in Stripe",
+              },
+              updated_at: new Date().toISOString(),
+            })
+            .eq("stripe_transfer_id", transfer.id);
+        }
+
+        eventDiagnostics = {
+          transfer_id: transfer.id,
+          status: "failed",
+          failure_message: transfer.failure_message,
+        };
         break;
       }
 
