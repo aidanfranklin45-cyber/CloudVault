@@ -703,8 +703,8 @@
         </div>
 
     <!-- Update Payment Method Modal -->
-    <div id="update-payment-modal" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 border border-gray-100">
+    <div id="update-payment-modal" class="fixed inset-0 bg-gray-900/75 backdrop-blur-md z-[100] flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 border border-gray-100 relative">
             <div class="flex justify-between items-center border-b border-gray-100 pb-3">
                 <div class="flex items-center space-x-2.5">
                     <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
@@ -3544,7 +3544,17 @@
 
         function openUpdatePaymentModal() {
             const modal = document.getElementById('update-payment-modal');
-            if (modal) modal.classList.remove('hidden');
+            if (modal) {
+                modal.classList.remove('hidden');
+                const nameInput = document.getElementById('pay-name');
+                if (nameInput && !nameInput.value && window.currentUser?.name) {
+                    nameInput.value = window.currentUser.name;
+                }
+                const cardInput = document.getElementById('pay-card');
+                if (cardInput) {
+                    setTimeout(() => cardInput.focus(), 50);
+                }
+            }
         }
         window.openUpdatePaymentModal = openUpdatePaymentModal;
 

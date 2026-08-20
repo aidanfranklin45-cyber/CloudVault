@@ -4759,6 +4759,7 @@ CREATE TABLE IF NOT EXISTS public.promo_codes (
     commission_duration_months INT DEFAULT 6,
     max_redemptions INT DEFAULT NULL,
     current_redemptions INT DEFAULT 0,
+    total_revenue_generated NUMERIC(12,2) DEFAULT 0.00,
     is_active BOOLEAN DEFAULT TRUE,
     expires_at TIMESTAMPTZ DEFAULT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -4772,13 +4773,17 @@ CREATE TABLE IF NOT EXISTS public.promo_redemptions (
     promo_code TEXT NOT NULL,
     creator_id UUID REFERENCES public.creators(id) ON DELETE SET NULL,
     customer_uid UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    customer_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
     customer_email TEXT,
     stripe_invoice_id TEXT,
+    stripe_charge_id TEXT,
     invoice_gross_amount NUMERIC(10,2) NOT NULL,
+    gross_amount NUMERIC(10,2),
     discount_amount NUMERIC(10,2) DEFAULT 0.00,
     net_paid_amount NUMERIC(10,2) NOT NULL,
     commission_rate_applied NUMERIC(5,2) NOT NULL,
     commission_amount NUMERIC(10,2) NOT NULL,
+    creator_commission_amount NUMERIC(10,2),
     month_index INT DEFAULT 1,
     is_commission_eligible BOOLEAN DEFAULT TRUE,
     payout_status VARCHAR(20) DEFAULT 'PENDING' CHECK (payout_status IN ('PENDING', 'APPROVED', 'PAID', 'VOIDED')),
@@ -4786,6 +4791,20 @@ CREATE TABLE IF NOT EXISTS public.promo_redemptions (
     paid_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Atomic increment helper for promo code statistics
+CREATE OR REPLACE FUNCTION public.increment_promo_code_stats(
+    p_promo_id UUID,
+    p_revenue_amount NUMERIC
+) RETURNS VOID SECURITY DEFINER AS $$
+BEGIN
+    UPDATE public.promo_codes
+    SET current_redemptions = COALESCE(current_redemptions, 0) + 1,
+        total_revenue_generated = COALESCE(total_revenue_generated, 0.00) + COALESCE(p_revenue_amount, 0.00),
+        updated_at = NOW()
+    WHERE id = p_promo_id;
+END;
+$$ LANGUAGE plpgsql;
 
 -- 4. Enable Row Level Security (RLS)
 ALTER TABLE public.creators ENABLE ROW LEVEL SECURITY;

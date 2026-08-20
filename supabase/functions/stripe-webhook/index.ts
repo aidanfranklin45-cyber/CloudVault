@@ -15,15 +15,114 @@ const stripe = new Stripe(stripeSecretKey, {
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
 /**
+ * Extract all possible promo code / coupon identifiers from a Stripe object
+ */
+function extractPromoCandidates(data: any): string[] {
+  const candidates: string[] = [];
+
+  const addCandidate = (val: any) => {
+    if (!val) return;
+    if (typeof val === "string" && val.trim().length > 0) {
+      const trimmed = val.trim();
+      if (!candidates.includes(trimmed)) {
+        candidates.push(trimmed);
+      }
+    } else if (typeof val === "object") {
+      if (val.id) addCandidate(val.id);
+      if (val.code) addCandidate(val.code);
+      if (val.coupon) addCandidate(val.coupon);
+      if (val.promotion_code) addCandidate(val.promotion_code);
+      if (val.name) addCandidate(val.name);
+    }
+  };
+
+  if (!data) return candidates;
+
+  // 1. Single discount object
+  if (data.discount) {
+    addCandidate(data.discount);
+    if (typeof data.discount === "object") {
+      addCandidate(data.discount.promotion_code);
+      addCandidate(data.discount.coupon);
+      addCandidate(data.discount.id);
+    }
+  }
+
+  // 2. Discounts array
+  if (Array.isArray(data.discounts)) {
+    for (const d of data.discounts) {
+      addCandidate(d);
+      if (typeof d === "object") {
+        addCandidate(d.promotion_code);
+        addCandidate(d.coupon);
+        addCandidate(d.id);
+      }
+    }
+  }
+
+  // 3. Total details breakdown discounts (Checkout session)
+  if (Array.isArray(data.total_details?.breakdown?.discounts)) {
+    for (const d of data.total_details.breakdown.discounts) {
+      addCandidate(d.discount);
+      if (typeof d.discount === "object") {
+        addCandidate(d.discount.promotion_code);
+        addCandidate(d.discount.coupon);
+        addCandidate(d.discount.id);
+      }
+    }
+  }
+
+  // 4. Total discount amounts (Invoice)
+  if (Array.isArray(data.total_discount_amounts)) {
+    for (const tda of data.total_discount_amounts) {
+      addCandidate(tda.discount);
+      if (typeof tda === "object" && tda.discount) {
+        addCandidate(tda.discount);
+      }
+    }
+  }
+
+  // 5. Line items discounts
+  if (Array.isArray(data.lines?.data)) {
+    for (const line of data.lines.data) {
+      if (Array.isArray(line.discounts)) {
+        for (const ld of line.discounts) {
+          addCandidate(ld);
+        }
+      }
+      if (Array.isArray(line.discount_amounts)) {
+        for (const lda of line.discount_amounts) {
+          addCandidate(lda.discount);
+        }
+      }
+    }
+  }
+
+  // 6. Metadata keys
+  const meta = data.metadata || {};
+  addCandidate(meta.promoCode);
+  addCandidate(meta.promo_code);
+  addCandidate(meta.promoCodeId);
+  addCandidate(meta.promo_code_id);
+  addCandidate(meta.couponId);
+  addCandidate(meta.coupon_id);
+  addCandidate(meta.coupon);
+  addCandidate(meta.discount_code);
+
+  return candidates;
+}
+
+/**
  * Helper to record promo redemption and calculate commission dynamically from database promo_codes
  */
 async function processPromoRedemption(
   supabase: any,
   params: {
-    promoIdentifier: string | null;
+    promoCandidates: string[];
     targetUserId: string | null;
     customerEmail: string | null;
     invoiceId: string;
+    chargeId: string | null;
     grossAmount: number;
     discountAmount: number;
     netPaidAmount: number;
@@ -31,17 +130,16 @@ async function processPromoRedemption(
   }
 ) {
   const {
-    promoIdentifier,
+    promoCandidates,
     targetUserId,
     customerEmail,
     invoiceId,
+    chargeId,
     grossAmount,
     discountAmount,
     netPaidAmount,
     nowIso,
   } = params;
-
-  if (!promoIdentifier && !targetUserId && !customerEmail) return;
 
   // 1. Prevent duplicate redemption record for the exact invoice
   const { data: existingRedemption } = await supabase
@@ -51,24 +149,35 @@ async function processPromoRedemption(
     .maybeSingle();
 
   if (existingRedemption) {
-    return;
+    console.log(`[StripeWebhook] Redemption already recorded for invoice ${invoiceId}. Skipping.`);
+    return existingRedemption;
   }
 
-  // 2. Find matching promo code record
+  // 2. Find matching promo code record from candidates
   let promo: any = null;
 
-  if (promoIdentifier) {
+  for (const candidate of promoCandidates) {
+    if (!candidate) continue;
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate);
+    let filterString = `code.ilike.${candidate},stripe_promo_code_id.eq.${candidate},stripe_coupon_id.eq.${candidate}`;
+    if (isUuid) {
+      filterString += `,id.eq.${candidate}`;
+    }
+
     const { data: p } = await supabase
       .from("promo_codes")
       .select("*")
-      .or(
-        `code.ilike.${promoIdentifier},stripe_promo_code_id.eq.${promoIdentifier},stripe_coupon_id.eq.${promoIdentifier},id.eq.${promoIdentifier}`
-      )
+      .or(filterString)
       .maybeSingle();
-    if (p) promo = p;
+
+    if (p) {
+      promo = p;
+      break;
+    }
   }
 
-  // Fallback: check if the user was referred by a promo code
+  // Fallback: check if the user was referred by a promo code in users table
   if (!promo && targetUserId) {
     const { data: u } = await supabase
       .from("users")
@@ -86,10 +195,16 @@ async function processPromoRedemption(
     }
   }
 
-  if (!promo) return;
+  if (!promo) {
+    if (promoCandidates.length > 0) {
+      console.log(`[StripeWebhook] No matching promo code in database for candidates: ${JSON.stringify(promoCandidates)}`);
+    }
+    return null;
+  }
 
+  // Dynamic commission calculation using promo_codes.commission_rate_pct from DB
   const commissionRate = Number(promo.commission_rate_pct) || 0;
-  const commissionAmount = Number((grossAmount * (commissionRate / 100)).toFixed(2));
+  const creatorCommissionAmount = Number((grossAmount * (commissionRate / 100)).toFixed(2));
   const isCommissionEligible = Boolean(promo.creator_id && commissionRate > 0);
 
   // Count prior redemptions by this customer for this promo to determine month_index
@@ -99,42 +214,85 @@ async function processPromoRedemption(
       .from("promo_redemptions")
       .select("id", { count: "exact", head: true })
       .eq("promo_code_id", promo.id)
-      .eq("customer_uid", targetUserId);
+      .or(`customer_id.eq.${targetUserId},customer_uid.eq.${targetUserId}`);
     if (count !== null && count !== undefined) {
       monthIndex = count + 1;
     }
   }
 
-  // 3. Insert redemption record
-  await supabase.from("promo_redemptions").insert({
+  // 3. Insert redemption record into public.promo_redemptions
+  const redemptionInsert: any = {
     promo_code_id: promo.id,
     promo_code: promo.code,
     creator_id: promo.creator_id,
+    customer_id: targetUserId,
     customer_uid: targetUserId,
     customer_email: customerEmail,
     stripe_invoice_id: invoiceId,
+    stripe_charge_id: chargeId,
+    gross_amount: grossAmount,
     invoice_gross_amount: grossAmount,
     discount_amount: discountAmount,
     net_paid_amount: netPaidAmount,
     commission_rate_applied: commissionRate,
-    commission_amount: commissionAmount,
+    commission_amount: creatorCommissionAmount,
+    creator_commission_amount: creatorCommissionAmount,
     month_index: monthIndex,
     is_commission_eligible: isCommissionEligible,
     payout_status: "PENDING",
     paid_at: nowIso,
     created_at: nowIso,
+  };
+
+  const { data: insertedRedemption, error: insertError } = await supabase
+    .from("promo_redemptions")
+    .insert(redemptionInsert)
+    .select()
+    .maybeSingle();
+
+  if (insertError) {
+    console.error(`[StripeWebhook] Failed to insert promo redemption:`, insertError.message);
+  }
+
+  // 4. Atomically increment promo_codes.current_redemptions and add to promo_codes.total_revenue_generated
+  const { error: rpcError } = await supabase.rpc("increment_promo_code_stats", {
+    p_promo_id: promo.id,
+    p_revenue_amount: grossAmount,
   });
 
-  // 4. Increment promo current_redemptions counter
-  await supabase
-    .from("promo_codes")
-    .update({
-      current_redemptions: (promo.current_redemptions || 0) + 1,
-      updated_at: nowIso,
-    })
-    .eq("id", promo.id);
+  if (rpcError) {
+    console.warn(`[StripeWebhook] increment_promo_code_stats RPC returned error, applying atomic fallback update:`, rpcError.message);
+    await supabase
+      .from("promo_codes")
+      .update({
+        current_redemptions: (promo.current_redemptions || 0) + 1,
+        total_revenue_generated: Number(((Number(promo.total_revenue_generated) || 0) + grossAmount).toFixed(2)),
+        updated_at: nowIso,
+      })
+      .eq("id", promo.id);
+  }
 
-  // 5. Update user referral attribution
+  // 5. Update creator lifetime stats
+  if (promo.creator_id) {
+    const { data: creator } = await supabase
+      .from("creators")
+      .select("total_attributed_revenue, total_commission_earned")
+      .eq("id", promo.creator_id)
+      .maybeSingle();
+
+    if (creator) {
+      await supabase
+        .from("creators")
+        .update({
+          total_attributed_revenue: Number(((Number(creator.total_attributed_revenue) || 0) + grossAmount).toFixed(2)),
+          total_commission_earned: Number(((Number(creator.total_commission_earned) || 0) + creatorCommissionAmount).toFixed(2)),
+          updated_at: nowIso,
+        })
+        .eq("id", promo.creator_id);
+    }
+  }
+
+  // 6. Update user referral attribution
   if (targetUserId) {
     await supabase
       .from("users")
@@ -146,7 +304,9 @@ async function processPromoRedemption(
       .eq("id", targetUserId);
   }
 
-  console.log(`[StripeWebhook] Recorded promo redemption for code ${promo.code} on invoice ${invoiceId}`);
+  console.log(`[StripeWebhook] Recorded promo redemption for code "${promo.code}" on invoice ${invoiceId}: Gross=$${grossAmount}, Discount=$${discountAmount}, CreatorCommission=$${creatorCommissionAmount}`);
+
+  return insertedRedemption || redemptionInsert;
 }
 
 Deno.serve(async (req: Request) => {
@@ -220,6 +380,8 @@ Deno.serve(async (req: Request) => {
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  let eventDiagnostics: Record<string, any> | null = null;
 
   try {
     const dataObject = event.data.object as any;
@@ -314,6 +476,88 @@ Deno.serve(async (req: Request) => {
       }
 
       // -------------------------------------------------------------
+      // Event: payment_intent.payment_failed
+      // -------------------------------------------------------------
+      case "payment_intent.payment_failed": {
+        const paymentIntent = dataObject as Stripe.PaymentIntent;
+        const paymentIntentId = paymentIntent.id;
+        const customerId = typeof paymentIntent.customer === "string" ? paymentIntent.customer : null;
+        const metadata = paymentIntent.metadata || {};
+        const invoiceId = metadata.invoice_id || (typeof paymentIntent.invoice === "string" ? paymentIntent.invoice : null);
+        const lastError = paymentIntent.last_payment_error;
+        const nowIso = new Date().toISOString();
+        const amountFailed = (paymentIntent.amount || 0) / 100;
+
+        console.warn(`🚨 [StripeWebhook] payment_intent.payment_failed: ${paymentIntentId}, Customer=${customerId}, Error=${lastError?.message || "Unknown"}`);
+
+        // Extract Failure Diagnostics
+        const failureDiagnostics = {
+          code: lastError?.code || "payment_intent_failed",
+          decline_code: lastError?.decline_code || null,
+          message: lastError?.message || "Payment intent execution failed",
+          type: lastError?.type || null,
+          param: lastError?.param || null,
+          doc_url: lastError?.doc_url || null,
+          stripe_payment_intent_id: paymentIntentId,
+          stripe_invoice_id: invoiceId,
+          stripe_customer_id: customerId,
+          amount_failed: amountFailed,
+          occurred_at: nowIso,
+        };
+
+        eventDiagnostics = { failure_diagnostics: failureDiagnostics };
+
+        // 1. Update matching invoice payment_status: 'failed'
+        const failureNote = `Payment intent failed: ${failureDiagnostics.message}${failureDiagnostics.decline_code ? ` [Decline: ${failureDiagnostics.decline_code}]` : ""}`;
+        if (invoiceId) {
+          await supabase
+            .from("invoices")
+            .update({
+              payment_status: "failed",
+              notes: failureNote,
+            })
+            .or(`id.eq.${invoiceId},stripe_invoice_id.eq.${invoiceId}`);
+        } else {
+          await supabase
+            .from("invoices")
+            .update({
+              payment_status: "failed",
+              notes: failureNote,
+            })
+            .eq("stripe_payment_intent_id", paymentIntentId);
+        }
+
+        // 2. Resolve user ID if possible
+        let targetUid = metadata.supabase_uid || metadata.uid || null;
+        if (!targetUid && customerId) {
+          const { data: u } = await supabase
+            .from("users")
+            .select("id")
+            .eq("stripe_customer_id", customerId)
+            .maybeSingle();
+          if (u) targetUid = u.id;
+        }
+
+        // 3. Record failed charge in public.charges
+        await supabase.from("charges").insert({
+          uid: targetUid,
+          charge_type: paymentIntent.description || "stripe_payment_intent_failed",
+          amount: amountFailed,
+          status: "failed",
+          stripe_payment_intent_id: paymentIntentId,
+          charged_at: nowIso,
+        });
+
+        // 4. Log failure in privacy_audit_logs
+        await supabase.from("privacy_audit_logs").insert({
+          action: "stripe_payment_intent_failed",
+          details: failureDiagnostics,
+        });
+
+        break;
+      }
+
+      // -------------------------------------------------------------
       // Event: invoice.paid & invoice.payment_succeeded
       // -------------------------------------------------------------
       case "invoice.paid":
@@ -322,7 +566,12 @@ Deno.serve(async (req: Request) => {
         const stripeInvoiceId = invoice.id;
         const customerId = typeof invoice.customer === "string" ? invoice.customer : null;
         const customerEmail = invoice.customer_email;
-        const paymentIntentId = typeof invoice.payment_intent === "string" ? invoice.payment_intent : null;
+        const paymentIntentId = typeof invoice.payment_intent === "string" 
+          ? invoice.payment_intent 
+          : (invoice.payment_intent as any)?.id || null;
+        const chargeId = typeof invoice.charge === "string" 
+          ? invoice.charge 
+          : (invoice.charge as any)?.id || paymentIntentId || null;
         const hostedUrl = invoice.hosted_invoice_url || null;
         const pdfUrl = invoice.invoice_pdf || null;
         const subtotal = (invoice.subtotal || 0) / 100;
@@ -331,12 +580,18 @@ Deno.serve(async (req: Request) => {
         const amountPaid = (invoice.amount_paid || 0) / 100;
         const amountDue = (invoice.amount_due || 0) / 100;
         const amountRemaining = (invoice.amount_remaining || 0) / 100;
-        const discountAmount = Math.max(0, subtotal - total);
+
+        // Dynamic calculation of discount amount
+        const totalDiscount = Array.isArray(invoice.total_discount_amounts)
+          ? invoice.total_discount_amounts.reduce((sum, d) => sum + (d.amount || 0), 0) / 100
+          : Math.max(0, subtotal - (total - tax));
+        const grossAmount = subtotal > 0 ? subtotal : Number((total - tax + totalDiscount).toFixed(2));
+
         const paidAt = invoice.status_transitions?.paid_at
           ? new Date(invoice.status_transitions.paid_at * 1000).toISOString()
           : new Date().toISOString();
 
-        console.log(`[StripeWebhook] invoice.paid: ${stripeInvoiceId}, Total=$${total}, Customer=${customerId}`);
+        console.log(`[StripeWebhook] ${event.type}: ${stripeInvoiceId}, Gross=$${grossAmount}, Discount=$${totalDiscount}, Total=$${total}, Customer=${customerId}`);
 
         // Resolve customer profile
         let uid: string | null = null;
@@ -386,13 +641,13 @@ Deno.serve(async (req: Request) => {
           payment_status: "paid",
           subtotal: subtotal,
           tax: tax,
-          discount: discountAmount,
+          discount: totalDiscount,
           total_amount: total,
           amount_due: amountDue,
           amount_paid: amountPaid,
           amount_remaining: amountRemaining,
           payment_method: "stripe",
-          transaction_reference: paymentIntentId || stripeInvoiceId,
+          transaction_reference: chargeId || paymentIntentId || stripeInvoiceId,
           line_items: lines,
           paid_at: paidAt,
         };
@@ -412,24 +667,23 @@ Deno.serve(async (req: Request) => {
           await supabase.from("invoices").insert(invoiceRecord);
         }
 
-        // Process Promo Redemption & Creator Commission Tracking
-        const promoIdentifier =
-          invoice.discount?.promotion_code ||
-          invoice.discount?.coupon?.id ||
-          invoice.metadata?.promoCode ||
-          invoice.metadata?.promo_code ||
-          null;
-
-        await processPromoRedemption(supabase, {
-          promoIdentifier: typeof promoIdentifier === "string" ? promoIdentifier : null,
+        // Webhook Attribution for Promo Codes
+        const promoCandidates = extractPromoCandidates(invoice);
+        const redemption = await processPromoRedemption(supabase, {
+          promoCandidates,
           targetUserId: uid,
           customerEmail: customerEmail || null,
           invoiceId: stripeInvoiceId,
-          grossAmount: subtotal,
-          discountAmount: discountAmount,
+          chargeId: chargeId,
+          grossAmount: grossAmount,
+          discountAmount: totalDiscount,
           netPaidAmount: amountPaid,
           nowIso: paidAt,
         });
+
+        if (redemption) {
+          eventDiagnostics = { promo_attribution: redemption };
+        }
 
         // Restore active standing for user
         if (uid) {
@@ -464,17 +718,46 @@ Deno.serve(async (req: Request) => {
         const invoice = dataObject as Stripe.Invoice;
         const stripeInvoiceId = invoice.id;
         const customerId = typeof invoice.customer === "string" ? invoice.customer : null;
+        const paymentIntentId = typeof invoice.payment_intent === "string" 
+          ? invoice.payment_intent 
+          : (invoice.payment_intent as any)?.id || null;
         const amountDue = (invoice.amount_due || 0) / 100;
         const nowIso = new Date().toISOString();
 
-        console.warn(`🚨 [StripeWebhook] invoice.payment_failed: ${stripeInvoiceId}, Customer=${customerId}, Due=$${amountDue}`);
+        // Extract Failure Diagnostics
+        const lastError = (invoice as any).last_payment_error || (invoice as any).payment_intent?.last_payment_error || null;
+        const failureDiagnostics = {
+          code: lastError?.code || (invoice as any).charge?.failure_code || "invoice_payment_failed",
+          decline_code: lastError?.decline_code || (invoice as any).charge?.failure_message || null,
+          message: lastError?.message || (invoice as any).charge?.failure_message || "Invoice payment attempt failed",
+          type: lastError?.type || null,
+          param: lastError?.param || null,
+          stripe_invoice_id: stripeInvoiceId,
+          stripe_payment_intent_id: paymentIntentId,
+          stripe_customer_id: customerId,
+          amount_due: amountDue,
+          attempt_count: invoice.attempt_count,
+          next_payment_attempt: invoice.next_payment_attempt
+            ? new Date(invoice.next_payment_attempt * 1000).toISOString()
+            : null,
+          occurred_at: nowIso,
+        };
 
-        // 1. Mark invoice status as past_due / payment_failed
+        eventDiagnostics = { failure_diagnostics: failureDiagnostics };
+
+        console.warn(`🚨 [StripeWebhook] invoice.payment_failed: ${stripeInvoiceId}, Customer=${customerId}, Due=$${amountDue}, Reason=${failureDiagnostics.message}`);
+
+        // 1. Determine if invoice is overdue or failed
+        const isOverdue = invoice.due_date ? (invoice.due_date * 1000 < Date.now()) : false;
+        const paymentStatus = isOverdue ? "overdue" : "failed";
+
+        // Update matching invoice in public.invoices
         await supabase
           .from("invoices")
           .update({
-            payment_status: "payment_failed",
+            payment_status: paymentStatus,
             amount_due: amountDue,
+            notes: `Payment failed: ${failureDiagnostics.message}${failureDiagnostics.decline_code ? ` (Decline code: ${failureDiagnostics.decline_code})` : ""}`,
           })
           .eq("stripe_invoice_id", stripeInvoiceId);
 
@@ -503,15 +786,7 @@ Deno.serve(async (req: Request) => {
         // 4. Log incident for Admin Alerts in privacy_audit_logs
         await supabase.from("privacy_audit_logs").insert({
           action: "stripe_invoice_payment_failed",
-          details: {
-            alert: "PAYMENT_FAILED_INCIDENT",
-            stripe_invoice_id: stripeInvoiceId,
-            stripe_customer_id: customerId,
-            amount_due: amountDue,
-            attempt_count: invoice.attempt_count,
-            next_payment_attempt: invoice.next_payment_attempt,
-            timestamp: nowIso,
-          },
+          details: failureDiagnostics,
         });
 
         break;
@@ -580,6 +855,7 @@ Deno.serve(async (req: Request) => {
         const subscriptionId = typeof session.subscription === "string" ? session.subscription : null;
         const userUid = session.client_reference_id || session.metadata?.userId || session.metadata?.supabase_uid || session.metadata?.uid;
         const customerEmail = session.customer_details?.email || session.customer_email;
+        const chargeId = typeof session.payment_intent === "string" ? session.payment_intent : null;
         const nowIso = new Date().toISOString();
 
         console.log(`[StripeWebhook] checkout.session.completed: userUid=${userUid}, customerId=${customerId}, subId=${subscriptionId}`);
@@ -615,27 +891,30 @@ Deno.serve(async (req: Request) => {
             .eq("id", targetUserId);
         }
 
-        // Process Promo Redemption from Checkout metadata or discounts
-        const promoIdentifier =
-          session.metadata?.promoCodeId ||
-          session.metadata?.promoCode ||
-          session.metadata?.promo_code ||
-          null;
-
-        const grossAmount = (session.amount_total || 0) / 100 + ((session.total_details?.amount_discount || 0) / 100);
+        // Webhook Attribution for Promo Codes
+        const promoCandidates = extractPromoCandidates(session);
         const discountAmount = (session.total_details?.amount_discount || 0) / 100;
-        const netPaidAmount = (session.amount_total || 0) / 100;
+        const subtotal = (session.amount_subtotal || 0) / 100;
+        const total = (session.amount_total || 0) / 100;
+        const grossAmount = subtotal > 0 ? subtotal : Number((total + discountAmount).toFixed(2));
+        const netPaidAmount = total;
+        const invoiceId = (typeof session.invoice === "string" ? session.invoice : null) || `CHK-${session.id.substring(3, 13).toUpperCase()}`;
 
-        await processPromoRedemption(supabase, {
-          promoIdentifier: typeof promoIdentifier === "string" ? promoIdentifier : null,
+        const redemption = await processPromoRedemption(supabase, {
+          promoCandidates,
           targetUserId: targetUserId || null,
           customerEmail: customerEmail || null,
-          invoiceId: (session.invoice as string) || `CHK-${session.id.substring(3, 13).toUpperCase()}`,
+          invoiceId: invoiceId,
+          chargeId: chargeId,
           grossAmount: grossAmount,
           discountAmount: discountAmount,
           netPaidAmount: netPaidAmount,
           nowIso: nowIso,
         });
+
+        if (redemption) {
+          eventDiagnostics = { promo_attribution: redemption };
+        }
 
         break;
       }
@@ -829,19 +1108,55 @@ Deno.serve(async (req: Request) => {
       case "charge.refunded":
       case "charge.refund.updated": {
         const charge = dataObject as Stripe.Charge;
+        const chargeId = charge.id;
         const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : null;
+        const invoiceId = typeof charge.invoice === "string" ? charge.invoice : null;
+        const customerId = typeof charge.customer === "string" ? charge.customer : null;
+        const amountRefunded = (charge.amount_refunded || 0) / 100;
+        const latestRefund = charge.refunds?.data?.[0];
+        const refundReason = latestRefund?.reason || (latestRefund as any)?.description || (charge as any)?.refund_reason || "requested_by_customer";
+        const refundId = latestRefund?.id || null;
         const nowIso = new Date().toISOString();
-        console.log(`[StripeWebhook] charge.refunded: ${charge.id}, PI=${paymentIntentId}`);
 
-        if (paymentIntentId) {
+        console.log(`[StripeWebhook] charge.refunded: ${chargeId}, PI=${paymentIntentId}, Amount=$${amountRefunded}, Reason=${refundReason}`);
+
+        const refundDetails = {
+          charge_id: chargeId,
+          stripe_payment_intent_id: paymentIntentId,
+          stripe_invoice_id: invoiceId,
+          stripe_customer_id: customerId,
+          refund_id: refundId,
+          amount_refunded: amountRefunded,
+          reason: refundReason,
+          status: latestRefund?.status || "succeeded",
+          refunded_at: nowIso,
+        };
+
+        eventDiagnostics = { refund_details: refundDetails };
+
+        // 1. Update invoice payment_status: 'refunded'
+        if (invoiceId) {
           await supabase
             .from("invoices")
             .update({
               payment_status: "refunded",
               refunded_at: nowIso,
+              notes: `Refunded $${amountRefunded}. Reason: ${refundReason}`,
+            })
+            .eq("stripe_invoice_id", invoiceId);
+        } else if (paymentIntentId) {
+          await supabase
+            .from("invoices")
+            .update({
+              payment_status: "refunded",
+              refunded_at: nowIso,
+              notes: `Refunded $${amountRefunded}. Reason: ${refundReason}`,
             })
             .eq("stripe_payment_intent_id", paymentIntentId);
+        }
 
+        // 2. Update charges table
+        if (paymentIntentId) {
           await supabase
             .from("charges")
             .update({
@@ -849,6 +1164,13 @@ Deno.serve(async (req: Request) => {
             })
             .eq("stripe_payment_intent_id", paymentIntentId);
         }
+
+        // 3. Log refund in privacy_audit_logs
+        await supabase.from("privacy_audit_logs").insert({
+          action: "stripe_charge_refunded",
+          details: refundDetails,
+        });
+
         break;
       }
 
@@ -857,12 +1179,14 @@ Deno.serve(async (req: Request) => {
         break;
     }
 
-    // 3. Log event into public.stripe_webhook_events as processed
+    // 3. Log event into public.stripe_webhook_events as processed with diagnostics
+    const finalPayload = eventDiagnostics ? { ...event, ...eventDiagnostics } : event;
+
     await supabase.from("stripe_webhook_events").upsert(
       {
         stripe_event_id: event.id,
         event_type: event.type,
-        payload: event,
+        payload: finalPayload,
         status: "processed",
         created_at: new Date().toISOString(),
       },
@@ -884,7 +1208,7 @@ Deno.serve(async (req: Request) => {
       {
         stripe_event_id: event.id,
         event_type: event.type,
-        payload: { error: error.message, event },
+        payload: { error: error.message, event, diagnostics: eventDiagnostics || null },
         status: "failed",
         created_at: new Date().toISOString(),
       },
