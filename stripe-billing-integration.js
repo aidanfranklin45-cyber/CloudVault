@@ -46,153 +46,181 @@
 
     /**
      * Redirects customer directly to Stripe's hosted Billing Portal for 100% PCI-compliant card updates.
-     * Zero credit card numbers or sensitive credentials are ever touched or stored locally.
-     * @param {string} customerId - Stripe Customer ID (cus_...)
+     * Invokes supabase edge function 'stripe-billing-portal'.
+     * @param {string} [customerId] - Stripe Customer ID (cus_...)
+     * @param {string} [userId] - CloudVault User ID
      */
-    launchCustomerPortal: async function (customerId) {
-      let custId = customerId;
-      if (!custId && global.currentUser) {
-        custId = global.currentUser.stripe_customer_id;
-      }
+    launchCustomerPortal: async function (customerId, userId) {
+      let targetUserId = userId || (global.currentUser ? global.currentUser.id : null);
+      let custId = customerId || (global.currentUser ? global.currentUser.stripe_customer_id : null);
 
-      if (!custId) {
-        // Try fetching user from Supabase if currentUser exists
-        if (global.currentUser && global.currentUser.id && global.supabase) {
-          const { data: u } = await global.supabase.from('users').select('stripe_customer_id').eq('id', global.currentUser.id).maybeSingle();
+      const sb = global.supabase;
+      if (!custId && targetUserId && sb) {
+        try {
+          const { data: u } = await sb.from('users').select('stripe_customer_id').eq('id', targetUserId).maybeSingle();
           if (u && u.stripe_customer_id) custId = u.stripe_customer_id;
+        } catch (e) {
+          console.warn('[StripeBillingIntegration] User customer lookup notice:', e.message);
         }
       }
 
-      if (!custId) {
-        alert("No active Stripe customer record linked to this account yet. Please contact support.");
-        return;
+      if (!targetUserId && !custId) {
+        alert("No active user or Stripe customer record linked to this account yet. Please contact support.");
+        return { success: false, error: 'No user or customer ID found' };
       }
 
       if (typeof global.showToast === 'function') {
-        global.showToast("🔒 Redirecting to secure Stripe Billing Portal (Zero Card Storage)...");
+        global.showToast("🔒 Redirecting to secure Stripe Billing Portal...");
       }
 
       try {
-        const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
-        if (!apiKey) throw new Error('[Security] Stripe API key not configured. Set window.STRIPE_RESTRICTED_KEY before calling this method.');
-        const returnUrl = window.location.href;
+        if (!sb || typeof sb.functions?.invoke !== 'function') {
+          throw new Error('Supabase client or Edge Functions unavailable.');
+        }
 
-        const res = await fetch('https://api.stripe.com/v1/billing_portal/sessions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/x-www-form-urlencoded'
-          },
-          body: new URLSearchParams({
-            customer: custId,
-            return_url: returnUrl
-          })
+        const returnUrl = window.location.href;
+        const { data, error } = await sb.functions.invoke('stripe-billing-portal', {
+          body: {
+            userId: targetUserId,
+            stripeCustomerId: custId,
+            returnUrl: returnUrl
+          }
         });
 
-        const session = await res.json();
-        if (session && session.url) {
-          window.location.href = session.url;
+        if (error) {
+          console.error('[StripeBillingIntegration] stripe-billing-portal function error:', error);
+          throw error;
+        }
+
+        const portalUrl = data?.url || data?.portalUrl || data?.sessionUrl;
+        if (portalUrl) {
+          window.location.href = portalUrl;
+          return { success: true, url: portalUrl };
         } else {
-          console.error('[StripeBillingIntegration] Portal session error:', session);
-          alert('Failed to initialize Stripe Customer Portal: ' + (session.error?.message || 'Unknown error'));
+          throw new Error(data?.error || 'No billing portal URL returned from Stripe');
         }
       } catch (err) {
-        console.error('[StripeBillingIntegration] Failed to launch Stripe portal:', err);
-        alert('Stripe Connection Error: ' + err.message);
+        console.error('[StripeBillingIntegration] Failed to launch Stripe customer portal:', err);
+        alert('Stripe Portal Error: ' + (err.message || err));
+        return { success: false, error: err.message };
       }
     },
 
     /**
-     * Synchronizes subscription quantity and rate tiers between Supabase and Stripe with automatic mid-month proration.
-     * @param {string} userId - Customer user ID
-     * @param {number} [forcedQuantity] - Optional new quantity to set
+     * Initiates Stripe hosted checkout session by invoking 'stripe-checkout' edge function and redirects user.
+     * @param {Object} options - Checkout configuration options
+     * @returns {Promise<Object>}
      */
-    syncSubscriptionQuantityWithStripe: async function (userId, forcedQuantity) {
-      if (!userId || !global.supabase) return { success: false, error: 'Missing userId or Supabase client' };
+    initiateStripeCheckout: async function (options = {}) {
+      if (typeof global.showToast === 'function') {
+        global.showToast("🔒 Redirecting to secure Stripe Checkout...");
+      }
 
       try {
-        const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
-        if (!apiKey) throw new Error('[Security] Stripe API key not configured. Set window.STRIPE_RESTRICTED_KEY before calling this method.');
-        if (!apiKey) return { success: false, error: 'Missing Stripe API key' };
-
-        // 1. Fetch current subscription from Supabase
-        const { data: sub } = await global.supabase.from('subscriptions').select('*').eq('uid', userId).maybeSingle();
-        if (!sub || !sub.stripe_subscription_id) {
-          return { success: true, message: 'No Stripe subscription linked' };
+        const sb = global.supabase;
+        if (!sb || typeof sb.functions?.invoke !== 'function') {
+          throw new Error('Supabase client or Edge Functions unavailable.');
         }
 
-        const subId = sub.stripe_subscription_id;
-        const targetQty = forcedQuantity != null ? Number(forcedQuantity) : Number(sub.total_totes || sub.tote_count || 1);
+        const payload = {
+          ...options,
+          userId: options.userId || (global.currentUser ? global.currentUser.id : null),
+          returnUrl: options.returnUrl || window.location.href,
+          successUrl: options.successUrl || window.location.href,
+          cancelUrl: options.cancelUrl || window.location.href
+        };
 
-        // 2. Fetch live subscription from Stripe
-        const getRes = await fetch(`https://api.stripe.com/v1/subscriptions/${subId}`, {
-          headers: { 'Authorization': `Bearer ${apiKey}` }
+        const { data, error } = await sb.functions.invoke('stripe-checkout', {
+          body: payload
         });
-        const stripeSub = await getRes.json();
 
-        if (stripeSub.error) {
-          console.warn('[StripeBillingIntegration] Stripe subscription lookup error:', stripeSub.error.message);
-          return { success: false, error: stripeSub.error.message };
+        if (error) {
+          console.error('[StripeBillingIntegration] stripe-checkout invoke error:', error);
+          throw error;
         }
 
-        const item = stripeSub.items?.data?.[0];
-        if (item && (item.quantity !== targetQty || Math.abs(Number(item.price?.unit_amount || 0) - Math.round(Number(sub.tote_rate || 3.50) * 100)) > 1) && targetQty > 0) {
-          console.log(`[StripeBillingIntegration] Syncing subscription quantity for ${subId}: ${item.quantity} -> ${targetQty} totes @ $${Number(sub.tote_rate || 3.50).toFixed(2)}/mo (Roll-over to Renewal)...`);
+        const checkoutUrl = data?.url || data?.checkoutUrl || data?.sessionUrl;
+        if (checkoutUrl) {
+          window.location.href = checkoutUrl;
+          return { success: true, url: checkoutUrl };
+        } else {
+          throw new Error(data?.error || 'No checkout URL returned from Stripe');
+        }
+      } catch (err) {
+        console.error('[StripeBillingIntegration] Failed to initiate Stripe checkout:', err);
+        alert('Stripe Checkout Error: ' + (err.message || err));
+        return { success: false, error: err.message };
+      }
+    },
 
-          // 1. Clean up any previous pending upgrade adjustment items so multiple events do not stack stale deltas
-          if (sub.stripe_customer_id) {
-            try {
-              const pRes = await fetch(`https://api.stripe.com/v1/invoiceitems?customer=${sub.stripe_customer_id}&pending=true`, {
-                headers: { 'Authorization': `Bearer ${apiKey}` }
-              });
-              const pData = await pRes.json();
-              if (pData.data && Array.isArray(pData.data)) {
-                for (const it of pData.data) {
-                  const desc = (it.description || '').toLowerCase();
-                  if (desc.includes('tier upgrade') || desc.includes('prorated storage')) {
-                    await fetch(`https://api.stripe.com/v1/invoiceitems/${it.id}`, {
-                      method: 'DELETE',
-                      headers: { 'Authorization': `Bearer ${apiKey}` }
-                    });
-                  }
-                }
-              }
-            } catch (pErr) {
-              console.warn('[StripeBillingIntegration] Pending items prune notice:', pErr.message);
-            }
+    /**
+     * Synchronizes subscription quantity with Stripe via 'stripe-subscription-update' edge function.
+     * @param {string} userId - Customer user ID
+     * @param {number} targetQty - Target tote count
+     */
+    syncSubscriptionQuantityWithStripe: async function (userId, targetQty) {
+      const targetUserId = userId || (global.currentUser ? global.currentUser.id : null);
+      if (!targetUserId) return { success: false, error: 'Missing userId' };
+
+      const sb = global.supabase;
+      if (!sb || typeof sb.functions?.invoke !== 'function') {
+        return { success: false, error: 'Supabase functions client unavailable' };
+      }
+
+      try {
+        let quantity = targetQty;
+        if (quantity == null) {
+          const { data: sub } = await sb.from('subscriptions').select('total_totes, tote_count').eq('uid', targetUserId).maybeSingle();
+          if (sub) {
+            quantity = Number(sub.total_totes || sub.tote_count || 1);
           }
-
-          // 2. Update recurring subscription quantity and price tier for the next renewal cycle ($0 upgrade fees)
-          const toteRate = Number(sub.tote_rate || (targetQty >= 25 ? 2.00 : (targetQty >= 10 ? 3.50 : 5.00)));
-          const unitCents = Math.round(toteRate * 100);
-          const updateBody = new URLSearchParams({
-            'items[0][id]': item.id,
-            'items[0][price_data][unit_amount]': unitCents.toString(),
-            'items[0][price_data][currency]': 'usd',
-            'items[0][price_data][recurring][interval]': 'month',
-            'items[0][price_data][product]': item.price?.product || 'prod_V69EeCLs9DeWGm',
-            'items[0][quantity]': targetQty.toString(),
-            'proration_behavior': 'none'
-          });
-
-          const updateRes = await fetch(`https://api.stripe.com/v1/subscriptions/${subId}`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: updateBody
-          });
-
-          const updatedSub = await updateRes.json();
-          console.log('[StripeBillingIntegration] Stripe subscription quantity updated to:', updatedSub.items?.data?.[0]?.quantity);
         }
 
-        return { success: true, quantity: targetQty };
+        console.log(`[StripeBillingIntegration] Invoking stripe-subscription-update for user ${targetUserId}, targetQty: ${quantity}...`);
+        const { data, error } = await sb.functions.invoke('stripe-subscription-update', {
+          body: {
+            userId: targetUserId,
+            targetToteCount: Number(quantity)
+          }
+        });
+
+        if (error) {
+          console.warn('[StripeBillingIntegration] stripe-subscription-update invoke error:', error);
+          return { success: false, error: error.message || error };
+        }
+
+        console.log('[StripeBillingIntegration] Stripe subscription updated successfully:', data);
+        return { success: true, data };
       } catch (err) {
         console.error('[StripeBillingIntegration] Exception in syncSubscriptionQuantityWithStripe:', err);
         return { success: false, error: err.message };
       }
+    },
+
+    /**
+     * Dynamically calculates tier rate from active facility context without hardcoded price fallbacks.
+     * @param {Object} facility - Facility record containing dynamic tier rates
+     * @param {number} toteCount - Target tote count
+     * @returns {{rate: number, tier: number, tierName: string, label: string}}
+     */
+    calculateTierRate: function (facility, toteCount) {
+      if (!facility) {
+        throw new Error('[StripeBillingIntegration] Missing facility context for dynamic rate calculation.');
+      }
+      const count = Number(toteCount) || 0;
+      const t1 = Number(facility.tier1_rate);
+      const t2 = Number(facility.tier2_rate);
+      const t3 = Number(facility.tier3_rate);
+      const t4 = Number(facility.tier4_rate);
+
+      if (isNaN(t1) || isNaN(t2) || isNaN(t3) || isNaN(t4)) {
+        throw new Error('[StripeBillingIntegration] Incomplete facility tier rate configuration.');
+      }
+
+      if (count >= 50) return { rate: t4, tier: 4, tierName: 'Tier 4', label: `Tier 4 — $${t4.toFixed(2)}/tote` };
+      if (count >= 25) return { rate: t3, tier: 3, tierName: 'Tier 3', label: `Tier 3 — $${t3.toFixed(2)}/tote` };
+      if (count >= 10) return { rate: t2, tier: 2, tierName: 'Tier 2', label: `Tier 2 — $${t2.toFixed(2)}/tote` };
+      return { rate: t1, tier: 1, tierName: 'Tier 1', label: `Tier 1 — $${t1.toFixed(2)}/tote` };
     },
 
     /**
@@ -272,7 +300,10 @@
           inv = global.userLoadedInvoices.find(i => i.invoice_number === invoiceNumberOrId || i.id === invoiceNumberOrId);
         }
 
-        const amt = inv ? Number(inv.total_amount || inv.subtotal || 0) : 25.00;
+        let amt = Number(inv ? (inv.total_amount || inv.subtotal || inv.amount_due) : 0);
+        if (!amt || isNaN(amt) || amt <= 0) {
+          throw new Error(`[StripeBillingIntegration] Invalid or zero invoice balance for ${invoiceNumberOrId}`);
+        }
         const invNum = inv ? inv.invoice_number : invoiceNumberOrId;
         const invUid = inv ? inv.uid : (global.currentUser ? global.currentUser.id : null);
 
@@ -558,7 +589,21 @@
      */
     createAndSendMissingToteInvoice: async function ({ customerId, amount, toteCode, facilityId, userId, customerEmail, customerName }) {
       const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
-      const feeAmount = Math.max(0, Number(amount) || 15.00);
+      let feeAmount = Number(amount);
+
+      if (isNaN(feeAmount) || feeAmount <= 0) {
+        if (facilityId && global.supabase) {
+          const { data: fac } = await global.supabase.from('facilities').select('missing_tote_fee').eq('id', facilityId).maybeSingle();
+          if (fac && fac.missing_tote_fee != null) {
+            feeAmount = Number(fac.missing_tote_fee);
+          }
+        }
+      }
+
+      if (isNaN(feeAmount) || feeAmount <= 0) {
+        throw new Error('[StripeBillingIntegration] Missing dynamic replacement fee configuration.');
+      }
+
       const unitCents = Math.round(feeAmount * 100);
       let custId = customerId;
 
@@ -851,6 +896,77 @@
               customerId: customerId || null,
               subscriptionId: subscriptionId || null,
               subStatus: subStatus,
+              status: 'processed'
+            };
+          }
+
+          case 'charge.refunded': {
+            const paymentIntentId = dataObj.payment_intent || dataObj.id;
+            const refundId = dataObj.refund_id || (dataObj.refunds?.data?.[0]?.id) || 're_webhook';
+            console.log(`[StripeBillingIntegration] Webhook: charge.refunded for PI ${paymentIntentId}, refund ${refundId}`);
+
+            if (sb && paymentIntentId) {
+              await sb
+                .from('invoices')
+                .update({
+                  payment_status: 'refunded',
+                  refunded_at: new Date().toISOString()
+                })
+                .eq('stripe_payment_intent_id', paymentIntentId);
+
+              await sb
+                .from('charges')
+                .update({ status: 'refunded' })
+                .eq('stripe_payment_intent_id', paymentIntentId);
+            }
+
+            return {
+              success: true,
+              eventType: 'charge.refunded',
+              paymentIntentId: paymentIntentId,
+              status: 'processed'
+            };
+          }
+
+          case 'payment_intent.succeeded': {
+            const customerId = dataObj.customer || dataObj.customer_id || dataObj.metadata?.userId || dataObj.metadata?.uid;
+            const paymentIntentId = dataObj.id;
+            const amountPaid = dataObj.amount_received ? dataObj.amount_received / 100 : (dataObj.amount ? dataObj.amount / 100 : 0);
+
+            console.log(`[StripeBillingIntegration] Webhook: payment_intent.succeeded for customer ${customerId}, PI ${paymentIntentId}, amount $${amountPaid}`);
+
+            if (sb) {
+              if (paymentIntentId) {
+                await sb
+                  .from('invoices')
+                  .update({
+                    payment_status: 'paid',
+                    paid_at: new Date().toISOString(),
+                    amount_paid: amountPaid,
+                    amount_remaining: 0
+                  })
+                  .eq('stripe_payment_intent_id', paymentIntentId);
+
+                await sb
+                  .from('charges')
+                  .update({ status: 'success' })
+                  .eq('stripe_payment_intent_id', paymentIntentId);
+              }
+
+              if (customerId) {
+                await sb
+                  .from('users')
+                  .update({ is_overdue: false, overdue: false, overdue_flag: false })
+                  .or(`id.eq.${customerId},email.eq.${customerId},stripe_customer_id.eq.${customerId}`);
+              }
+            }
+
+            return {
+              success: true,
+              eventType: 'payment_intent.succeeded',
+              customerId: customerId || null,
+              paymentIntentId: paymentIntentId,
+              amountPaid: amountPaid,
               status: 'processed'
             };
           }

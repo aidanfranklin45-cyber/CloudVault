@@ -847,6 +847,7 @@
                         handledTotes.add(t.tote_code);
                         const uId = t.uid;
                         const u = extraUsersMap[uId];
+                        const truckCode = t.location_code && (t.location_code.includes('TRUCK') || t.location_code.includes('VAN')) ? t.location_code : 'VALET-TRUCK-A';
                         stops.push({
                             uid: uId,
                             id: `transit_${t.tote_code}`,
@@ -855,7 +856,7 @@
                             slot: t.status === 'out-for-delivery' ? '09:00 AM - 12:00 PM (En Route)' : 'Awaiting Vehicle Load',
                             status: t.status,
                             toteCount: 1,
-                            driver: 'Active Fleet Driver'
+                            driver: `Active Fleet Driver (${truckCode})`
                         });
                     }
                 });

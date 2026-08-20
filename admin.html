@@ -5127,6 +5127,7 @@
                             const dateStr = reqDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
                             const slotStr = timeSlot || '09:00 AM - 12:00 PM';
                             const driver = request?.driver_name || 'Active Fleet Driver';
+                            const truck = request?.vehicle_info || (totes.find(t => t.location_code && (t.location_code.includes('TRUCK') || t.location_code.includes('VAN')))?.location_code) || 'VALET-TRUCK-A';
                             const toteCodesJson = JSON.stringify(totes.map(t => t.tote_code)).replace(/"/g, '&quot;');
                             const toteIdsJson = JSON.stringify(totes.map(t => t.id)).replace(/"/g, '&quot;');
 
@@ -5143,11 +5144,12 @@
                                                     ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
                                                     ${getJobEventBadge(job)}
                                                 </div>
-                                                <p class="text-[11px] font-mono text-gray-400">Order ID: <span class="text-orange-300 font-bold font-mono">${jobId.startsWith('ORD-') ? jobId : jobId.substring(0, 8)}</span> • ${totes.length} Tote(s) Out on Van • ${driver}</p>
+                                                <p class="text-[11px] font-mono text-gray-400">Order ID: <span class="text-orange-300 font-bold font-mono">${jobId.startsWith('ORD-') ? jobId : jobId.substring(0, 8)}</span> • ${totes.length} Tote(s) Out on Van • <span class="text-amber-300 font-bold">📍 ${truck}</span> • ${driver}</p>
                                             </div>
                                         </div>
                                         <div class="flex flex-wrap items-center gap-2">
-                                            <span class="text-xs font-bold font-mono text-orange-400 bg-orange-500/10 border border-orange-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5"></i> En Route to Customer</span>
+                                            <span class="text-xs font-bold font-mono text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5 text-amber-400"></i> ${truck}</span>
+                                            <span class="text-xs font-bold font-mono text-orange-400 bg-orange-500/10 border border-orange-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="navigation" class="w-3.5 h-3.5"></i> En Route to Customer</span>
                                         </div>
                                     </div>
 

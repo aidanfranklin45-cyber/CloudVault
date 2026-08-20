@@ -14,6 +14,141 @@ const stripe = new Stripe(stripeSecretKey, {
 
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
+/**
+ * Helper to record promo redemption and calculate commission dynamically from database promo_codes
+ */
+async function processPromoRedemption(
+  supabase: any,
+  params: {
+    promoIdentifier: string | null;
+    targetUserId: string | null;
+    customerEmail: string | null;
+    invoiceId: string;
+    grossAmount: number;
+    discountAmount: number;
+    netPaidAmount: number;
+    nowIso: string;
+  }
+) {
+  const {
+    promoIdentifier,
+    targetUserId,
+    customerEmail,
+    invoiceId,
+    grossAmount,
+    discountAmount,
+    netPaidAmount,
+    nowIso,
+  } = params;
+
+  if (!promoIdentifier && !targetUserId && !customerEmail) return;
+
+  // 1. Prevent duplicate redemption record for the exact invoice
+  const { data: existingRedemption } = await supabase
+    .from("promo_redemptions")
+    .select("id")
+    .eq("stripe_invoice_id", invoiceId)
+    .maybeSingle();
+
+  if (existingRedemption) {
+    return;
+  }
+
+  // 2. Find matching promo code record
+  let promo: any = null;
+
+  if (promoIdentifier) {
+    const { data: p } = await supabase
+      .from("promo_codes")
+      .select("*")
+      .or(
+        `code.ilike.${promoIdentifier},stripe_promo_code_id.eq.${promoIdentifier},stripe_coupon_id.eq.${promoIdentifier},id.eq.${promoIdentifier}`
+      )
+      .maybeSingle();
+    if (p) promo = p;
+  }
+
+  // Fallback: check if the user was referred by a promo code
+  if (!promo && targetUserId) {
+    const { data: u } = await supabase
+      .from("users")
+      .select("referred_by_promo_code, referred_by_creator_id")
+      .eq("id", targetUserId)
+      .maybeSingle();
+
+    if (u && u.referred_by_promo_code) {
+      const { data: p } = await supabase
+        .from("promo_codes")
+        .select("*")
+        .ilike("code", u.referred_by_promo_code)
+        .maybeSingle();
+      if (p) promo = p;
+    }
+  }
+
+  if (!promo) return;
+
+  const commissionRate = Number(promo.commission_rate_pct) || 0;
+  const commissionAmount = Number((grossAmount * (commissionRate / 100)).toFixed(2));
+  const isCommissionEligible = Boolean(promo.creator_id && commissionRate > 0);
+
+  // Count prior redemptions by this customer for this promo to determine month_index
+  let monthIndex = 1;
+  if (targetUserId) {
+    const { count } = await supabase
+      .from("promo_redemptions")
+      .select("id", { count: "exact", head: true })
+      .eq("promo_code_id", promo.id)
+      .eq("customer_uid", targetUserId);
+    if (count !== null && count !== undefined) {
+      monthIndex = count + 1;
+    }
+  }
+
+  // 3. Insert redemption record
+  await supabase.from("promo_redemptions").insert({
+    promo_code_id: promo.id,
+    promo_code: promo.code,
+    creator_id: promo.creator_id,
+    customer_uid: targetUserId,
+    customer_email: customerEmail,
+    stripe_invoice_id: invoiceId,
+    invoice_gross_amount: grossAmount,
+    discount_amount: discountAmount,
+    net_paid_amount: netPaidAmount,
+    commission_rate_applied: commissionRate,
+    commission_amount: commissionAmount,
+    month_index: monthIndex,
+    is_commission_eligible: isCommissionEligible,
+    payout_status: "PENDING",
+    paid_at: nowIso,
+    created_at: nowIso,
+  });
+
+  // 4. Increment promo current_redemptions counter
+  await supabase
+    .from("promo_codes")
+    .update({
+      current_redemptions: (promo.current_redemptions || 0) + 1,
+      updated_at: nowIso,
+    })
+    .eq("id", promo.id);
+
+  // 5. Update user referral attribution
+  if (targetUserId) {
+    await supabase
+      .from("users")
+      .update({
+        referred_by_promo_code: promo.code,
+        referred_by_creator_id: promo.creator_id,
+        referred_at: nowIso,
+      })
+      .eq("id", targetUserId);
+  }
+
+  console.log(`[StripeWebhook] Recorded promo redemption for code ${promo.code} on invoice ${invoiceId}`);
+}
+
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -196,6 +331,7 @@ Deno.serve(async (req: Request) => {
         const amountPaid = (invoice.amount_paid || 0) / 100;
         const amountDue = (invoice.amount_due || 0) / 100;
         const amountRemaining = (invoice.amount_remaining || 0) / 100;
+        const discountAmount = Math.max(0, subtotal - total);
         const paidAt = invoice.status_transitions?.paid_at
           ? new Date(invoice.status_transitions.paid_at * 1000).toISOString()
           : new Date().toISOString();
@@ -250,6 +386,7 @@ Deno.serve(async (req: Request) => {
           payment_status: "paid",
           subtotal: subtotal,
           tax: tax,
+          discount: discountAmount,
           total_amount: total,
           amount_due: amountDue,
           amount_paid: amountPaid,
@@ -274,6 +411,25 @@ Deno.serve(async (req: Request) => {
         } else {
           await supabase.from("invoices").insert(invoiceRecord);
         }
+
+        // Process Promo Redemption & Creator Commission Tracking
+        const promoIdentifier =
+          invoice.discount?.promotion_code ||
+          invoice.discount?.coupon?.id ||
+          invoice.metadata?.promoCode ||
+          invoice.metadata?.promo_code ||
+          null;
+
+        await processPromoRedemption(supabase, {
+          promoIdentifier: typeof promoIdentifier === "string" ? promoIdentifier : null,
+          targetUserId: uid,
+          customerEmail: customerEmail || null,
+          invoiceId: stripeInvoiceId,
+          grossAmount: subtotal,
+          discountAmount: discountAmount,
+          netPaidAmount: amountPaid,
+          nowIso: paidAt,
+        });
 
         // Restore active standing for user
         if (uid) {
@@ -422,8 +578,9 @@ Deno.serve(async (req: Request) => {
         const session = dataObject as Stripe.Checkout.Session;
         const customerId = typeof session.customer === "string" ? session.customer : null;
         const subscriptionId = typeof session.subscription === "string" ? session.subscription : null;
-        const userUid = session.client_reference_id || session.metadata?.supabase_uid || session.metadata?.uid;
+        const userUid = session.client_reference_id || session.metadata?.userId || session.metadata?.supabase_uid || session.metadata?.uid;
         const customerEmail = session.customer_details?.email || session.customer_email;
+        const nowIso = new Date().toISOString();
 
         console.log(`[StripeWebhook] checkout.session.completed: userUid=${userUid}, customerId=${customerId}, subId=${subscriptionId}`);
 
@@ -457,6 +614,28 @@ Deno.serve(async (req: Request) => {
             })
             .eq("id", targetUserId);
         }
+
+        // Process Promo Redemption from Checkout metadata or discounts
+        const promoIdentifier =
+          session.metadata?.promoCodeId ||
+          session.metadata?.promoCode ||
+          session.metadata?.promo_code ||
+          null;
+
+        const grossAmount = (session.amount_total || 0) / 100 + ((session.total_details?.amount_discount || 0) / 100);
+        const discountAmount = (session.total_details?.amount_discount || 0) / 100;
+        const netPaidAmount = (session.amount_total || 0) / 100;
+
+        await processPromoRedemption(supabase, {
+          promoIdentifier: typeof promoIdentifier === "string" ? promoIdentifier : null,
+          targetUserId: targetUserId || null,
+          customerEmail: customerEmail || null,
+          invoiceId: (session.invoice as string) || `CHK-${session.id.substring(3, 13).toUpperCase()}`,
+          grossAmount: grossAmount,
+          discountAmount: discountAmount,
+          netPaidAmount: netPaidAmount,
+          nowIso: nowIso,
+        });
 
         break;
       }
@@ -529,6 +708,147 @@ Deno.serve(async (req: Request) => {
           await supabase.from("subscriptions").insert(subData);
         }
 
+        break;
+      }
+
+      // -------------------------------------------------------------
+      // Event: promotion_code.created
+      // -------------------------------------------------------------
+      case "promotion_code.created": {
+        const promoCodeObj = dataObject as Stripe.PromotionCode;
+        const couponId = typeof promoCodeObj.coupon === "string" ? promoCodeObj.coupon : promoCodeObj.coupon?.id;
+        const code = promoCodeObj.code;
+        const maxRedemptions = promoCodeObj.max_redemptions || null;
+        const expiresAt = promoCodeObj.expires_at ? new Date(promoCodeObj.expires_at * 1000).toISOString() : null;
+        const isActive = promoCodeObj.active;
+        const nowIso = new Date().toISOString();
+
+        console.log(`[StripeWebhook] promotion_code.created: ${promoCodeObj.id} (${code})`);
+
+        const { data: existingPromo } = await supabase
+          .from("promo_codes")
+          .select("id")
+          .ilike("code", code)
+          .maybeSingle();
+
+        if (existingPromo) {
+          await supabase
+            .from("promo_codes")
+            .update({
+              stripe_promo_code_id: promoCodeObj.id,
+              stripe_coupon_id: couponId,
+              max_redemptions: maxRedemptions,
+              expires_at: expiresAt,
+              is_active: isActive,
+              updated_at: nowIso,
+            })
+            .eq("id", existingPromo.id);
+        }
+        break;
+      }
+
+      // -------------------------------------------------------------
+      // Event: promotion_code.updated
+      // -------------------------------------------------------------
+      case "promotion_code.updated": {
+        const promoCodeObj = dataObject as Stripe.PromotionCode;
+        const maxRedemptions = promoCodeObj.max_redemptions || null;
+        const expiresAt = promoCodeObj.expires_at ? new Date(promoCodeObj.expires_at * 1000).toISOString() : null;
+        const isActive = promoCodeObj.active;
+        const nowIso = new Date().toISOString();
+
+        console.log(`[StripeWebhook] promotion_code.updated: ${promoCodeObj.id}`);
+
+        await supabase
+          .from("promo_codes")
+          .update({
+            max_redemptions: maxRedemptions,
+            expires_at: expiresAt,
+            is_active: isActive,
+            updated_at: nowIso,
+          })
+          .eq("stripe_promo_code_id", promoCodeObj.id);
+        break;
+      }
+
+      // -------------------------------------------------------------
+      // Event: coupon.created
+      // -------------------------------------------------------------
+      case "coupon.created": {
+        const couponObj = dataObject as Stripe.Coupon;
+        const couponId = couponObj.id;
+        const percentOff = couponObj.percent_off ? Number(couponObj.percent_off) : null;
+        const durationMonths = couponObj.duration_in_months || null;
+        const nowIso = new Date().toISOString();
+
+        console.log(`[StripeWebhook] coupon.created: ${couponId} (${percentOff}% off)`);
+
+        const { data: existingPromo } = await supabase
+          .from("promo_codes")
+          .select("id")
+          .eq("stripe_coupon_id", couponId)
+          .maybeSingle();
+
+        if (existingPromo && percentOff !== null) {
+          await supabase
+            .from("promo_codes")
+            .update({
+              customer_discount_pct: percentOff,
+              customer_discount_duration_months: durationMonths,
+              is_active: couponObj.valid,
+              updated_at: nowIso,
+            })
+            .eq("id", existingPromo.id);
+        }
+        break;
+      }
+
+      // -------------------------------------------------------------
+      // Event: coupon.deleted
+      // -------------------------------------------------------------
+      case "coupon.deleted": {
+        const couponObj = dataObject as Stripe.Coupon;
+        const couponId = couponObj.id;
+        const nowIso = new Date().toISOString();
+
+        console.log(`[StripeWebhook] coupon.deleted: ${couponId}`);
+
+        await supabase
+          .from("promo_codes")
+          .update({
+            is_active: false,
+            updated_at: nowIso,
+          })
+          .eq("stripe_coupon_id", couponId);
+        break;
+      }
+
+      // -------------------------------------------------------------
+      // Event: charge.refunded & charge.refund.updated
+      // -------------------------------------------------------------
+      case "charge.refunded":
+      case "charge.refund.updated": {
+        const charge = dataObject as Stripe.Charge;
+        const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : null;
+        const nowIso = new Date().toISOString();
+        console.log(`[StripeWebhook] charge.refunded: ${charge.id}, PI=${paymentIntentId}`);
+
+        if (paymentIntentId) {
+          await supabase
+            .from("invoices")
+            .update({
+              payment_status: "refunded",
+              refunded_at: nowIso,
+            })
+            .eq("stripe_payment_intent_id", paymentIntentId);
+
+          await supabase
+            .from("charges")
+            .update({
+              status: "refunded",
+            })
+            .eq("stripe_payment_intent_id", paymentIntentId);
+        }
         break;
       }
 

@@ -1233,8 +1233,8 @@
                             <p class="text-[11px] text-gray-500 font-medium">Expires 12/2028</p>
                         </div>
                     </div>
-                    <button onclick="launchStripePortalMock()" class="text-blue-600 hover:text-blue-700 text-xs font-bold bg-blue-50 hover:bg-blue-100 px-3.5 py-2 rounded-xl transition border border-blue-200">
-                        Update Card
+                    <button onclick="window.StripeBillingIntegration ? window.StripeBillingIntegration.launchCustomerPortal(currentUser?.stripe_customer_id, currentUser?.id) : launchStripePortalMock()" class="text-blue-600 hover:text-blue-700 text-xs font-bold bg-blue-50 hover:bg-blue-100 px-3.5 py-2 rounded-xl transition border border-blue-200">
+                        Manage Payment Method
                     </button>
                 </div>
             </div>
@@ -1578,15 +1578,20 @@
         let currentUserColor = 'blue';
         let selectedItems = new Set();
         let currentInventory = [];
-        let systemPricing = { valet_base: 17.00, valet_tote_adder: 1.00 };
+        let systemPricing = { valet_base: 0, valet_tote_adder: 0 };
         let activeFacilityPricing = {
-            valet_base: 17.00,
-            valet_tote_adder: 1.00,
-            next_day_surge_fee: 9.99,
-            next_day_peak_surge_fee: 14.99,
-            same_day_surge_fee: 19.99,
-            same_day_peak_surge_fee: 24.99,
-            evening_peak_slot_fee: 4.99,
+            tier1_rate: 0,
+            tier2_rate: 0,
+            tier3_rate: 0,
+            tier4_rate: 0,
+            valet_base: 0,
+            valet_tote_adder: 0,
+            next_day_surge_fee: 0,
+            next_day_peak_surge_fee: 0,
+            same_day_surge_fee: 0,
+            same_day_peak_surge_fee: 0,
+            evening_peak_slot_fee: 0,
+            missing_tote_fee: 0,
             next_day_promo_free: false,
             max_scheduling_days_out: 30,
             min_lead_time_days: 0
@@ -1663,17 +1668,26 @@
         // Pricing & Wizard Functions
         // ============================================================
         function getAddTierRate(count) {
-            if (count >= 50) return { rate: 1.00, tier: 4, label: 'Tier 4 — $1.00/tote' };
-            if (count >= 25) return { rate: 2.00, tier: 3, label: 'Tier 3 — $2.00/tote' };
-            if (count >= 10) return { rate: 3.50, tier: 2, label: 'Tier 2 — $3.50/tote' };
-            return { rate: 5.00, tier: 1, label: 'Tier 1 — $5.00/tote' };
+            const fac = window.currentActiveFacility || activeFacilityPricing || {};
+            if (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.calculateTierRate === 'function' && fac.tier1_rate != null) {
+                return window.StripeBillingIntegration.calculateTierRate(fac, count);
+            }
+            const t1 = Number(fac.tier1_rate != null ? fac.tier1_rate : (window.regionalRates?.tier1 || 0));
+            const t2 = Number(fac.tier2_rate != null ? fac.tier2_rate : (window.regionalRates?.tier2 || 0));
+            const t3 = Number(fac.tier3_rate != null ? fac.tier3_rate : (window.regionalRates?.tier3 || 0));
+            const t4 = Number(fac.tier4_rate != null ? fac.tier4_rate : (window.regionalRates?.tier4 || 0));
+
+            if (count >= 50) return { rate: t4, tier: 4, label: `Tier 4 — $${t4.toFixed(2)}/tote`, tierName: 'Tier 4' };
+            if (count >= 25) return { rate: t3, tier: 3, label: `Tier 3 — $${t3.toFixed(2)}/tote`, tierName: 'Tier 3' };
+            if (count >= 10) return { rate: t2, tier: 2, label: `Tier 2 — $${t2.toFixed(2)}/tote`, tierName: 'Tier 2' };
+            return { rate: t1, tier: 1, label: `Tier 1 — $${t1.toFixed(2)}/tote`, tierName: 'Tier 1' };
         }
 
         function updateAddTotesPreview() {
             if (!currentSubscription) return;
             const currentTotes = currentSubscription.total_totes || 0;
-            const currentRate = Number(currentSubscription.tote_rate) || 5.00;
-            const currentMonthly = Number(currentSubscription.recurring_storage) || 0.00;
+            const currentRate = Number(currentSubscription.tote_rate || 0);
+            const currentMonthly = Number(currentSubscription.recurring_storage || 0.00);
 
             const newTotal = currentTotes + additionalToteCount;
             const { rate: newRate, label: rateLabel } = getAddTierRate(newTotal);
@@ -1696,8 +1710,8 @@
                 tierBanner.classList.add('hidden');
             }
 
-            const vBase = Number(activeFacilityPricing?.valet_base != null ? activeFacilityPricing.valet_base : (systemPricing?.valet_base || 8.00));
-            const vAdder = Number(activeFacilityPricing?.valet_tote_adder != null ? activeFacilityPricing.valet_tote_adder : (systemPricing?.valet_tote_adder || 1.00));
+            const vBase = Number(activeFacilityPricing?.valet_base != null ? activeFacilityPricing.valet_base : (systemPricing?.valet_base || 0));
+            const vAdder = Number(activeFacilityPricing?.valet_tote_adder != null ? activeFacilityPricing.valet_tote_adder : (systemPricing?.valet_tote_adder || 0));
             const valetLabel = document.getElementById('add-valet-fee-label');
             if (valetLabel) valetLabel.textContent = `$${(vBase + additionalToteCount * vAdder).toFixed(2)}`;
             const valetSubLabel = document.getElementById('add-valet-sub-label');
@@ -2916,13 +2930,14 @@
                 let activeFacId = area.facility_id || 'facility_seattle_north';
                 const { data: facData } = await supabase.from('facilities').select('*').eq('id', activeFacId).maybeSingle();
                 if (facData) {
+                    window.currentActiveFacility = facData;
                     window.regionalRates = {
-                        tier1: Number(facData.tier1_rate) || 5.00,
-                        tier2: Number(facData.tier2_rate) || 3.50,
-                        tier3: Number(facData.tier3_rate) || 2.00,
-                        tier4: Number(facData.tier4_rate) || 1.00,
-                        valetBase: Number(facData.valet_base) || 15.00,
-                        valetAdder: Number(facData.valet_tote_adder) || 1.00
+                        tier1: Number(facData.tier1_rate),
+                        tier2: Number(facData.tier2_rate),
+                        tier3: Number(facData.tier3_rate),
+                        tier4: Number(facData.tier4_rate),
+                        valetBase: Number(facData.valet_base),
+                        valetAdder: Number(facData.valet_tote_adder)
                     };
                 }
 
@@ -2940,15 +2955,19 @@
 
         async function submitWizardWaitlist() {
             const btn = document.getElementById('btn-wizard-waitlist-submit');
-            btn.textContent = 'Processing $25 Deposit...';
+            btn.textContent = 'Processing Deposit...';
             btn.disabled = true;
 
             try {
+                const fac = window.currentActiveFacility || activeFacilityPricing || {};
+                const { data: facData } = await supabase.from('facilities').select('*').limit(1).maybeSingle();
+                const depAmt = facData?.waitlist_deposit || 25.00; // Database-driven deposit config
+
                 await supabase.from('waitlist').insert({
                     email: currentUser.email,
                     zip_code: wizardZip,
                     requested_totes: wizardTotes || 5,
-                    deposit_amount: 25.00,
+                    deposit_amount: depAmt,
                     price_lock_years: 3,
                     refund_guarantee_days: 365,
                     payment_status: 'deposit_paid'
@@ -2958,26 +2977,32 @@
             } catch (err) {
                 console.error("Error joining waitlist:", err);
                 alert("Something went wrong processing your deposit. Please try again.");
-                btn.textContent = 'Place $25 Deposit & Lock Legacy Rates';
+                btn.textContent = 'Place Deposit & Lock Legacy Rates';
                 btn.disabled = false;
             }
         }
 
         function getWizardTierRate(count) {
-            let rates = window.regionalRates || { tier1: 5.00, tier2: 3.50, tier3: 2.00, tier4: 1.00 };
+            const fac = window.currentActiveFacility || activeFacilityPricing || {};
+            let rates = window.regionalRates || {
+                tier1: Number(fac.tier1_rate != null ? fac.tier1_rate : 0),
+                tier2: Number(fac.tier2_rate != null ? fac.tier2_rate : 0),
+                tier3: Number(fac.tier3_rate != null ? fac.tier3_rate : 0),
+                tier4: Number(fac.tier4_rate != null ? fac.tier4_rate : 0)
+            };
             if (window.currentUserData && window.currentUserData.has_price_lock && window.currentUserData.price_lock_rates) {
                 const plr = window.currentUserData.price_lock_rates;
                 rates = {
-                    tier1: Number(plr.tier1_rate || plr.tier1 || rates.tier1),
-                    tier2: Number(plr.tier2_rate || plr.tier2 || rates.tier2),
-                    tier3: Number(plr.tier3_rate || plr.tier3 || rates.tier3),
-                    tier4: Number(plr.tier4_rate || plr.tier4 || rates.tier4)
+                    tier1: Number(plr.tier1_rate != null ? plr.tier1_rate : (plr.tier1 || rates.tier1)),
+                    tier2: Number(plr.tier2_rate != null ? plr.tier2_rate : (plr.tier2 || rates.tier2)),
+                    tier3: Number(plr.tier3_rate != null ? plr.tier3_rate : (plr.tier3 || rates.tier3)),
+                    tier4: Number(plr.tier4_rate != null ? plr.tier4_rate : (plr.tier4 || rates.tier4))
                 };
             }
-            if (count >= 50) return { rate: rates.tier4, tier: 4, label: `Tier 4 — $${rates.tier4.toFixed(2)}/tote` };
-            if (count >= 25) return { rate: rates.tier3, tier: 3, label: `Tier 3 — $${rates.tier3.toFixed(2)}/tote` };
-            if (count >= 10) return { rate: rates.tier2, tier: 2, label: `Tier 2 — $${rates.tier2.toFixed(2)}/tote` };
-            return { rate: rates.tier1, tier: 1, label: `Tier 1 — $${rates.tier1.toFixed(2)}/tote` };
+            if (count >= 50) return { rate: rates.tier4, tier: 4, label: `Tier 4 — $${rates.tier4.toFixed(2)}/tote`, tierName: 'Tier 4' };
+            if (count >= 25) return { rate: rates.tier3, tier: 3, label: `Tier 3 — $${rates.tier3.toFixed(2)}/tote`, tierName: 'Tier 3' };
+            if (count >= 10) return { rate: rates.tier2, tier: 2, label: `Tier 2 — $${rates.tier2.toFixed(2)}/tote`, tierName: 'Tier 2' };
+            return { rate: rates.tier1, tier: 1, label: `Tier 1 — $${rates.tier1.toFixed(2)}/tote`, tierName: 'Tier 1' };
         }
 
         function selectWizardTotes(count) {
@@ -3034,9 +3059,10 @@
                 }
             }
 
-            const rates = window.regionalRates || { valetBase: 15.00, valetAdder: 1.00 };
+            const fac = window.currentActiveFacility || activeFacilityPricing || {};
+            const rates = window.regionalRates || { valetBase: Number(fac.valet_base || 0), valetAdder: Number(fac.valet_tote_adder || 0) };
             const monthly = wizardTotes * rate;
-            const logisticsFee = wizardLogistics === 'valet_pickup' ? rates.valetBase + (wizardTotes * rates.valetAdder) : 0;
+            const logisticsFee = wizardLogistics === 'valet_pickup' ? (rates.valetBase + (wizardTotes * rates.valetAdder)) : 0;
             const total = monthly + logisticsFee;
 
             document.getElementById('ledger-monthly').textContent = monthly.toFixed(2);
@@ -3391,6 +3417,9 @@
                                 }
                                 updateAddTotesPreview();
                             }
+                            if (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.syncSubscriptionQuantityWithStripe === 'function' && currentUser?.id) {
+                                window.StripeBillingIntegration.syncSubscriptionQuantityWithStripe(currentUser.id, updatedSub?.total_totes).catch(e => console.warn('[Stripe Sync Notice]', e));
+                            }
                             if (typeof globalFetchInventory === 'function') {
                                 globalFetchInventory();
                             }
@@ -3419,6 +3448,9 @@
                             headerPlan.textContent = `${updatedSub.total_totes} Totes Plan ($${Number(updatedSub.tote_rate).toFixed(2)}/tote — $${Number(updatedSub.recurring_storage).toFixed(2)}/mo)`;
                         }
                         updateAddTotesPreview();
+                    }
+                    if (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.syncSubscriptionQuantityWithStripe === 'function' && currentUser?.id) {
+                        window.StripeBillingIntegration.syncSubscriptionQuantityWithStripe(currentUser.id, updatedSub?.total_totes).catch(e => console.warn('[Stripe Sync Notice]', e));
                     }
                     if (typeof globalFetchInventory === 'function') {
                         globalFetchInventory();
@@ -4112,17 +4144,30 @@
                         id: fac.id,
                         name: fac.name,
                         city: fac.city,
-                        valet_base: (fac.valet_base !== null && fac.valet_base !== undefined) ? Number(fac.valet_base) : 17.00,
-                        valet_tote_adder: (fac.valet_tote_adder !== null && fac.valet_tote_adder !== undefined) ? Number(fac.valet_tote_adder) : 1.00,
-                        next_day_surge_fee: (fac.next_day_surge_fee !== null && fac.next_day_surge_fee !== undefined) ? Number(fac.next_day_surge_fee) : 0.00,
-                        next_day_peak_surge_fee: (fac.next_day_peak_surge_fee !== null && fac.next_day_peak_surge_fee !== undefined) ? Number(fac.next_day_peak_surge_fee) : 0.00,
-                        same_day_surge_fee: (fac.same_day_surge_fee !== null && fac.same_day_surge_fee !== undefined) ? Number(fac.same_day_surge_fee) : 19.99,
-                        same_day_peak_surge_fee: (fac.same_day_peak_surge_fee !== null && fac.same_day_peak_surge_fee !== undefined) ? Number(fac.same_day_peak_surge_fee) : 24.99,
-                        evening_peak_slot_fee: (fac.evening_peak_slot_fee !== null && fac.evening_peak_slot_fee !== undefined) ? Number(fac.evening_peak_slot_fee) : 0.00,
+                        tier1_rate: Number(fac.tier1_rate != null ? fac.tier1_rate : 0),
+                        tier2_rate: Number(fac.tier2_rate != null ? fac.tier2_rate : 0),
+                        tier3_rate: Number(fac.tier3_rate != null ? fac.tier3_rate : 0),
+                        tier4_rate: Number(fac.tier4_rate != null ? fac.tier4_rate : 0),
+                        valet_base: Number(fac.valet_base != null ? fac.valet_base : 0),
+                        valet_tote_adder: Number(fac.valet_tote_adder != null ? fac.valet_tote_adder : 0),
+                        next_day_surge_fee: Number(fac.next_day_surge_fee != null ? fac.next_day_surge_fee : 0),
+                        next_day_peak_surge_fee: Number(fac.next_day_peak_surge_fee != null ? fac.next_day_peak_surge_fee : 0),
+                        same_day_surge_fee: Number(fac.same_day_surge_fee != null ? fac.same_day_surge_fee : 0),
+                        same_day_peak_surge_fee: Number(fac.same_day_peak_surge_fee != null ? fac.same_day_peak_surge_fee : 0),
+                        evening_peak_slot_fee: Number(fac.evening_peak_slot_fee != null ? fac.evening_peak_slot_fee : 0),
+                        missing_tote_fee: Number(fac.missing_tote_fee != null ? fac.missing_tote_fee : 0),
                         next_day_promo_free: Boolean(fac.next_day_promo_free) || (Number(fac.next_day_surge_fee) === 0),
                         max_scheduling_days_out: fac.max_scheduling_days_out || 30,
-                        min_lead_time_days: (fac.min_lead_time_days !== null && fac.min_lead_time_days !== undefined) ? fac.min_lead_time_days : 0,
+                        min_lead_time_days: fac.min_lead_time_days != null ? fac.min_lead_time_days : 0,
                         staging_config: fac.staging_config || {}
+                    };
+                    window.regionalRates = {
+                        tier1: activeFacilityPricing.tier1_rate,
+                        tier2: activeFacilityPricing.tier2_rate,
+                        tier3: activeFacilityPricing.tier3_rate,
+                        tier4: activeFacilityPricing.tier4_rate,
+                        valetBase: activeFacilityPricing.valet_base,
+                        valetAdder: activeFacilityPricing.valet_tote_adder
                     };
                     systemPricing.valet_base = activeFacilityPricing.valet_base;
                     systemPricing.valet_tote_adder = activeFacilityPricing.valet_tote_adder;
@@ -4130,6 +4175,9 @@
                     populatePickupWindowSelects(fac.pickup_windows, fac.staging_config, activeFacilityPricing.evening_peak_slot_fee);
                     if (typeof updateReservationSurgeUI === 'function') {
                         updateReservationSurgeUI();
+                    }
+                    if (typeof updateAddTotesPreview === 'function') {
+                        updateAddTotesPreview();
                     }
                 }
             } catch (e) {

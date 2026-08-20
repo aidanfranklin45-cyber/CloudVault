@@ -2,3 +2,12 @@ project_id = "xbxvebnrjryvksvtufqj"
 
 [functions.stripe-webhook]
 verify_jwt = false
+
+[functions.stripe-checkout]
+verify_jwt = false
+
+[functions.stripe-billing-portal]
+verify_jwt = false
+
+[functions.stripe-subscription-update]
+verify_jwt = false
