@@ -1301,9 +1301,8 @@
           if (!error && data) {
             console.log('[StripeBillingIntegration] Attribution recorded successfully:', data);
 
-            // Sync discount to Stripe Customer / Subscription if Stripe key available
+            // Optional sync discount to Stripe Customer / Subscription if Stripe key available
             const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
-            if (!apiKey) throw new Error('[Security] Stripe API key not configured. Set window.STRIPE_RESTRICTED_KEY before calling this method.');
             if (apiKey && customerUid) {
               try {
                 const { data: u } = await sb.from('users').select('email, stripe_customer_id').eq('id', customerUid).maybeSingle();
