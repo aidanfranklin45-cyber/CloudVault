@@ -5289,7 +5289,47 @@ BEGIN
     );
 END;
 $$;
+CREATE OR REPLACE FUNCTION public.sync_warehouse_location_occupancy()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Update occupancy for NEW location if present
+  IF NEW.location_code IS NOT NULL THEN
+    UPDATE public.warehouse_locations wl
+    SET is_occupied = (
+      SELECT COUNT(*) >= COALESCE(wl.capacity, 3)
+      FROM public.inventory i
+      WHERE (i.location_id = wl.id OR i.location_code = wl.identifier OR i.location_code = wl.location_code)
+        AND (i.facility_id = wl.facility_id OR wl.facility_id IS NULL)
+        AND i.status IN ('stored', 'staged', 'pending-stage')
+    )
+    WHERE (wl.identifier = NEW.location_code OR wl.location_code = NEW.location_code OR wl.id = NEW.location_id)
+      AND (wl.facility_id = NEW.facility_id OR NEW.facility_id IS NULL);
+  END IF;
 
+  -- Update occupancy for OLD location if changed
+  IF TG_OP = 'UPDATE' AND OLD.location_code IS NOT NULL AND OLD.location_code != COALESCE(NEW.location_code, '') THEN
+    UPDATE public.warehouse_locations wl
+    SET is_occupied = (
+      SELECT COUNT(*) >= COALESCE(wl.capacity, 3)
+      FROM public.inventory i
+      WHERE (i.location_id = wl.id OR i.location_code = wl.identifier OR i.location_code = wl.location_code)
+        AND (i.facility_id = wl.facility_id OR wl.facility_id IS NULL)
+        AND i.status IN ('stored', 'staged', 'pending-stage')
+    )
+    WHERE (wl.identifier = OLD.location_code OR wl.location_code = OLD.location_code OR wl.id = OLD.location_id)
+      AND (wl.facility_id = OLD.facility_id OR OLD.facility_id IS NULL);
+  END IF;
 
+  RETURN NEW;
+END;
+$$;
 
-
+DROP TRIGGER IF EXISTS trg_sync_inventory_location_occupancy ON public.inventory;
+CREATE TRIGGER trg_sync_inventory_location_occupancy
+AFTER INSERT OR UPDATE OF location_code, location_id, status, facility_id
+ON public.inventory
+FOR EACH ROW
+EXECUTE FUNCTION public.sync_warehouse_location_occupancy();

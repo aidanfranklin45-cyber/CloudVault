@@ -4589,6 +4589,10 @@
                         if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
                         realtimeDebounceTimer = setTimeout(() => {
                             loadLiveData();
+                            if (typeof loadFacilityMapData === 'function') {
+                                const activeFac = window.facMapState?.activeFacilityId || getSafeSavedFacilityId();
+                                loadFacilityMapData(activeFac);
+                            }
                         }, 200);
                     };
                     supabase.channel('admin_live_worker_queues')
@@ -5988,9 +5992,17 @@
                 const searchInput = document.getElementById('facmap-search-input');
                 if (searchInput) searchInput.value = '';
 
-                // 1. Immediately render complete blueprint map synchronously (0ms wait)
+                // 1. Immediately render complete blueprint map using cached inventory
                 try {
                     updateFacilityMapTargetBadge();
+                    if (window._masterAdminData && window._masterAdminData.inventory) {
+                        const facTotes = (window._masterAdminData.inventory || []).filter(i => matchesFacilityTarget(i, currentFac) && i.status !== 'with-customer');
+                        const occ = {};
+                        facTotes.forEach(t => {
+                            if (t.location_code) occ[t.location_code.toUpperCase().trim()] = t;
+                        });
+                        window.facMapState.occupiedMap = occ;
+                    }
                     renderFacilityMap();
                 } catch (e) {
                     console.error('[openFacilityMapModal] Error in initial renderFacilityMap:', e);
@@ -5999,7 +6011,7 @@
                 // 2. Background sync of live facility specs & inventory occupancy
                 try {
                     populateFacilityMapSelector();
-                    loadFacilityMapData(currentFac);
+                    await loadFacilityMapData(currentFac);
                 } catch (e) {
                     console.error('[openFacilityMapModal] Error in background data fetch:', e);
                 }
@@ -7091,6 +7103,9 @@
                     barcodeInput.focus();
                 }
                 loadWorkerQueues();
+                if (typeof loadFacilityMapData === 'function') {
+                    loadFacilityMapData(getSafeSavedFacilityId());
+                }
             } catch (e) {
                 console.error("Live scan failed:", e);
                 const errMsg = e.message || (typeof e === 'object' && e.error_description ? e.error_description : "Failed to transition tote state.");
