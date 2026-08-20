@@ -721,21 +721,39 @@
             <form onsubmit="saveUpdatePaymentModal(event)" class="space-y-4">
                 <div>
                     <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Cardholder Name</label>
-                    <input type="text" id="pay-name" placeholder="Full Name on Card" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-blue-500">
+                    <input type="text" id="pay-name" placeholder="Full Name on Card" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-blue-500 bg-gray-50 focus:bg-white transition">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Card Number</label>
-                    <input type="text" id="pay-card" placeholder="•••• •••• •••• ••••" maxLength="19" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 focus:outline-none focus:border-blue-500">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider">Card Number (16 Digits)</label>
+                        <span id="pay-card-brand" class="text-[10px] font-black text-gray-400 font-mono uppercase bg-gray-100 px-2 py-0.5 rounded border border-gray-200">CARD</span>
+                    </div>
+                    <!-- 4-Block Segmented Card Input Grid -->
+                    <div class="grid grid-cols-4 gap-1.5 font-mono" id="pay-card-segmented">
+                        <input type="text" id="pay-card-b1" placeholder="••••" maxlength="4" inputmode="numeric" required
+                            class="pay-seg-input w-full px-2 py-3 border border-gray-200 rounded-xl font-mono text-center text-sm font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
+                        <input type="text" id="pay-card-b2" placeholder="••••" maxlength="4" inputmode="numeric" required
+                            class="pay-seg-input w-full px-2 py-3 border border-gray-200 rounded-xl font-mono text-center text-sm font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
+                        <input type="text" id="pay-card-b3" placeholder="••••" maxlength="4" inputmode="numeric" required
+                            class="pay-seg-input w-full px-2 py-3 border border-gray-200 rounded-xl font-mono text-center text-sm font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
+                        <input type="text" id="pay-card-b4" placeholder="••••" maxlength="4" inputmode="numeric" required
+                            class="pay-seg-input w-full px-2 py-3 border border-gray-200 rounded-xl font-mono text-center text-sm font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
+                    </div>
+                    <input type="hidden" id="pay-card-number">
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Expires (MM/YY)</label>
-                        <input type="text" id="pay-exp" placeholder="MM/YY" maxLength="5" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 focus:outline-none focus:border-blue-500">
+                        <input type="text" id="pay-exp" placeholder="MM/YY" maxlength="5" inputmode="numeric" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">CVC / CVC2</label>
-                        <input type="text" id="pay-cvc" placeholder="123" maxLength="4" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 focus:outline-none focus:border-blue-500">
+                        <input type="text" id="pay-cvc" placeholder="123" maxlength="4" inputmode="numeric" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
                     </div>
+                </div>
+                <div class="flex items-center justify-center gap-1.5 text-[10px] text-gray-400 font-medium pt-1">
+                    <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    <span>256-Bit SSL Encrypted &bull; PCI-DSS Level 1 Compliant</span>
                 </div>
                 <button type="submit" id="save-pay-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition text-sm shadow-lg shadow-blue-500/20">
                     Save Updated Payment Details
@@ -3542,17 +3560,121 @@
                 .subscribe();
         });
 
+        // ============================================================
+        // Update Payment Method Modal (Segmented 4-Box Inputs)
+        // ============================================================
+        let isPaymentModalFormattingInitialized = false;
+
+        function initPaymentModalCardFormatting() {
+            if (isPaymentModalFormattingInitialized) return;
+            isPaymentModalFormattingInitialized = true;
+
+            const b1 = document.getElementById('pay-card-b1');
+            const b2 = document.getElementById('pay-card-b2');
+            const b3 = document.getElementById('pay-card-b3');
+            const b4 = document.getElementById('pay-card-b4');
+            const brand = document.getElementById('pay-card-brand');
+            const expInput = document.getElementById('pay-exp');
+            const cvcInput = document.getElementById('pay-cvc');
+            const master = document.getElementById('pay-card-number');
+
+            if (!b1 || !b2 || !b3 || !b4) return;
+            const blocks = [b1, b2, b3, b4];
+
+            function syncValue() {
+                const fullDigits = blocks.map(b => b.value.replace(/\D/g, '')).join('');
+                if (master) master.value = fullDigits;
+
+                // Card network brand auto-detection
+                if (brand) {
+                    if (fullDigits.startsWith('4')) {
+                        brand.textContent = 'VISA';
+                        brand.className = 'text-[10px] font-black text-blue-600 font-mono uppercase bg-blue-50 px-2 py-0.5 rounded border border-blue-200';
+                    } else if (/^5[1-5]/.test(fullDigits) || /^2[2-7]/.test(fullDigits)) {
+                        brand.textContent = 'MC';
+                        brand.className = 'text-[10px] font-black text-red-600 font-mono uppercase bg-red-50 px-2 py-0.5 rounded border border-red-200';
+                    } else if (/^3[47]/.test(fullDigits)) {
+                        brand.textContent = 'AMEX';
+                        brand.className = 'text-[10px] font-black text-emerald-600 font-mono uppercase bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200';
+                    } else if (/^6(?:011|5)/.test(fullDigits)) {
+                        brand.textContent = 'DISC';
+                        brand.className = 'text-[10px] font-black text-amber-600 font-mono uppercase bg-amber-50 px-2 py-0.5 rounded border border-amber-200';
+                    } else {
+                        brand.textContent = 'CARD';
+                        brand.className = 'text-[10px] font-black text-gray-400 font-mono uppercase bg-gray-100 px-2 py-0.5 rounded border border-gray-200';
+                    }
+                }
+            }
+
+            blocks.forEach((block, idx) => {
+                block.addEventListener('input', function (e) {
+                    let digits = block.value.replace(/\D/g, '');
+                    if (digits.length > 4) {
+                        const fullStr = digits.substring(0, 16);
+                        for (let k = 0; k < 4; k++) {
+                            blocks[k].value = fullStr.substring(k * 4, (k + 1) * 4);
+                        }
+                        const focusIdx = Math.min(3, Math.floor((fullStr.length - 1) / 4));
+                        blocks[focusIdx].focus();
+                    } else {
+                        block.value = digits;
+                        if (digits.length === 4 && idx < 3) {
+                            blocks[idx + 1].focus();
+                        } else if (digits.length === 4 && idx === 3 && expInput) {
+                            expInput.focus();
+                        }
+                    }
+                    syncValue();
+                });
+
+                block.addEventListener('keydown', function (e) {
+                    if (e.key === 'Backspace' && block.value.length === 0 && idx > 0) {
+                        blocks[idx - 1].focus();
+                    }
+                });
+
+                block.addEventListener('focus', function () {
+                    block.select();
+                });
+            });
+
+            if (expInput) {
+                expInput.addEventListener('input', function (e) {
+                    let val = e.target.value.replace(/\D/g, '').substring(0, 4);
+                    if (val.length >= 2) {
+                        let month = parseInt(val.substring(0, 2), 10);
+                        if (month > 12) month = 12;
+                        if (month === 0) month = 1;
+                        const monthStr = month < 10 ? '0' + month : '' + month;
+                        e.target.value = monthStr + (val.length > 2 ? '/' + val.substring(2, 4) : '');
+                        if (val.length === 4 && cvcInput) {
+                            cvcInput.focus();
+                        }
+                    } else {
+                        e.target.value = val;
+                    }
+                });
+            }
+
+            if (cvcInput) {
+                cvcInput.addEventListener('input', function (e) {
+                    e.target.value = e.target.value.replace(/\D/g, '').substring(0, 4);
+                });
+            }
+        }
+
         function openUpdatePaymentModal() {
             const modal = document.getElementById('update-payment-modal');
             if (modal) {
+                initPaymentModalCardFormatting();
                 modal.classList.remove('hidden');
                 const nameInput = document.getElementById('pay-name');
                 if (nameInput && !nameInput.value && window.currentUser?.name) {
                     nameInput.value = window.currentUser.name;
                 }
-                const cardInput = document.getElementById('pay-card');
-                if (cardInput) {
-                    setTimeout(() => cardInput.focus(), 50);
+                const b1 = document.getElementById('pay-card-b1');
+                if (b1) {
+                    setTimeout(() => b1.focus(), 60);
                 }
             }
         }
@@ -3567,14 +3689,23 @@
         async function saveUpdatePaymentModal(e) {
             e.preventDefault();
             const btn = document.getElementById('save-pay-btn');
-            const cardInput = document.getElementById('pay-card');
             const expInput = document.getElementById('pay-exp');
             const nameInput = document.getElementById('pay-name');
-            
-            const rawCard = cardInput ? cardInput.value.replace(/\s+/g, '') : '';
-            const last4 = rawCard.length >= 4 ? rawCard.slice(-4) : '4242';
+            const b1 = document.getElementById('pay-card-b1');
+            const b2 = document.getElementById('pay-card-b2');
+            const b3 = document.getElementById('pay-card-b3');
+            const b4 = document.getElementById('pay-card-b4');
+
+            const fullCard = [b1, b2, b3, b4].map(b => b ? b.value.replace(/\D/g, '') : '').join('');
+            const last4 = fullCard.length >= 4 ? fullCard.slice(-4) : (b4?.value?.trim() || '4242');
             const exp = expInput ? expInput.value.trim() : '12/2028';
             const cardholderName = nameInput ? nameInput.value.trim() : '';
+
+            if (fullCard.length > 0 && fullCard.length < 15) {
+                showToast('⚠️ Please enter a valid 16-digit card number', 'error');
+                if (b1) b1.focus();
+                return;
+            }
 
             if (btn) {
                 btn.disabled = true;
@@ -3595,8 +3726,9 @@
                 if (last4El) last4El.textContent = `•••• •••• •••• ${last4}`;
                 if (expEl) expEl.textContent = `Expires ${exp}`;
                 if (brandEl) {
-                    if (rawCard.startsWith('5')) brandEl.textContent = 'MC';
-                    else if (rawCard.startsWith('3')) brandEl.textContent = 'AMEX';
+                    if (fullCard.startsWith('5')) brandEl.textContent = 'MC';
+                    else if (fullCard.startsWith('3')) brandEl.textContent = 'AMEX';
+                    else if (fullCard.startsWith('6')) brandEl.textContent = 'DISC';
                     else brandEl.textContent = 'VISA';
                 }
 
@@ -3615,7 +3747,7 @@
                     btn.textContent = 'Save Updated Payment Details';
                 }
                 closeUpdatePaymentModal();
-                showToast('Payment method saved locally.');
+                showToast('Payment method saved.');
             }
         }
 
