@@ -1543,7 +1543,26 @@
                     }
                     updateStagingPreviewText();
 
-                    const actualValetTrucks = (fac.num_valet_trucks !== null && fac.num_valet_trucks !== undefined) ? fac.num_valet_trucks : ((fac.valet_trucks !== null && fac.valet_trucks !== undefined) ? fac.valet_trucks : 3);
+                    let actualValetTrucks = (fac.num_valet_trucks !== null && fac.num_valet_trucks !== undefined) ? fac.num_valet_trucks : ((fac.valet_trucks !== null && fac.valet_trucks !== undefined) ? fac.valet_trucks : null);
+
+                    if (typeof supabase !== 'undefined' && fac.id) {
+                        try {
+                            const { data: dbTruckLocs } = await supabase
+                                .from('warehouse_locations')
+                                .select('identifier')
+                                .eq('facility_id', fac.id)
+                                .eq('zone_type', 'DISPATCH');
+
+                            if (dbTruckLocs && dbTruckLocs.length > 0) {
+                                actualValetTrucks = dbTruckLocs.length;
+                            }
+                        } catch (err) {
+                            console.warn("Error fetching Supabase dispatch truck locations:", err);
+                        }
+                    }
+
+                    if (actualValetTrucks === null) actualValetTrucks = 2;
+
                     if (document.getElementById('conf-valet-trucks')) {
                         document.getElementById('conf-valet-trucks').value = actualValetTrucks;
                     }
@@ -1951,6 +1970,26 @@
                             .upsert(locations, { onConflict: 'facility_id,identifier' });
 
                         if (error) throw error;
+
+                        // Clean up excess unoccupied truck locations for this facility
+                        try {
+                            const validIdentifiers = locations.map(l => l.identifier);
+                            const { data: excessLocs } = await supabase
+                                .from('warehouse_locations')
+                                .select('id, identifier, is_occupied')
+                                .eq('facility_id', currentLoadedFac.id)
+                                .eq('zone_type', 'DISPATCH')
+                                .eq('is_occupied', false);
+
+                            if (excessLocs && excessLocs.length > 0) {
+                                const idsToDelete = excessLocs.filter(l => !validIdentifiers.includes(l.identifier)).map(l => l.id);
+                                if (idsToDelete.length > 0) {
+                                    await supabase.from('warehouse_locations').delete().in('id', idsToDelete);
+                                }
+                            }
+                        } catch (cleanErr) {
+                            console.warn("Notice during valet truck pruning:", cleanErr);
+                        }
 
                         // Also persist count to facilities table
                         await supabase.from('facilities').update({
