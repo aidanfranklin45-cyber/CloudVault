@@ -47,45 +47,52 @@
     /**
      * Redirects customer directly to Stripe's hosted Billing Portal for 100% PCI-compliant card updates.
      * Invokes supabase edge function 'stripe-billing-portal'.
+    /**
+     * Launches the secure, 100% Stripe-hosted Customer Portal (billing.stripe.com)
+     * Direct gateway for customers to manage their payment methods, default cards, and billing addresses
      * @param {string} [customerId] - Stripe Customer ID (cus_...)
      * @param {string} [userId] - CloudVault User ID
+     * @param {HTMLElement} [triggerBtn] - Optional button element to apply instant spinner state
      */
-    launchCustomerPortal: async function (customerId, userId) {
+    launchCustomerPortal: async function (customerId, userId, triggerBtn) {
       let targetUserId = userId || (global.currentUser ? global.currentUser.id : null);
       let custId = customerId || (global.currentUser ? global.currentUser.stripe_customer_id : null);
 
-      const openModal = () => {
-        if (typeof global.openUpdatePaymentModal === 'function') {
-          global.openUpdatePaymentModal();
-        } else if (typeof window !== 'undefined' && typeof window.openUpdatePaymentModal === 'function') {
-          window.openUpdatePaymentModal();
-        } else if (typeof document !== 'undefined') {
-          const modal = document.getElementById('update-payment-modal');
-          if (modal) modal.classList.remove('hidden');
-        }
-      };
-
-      const sb = global.supabase;
-      if (!custId && targetUserId && sb) {
-        try {
-          const { data: u } = await sb.from('users').select('stripe_customer_id').eq('id', targetUserId).maybeSingle();
-          if (u && u.stripe_customer_id) custId = u.stripe_customer_id;
-        } catch (e) {
-          console.warn('[StripeBillingIntegration] User customer lookup notice:', e.message);
-        }
+      // Instant UI button spinner feedback
+      const btn = triggerBtn || (typeof document !== 'undefined' ? document.getElementById('manage-pay-btn') || document.querySelector('[onclick*="launchCustomerPortal"]') : null);
+      let originalBtnHtml = '';
+      if (btn) {
+        originalBtnHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `
+          <svg class="w-3.5 h-3.5 animate-spin text-blue-600 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+          <span class="ml-1">Connecting to Stripe...</span>
+        `;
       }
 
       if (typeof global.showToast === 'function') {
-        global.showToast("💳 Opening Payment Method Manager...");
+        global.showToast("🔒 Opening secure Stripe Payment Portal...");
       }
 
+      const restoreBtn = () => {
+        if (btn && originalBtnHtml) {
+          btn.disabled = false;
+          btn.innerHTML = originalBtnHtml;
+        }
+      };
+
       try {
+        const sb = global.supabase;
         if (!sb || typeof sb.functions?.invoke !== 'function') {
-          openModal();
-          return { success: true, isSimulated: true };
+          restoreBtn();
+          if (typeof global.showToast === 'function') global.showToast("⚠️ Supabase client not initialized.");
+          return { success: false };
         }
 
-        const returnUrl = typeof window !== 'undefined' ? window.location.href : 'https://cloudvault.app/dashboard.html';
+        const returnUrl = typeof window !== 'undefined' ? window.location.href : 'https://cloudvault-35a9b-6b3db.web.app/dashboard.html';
         const { data, error } = await sb.functions.invoke('stripe-billing-portal', {
           body: {
             userId: targetUserId,
@@ -95,33 +102,39 @@
         });
 
         if (error) {
-          console.warn('[StripeBillingIntegration] Portal invocation notice, falling back to in-app payment modal:', error);
-          openModal();
-          return { success: true, isSimulated: true };
+          console.warn('[StripeBillingIntegration] Portal invocation error:', error);
+          restoreBtn();
+          if (typeof global.showToast === 'function') global.showToast("⚠️ Unable to launch Stripe portal. Please try again.");
+          return { success: false, error };
         }
 
         if (data?.customerId && global.currentUser) {
           global.currentUser.stripe_customer_id = data.customerId;
         }
 
-        if (data?.isSimulated || !data?.url) {
-          console.log('[StripeBillingIntegration] Customer portal in in-app payment management mode');
-          openModal();
-          return { success: true, isSimulated: true, customerId: data?.customerId };
-        }
-
         const portalUrl = data?.url || data?.portalUrl || data?.sessionUrl;
         if (portalUrl && typeof window !== 'undefined') {
+          if (btn) {
+            btn.innerHTML = `
+              <svg class="w-3.5 h-3.5 animate-spin text-blue-600 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+              </svg>
+              <span class="ml-1">Redirecting to Stripe...</span>
+            `;
+          }
           window.location.href = portalUrl;
           return { success: true, url: portalUrl };
         } else {
-          openModal();
-          return { success: true, isSimulated: true };
+          restoreBtn();
+          if (typeof global.showToast === 'function') global.showToast("⚠️ Stripe customer portal is currently unavailable.");
+          return { success: false };
         }
       } catch (err) {
-        console.warn('[StripeBillingIntegration] Fallback to in-app payment modal:', err);
-        openModal();
-        return { success: true, isSimulated: true };
+        console.error('[StripeBillingIntegration] Exception launching customer portal:', err);
+        restoreBtn();
+        if (typeof global.showToast === 'function') global.showToast("⚠️ Connection error while reaching Stripe.");
+        return { success: false, error: err.message };
       }
     },
 
