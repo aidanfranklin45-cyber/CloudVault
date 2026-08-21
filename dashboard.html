@@ -5184,6 +5184,28 @@
                         }
 
                         if (grossDeliveryAndSurge > 0) {
+                            let stripeChargeRes = null;
+                            if (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.chargeServiceFeeViaStripe === 'function') {
+                                try {
+                                    stripeChargeRes = await window.StripeBillingIntegration.chargeServiceFeeViaStripe({
+                                        userId: currentUser.id,
+                                        facilityId: userFac,
+                                        chargeType: invoiceType,
+                                        subtotal: finalDeliveryFee,
+                                        deliveryFee: finalDeliveryFee,
+                                        surgeFee: surgeFee,
+                                        tax: taxAmt,
+                                        discount: promoDiscountAmt,
+                                        totalAmount: totalCharged,
+                                        amount: totalCharged,
+                                        lineItems: lineItems,
+                                        notes: `Access retrieval request for ${toteCount} totes (${retrievalLogisticsType === 'valet_delivery' ? 'Valet Delivery' : 'Self-Service Staging'}). Target Date: ${targetDate || 'Standard'}.`
+                                    });
+                                } catch (scErr) {
+                                    console.warn('[CloudVault Billing] Stripe charge notice:', scErr);
+                                }
+                            }
+
                             const invCreated = await window.CloudVaultBilling.createInvoiceRecord({
                                 uid: currentUser.id,
                                 customer_name: currentUser.user_metadata?.name || (currentProfile && currentProfile.name) || currentUser.email.split('@')[0],
@@ -5200,6 +5222,11 @@
                                 tax: taxAmt,
                                 total_amount: totalCharged,
                                 payment_method: 'card_on_file',
+                                transaction_reference: stripeChargeRes?.paymentIntentId || stripeChargeRes?.stripeInvoiceId || ('TXN-VALET-' + Date.now()),
+                                stripe_invoice_id: stripeChargeRes?.stripeInvoiceId || null,
+                                stripe_invoice_pdf: stripeChargeRes?.stripeInvoicePdf || null,
+                                stripe_hosted_invoice_url: stripeChargeRes?.stripeHostedInvoiceUrl || null,
+                                stripe_payment_intent_id: stripeChargeRes?.paymentIntentId || null,
                                 line_items: lineItems,
                                 notes: `Access retrieval request for ${toteCount} totes (${retrievalLogisticsType === 'valet_delivery' ? 'Valet Delivery' : 'Self-Service Staging'}). Target Date: ${targetDate || 'Standard'}.${promoDiscountAmt > 0 ? ` (Applied active promo ${appliedPromoCode} discount: -$${promoDiscountAmt.toFixed(2)})` : ''}`
                             });
@@ -5209,7 +5236,7 @@
                                     await StripeBillingIntegration.recordPromoAttribution(
                                         appliedPromoCode,
                                         currentUser.id,
-                                        invCreated?.data?.id ? `in_${invCreated.data.id}` : ('in_valet_' + Date.now()),
+                                        stripeChargeRes?.stripeInvoiceId || (invCreated?.data?.id ? `in_${invCreated.data.id}` : ('in_valet_' + Date.now())),
                                         grossDeliveryAndSurge,
                                         netTaxable
                                     );

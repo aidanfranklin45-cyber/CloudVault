@@ -265,8 +265,9 @@
 
           // B. Create & Send Stripe Invoice
           let stripeRes = { success: true, stripeInvoiceId: null, hostedInvoiceUrl: null, pdfUrl: null, paymentIntentId: null };
-          if (global.CloudVaultStripe && typeof global.CloudVaultStripe.createAndSendMissingToteInvoice === 'function') {
-            stripeRes = await global.CloudVaultStripe.createAndSendMissingToteInvoice({
+          const stripeHelper = global.StripeBillingIntegration || global.CloudVaultStripe;
+          if (stripeHelper && typeof stripeHelper.createAndSendMissingToteInvoice === 'function') {
+            stripeRes = await stripeHelper.createAndSendMissingToteInvoice({
               customerId: user.stripe_customer_id,
               amount: fee,
               toteCode: code,
@@ -653,6 +654,10 @@
           total_amount: totalAmount,
           payment_method: params.payment_method || params.paymentMethod || 'card',
           transaction_reference: params.transaction_reference || params.transactionReference || null,
+          stripe_invoice_id: params.stripe_invoice_id || params.stripeInvoiceId || null,
+          stripe_hosted_invoice_url: params.stripe_hosted_invoice_url || params.stripeHostedInvoiceUrl || null,
+          stripe_invoice_pdf: params.stripe_invoice_pdf || params.stripeInvoicePdf || null,
+          stripe_payment_intent_id: params.stripe_payment_intent_id || params.stripePaymentIntentId || null,
           notes: params.notes || null,
           line_items: lineItems,
           due_date: dueDate,
@@ -2454,7 +2459,12 @@
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                   <span>Download PDF</span>
                 </a>
-              ` : ''}
+              ` : `
+                <button onclick="window.CloudVaultBilling.downloadInvoicePDF('${invNum}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                  <span>Download PDF</span>
+                </button>
+              `}
               <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                 <span>Print</span>
@@ -2588,6 +2598,14 @@
       if (modalEl) {
         modalEl.classList.add('hidden');
       }
+    },
+
+    /**
+     * Triggers clean PDF generation / printing for the official statement document.
+     * @param {string} invoiceNumber
+     */
+    downloadInvoicePDF: function (invoiceNumber) {
+      window.print();
     },
     /**
      * Scans for cancelled subscriptions past their service end date with unreturned totes
