@@ -425,227 +425,62 @@
         </div>
 
         <!-- VIEW 1: EXECUTIVE ROLE (SUPER ADMIN) -->
-        <div id="view-executive" class="space-y-8 animate-fade-in">
-
-            <!-- Executive Metrics Bar -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div class="glass-panel p-6 rounded-2xl">
-                    <div class="flex justify-between items-start">
-                        <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Company MRR</p>
-                        <span class="p-2 bg-blue-500/10 text-blue-400 rounded-lg"><i data-lucide="dollar-sign"
-                                class="w-4 h-4"></i></span>
-                    </div>
-                    <p class="text-3xl font-bold text-white mt-2" id="exec-mrr">$0</p>
-                    <p class="text-xs text-emerald-400 mt-1 flex items-center font-medium" id="exec-mrr-subtext"><i
-                            data-lucide="arrow-up-right" class="w-3.5 h-3.5 mr-0.5"></i> Live subscription revenue</p>
-                </div>
-                <div class="glass-panel p-6 rounded-2xl">
-                    <div class="flex justify-between items-start">
-                        <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total Totes Managed</p>
-                        <span class="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg"><i data-lucide="package"
-                                class="w-4 h-4"></i></span>
-                    </div>
-                    <p class="text-3xl font-bold text-white mt-2" id="exec-totes">0</p>
-                </div>
-                <div class="glass-panel p-6 rounded-2xl">
-                    <div class="flex justify-between items-start">
-                        <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Active Service Markets
-                        </p>
-                        <span class="p-2 bg-amber-500/10 text-amber-400 rounded-lg"><i data-lucide="map-pin"
-                                class="w-4 h-4"></i></span>
-                    </div>
-                    <p class="text-3xl font-bold text-white mt-2" id="exec-markets">0 Cities</p>
-                    <p class="text-xs text-emerald-400 mt-1 flex items-center font-medium" id="exec-markets-subtext"><i
-                            data-lucide="plus" class="w-3 h-3"></i> Active markets</p>
-                </div>
-                <div class="glass-panel p-6 rounded-2xl">
-                    <div class="flex justify-between items-start">
-                        <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Checkout Conv. Rate</p>
-                        <span class="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg"><i data-lucide="trending-up"
-                                class="w-4 h-4"></i></span>
-                    </div>
-                    <p class="text-3xl font-bold text-white mt-2" id="exec-conv">0.0%</p>
-                    <p class="text-xs text-blue-400 mt-1 flex items-center font-medium" id="exec-conv-subtext">Estimator
-                        conversion metrics</p>
-                </div>
+        <div id="view-executive" class="space-y-8 animate-fade-in">            <!-- Hidden telemetry bridge elements for legacy selector compatibility -->
+            <div class="hidden">
+                <span id="exec-mrr">$0</span>
+                <span id="exec-mrr-subtext"></span>
+                <span id="exec-totes">0</span>
+                <span id="exec-markets">0 Cities</span>
+                <span id="exec-markets-subtext"></span>
+                <span id="exec-conv-subtext"></span>
             </div>
 
-            <!-- Business Intelligence Conversion Funnel Charts -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
-                <!-- Funnel Graph -->
-                <div class="glass-panel p-6 rounded-3xl lg:col-span-8 space-y-4">
-                    <div class="flex items-center justify-between border-b border-gray-800 pb-4">
-                        <div class="flex items-center space-x-2">
-                            <i data-lucide="funnel" class="w-5 h-5 text-emerald-400"></i>
-                            <h3 class="font-bold text-white text-lg">Web Traffic & Customer Signup Funnel</h3>
-                        </div>
-                        <div class="text-xs text-gray-400 flex items-center gap-4">
-                            <span class="flex items-center gap-1.5"><span
-                                    class="w-2.5 h-2.5 bg-blue-500 rounded-full"></span> Low Volume (< 25)</span>
-                                    <span class="flex items-center gap-1.5"><span
-                                            class="w-2.5 h-2.5 bg-indigo-500 rounded-full"></span> High Volume (Anchor
-                                        25+)</span>
-                        </div>
-                    </div>
-
-                    <div class="relative h-80">
-                        <canvas id="conversionFunnelChart"></canvas>
-                    </div>
-                    <div class="pt-2 text-center text-xs text-gray-500">
-                        Funnel tracking isolates low-volume users against anchor users to validate tiered rate
-                        efficiency.
-                    </div>
-                </div>
-
-                <!-- Right-hand System Health & Operational Telemetry Column -->
-                <div class="lg:col-span-4 space-y-6">
-                    <!-- System Health & Live Incident Telemetry Hub -->
-                    <div class="glass-panel p-6 rounded-3xl space-y-6 border border-indigo-500/20 shadow-2xl">
-                        <div class="flex items-center justify-between border-b border-gray-800 pb-4">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-9 h-9 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold border border-indigo-500/30">
-                                    <i data-lucide="activity" class="w-4.5 h-4.5"></i>
-                                </div>
-                                <div>
-                                    <h3 class="font-bold text-white text-base">System Health &amp; Exceptions</h3>
-                                    <p class="text-[10px] text-gray-400 font-mono">Live Operational Flags &amp; Telemetry</p>
-                                </div>
-                            </div>
-                            <span id="exec-incident-badge" class="px-2.5 py-1 rounded-full text-xs font-bold font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
-                                0 Active Issues
-                            </span>
-                        </div>
-
-                        <!-- Incident Quick Tally Badges -->
-                        <div class="grid grid-cols-2 gap-2.5 text-xs font-mono">
-                            <div class="p-3 bg-gray-950/80 border border-gray-800 rounded-2xl space-y-1">
-                                <div class="text-[10px] text-gray-400 flex items-center gap-1.5">
-                                    <span class="w-2 h-2 rounded-full bg-rose-500"></span> Missing / Exceptions
-                                </div>
-                                <div class="text-base font-extrabold text-white" id="exec-missing-count">0</div>
-                            </div>
-                            <div class="p-3 bg-gray-950/80 border border-gray-800 rounded-2xl space-y-1">
-                                <div class="text-[10px] text-gray-400 flex items-center gap-1.5">
-                                    <span class="w-2 h-2 rounded-full bg-amber-500"></span> Dunning Alerts
-                                </div>
-                                <div class="text-base font-extrabold text-white" id="exec-dunning-count">0</div>
-                            </div>
-                            <div class="p-3 bg-gray-950/80 border border-gray-800 rounded-2xl space-y-1">
-                                <div class="text-[10px] text-gray-400 flex items-center gap-1.5">
-                                    <span class="w-2 h-2 rounded-full bg-cyan-500"></span> Overdue Staging
-                                </div>
-                                <div class="text-base font-extrabold text-white" id="exec-overdue-count">0</div>
-                            </div>
-                            <div class="p-3 bg-gray-950/80 border border-gray-800 rounded-2xl space-y-1">
-                                <div class="text-[10px] text-gray-400 flex items-center gap-1.5">
-                                    <span class="w-2 h-2 rounded-full bg-indigo-400"></span> PostHog Status
-                                </div>
-                                <div class="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Connected
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Active Operational Flags & Repeated Bug Feed -->
-                        <div class="space-y-2">
-                            <div class="flex items-center justify-between text-[11px] font-bold text-gray-400 uppercase font-mono">
-                                <span>Recent Flagged Exceptions</span>
-                                <span class="text-[10px] text-indigo-400 font-normal">Real-Time</span>
-                            </div>
-                            <div id="exec-incident-feed" class="space-y-2 max-h-56 overflow-y-auto pr-1 text-xs font-mono">
-                                <div class="p-3 bg-gray-950/60 border border-gray-850 rounded-xl text-center text-gray-500 text-[11px]">
-                                    Scanning live database telemetry...
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Navigation Shortcuts & PostHog Launcher -->
-                        <div class="pt-2 border-t border-gray-800 space-y-2">
-                            <a href="admin-facilities.html"
-                                class="w-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 hover:text-white border border-blue-500/30 font-bold py-2.5 rounded-xl transition text-xs flex items-center justify-center gap-1.5">
-                                <i data-lucide="users" class="w-3.5 h-3.5 text-blue-400"></i> Provision Employees in Facility Config &rarr;
-                            </a>
-                            <a href="https://us.posthog.com/project/521354/dashboard" target="_blank"
-                                rel="noopener noreferrer"
-                                class="w-full bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-white border border-indigo-500/40 font-bold py-2 rounded-xl transition text-xs flex items-center justify-center gap-1.5">
-                                <i data-lucide="external-link" class="w-3.5 h-3.5"></i> Open PostHog Diagnostics (521354)
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ── Executive Unit Economics & Realized Tier Yield Command Center ── -->
-            <div class="glass-panel p-6 sm:p-8 rounded-3xl space-y-6">
+            <!-- ── 1. Facility Operational & Financial Performance Ledger Table (Top Hero) ── -->
+            <div class="glass-panel p-6 sm:p-8 rounded-3xl space-y-5 border border-indigo-500/20 shadow-2xl">
                 <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-gray-800 pb-4 gap-4">
                     <div class="flex items-center space-x-3">
-                        <div class="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20">
-                            <i data-lucide="calculator" class="w-6 h-6"></i>
+                        <div class="p-2.5 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20">
+                            <i data-lucide="building-2" class="w-6 h-6"></i>
                         </div>
                         <div>
                             <h3 class="font-bold text-white text-xl flex items-center gap-2">
-                                Unit Economics & Realized Tier Yield
-                                <span class="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-wider">Pricing Strategy</span>
+                                Facility Operational &amp; Financial Performance
+                                <span class="bg-blue-500/10 text-blue-400 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-wider">Live Hub Ledger</span>
                             </h3>
-                            <p class="text-xs text-gray-400 mt-0.5">Average revenue per tote, operating cost footprint, and realized rate tier profitability.</p>
+                            <p class="text-xs text-gray-400 mt-0.5">Real-time facility inventory density, subscriber accounts, MRR contributions, and capacity yields.</p>
                         </div>
                     </div>
-                    <!-- Pricing Optimization Insight Pill -->
-                    <div id="exec-pricing-recommendation-pill" class="bg-emerald-950/40 border border-emerald-500/30 px-3.5 py-2 rounded-2xl flex items-center gap-2 text-xs font-mono text-emerald-300 shadow-inner">
-                        <i data-lucide="sparkles" class="w-4 h-4 text-emerald-400"></i>
-                        <span id="exec-pricing-recommendation-text">Pricing Optimization: Evaluating live rate yields...</span>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-mono text-gray-400 bg-gray-950/80 px-3 py-1.5 rounded-xl border border-gray-800 flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                            Live Synchronization
+                        </span>
                     </div>
                 </div>
-
-                <!-- 4 Unit Economics Metric Cards -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div class="bg-gray-950/80 border border-gray-850 p-4 rounded-2xl space-y-1">
-                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Average Revenue / Tote (ARPT)</p>
-                        <p class="text-2xl font-black text-white font-mono" id="exec-arpt">$0.00</p>
-                        <p class="text-[11px] text-emerald-400 flex items-center gap-1 font-medium" id="exec-arpt-subtext">
-                            <i data-lucide="trending-up" class="w-3 h-3"></i> Blended Storage &amp; Service Rate
-                        </p>
-                    </div>
-                    <div class="bg-gray-950/80 border border-gray-850 p-4 rounded-2xl space-y-1">
-                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Facility Unit Cost / Tote</p>
-                        <p class="text-2xl font-black text-amber-400 font-mono" id="exec-unit-cost">$0.00</p>
-                        <p class="text-[11px] text-gray-400 flex items-center gap-1" id="exec-unit-cost-subtext">
-                            Lease &amp; Labor Allocation
-                        </p>
-                    </div>
-                    <div class="bg-gray-950/80 border border-gray-850 p-4 rounded-2xl space-y-1">
-                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Profit Margin / Tote</p>
-                        <p class="text-2xl font-black text-emerald-400 font-mono" id="exec-net-margin">$0.00</p>
-                        <p class="text-[11px] text-emerald-400 flex items-center gap-1 font-medium" id="exec-margin-pct">
-                            0.0% Net Spread Margin
-                        </p>
-                    </div>
-                    <div class="bg-gray-950/80 border border-gray-850 p-4 rounded-2xl space-y-1">
-                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Subscribers MoM Growth</p>
-                        <p class="text-2xl font-black text-blue-400 font-mono" id="exec-subs-mom">+0.0%</p>
-                        <p class="text-[11px] text-blue-400 flex items-center gap-1 font-medium" id="exec-subs-mom-subtext">
-                            <i data-lucide="arrow-up" class="w-3 h-3"></i> Current vs Prior Month
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Tier Realized Yield Distribution Breakdown -->
-                <div class="bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-4">
-                    <div class="flex items-center justify-between border-b border-gray-850 pb-3">
-                        <h4 class="text-xs font-extrabold uppercase text-gray-300 tracking-wider flex items-center gap-1.5">
-                            <i data-lucide="layers" class="w-4 h-4 text-emerald-400"></i>
-                            Realized Revenue &amp; Tote Distribution by Pricing Tier
-                        </h4>
-                        <span class="text-[10px] text-gray-500 font-mono">Live Subscriptions Joined</span>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="exec-tier-yield-cards">
-                        <!-- Dynamically populated Tier 1, 2, 3, 4 cards -->
-                    </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="border-b border-gray-800 text-gray-400 uppercase tracking-wider text-[10px] font-bold">
+                                <th class="pb-3">Facility Hub</th>
+                                <th class="pb-3">Active Subscribers</th>
+                                <th class="pb-3">Active Stored Totes</th>
+                                <th class="pb-3">Capacity Utilization</th>
+                                <th class="pb-3">Monthly Storage MRR</th>
+                                <th class="pb-3">Realized ARPT</th>
+                                <th class="pb-3 text-right">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="exec-facility-breakdown-tbody" class="divide-y divide-gray-850 font-mono">
+                            <!-- Dynamically populated facility rows -->
+                        </tbody>
+                        <tfoot id="exec-facility-breakdown-tfoot" class="font-mono">
+                            <!-- Dynamically populated network total row -->
+                        </tfoot>
+                    </table>
                 </div>
             </div>
 
-            <!-- ── Global Facility Subscription Composition & Logistics Movement Velocity ── -->
+            <!-- ── 2. Facility Market Composition & Logistics Movement Velocity (Prominent Top Section) ── -->
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 <!-- Left: Facility Composition Doughnut Chart (5 Cols) -->
                 <div class="glass-panel p-6 rounded-3xl lg:col-span-5 space-y-4 flex flex-col justify-between">
@@ -704,32 +539,184 @@
                 </div>
             </div>
 
-            <!-- ── Facility Operational & Financial Performance Ledger Table ── -->
-            <div class="glass-panel p-6 rounded-3xl space-y-4">
-                <div class="flex items-center justify-between border-b border-gray-800 pb-3">
-                    <div class="flex items-center space-x-2">
-                        <i data-lucide="building" class="w-5 h-5 text-blue-400"></i>
-                        <h3 class="font-bold text-white text-base">Facility Operational &amp; Financial Performance</h3>
+            <!-- ── 3. Web Traffic & Customer Signup Funnel & System Health ── -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+                <!-- Funnel Graph (With Integrated Conversion Rate in Header) -->
+                <div class="glass-panel p-6 rounded-3xl lg:col-span-8 space-y-4">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-gray-800 pb-4 gap-3">
+                        <div class="flex items-center space-x-3 flex-wrap gap-2">
+                            <div class="flex items-center space-x-2">
+                                <i data-lucide="funnel" class="w-5 h-5 text-emerald-400"></i>
+                                <h3 class="font-bold text-white text-lg">Web Traffic &amp; Customer Signup Funnel</h3>
+                            </div>
+                            <span class="text-xs font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                                <i data-lucide="trending-up" class="w-3.5 h-3.5"></i>
+                                <span>Conv. Rate:</span> <strong id="exec-conv">0.0%</strong>
+                            </span>
+                        </div>
+                        <div class="text-xs text-gray-400 flex items-center gap-4">
+                            <span class="flex items-center gap-1.5"><span
+                                    class="w-2.5 h-2.5 bg-blue-500 rounded-full"></span> Low Volume (&lt; 25)</span>
+                            <span class="flex items-center gap-1.5"><span
+                                    class="w-2.5 h-2.5 bg-indigo-500 rounded-full"></span> High Volume (Anchor
+                                25+)</span>
+                        </div>
                     </div>
-                    <span class="text-[10px] font-mono text-gray-400">Real-Time Hub Ledger</span>
+
+                    <div class="relative h-80">
+                        <canvas id="conversionFunnelChart"></canvas>
+                    </div>
+                    <div class="pt-2 text-center text-xs text-gray-500">
+                        Funnel tracking isolates low-volume users against anchor users to validate tiered rate
+                        efficiency.
+                    </div>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-xs">
-                        <thead>
-                            <tr class="border-b border-gray-800 text-gray-400 uppercase tracking-wider text-[10px] font-bold">
-                                <th class="pb-3">Facility Hub</th>
-                                <th class="pb-3">Active Subscribers</th>
-                                <th class="pb-3">Active Stored Totes</th>
-                                <th class="pb-3">Capacity Utilization</th>
-                                <th class="pb-3">Monthly Storage MRR</th>
-                                <th class="pb-3">Realized ARPT</th>
-                                <th class="pb-3 text-right">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="exec-facility-breakdown-tbody" class="divide-y divide-gray-850 font-mono">
-                            <!-- Dynamically populated facility rows -->
-                        </tbody>
-                    </table>
+
+                <!-- Right-hand System Health & Operational Telemetry Column -->
+                <div class="lg:col-span-4 space-y-6">
+                    <!-- System Health & Live Incident Telemetry Hub -->
+                    <div class="glass-panel p-6 rounded-3xl space-y-6 border border-indigo-500/20 shadow-2xl">
+                        <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-9 h-9 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold border border-indigo-500/30">
+                                    <i data-lucide="activity" class="w-4.5 h-4.5"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-white text-base">System Health &amp; Exceptions</h3>
+                                    <p class="text-[10px] text-gray-400 font-mono">Live Operational Flags &amp; Telemetry</p>
+                                </div>
+                            </div>
+                            <span id="exec-incident-badge" class="px-2.5 py-1 rounded-full text-xs font-bold font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
+                                0 Active Issues
+                            </span>
+                        </div>
+
+                        <!-- Incident Quick Tally Badges -->
+                        <div class="grid grid-cols-2 gap-2.5 text-xs font-mono">
+                            <div class="p-3 bg-gray-950/80 border border-gray-850 rounded-2xl space-y-1">
+                                <div class="text-[10px] text-gray-400 flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-rose-500"></span> Missing / Exceptions
+                                </div>
+                                <div class="text-base font-extrabold text-white" id="exec-missing-count">0</div>
+                            </div>
+                            <div class="p-3 bg-gray-950/80 border border-gray-850 rounded-2xl space-y-1">
+                                <div class="text-[10px] text-gray-400 flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-amber-500"></span> Dunning Alerts
+                                </div>
+                                <div class="text-base font-extrabold text-white" id="exec-dunning-count">0</div>
+                            </div>
+                            <div class="p-3 bg-gray-950/80 border border-gray-850 rounded-2xl space-y-1">
+                                <div class="text-[10px] text-gray-400 flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-cyan-500"></span> Overdue Staging
+                                </div>
+                                <div class="text-base font-extrabold text-white" id="exec-overdue-count">0</div>
+                            </div>
+                            <div class="p-3 bg-gray-950/80 border border-gray-850 rounded-2xl space-y-1">
+                                <div class="text-[10px] text-gray-400 flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-indigo-400"></span> PostHog Status
+                                </div>
+                                <div class="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Connected
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Active Operational Flags & Repeated Bug Feed -->
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between text-[11px] font-bold text-gray-400 uppercase font-mono">
+                                <span>Recent Flagged Exceptions</span>
+                                <span class="text-[10px] text-indigo-400 font-normal">Real-Time</span>
+                            </div>
+                            <div id="exec-incident-feed" class="space-y-2 max-h-56 overflow-y-auto pr-1 text-xs font-mono">
+                                <div class="p-3 bg-gray-950/60 border border-gray-850 rounded-xl text-center text-gray-500 text-[11px]">
+                                    Scanning live database telemetry...
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Navigation Shortcuts & PostHog Launcher -->
+                        <div class="pt-2 border-t border-gray-800 space-y-2">
+                            <a href="admin-facilities.html"
+                                class="w-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 hover:text-white border border-blue-500/30 font-bold py-2.5 rounded-xl transition text-xs flex items-center justify-center gap-1.5">
+                                <i data-lucide="users" class="w-3.5 h-3.5 text-blue-400"></i> Provision Employees in Facility Config &rarr;
+                            </a>
+                            <a href="https://us.posthog.com/project/521354/dashboard" target="_blank"
+                                rel="noopener noreferrer"
+                                class="w-full bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-white border border-indigo-500/40 font-bold py-2 rounded-xl transition text-xs flex items-center justify-center gap-1.5">
+                                <i data-lucide="external-link" class="w-3.5 h-3.5"></i> Open PostHog Diagnostics (521354)
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── 4. Executive Unit Economics & Realized Tier Yield Command Center ── -->
+            <div class="glass-panel p-6 sm:p-8 rounded-3xl space-y-6">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-gray-800 pb-4 gap-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20">
+                            <i data-lucide="calculator" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-white text-xl flex items-center gap-2">
+                                Unit Economics &amp; Realized Tier Yield
+                                <span class="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-wider">Pricing Strategy</span>
+                            </h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Average revenue per tote, operating cost footprint, and realized rate tier profitability.</p>
+                        </div>
+                    </div>
+                    <!-- Pricing Optimization Insight Pill -->
+                    <div id="exec-pricing-recommendation-pill" class="bg-emerald-950/40 border border-emerald-500/30 px-3.5 py-2 rounded-2xl flex items-center gap-2 text-xs font-mono text-emerald-300 shadow-inner">
+                        <i data-lucide="sparkles" class="w-4 h-4 text-emerald-400"></i>
+                        <span id="exec-pricing-recommendation-text">Pricing Optimization: Evaluating live rate yields...</span>
+                    </div>
+                </div>
+
+                <!-- 4 Unit Economics Metric Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-gray-950/80 border border-gray-850 p-4 rounded-2xl space-y-1">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Average Revenue / Tote (ARPT)</p>
+                        <p class="text-2xl font-black text-white font-mono" id="exec-arpt">$0.00</p>
+                        <p class="text-[11px] text-emerald-400 flex items-center gap-1 font-medium" id="exec-arpt-subtext">
+                            <i data-lucide="trending-up" class="w-3 h-3"></i> Blended Storage &amp; Service Rate
+                        </p>
+                    </div>
+                    <div class="bg-gray-950/80 border border-gray-850 p-4 rounded-2xl space-y-1">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Facility Unit Cost / Tote</p>
+                        <p class="text-2xl font-black text-amber-400 font-mono" id="exec-unit-cost">$0.00</p>
+                        <p class="text-[11px] text-gray-400 flex items-center gap-1" id="exec-unit-cost-subtext">
+                            Lease &amp; Labor Allocation
+                        </p>
+                    </div>
+                    <div class="bg-gray-950/80 border border-gray-850 p-4 rounded-2xl space-y-1">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Profit Margin / Tote</p>
+                        <p class="text-2xl font-black text-emerald-400 font-mono" id="exec-net-margin">$0.00</p>
+                        <p class="text-[11px] text-emerald-400 flex items-center gap-1 font-medium" id="exec-margin-pct">
+                            0.0% Net Spread Margin
+                        </p>
+                    </div>
+                    <div class="bg-gray-950/80 border border-gray-850 p-4 rounded-2xl space-y-1">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Subscribers MoM Growth</p>
+                        <p class="text-2xl font-black text-blue-400 font-mono" id="exec-subs-mom">+0.0%</p>
+                        <p class="text-[11px] text-blue-400 flex items-center gap-1 font-medium" id="exec-subs-mom-subtext">
+                            <i data-lucide="arrow-up" class="w-3 h-3"></i> Current vs Prior Month
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Tier Realized Yield Distribution Breakdown -->
+                <div class="bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-4">
+                    <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                        <h4 class="text-xs font-extrabold uppercase text-gray-300 tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="layers" class="w-4 h-4 text-emerald-400"></i>
+                            Realized Revenue &amp; Tote Distribution by Pricing Tier
+                        </h4>
+                        <span class="text-[10px] text-gray-500 font-mono">Live Subscriptions Joined</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="exec-tier-yield-cards">
+                        <!-- Dynamically populated Tier 1, 2, 3, 4 cards -->
+                    </div>
                 </div>
             </div>
 
@@ -8522,6 +8509,12 @@
                                 const matched = (activeValetTotes || []).find(t => t.id === it || t.tote_code === it);
                                 return matched ? matched.tote_code : it;
                             });
+                            const addr1 = r.delivery_address_line1 || '';
+                            const addr2 = r.delivery_address_line2 || '';
+                            const city = r.delivery_city || '';
+                            const state = r.delivery_state || '';
+                            const zip = r.delivery_zip || r.users?.zip || r.users?.active_zone || '';
+                            const fullAddr = [addr1, addr2, [city, state].filter(Boolean).join(', '), zip].filter(Boolean).join(' ') || (zip ? `ZIP ${zip}` : 'Local Delivery Area');
 
                             stops.push({
                                 id: r.id,
@@ -8530,6 +8523,9 @@
                                 target_date: r.target_date,
                                 time_slot: r.time_slot || '09:00 AM - 12:00 PM',
                                 status: r.status,
+                                address: fullAddr,
+                                hasSpecificAddress: Boolean(addr1 || city),
+                                delivery_notes: r.delivery_notes || '',
                                 requested_items: items.length > 0 ? items : ['1 Tote']
                             });
                         }
@@ -8555,29 +8551,41 @@
                     } else {
                         stopsListEl.innerHTML = stops.map((s, idx) => {
                             const name = s.users?.name || `Customer ${s.uid.substring(0, 6)}`;
-                            const zip = s.users?.zip || s.users?.active_zone || 'Local Area';
                             const slot = s.time_slot || '09:00 AM - 12:00 PM';
                             const reqDate = s.target_date ? new Date(s.target_date.split('T')[0] + 'T12:00:00') : new Date();
                             const dateStr = reqDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
                             const toteCount = (s.requested_items || []).length || 1;
+                            const mapUrl = s.hasSpecificAddress ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address)}` : `https://maps.google.com/?q=${encodeURIComponent(s.address)}`;
 
                             return `
-                                <div class="bg-gray-950 border border-gray-850 p-3.5 rounded-2xl flex items-center justify-between hover:border-blue-500/40 transition">
-                                    <div class="flex items-center space-x-3">
-                                        <div class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 font-bold text-xs flex items-center justify-center border border-blue-500/30 font-mono">
+                                <div class="bg-gray-950 border border-gray-850 p-3.5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-blue-500/40 transition">
+                                    <div class="flex items-start space-x-3">
+                                        <div class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 font-bold text-xs flex items-center justify-center border border-blue-500/30 font-mono shrink-0 mt-0.5">
                                             #${idx + 1}
                                         </div>
-                                        <div>
-                                            <h5 class="text-xs font-extrabold text-white flex items-center gap-2">
-                                                ${name}
-                                                <span class="text-[9px] font-mono text-gray-500">ZIP ${zip}</span>
-                                            </h5>
-                                            <p class="text-[10px] font-mono text-amber-300 font-bold flex items-center gap-1 mt-0.5">
+                                        <div class="space-y-1">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <h5 class="text-xs font-extrabold text-white">${escapeHtml(name)}</h5>
+                                                <span class="text-[10px] font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                    📍 ${escapeHtml(s.address)}
+                                                </span>
+                                            </div>
+                                            <div class="flex items-center gap-2 text-[10px] font-mono text-amber-300 font-bold">
                                                 <i data-lucide="clock" class="w-3 h-3 text-amber-400 inline"></i> ${dateStr} &bull; ${slot}
-                                            </p>
+                                            </div>
+                                            ${s.delivery_notes ? `
+                                                <p class="text-[10px] text-gray-400 font-mono bg-gray-900/80 px-2 py-1 rounded-lg border border-gray-800">
+                                                    📝 Note: ${escapeHtml(s.delivery_notes)}
+                                                </p>
+                                            ` : ''}
                                         </div>
                                     </div>
-                                    <span class="text-xs font-black font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/30">${toteCount} TOTE(S)</span>
+                                    <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+                                        <a href="${mapUrl}" target="_blank" rel="noopener noreferrer" class="px-2.5 py-1.5 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 rounded-xl text-[10px] font-bold font-mono transition flex items-center gap-1 cursor-pointer">
+                                            <i data-lucide="navigation" class="w-3 h-3 text-blue-400"></i> Route
+                                        </a>
+                                        <span class="text-xs font-black font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/30">${toteCount} TOTE(S)</span>
+                                    </div>
                                 </div>`;
                         }).join('');
                     }
@@ -9016,7 +9024,7 @@
                 };
             });
 
-            // Populate Facility Breakdown Table
+            // Populate Facility Breakdown Table Body & Network Total Footer
             const facTbody = document.getElementById('exec-facility-breakdown-tbody');
             if (facTbody) {
                 facTbody.innerHTML = facDataList.map(f => `
@@ -9044,6 +9052,49 @@
                         </td>
                     </tr>
                 `).join('');
+            }
+
+            const facTfoot = document.getElementById('exec-facility-breakdown-tfoot');
+            if (facTfoot) {
+                const totalSubs = facDataList.reduce((sum, f) => sum + f.subscribers, 0);
+                const totalTotes = facDataList.reduce((sum, f) => sum + f.totes, 0);
+                const totalMRR = facDataList.reduce((sum, f) => sum + f.mrr, 0);
+                const totalCapSqft = facilities.reduce((sum, f) => sum + (Number(f.usable_warehouse_sqft) || (Number(f.tote_capacity || 0) * Number(f.sqft_per_tote || 1)) || 0), 0);
+                const totalUsedSqft = facilities.reduce((sum, f) => {
+                    const fObj = facDataList.find(x => x.id === f.id);
+                    const count = fObj ? fObj.totes : 0;
+                    return sum + (count * (Number(f.sqft_per_tote) || 1.0));
+                }, 0);
+                const blendedCapPct = totalCapSqft > 0 ? Math.min(100, Math.round((totalUsedSqft / totalCapSqft) * 100)) : 0;
+                const overallARPT = totalTotes > 0 ? (totalMRR / totalTotes).toFixed(2) : '0.00';
+                const activeCount = facDataList.filter(f => f.active).length;
+
+                facTfoot.innerHTML = `
+                    <tr class="bg-gray-950/90 border-t-2 border-indigo-500/40 text-white font-extrabold text-xs">
+                        <td class="py-3.5 font-sans flex items-center gap-2 text-indigo-300">
+                            <i data-lucide="layers" class="w-4 h-4 text-indigo-400"></i>
+                            NETWORK TOTAL (${facilities.length} Regions)
+                        </td>
+                        <td class="py-3.5 text-slate-200">${totalSubs} accounts</td>
+                        <td class="py-3.5 text-cyan-300 text-sm">${totalTotes.toLocaleString()} totes</td>
+                        <td class="py-3.5">
+                            <div class="flex items-center gap-2">
+                                <div class="w-16 bg-gray-800 h-2 rounded-full overflow-hidden border border-gray-700">
+                                    <div class="bg-gradient-to-r from-blue-500 to-indigo-500 h-full" style="width: ${blendedCapPct}%"></div>
+                                </div>
+                                <span class="text-xs text-indigo-300 font-black">${blendedCapPct}%</span>
+                            </div>
+                        </td>
+                        <td class="py-3.5 text-emerald-400 text-sm font-bold">${totalMRR.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td class="py-3.5 text-emerald-300 font-bold">${overallARPT}</td>
+                        <td class="py-3.5 text-right">
+                            <span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                ${activeCount}/${facilities.length} OPERATIONAL
+                            </span>
+                        </td>
+                    </tr>
+                `;
+                if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
             }
 
             // Update Facility Composition Doughnut Chart (Only plot facilities with real totes > 0)

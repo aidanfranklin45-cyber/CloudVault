@@ -899,6 +899,51 @@
                     </div>
                 </div>
                 
+                <!-- Valet Delivery Address Container -->
+                <div id="valet-address-container" class="hidden mt-5 pt-4 border-t border-gray-150 space-y-3 fade-in">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-extrabold uppercase text-gray-800 tracking-wider flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            <span>Doorstep Delivery Address</span>
+                        </label>
+                        <span id="saved-address-indicator" class="hidden text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">✓ Address on file</span>
+                    </div>
+
+                    <!-- Street Address -->
+                    <div>
+                        <span class="text-[11px] font-bold text-gray-500 block mb-1">Street Address <span class="text-red-500">*</span></span>
+                        <input type="text" id="valet-addr-line1" autocomplete="street-address" placeholder="1234 Main St" class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <!-- Apt / Suite / Unit -->
+                    <div>
+                        <span class="text-[11px] font-bold text-gray-500 block mb-1">Apartment, Suite, Unit <span class="text-gray-400 font-normal lowercase">(optional)</span></span>
+                        <input type="text" id="valet-addr-line2" autocomplete="address-line2" placeholder="Apt 4B" class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <!-- City, State, ZIP -->
+                    <div class="grid grid-cols-6 gap-2">
+                        <div class="col-span-3">
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">City <span class="text-red-500">*</span></span>
+                            <input type="text" id="valet-addr-city" autocomplete="address-level2" placeholder="Seattle" class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">State <span class="text-red-500">*</span></span>
+                            <input type="text" id="valet-addr-state" autocomplete="address-level1" placeholder="WA" maxlength="2" class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500 uppercase text-center">
+                        </div>
+                        <div class="col-span-2">
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">ZIP <span class="text-red-500">*</span></span>
+                            <input type="text" id="valet-addr-zip" autocomplete="postal-code" placeholder="98101" maxlength="10" class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500 text-center">
+                        </div>
+                    </div>
+
+                    <!-- Save Default Checkbox -->
+                    <label class="flex items-center space-x-2 pt-1 cursor-pointer">
+                        <input type="checkbox" id="valet-save-default-addr" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        <span class="text-xs font-bold text-gray-600">Save as my default delivery address</span>
+                    </label>
+                </div>
+
                 <!-- Valet Delivery Notes Input -->
                 <div id="valet-notes-container" class="hidden mt-4 space-y-2 fade-in">
                     <label for="valet-delivery-notes" class="block text-xs font-extrabold uppercase text-gray-700 tracking-wider">
@@ -1015,8 +1060,44 @@
                 <p class="text-[11px] text-gray-500 font-medium">Facility assignments are managed by CloudVault warehouse logistics. Contact support to request a transfer.</p>
             </div>
 
+            <!-- Saved Primary Delivery Address -->
+            <div class="space-y-3 pt-2 border-t border-gray-150">
+                <div class="flex items-center justify-between">
+                    <label class="block text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                        <i data-lucide="home" class="w-4 h-4 text-blue-600"></i>
+                        <span>Primary Delivery Address</span>
+                    </label>
+                    <span class="text-[10px] font-mono text-gray-400 font-bold uppercase">Valet &amp; Billing</span>
+                </div>
+                
+                <div>
+                    <span class="text-[11px] font-bold text-gray-500 block mb-1">Street Address</span>
+                    <input type="text" id="settings-addr-line1" autocomplete="street-address" placeholder="1234 Main St" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                </div>
+
+                <div>
+                    <span class="text-[11px] font-bold text-gray-500 block mb-1">Apt, Suite, Unit <span class="text-gray-400 font-normal lowercase">(optional)</span></span>
+                    <input type="text" id="settings-addr-line2" autocomplete="address-line2" placeholder="Apt 4B" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                </div>
+
+                <div class="grid grid-cols-6 gap-2">
+                    <div class="col-span-3">
+                        <span class="text-[11px] font-bold text-gray-500 block mb-1">City</span>
+                        <input type="text" id="settings-addr-city" autocomplete="address-level2" placeholder="Seattle" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div class="col-span-1">
+                        <span class="text-[11px] font-bold text-gray-500 block mb-1">State</span>
+                        <input type="text" id="settings-addr-state" autocomplete="address-level1" placeholder="WA" maxlength="2" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500 uppercase text-center">
+                    </div>
+                    <div class="col-span-2">
+                        <span class="text-[11px] font-bold text-gray-500 block mb-1">ZIP</span>
+                        <input type="text" id="settings-addr-zip" autocomplete="postal-code" placeholder="98101" maxlength="10" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500 text-center">
+                    </div>
+                </div>
+            </div>
+
             <!-- Avatar Color Selector -->
-            <div class="space-y-3">
+            <div class="space-y-3 pt-2 border-t border-gray-150">
                 <label class="block text-sm font-bold text-gray-800">Avatar Accent Color</label>
                 <div class="flex space-x-4">
                     <button onclick="selectColor('blue')" id="color-blue" class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 border-2 border-transparent hover:border-blue-300 flex items-center justify-center font-bold transition"></button>
@@ -4932,6 +5013,41 @@
             document.getElementById('retrieval-modal').classList.add('hidden');
         }
 
+        async function loadSavedCustomerAddress() {
+            try {
+                if (!currentUser) return;
+                const { data, error } = await supabase
+                    .from('customer_addresses')
+                    .select('*')
+                    .eq('uid', currentUser.id)
+                    .maybeSingle();
+
+                const indicator = document.getElementById('saved-address-indicator');
+                if (data && data.address_line1) {
+                    const line1Input = document.getElementById('valet-addr-line1');
+                    const line2Input = document.getElementById('valet-addr-line2');
+                    const cityInput = document.getElementById('valet-addr-city');
+                    const stateInput = document.getElementById('valet-addr-state');
+                    const zipInput = document.getElementById('valet-addr-zip');
+
+                    if (line1Input && !line1Input.value) line1Input.value = data.address_line1 || '';
+                    if (line2Input && !line2Input.value) line2Input.value = data.address_line2 || '';
+                    if (cityInput && !cityInput.value) cityInput.value = data.city || '';
+                    if (stateInput && !stateInput.value) stateInput.value = data.state || '';
+                    if (zipInput && !zipInput.value) zipInput.value = data.zip || '';
+
+                    if (data.delivery_instructions && document.getElementById('valet-delivery-notes') && !document.getElementById('valet-delivery-notes').value) {
+                        document.getElementById('valet-delivery-notes').value = data.delivery_instructions;
+                    }
+                    if (indicator) indicator.classList.remove('hidden');
+                } else {
+                    if (indicator) indicator.classList.add('hidden');
+                }
+            } catch (err) {
+                console.warn('Could not load saved address:', err);
+            }
+        }
+
         function selectRetrievalLogistics(type) {
             retrievalLogisticsType = type;
             
@@ -4941,6 +5057,7 @@
             const valetDot = document.getElementById('retrieval-dot-valet');
             const termsBox = document.getElementById('retrieval-valet-terms');
             const valetNotesContainer = document.getElementById('valet-notes-container');
+            const valetAddressContainer = document.getElementById('valet-address-container');
             const calTitle = document.getElementById('retrieval-calendar-title');
             const dateLabel = document.getElementById('retrieval-date-label');
             const slotLabel = document.getElementById('retrieval-slot-label');
@@ -4960,6 +5077,7 @@
                 
                 termsBox.classList.add('hidden');
                 if (valetNotesContainer) valetNotesContainer.classList.add('hidden');
+                if (valetAddressContainer) valetAddressContainer.classList.add('hidden');
 
                 if (calTitle) calTitle.textContent = "Reserve Staging Slot Date";
                 if (dateLabel) dateLabel.textContent = "Target Pickup Date:";
@@ -4979,6 +5097,10 @@
                 
                 termsBox.classList.remove('hidden');
                 if (valetNotesContainer) valetNotesContainer.classList.remove('hidden');
+                if (valetAddressContainer) {
+                    valetAddressContainer.classList.remove('hidden');
+                    loadSavedCustomerAddress();
+                }
 
                 if (calTitle) calTitle.textContent = "Schedule Valet Doorstep Delivery";
                 if (dateLabel) dateLabel.textContent = "Target Delivery Date:";
@@ -4996,6 +5118,65 @@
             const deliveryNotes = retrievalLogisticsType === 'valet_delivery' 
                 ? (document.getElementById('valet-delivery-notes')?.value.trim() || '') 
                 : '';
+
+            let addrLine1 = '';
+            let addrLine2 = '';
+            let addrCity = '';
+            let addrState = '';
+            let addrZip = '';
+
+            if (retrievalLogisticsType === 'valet_delivery') {
+                addrLine1 = document.getElementById('valet-addr-line1')?.value.trim() || '';
+                addrLine2 = document.getElementById('valet-addr-line2')?.value.trim() || '';
+                addrCity = document.getElementById('valet-addr-city')?.value.trim() || '';
+                addrState = document.getElementById('valet-addr-state')?.value.trim().toUpperCase() || '';
+                addrZip = document.getElementById('valet-addr-zip')?.value.trim() || '';
+
+                if (!addrLine1) {
+                    alert("⚠️ Please enter your street address for valet doorstep delivery.");
+                    btn.disabled = false;
+                    btn.textContent = 'Confirm Request';
+                    document.getElementById('valet-addr-line1')?.focus();
+                    return;
+                }
+                if (!addrCity) {
+                    alert("⚠️ Please enter your city for valet doorstep delivery.");
+                    btn.disabled = false;
+                    btn.textContent = 'Confirm Request';
+                    document.getElementById('valet-addr-city')?.focus();
+                    return;
+                }
+                if (!addrState || addrState.length !== 2) {
+                    alert("⚠️ Please enter a valid 2-letter state code (e.g. WA, OR, CA).");
+                    btn.disabled = false;
+                    btn.textContent = 'Confirm Request';
+                    document.getElementById('valet-addr-state')?.focus();
+                    return;
+                }
+                if (!addrZip || addrZip.length < 5) {
+                    alert("⚠️ Please enter a valid 5-digit ZIP code.");
+                    btn.disabled = false;
+                    btn.textContent = 'Confirm Request';
+                    document.getElementById('valet-addr-zip')?.focus();
+                    return;
+                }
+
+                // If user checked 'Save as default address', save to customer_addresses
+                if (document.getElementById('valet-save-default-addr')?.checked) {
+                    try {
+                        await supabase.rpc('save_customer_delivery_address', {
+                            p_address_line1: addrLine1,
+                            p_address_line2: addrLine2 || null,
+                            p_city: addrCity,
+                            p_state: addrState,
+                            p_zip: addrZip,
+                            p_instructions: deliveryNotes || null
+                        });
+                    } catch (saveErr) {
+                        console.warn("Could not save default address:", saveErr);
+                    }
+                }
+            }
 
             const dateInput = document.getElementById('retrieval-target-date');
             const slotInput = document.getElementById('retrieval-time-slot');
@@ -5034,7 +5215,14 @@
                     p_time_slot: timeSlot,
                     p_delivery_notes: deliveryNotes,
                     p_start_time: startTime,
-                    p_end_time: endTime
+                    p_end_time: endTime,
+                    p_surge_fee: selectedReservationSurge.fee,
+                    p_surge_tier: selectedReservationSurge.tier,
+                    p_delivery_address_line1: addrLine1 || null,
+                    p_delivery_address_line2: addrLine2 || null,
+                    p_delivery_city: addrCity || null,
+                    p_delivery_state: addrState || null,
+                    p_delivery_zip: addrZip || null
                 });
 
                 if (error) {
@@ -5073,6 +5261,11 @@
                         target_date: targetDate,
                         time_slot: timeSlot,
                         delivery_notes: deliveryNotes,
+                        delivery_address_line1: addrLine1 || null,
+                        delivery_address_line2: addrLine2 || null,
+                        delivery_city: addrCity || null,
+                        delivery_state: addrState || null,
+                        delivery_zip: addrZip || null,
                         pin: genPin,
                         status: 'pending',
                         created_at: new Date().toISOString()
@@ -5620,7 +5813,7 @@
             document.getElementById('settings-modal').classList.remove('hidden');
             if (currentUserColor) selectColor(currentUserColor);
 
-            // Display current assigned Home Facility
+            // Display current assigned Home Facility and Saved Delivery Address
             try {
                 const facNameEl = document.getElementById('settings-facility-name');
                 const userFacId = (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
@@ -5632,8 +5825,26 @@
                     const { data: fac } = await supabase.from('facilities').select('name').eq('id', userFacId).maybeSingle();
                     if (fac && facNameEl) facNameEl.textContent = fac.name;
                 }
+
+                // Load saved delivery address
+                if (currentUser) {
+                    const { data: addrData } = await supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle();
+                    if (addrData) {
+                        const l1 = document.getElementById('settings-addr-line1');
+                        const l2 = document.getElementById('settings-addr-line2');
+                        const ct = document.getElementById('settings-addr-city');
+                        const st = document.getElementById('settings-addr-state');
+                        const zp = document.getElementById('settings-addr-zip');
+
+                        if (l1) l1.value = addrData.address_line1 || '';
+                        if (l2) l2.value = addrData.address_line2 || '';
+                        if (ct) ct.value = addrData.city || '';
+                        if (st) st.value = addrData.state || '';
+                        if (zp) zp.value = addrData.zip || '';
+                    }
+                }
             } catch (e) {
-                console.error("Failed to load facility in settings:", e);
+                console.error("Failed to load settings data:", e);
             }
             if (window.lucide) lucide.createIcons();
         }
@@ -5667,10 +5878,28 @@
                 const { error } = await supabase.from('users').update({ avatar_color: tempColor }).eq('id', currentUser.id);
                 if (error) throw error;
 
+                // Save delivery address if filled
+                const line1 = document.getElementById('settings-addr-line1')?.value.trim();
+                const line2 = document.getElementById('settings-addr-line2')?.value.trim();
+                const city = document.getElementById('settings-addr-city')?.value.trim();
+                const state = document.getElementById('settings-addr-state')?.value.trim().toUpperCase();
+                const zip = document.getElementById('settings-addr-zip')?.value.trim();
+
+                if (line1 && city && state && zip) {
+                    await supabase.rpc('save_customer_delivery_address', {
+                        p_address_line1: line1,
+                        p_address_line2: line2 || null,
+                        p_city: city,
+                        p_state: state,
+                        p_zip: zip,
+                        p_instructions: null
+                    });
+                }
+
                 currentUserColor = tempColor;
                 applyAvatarColor(currentUserColor);
                 closeSettingsModal();
-                showToast("Profile settings saved!");
+                showToast("Profile & address settings saved!");
             } catch (err) {
                 console.error("Failed to update settings", err);
                 alert("Failed to update settings: " + err.message);
