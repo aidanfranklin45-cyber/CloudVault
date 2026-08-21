@@ -1332,9 +1332,9 @@
                             <p id="billing-card-exp" class="text-[11px] text-gray-500 font-medium">Expires 12/2028</p>
                         </div>
                     </div>
-                    <button id="manage-pay-btn" onclick="window.StripeBillingIntegration ? window.StripeBillingIntegration.launchCustomerPortal(currentUser?.stripe_customer_id, currentUser?.id, this) : launchStripePortalMock()" class="text-blue-600 hover:text-blue-700 text-xs font-bold bg-blue-50 hover:bg-blue-100 px-3.5 py-2 rounded-xl transition border border-blue-200 flex items-center gap-1.5 cursor-pointer shadow-sm">
+                    <button id="manage-pay-btn" onclick="openUpdatePaymentModal()" class="text-blue-600 hover:text-blue-700 text-xs font-bold bg-blue-50 hover:bg-blue-100 px-3.5 py-2 rounded-xl transition border border-blue-200 flex items-center gap-1.5 cursor-pointer shadow-sm">
                         <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                        <span>Manage Payment Method</span>
+                        <span>Update Payment Method</span>
                     </button>
                 </div>
             </div>
@@ -5996,6 +5996,16 @@
                 if (window._priceLockTimerInterval) clearInterval(window._priceLockTimerInterval);
             }
 
+            // Populate card on file preview if saved
+            if (currentUser?.default_payment_method_id) {
+                const pm = currentUser.default_payment_method_id;
+                const last4Match = pm.match(/\d{4}$/);
+                if (last4Match) {
+                    const last4El = document.getElementById('billing-card-last4');
+                    if (last4El) last4El.textContent = `•••• •••• •••• ${last4Match[0]}`;
+                }
+            }
+
             loadInvoiceHistory();
         }
 
@@ -6251,10 +6261,10 @@
 
 
         function launchStripePortalMock() {
-            if (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.launchCustomerPortal === 'function') {
+            if (typeof openUpdatePaymentModal === 'function') {
+                openUpdatePaymentModal();
+            } else if (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.launchCustomerPortal === 'function') {
                 window.StripeBillingIntegration.launchCustomerPortal(currentUser?.stripe_customer_id, currentUser?.id);
-            } else {
-                showToast("Opening Stripe Customer Portal...");
             }
         }
 

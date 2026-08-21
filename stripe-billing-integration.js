@@ -127,12 +127,26 @@
           return { success: true, url: portalUrl };
         } else {
           restoreBtn();
+          if (typeof global.openUpdatePaymentModal === 'function') {
+            global.openUpdatePaymentModal();
+            return { success: true, mode: 'modal' };
+          } else if (typeof window !== 'undefined' && typeof window.openUpdatePaymentModal === 'function') {
+            window.openUpdatePaymentModal();
+            return { success: true, mode: 'modal' };
+          }
           if (typeof global.showToast === 'function') global.showToast("⚠️ Stripe customer portal is currently unavailable.");
           return { success: false };
         }
       } catch (err) {
         console.error('[StripeBillingIntegration] Exception launching customer portal:', err);
         restoreBtn();
+        if (typeof global.openUpdatePaymentModal === 'function') {
+          global.openUpdatePaymentModal();
+          return { success: true, mode: 'modal' };
+        } else if (typeof window !== 'undefined' && typeof window.openUpdatePaymentModal === 'function') {
+          window.openUpdatePaymentModal();
+          return { success: true, mode: 'modal' };
+        }
         if (typeof global.showToast === 'function') global.showToast("⚠️ Connection error while reaching Stripe.");
         return { success: false, error: err.message };
       }
