@@ -1,4 +1,4 @@
-﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "npm:stripe@^14.25.0";
 import { createClient } from "npm:@supabase/supabase-js@2.42.0";
 
@@ -40,33 +40,6 @@ Deno.serve(async (req: Request) => {
     const userId = body.userId || body.user_id || null;
     const returnUrl = body.returnUrl || body.return_url || "https://cloudvault-35a9b-6b3db.web.app/dashboard.html";
 
-    // Fast-path: If real Stripe Customer ID is passed and Stripe Secret exists, generate portal session directly
-    if (stripeSecretKey && customerId && customerId.startsWith("cus_") && !customerId.startsWith("cus_sim_")) {
-      try {
-        const stripe = new Stripe(stripeSecretKey, {
-          apiVersion: "2023-10-16",
-          httpClient: Stripe.createFetchHttpClient(),
-        });
-
-        const portalSession = await stripe.billingPortal.sessions.create({
-          customer: customerId,
-          return_url: returnUrl,
-        });
-
-        return new Response(
-          JSON.stringify({
-            url: portalSession.url,
-            customerId: customerId,
-            isSimulated: false,
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      } catch (fastErr: any) {
-        console.warn("[StripeBillingPortal] Fast path notice:", fastErr.message);
-      }
-    }
-
-    // Fallback path: Lookup user in database or create customer
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: { persistSession: false },
     });
@@ -88,65 +61,142 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (!customerId && stripeSecretKey && userRecord?.email) {
-      try {
-        const stripe = new Stripe(stripeSecretKey, {
-          apiVersion: "2023-10-16",
-          httpClient: Stripe.createFetchHttpClient(),
-        });
+    if (!stripeSecretKey) {
+      return new Response(
+        JSON.stringify({
+          error: "STRIPE_SECRET_KEY is not configured in Supabase Edge Functions environment.",
+          url: null,
+          isSimulated: true,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
+    const stripe = new Stripe(stripeSecretKey, {
+      apiVersion: "2023-10-16",
+      httpClient: Stripe.createFetchHttpClient(),
+    });
+
+    // If customerId is missing or simulated, auto-create a real customer in Stripe
+    if (!customerId || customerId.startsWith("cus_sim_")) {
+      const email = userRecord?.email || `user_${userId || Date.now()}@cloudvault.app`;
+      const name = userRecord?.name || email.split("@")[0];
+
+      const existingCustomers = await stripe.customers.list({ email: email, limit: 1 });
+      if (existingCustomers.data.length > 0) {
+        customerId = existingCustomers.data[0].id;
+      } else {
         const newCustomer = await stripe.customers.create({
-          email: userRecord.email,
-          name: userRecord.name || userRecord.email.split("@")[0],
+          email: email,
+          name: name,
           metadata: { supabase_uid: userId || "" },
         });
-
         customerId = newCustomer.id;
+      }
 
-        if (userId) {
-          await supabase
-            .from("users")
-            .update({ stripe_customer_id: customerId })
-            .eq("id", userId);
-        }
-      } catch (createErr: any) {
-        console.warn("[StripeBillingPortal] Auto customer creation notice:", createErr.message);
+      if (userId) {
+        await supabase
+          .from("users")
+          .update({ stripe_customer_id: customerId })
+          .eq("id", userId);
       }
     }
 
     let portalUrl: string | null = null;
-    let isSimulated = false;
+    let lastErrorMsg: string | null = null;
 
-    if (stripeSecretKey && customerId && !customerId.startsWith("cus_sim_")) {
-      try {
-        const stripe = new Stripe(stripeSecretKey, {
-          apiVersion: "2023-10-16",
-          httpClient: Stripe.createFetchHttpClient(),
-        });
+    // Step 1: Attempt standard Billing Portal session creation
+    try {
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: returnUrl,
+      });
+      portalUrl = portalSession.url;
+    } catch (portalErr: any) {
+      console.warn("[StripeBillingPortal] Direct portal session attempt:", portalErr.message);
+      lastErrorMsg = portalErr.message;
 
-        const portalSession = await stripe.billingPortal.sessions.create({
-          customer: customerId,
-          return_url: returnUrl,
-        });
-        portalUrl = portalSession.url;
-      } catch (err: any) {
-        console.warn("[StripeBillingPortal] Portal API notice:", err.message);
-        isSimulated = true;
+      // If no portal configuration exists, list or create one dynamically
+      if (portalErr.message && (portalErr.message.includes("configuration") || portalErr.message.includes("portal"))) {
+        try {
+          const configs = await stripe.billingPortal.configurations.list({ limit: 1 });
+          let configId = configs.data.length > 0 ? configs.data[0].id : null;
+
+          if (!configId) {
+            const newConfig = await stripe.billingPortal.configurations.create({
+              business_profile: {
+                headline: "CloudVault Account & Payment Management",
+              },
+              features: {
+                payment_method_update: { enabled: true },
+                customer_update: {
+                  allowed_updates: ["email", "address", "phone"],
+                  enabled: true,
+                },
+                invoice_history: { enabled: true },
+              },
+            });
+            configId = newConfig.id;
+          }
+
+          if (configId) {
+            const portalSession = await stripe.billingPortal.sessions.create({
+              customer: customerId,
+              return_url: returnUrl,
+              configuration: configId,
+            });
+            portalUrl = portalSession.url;
+          }
+        } catch (configErr: any) {
+          console.warn("[StripeBillingPortal] Config creation/retry attempt:", configErr.message);
+          lastErrorMsg = configErr.message;
+        }
       }
-    } else {
-      isSimulated = true;
     }
 
-    return new Response(
-      JSON.stringify({
-        url: portalUrl,
-        customerId: customerId,
-        isSimulated: isSimulated,
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    // Step 2: Fallback to Stripe Hosted Checkout Setup Mode (allowing instant card update directly on Stripe)
+    if (!portalUrl) {
+      try {
+        const setupSession = await stripe.checkout.sessions.create({
+          mode: "setup",
+          customer: customerId,
+          payment_method_types: ["card"],
+          success_url: `${returnUrl}?setup_success=true&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: returnUrl,
+          metadata: {
+            supabase_uid: userId || "",
+            purpose: "update_payment_method",
+          },
+        });
+        portalUrl = setupSession.url;
+      } catch (setupErr: any) {
+        console.warn("[StripeBillingPortal] Checkout setup session fallback error:", setupErr.message);
+        lastErrorMsg = setupErr.message;
+      }
+    }
+
+    if (portalUrl) {
+      return new Response(
+        JSON.stringify({
+          url: portalUrl,
+          customerId: customerId,
+          isSimulated: false,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    } else {
+      return new Response(
+        JSON.stringify({
+          url: null,
+          customerId: customerId,
+          isSimulated: true,
+          error: lastErrorMsg || "Failed to create portal or setup session",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
   } catch (error: any) {
-    console.error("[StripeBillingPortal] Error:", error.message);
+    console.error("[StripeBillingPortal] Critical Error:", error.message);
     return new Response(
       JSON.stringify({ error: error.message || "Failed to create customer portal session" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
