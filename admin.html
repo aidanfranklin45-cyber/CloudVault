@@ -1026,83 +1026,8 @@
                 </div>
             </div>
 
-        </div>
+        
 
-        <!-- VIEW 2: WAREHOUSE MANAGER ROLE -->
-        <div id="view-manager" class="space-y-8 hidden animate-fade-in">
-
-            <!-- Hidden fallback facility select for backwards compatibility -->
-            <select id="manager-facility-select" onchange="onGlobalFacilityChange(this.value)" class="hidden">
-            </select>
-
-            <!-- Admin Staging Reservation Calendar (Feature 4) -->
-            <div id="admin-scheduling-calendar" class="glass-panel p-6 rounded-3xl space-y-6 border border-blue-500/30">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-4 gap-3">
-                    <div class="flex items-center space-x-3">
-                        <div class="p-2.5 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20">
-                            <i data-lucide="calendar" class="w-6 h-6"></i>
-                        </div>
-                        <div>
-                            <h3 class="font-bold text-white text-lg flex items-center gap-2">
-                                Staging &amp; Logistics Reservation Calendar
-                                <span class="bg-blue-500/10 text-blue-400 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-wider">Weekly Heatmap</span>
-                            </h3>
-                            <p class="text-xs text-gray-400 mt-0.5">Capacity heatmap &amp; customer reservation schedule per time window</p>
-                        </div>
-                    </div>
-                    <!-- Calendar Controls -->
-                    <div class="flex items-center space-x-2 bg-gray-900 border border-gray-800 p-1.5 rounded-2xl">
-                        <button onclick="navigateCalendarWeek(-7)" class="p-1.5 hover:bg-gray-800 text-gray-400 hover:text-white rounded-xl transition cursor-pointer" title="Previous Week">
-                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
-                        </button>
-                        <button onclick="navigateCalendarWeek(0)" class="px-2.5 py-1 text-xs font-bold text-blue-400 hover:bg-blue-500/10 rounded-xl transition cursor-pointer">
-                            Today
-                        </button>
-                        <span id="cal-week-range-label" class="text-xs font-mono font-bold text-white px-2">Loading...</span>
-                        <button onclick="navigateCalendarWeek(7)" class="p-1.5 hover:bg-gray-800 text-gray-400 hover:text-white rounded-xl transition cursor-pointer" title="Next Week">
-                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Calendar Weekly Grid -->
-                <div class="overflow-x-auto">
-                    <div class="min-w-[700px] space-y-2">
-                        <!-- Grid Header (Days) -->
-                        <div class="grid grid-cols-8 gap-2 text-center text-xs font-bold font-mono uppercase tracking-wider text-gray-400 pb-2 border-b border-gray-800">
-                            <div class="text-left text-gray-500 text-[10px] pt-1">Time Slot</div>
-                            <div id="cal-day-col-0" class="p-1 rounded-xl">Mon</div>
-                            <div id="cal-day-col-1" class="p-1 rounded-xl">Tue</div>
-                            <div id="cal-day-col-2" class="p-1 rounded-xl">Wed</div>
-                            <div id="cal-day-col-3" class="p-1 rounded-xl">Thu</div>
-                            <div id="cal-day-col-4" class="p-1 rounded-xl">Fri</div>
-                            <div id="cal-day-col-5" class="p-1 rounded-xl">Sat</div>
-                            <div id="cal-day-col-6" class="p-1 rounded-xl">Sun</div>
-                        </div>
-                        <!-- Grid Body (Populated dynamically) -->
-                        <div id="cal-grid-body" class="space-y-2">
-                            <div class="p-8 text-center text-xs text-gray-500 font-mono">Loading reservation heatmap calendar...</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Expanded Slot Customer Details Drawer/Panel -->
-                <div id="cal-slot-detail-panel" class="hidden bg-gray-950 border border-blue-500/30 rounded-2xl p-4 space-y-3 animate-fade-in">
-                    <div class="flex items-center justify-between border-b border-gray-800 pb-2">
-                        <div class="flex items-center space-x-2">
-                            <i data-lucide="users" class="w-4 h-4 text-blue-400"></i>
-                            <h4 id="cal-slot-detail-title" class="text-xs font-bold text-white uppercase tracking-wider">Slot Details</h4>
-                        </div>
-                        <button onclick="closeCalendarSlotDetail()" class="text-gray-400 hover:text-white text-xs font-bold cursor-pointer">✕ Close</button>
-                    </div>
-                    <div id="cal-slot-detail-content" class="space-y-2 text-xs font-mono">
-                        <!-- Populated dynamically -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- ========================================================================= -->
-            <!-- Executive Creator & Promotional Attribution Hub (Stripe + Supabase) -->
             <!-- ========================================================================= -->
             <div id="executive-creator-promo-hub" class="glass-panel p-6 sm:p-8 rounded-3xl border border-emerald-500/30 space-y-6">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-5 gap-4">
@@ -1364,7 +1289,83 @@
                     </div>
                 </div>
             </div>
+        </div>
 
+        <!-- VIEW 2: WAREHOUSE MANAGER ROLE -->
+        <div id="view-manager" class="space-y-8 hidden animate-fade-in">
+
+            <!-- Hidden fallback facility select for backwards compatibility -->
+            <select id="manager-facility-select" onchange="onGlobalFacilityChange(this.value)" class="hidden">
+            </select>
+
+            <!-- Admin Staging Reservation Calendar (Feature 4) -->
+            <div id="admin-scheduling-calendar" class="glass-panel p-6 rounded-3xl space-y-6 border border-blue-500/30">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-4 gap-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="p-2.5 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20">
+                            <i data-lucide="calendar" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-white text-lg flex items-center gap-2">
+                                Staging &amp; Logistics Reservation Calendar
+                                <span class="bg-blue-500/10 text-blue-400 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-wider">Weekly Heatmap</span>
+                            </h3>
+                            <p class="text-xs text-gray-400 mt-0.5">Capacity heatmap &amp; customer reservation schedule per time window</p>
+                        </div>
+                    </div>
+                    <!-- Calendar Controls -->
+                    <div class="flex items-center space-x-2 bg-gray-900 border border-gray-800 p-1.5 rounded-2xl">
+                        <button onclick="navigateCalendarWeek(-7)" class="p-1.5 hover:bg-gray-800 text-gray-400 hover:text-white rounded-xl transition cursor-pointer" title="Previous Week">
+                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="navigateCalendarWeek(0)" class="px-2.5 py-1 text-xs font-bold text-blue-400 hover:bg-blue-500/10 rounded-xl transition cursor-pointer">
+                            Today
+                        </button>
+                        <span id="cal-week-range-label" class="text-xs font-mono font-bold text-white px-2">Loading...</span>
+                        <button onclick="navigateCalendarWeek(7)" class="p-1.5 hover:bg-gray-800 text-gray-400 hover:text-white rounded-xl transition cursor-pointer" title="Next Week">
+                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Calendar Weekly Grid -->
+                <div class="overflow-x-auto">
+                    <div class="min-w-[700px] space-y-2">
+                        <!-- Grid Header (Days) -->
+                        <div class="grid grid-cols-8 gap-2 text-center text-xs font-bold font-mono uppercase tracking-wider text-gray-400 pb-2 border-b border-gray-800">
+                            <div class="text-left text-gray-500 text-[10px] pt-1">Time Slot</div>
+                            <div id="cal-day-col-0" class="p-1 rounded-xl">Mon</div>
+                            <div id="cal-day-col-1" class="p-1 rounded-xl">Tue</div>
+                            <div id="cal-day-col-2" class="p-1 rounded-xl">Wed</div>
+                            <div id="cal-day-col-3" class="p-1 rounded-xl">Thu</div>
+                            <div id="cal-day-col-4" class="p-1 rounded-xl">Fri</div>
+                            <div id="cal-day-col-5" class="p-1 rounded-xl">Sat</div>
+                            <div id="cal-day-col-6" class="p-1 rounded-xl">Sun</div>
+                        </div>
+                        <!-- Grid Body (Populated dynamically) -->
+                        <div id="cal-grid-body" class="space-y-2">
+                            <div class="p-8 text-center text-xs text-gray-500 font-mono">Loading reservation heatmap calendar...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expanded Slot Customer Details Drawer/Panel -->
+                <div id="cal-slot-detail-panel" class="hidden bg-gray-950 border border-blue-500/30 rounded-2xl p-4 space-y-3 animate-fade-in">
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-2">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="users" class="w-4 h-4 text-blue-400"></i>
+                            <h4 id="cal-slot-detail-title" class="text-xs font-bold text-white uppercase tracking-wider">Slot Details</h4>
+                        </div>
+                        <button onclick="closeCalendarSlotDetail()" class="text-gray-400 hover:text-white text-xs font-bold cursor-pointer">✕ Close</button>
+                    </div>
+                    <div id="cal-slot-detail-content" class="space-y-2 text-xs font-mono">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================================================= -->
+            <!-- Executive Creator & Promotional Attribution Hub (Stripe + Supabase) -->
             <!-- Modal: Webhook Payload Viewer -->
             <div id="webhook-payload-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
                 <div class="bg-gray-900 border border-indigo-500/40 rounded-3xl p-6 sm:p-8 max-w-2xl w-full space-y-4 shadow-2xl">
@@ -1636,6 +1637,27 @@
 
         <!-- VIEW 3: WAREHOUSE WORKER ROLE (HARDWARE-OPTIMIZED INDUSTRIAL TERMINAL) -->
         <div id="view-worker" class="space-y-6 hidden animate-fade-in">
+
+            <!-- Dedicated Full-Screen Logistics Operations Terminal Shortcut -->
+            <div class="glass-panel p-6 rounded-3xl border border-emerald-500/40 bg-gradient-to-r from-emerald-950/40 via-gray-900 to-teal-950/20 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl">
+                <div class="flex items-center space-x-4">
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-xl shrink-0">
+                        🏭
+                    </div>
+                    <div>
+                        <h3 class="text-base font-extrabold text-white flex items-center gap-2">
+                            Warehouse Fulfillment Terminal &amp; Queues
+                            <span class="text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded-full uppercase">Operational Mode</span>
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-0.5">High-speed hardware 2D barcode scanner, intake processing queue, outbound staging bay, and tote location radar.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+                    <a href="admin-logistics.html" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-emerald-600/30 whitespace-nowrap cursor-pointer">
+                        <i data-lucide="external-link" class="w-4 h-4"></i> Open Dedicated Logistics Terminal &rarr;
+                    </a>
+                </div>
+            </div>
 
                 <!-- Worker Shift Productivity Tracker (Feature 3) -->
                 <div id="worker-shift-tracker" class="glass-panel p-5 rounded-3xl border border-emerald-500/30 space-y-4">
@@ -7781,6 +7803,7 @@
         }
 
         async function initiateCreatorStripeConnect(creatorId, btnEl) {
+            if (!isExecutiveAuthorized()) return;
             let origHtml = '';
             if (btnEl) {
                 origHtml = btnEl.innerHTML;
@@ -7949,7 +7972,20 @@
             if (ledgerPanel) ledgerPanel.classList.toggle('hidden', tab !== 'ledger');
         }
 
+        function isExecutiveAuthorized() {
+            if (actualUserRole && actualUserRole !== 'executive') {
+                alert("⛔ Unauthorized Access: Creator & Promotional Revenue Governance is restricted strictly to Super Admin Executives.");
+                return false;
+            }
+            if (activeRole !== 'executive') {
+                alert("⚠️ Role Restriction: Please switch to the Executive clearance view to manage Creator Promo codes and financial disbursements.");
+                return false;
+            }
+            return true;
+        }
+
         function openCreateCreatorPromoModal() {
+            if (!isExecutiveAuthorized()) return;
             const modal = document.getElementById('create-creator-modal');
             if (modal) modal.classList.remove('hidden');
         }
@@ -7961,6 +7997,7 @@
 
         async function submitCreateCreatorPromo(e) {
             e.preventDefault();
+            if (!isExecutiveAuthorized()) return;
             const btn = document.getElementById('cc-submit-btn');
             const name = document.getElementById('cc-name').value.trim();
             const handle = document.getElementById('cc-handle').value.trim();
@@ -7994,6 +8031,7 @@
         }
 
         async function togglePromoCodeStatusAction(promoId, isChecked) {
+            if (!isExecutiveAuthorized()) return;
             try {
                 await StripeBillingIntegration.togglePromoCodeStatus(promoId, isChecked);
                 loadCreatorGovernanceHub();
@@ -8004,6 +8042,7 @@
         }
 
         function openSettlePayoutModal(creatorId, creatorName, pendingAmount) {
+            if (!isExecutiveAuthorized()) return;
             const modal = document.getElementById('settle-payout-modal');
             document.getElementById('payout-creator-id').value = creatorId;
             document.getElementById('payout-creator-name').textContent = creatorName;
@@ -8018,6 +8057,7 @@
 
         async function submitSettleCreatorPayout(e) {
             e.preventDefault();
+            if (!isExecutiveAuthorized()) return;
             const btn = document.getElementById('payout-submit-btn');
             const creatorId = document.getElementById('payout-creator-id').value;
             const amount = document.getElementById('payout-amount').value;
@@ -9766,18 +9806,18 @@
         }
 
         async function recalcFacilityProfit(preloadedInventory = null) {
-            const rentInput = document.getElementById('fspec-rent').value;
-            const laborInput = document.getElementById('fspec-labor').value;
-            const utilitiesInput = document.getElementById('fspec-utilities').value;
-            const insuranceInput = document.getElementById('fspec-insurance').value;
+            const rentInput = document.getElementById('fspec-rent')?.value;
+            const laborInput = document.getElementById('fspec-labor')?.value;
+            const utilitiesInput = document.getElementById('fspec-utilities')?.value;
+            const insuranceInput = document.getElementById('fspec-insurance')?.value;
 
-            const rent = rentInput !== "" ? Number(rentInput) : 0;
-            const labor = laborInput !== "" ? Number(laborInput) : 0;
-            const utilities = utilitiesInput !== "" ? Number(utilitiesInput) : 0;
-            const insurance = insuranceInput !== "" ? Number(insuranceInput) : 0;
+            const rent = rentInput ? Number(rentInput) : 0;
+            const labor = laborInput ? Number(laborInput) : 0;
+            const utilities = utilitiesInput ? Number(utilitiesInput) : 0;
+            const insurance = insuranceInput ? Number(insuranceInput) : 0;
             const totalCosts = rent + labor + utilities + insurance;
 
-            const capacity = Number(document.getElementById('fspec-tote-capacity').value) || 2000;
+            const capacity = Number(document.getElementById('fspec-tote-capacity')?.value) || 2000;
 
             let facilityId = currentLoadedFac?.id || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
 
@@ -9822,12 +9862,16 @@
             const utilPctRaw = capacity > 0 ? (activeTotesCount / capacity) * 100 : 0;
             const utilPctStr = (utilPctRaw > 0 && utilPctRaw < 1) ? utilPctRaw.toFixed(1) : Math.round(utilPctRaw).toString();
 
-            document.getElementById('fp-revenue').textContent = `$${monthlyRev.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            document.getElementById('fp-costs').textContent = `$${totalCosts.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            const fpRevEl = document.getElementById('fp-revenue');
+            if (fpRevEl) fpRevEl.textContent = `$${monthlyRev.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            const fpCostsEl = document.getElementById('fp-costs');
+            if (fpCostsEl) fpCostsEl.textContent = `$${totalCosts.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
             const netEl = document.getElementById('fp-net');
-            netEl.textContent = `${netProfit >= 0 ? '+' : ''}$${netProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            netEl.className = `text-2xl font-black mt-1 ${netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
+            if (netEl) {
+                netEl.textContent = `${netProfit >= 0 ? '+' : ''}$${netProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                netEl.className = `text-2xl font-black mt-1 ${netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
+            }
 
             const marginPct = monthlyRev > 0 ? ((netProfit / monthlyRev) * 100).toFixed(1) : "0.0";
             const marginBadge = document.getElementById('fp-margin-badge');
@@ -9836,7 +9880,7 @@
                 marginBadge.className = `text-[9px] font-mono font-bold px-2 py-0.5 rounded border ${netProfit >= 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`;
             }
 
-            const usableSqFt = Number(document.getElementById('fspec-sqft').value) || 20000;
+            const usableSqFt = Number(document.getElementById('fspec-sqft')?.value) || 20000;
             let revPerSqFtStr = "$0.00/sqft";
             if (usableSqFt > 0 && monthlyRev > 0) {
                 const rawRevSqFt = monthlyRev / usableSqFt;
@@ -9849,12 +9893,18 @@
             const revSqFtEl = document.getElementById('fp-rev-sqft');
             if (revSqFtEl) revSqFtEl.textContent = revPerSqFtStr;
 
-            document.getElementById('fp-util').textContent = `${utilPctStr}% Capacity`;
-            document.getElementById('m-capacity-pct').textContent = `${utilPctStr}%`;
-            document.getElementById('m-usable-sqft').textContent = usableSqFt.toLocaleString();
-            document.getElementById('m-active-totes').textContent = activeTotesCount.toLocaleString();
-            document.getElementById('m-tote-capacity').textContent = capacity.toLocaleString();
-            document.getElementById('m-staging-rooms').textContent = (currentLoadedFac?.num_staging_rooms || 2).toString();
+            const fpUtilEl = document.getElementById('fp-util');
+            if (fpUtilEl) fpUtilEl.textContent = `${utilPctStr}% Capacity`;
+            const mCapEl = document.getElementById('m-capacity-pct');
+            if (mCapEl) mCapEl.textContent = `${utilPctStr}%`;
+            const mUsableEl = document.getElementById('m-usable-sqft');
+            if (mUsableEl) mUsableEl.textContent = usableSqFt.toLocaleString();
+            const mActiveEl = document.getElementById('m-active-totes');
+            if (mActiveEl) mActiveEl.textContent = activeTotesCount.toLocaleString();
+            const mTotCapEl = document.getElementById('m-tote-capacity');
+            if (mTotCapEl) mTotCapEl.textContent = capacity.toLocaleString();
+            const mStageRoomsEl = document.getElementById('m-staging-rooms');
+            if (mStageRoomsEl) mStageRoomsEl.textContent = (currentLoadedFac?.num_staging_rooms || 2).toString();
 
             // Draw / Refresh the physical utilization ring chart in executive panel
             if (typeof Chart !== 'undefined') {
