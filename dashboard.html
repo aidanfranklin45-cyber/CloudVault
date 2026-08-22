@@ -1060,38 +1060,88 @@
                 <p class="text-[11px] text-gray-500 font-medium">Facility assignments are managed by CloudVault warehouse logistics. Contact support to request a transfer.</p>
             </div>
 
-            <!-- Saved Primary Delivery Address -->
-            <div class="space-y-3 pt-2 border-t border-gray-150">
-                <div class="flex items-center justify-between">
-                    <label class="block text-sm font-bold text-gray-800 flex items-center gap-1.5">
-                        <i data-lucide="home" class="w-4 h-4 text-blue-600"></i>
-                        <span>Primary Delivery Address</span>
+            <!-- Billing & Shipping Addresses -->
+            <div class="space-y-4 pt-2 border-t border-gray-150">
+                <!-- Billing Address Section -->
+                <div class="space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-extrabold uppercase text-gray-800 tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="credit-card" class="w-3.5 h-3.5 text-blue-600"></i>
+                            <span>Billing Address</span>
+                        </label>
+                        <span class="text-[10px] font-mono text-gray-400 font-bold uppercase">Tax &amp; Invoicing</span>
+                    </div>
+                    
+                    <div>
+                        <span class="text-[11px] font-bold text-gray-500 block mb-1">Street Address</span>
+                        <input type="text" id="settings-bill-line1" autocomplete="billing street-address" oninput="onSettingsBillingInput()" placeholder="1234 Main St" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <div>
+                        <span class="text-[11px] font-bold text-gray-500 block mb-1">Apt, Suite, Unit <span class="text-gray-400 font-normal lowercase">(optional)</span></span>
+                        <input type="text" id="settings-bill-line2" autocomplete="billing address-line2" oninput="onSettingsBillingInput()" placeholder="Apt 4B" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <div class="grid grid-cols-6 gap-2">
+                        <div class="col-span-3">
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">City</span>
+                            <input type="text" id="settings-bill-city" autocomplete="billing address-level2" oninput="onSettingsBillingInput()" placeholder="Seattle" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">State</span>
+                            <input type="text" id="settings-bill-state" autocomplete="billing address-level1" oninput="onSettingsBillingInput()" placeholder="WA" maxlength="2" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500 uppercase text-center">
+                        </div>
+                        <div class="col-span-2">
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">ZIP</span>
+                            <input type="text" id="settings-bill-zip" autocomplete="billing postal-code" oninput="onSettingsBillingInput()" placeholder="98101" maxlength="10" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500 text-center">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Same as Billing Toggle -->
+                <div class="pt-2 border-t border-gray-150">
+                    <label class="flex items-center space-x-2.5 cursor-pointer bg-blue-50/60 p-2.5 rounded-xl border border-blue-100">
+                        <input type="checkbox" id="settings-same-as-billing-toggle" checked onchange="toggleSettingsSameAsBilling()" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        <div>
+                            <span class="text-xs font-bold text-gray-900 block">Shipping / Valet address is the same as billing</span>
+                            <span class="text-[10px] text-gray-500 block">Use the above billing address for tote delivery and doorstep pickup</span>
+                        </div>
                     </label>
-                    <span class="text-[10px] font-mono text-gray-400 font-bold uppercase">Valet &amp; Billing</span>
-                </div>
-                
-                <div>
-                    <span class="text-[11px] font-bold text-gray-500 block mb-1">Street Address</span>
-                    <input type="text" id="settings-addr-line1" autocomplete="street-address" placeholder="1234 Main St" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
                 </div>
 
-                <div>
-                    <span class="text-[11px] font-bold text-gray-500 block mb-1">Apt, Suite, Unit <span class="text-gray-400 font-normal lowercase">(optional)</span></span>
-                    <input type="text" id="settings-addr-line2" autocomplete="address-line2" placeholder="Apt 4B" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
-                </div>
+                <!-- Custom Shipping Address Fields (Collapsible) -->
+                <div id="settings-shipping-container" class="hidden space-y-2.5 pt-1 fade-in">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-extrabold uppercase text-gray-800 tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="truck" class="w-3.5 h-3.5 text-emerald-600"></i>
+                            <span>Valet Delivery / Shipping Address</span>
+                        </label>
+                        <span class="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 font-bold uppercase">Destination</span>
+                    </div>
 
-                <div class="grid grid-cols-6 gap-2">
-                    <div class="col-span-3">
-                        <span class="text-[11px] font-bold text-gray-500 block mb-1">City</span>
-                        <input type="text" id="settings-addr-city" autocomplete="address-level2" placeholder="Seattle" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                    <div>
+                        <span class="text-[11px] font-bold text-gray-500 block mb-1">Street Address</span>
+                        <input type="text" id="settings-ship-line1" autocomplete="shipping street-address" placeholder="5678 Delivery Ave" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
                     </div>
-                    <div class="col-span-1">
-                        <span class="text-[11px] font-bold text-gray-500 block mb-1">State</span>
-                        <input type="text" id="settings-addr-state" autocomplete="address-level1" placeholder="WA" maxlength="2" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500 uppercase text-center">
+
+                    <div>
+                        <span class="text-[11px] font-bold text-gray-500 block mb-1">Apt, Suite, Unit <span class="text-gray-400 font-normal lowercase">(optional)</span></span>
+                        <input type="text" id="settings-ship-line2" autocomplete="shipping address-line2" placeholder="Suite 100" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
                     </div>
-                    <div class="col-span-2">
-                        <span class="text-[11px] font-bold text-gray-500 block mb-1">ZIP</span>
-                        <input type="text" id="settings-addr-zip" autocomplete="postal-code" placeholder="98101" maxlength="10" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500 text-center">
+
+                    <div class="grid grid-cols-6 gap-2">
+                        <div class="col-span-3">
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">City</span>
+                            <input type="text" id="settings-ship-city" autocomplete="shipping address-level2" placeholder="Yakima" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div class="col-span-1">
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">State</span>
+                            <input type="text" id="settings-ship-state" autocomplete="shipping address-level1" placeholder="WA" maxlength="2" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500 uppercase text-center">
+                        </div>
+                        <div class="col-span-2">
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">ZIP</span>
+                            <input type="text" id="settings-ship-zip" autocomplete="shipping postal-code" placeholder="98901" maxlength="10" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500 text-center">
+                        </div>
                     </div>
                 </div>
             </div>
