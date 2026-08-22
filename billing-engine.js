@@ -2439,6 +2439,22 @@
         </tr>
       `).join('');
 
+      // Resolve dynamic customer billing address
+      const addr1 = invoiceObj.billing_address_line1 || invoiceObj.address_line1 || window.currentUserAddress?.billing_address_line1 || window.currentUserAddress?.address_line1 || '';
+      const addr2 = invoiceObj.billing_address_line2 || invoiceObj.address_line2 || window.currentUserAddress?.billing_address_line2 || window.currentUserAddress?.address_line2 || '';
+      const city = invoiceObj.billing_city || invoiceObj.city || window.currentUserAddress?.billing_city || window.currentUserAddress?.city || '';
+      const state = invoiceObj.billing_state || invoiceObj.state || window.currentUserAddress?.billing_state || window.currentUserAddress?.state || '';
+      const zip = invoiceObj.billing_zip || invoiceObj.zip || window.currentUserAddress?.billing_zip || window.currentUserAddress?.zip || '';
+
+      let formattedBillingAddress = 'Address on file';
+      if (addr1 && city) {
+        formattedBillingAddress = [addr1, addr2, [city, state].filter(Boolean).join(', '), zip].filter(Boolean).join(' ');
+      } else if (invoiceObj.delivery_address_line1 && invoiceObj.delivery_city) {
+        formattedBillingAddress = [invoiceObj.delivery_address_line1, invoiceObj.delivery_address_line2, [invoiceObj.delivery_city, invoiceObj.delivery_state].filter(Boolean).join(', '), invoiceObj.delivery_zip].filter(Boolean).join(' ');
+      } else if (city || state || zip) {
+        formattedBillingAddress = [[city, state].filter(Boolean).join(', '), zip].filter(Boolean).join(' ');
+      }
+
       modalEl.innerHTML = `
         <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-auto border border-slate-200 overflow-hidden text-slate-800 my-6">
           <!-- Top Controls Bar -->
@@ -2510,7 +2526,7 @@
                 <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Billed To</span>
                 <p class="font-extrabold text-sm text-slate-900">${customerName}</p>
                 <p class="text-slate-600 font-mono">${customerEmail}</p>
-                <p class="text-slate-500">100 Vault Way, Selah, Washington 98942</p>
+                <p class="text-slate-600 font-medium">${formattedBillingAddress}</p>
               </div>
               <div class="space-y-1.5">
                 <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Service &amp; Facility Hub</span>

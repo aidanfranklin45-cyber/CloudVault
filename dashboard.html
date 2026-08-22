@@ -3365,6 +3365,10 @@
                         currentUserColor = profileData.avatar_color;
                         applyAvatarColor(currentUserColor);
                     }
+                    // Async load customer address into memory for invoice & logistics
+                    supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle().then(({ data }) => {
+                        if (data) window.currentUserAddress = data;
+                    }).catch(e => console.warn('Address cache notice:', e));
                     const devHeld = document.getElementById('dev-totes-held');
                     if (devHeld) {
                         devHeld.textContent = profileData.active_totes_held || 0;
@@ -5058,11 +5062,6 @@
             document.getElementById('retrieval-modal').classList.remove('hidden');
         }
 
-        function closeRetrievalModal() {
-            stopQuoteLockTimer();
-            document.getElementById('retrieval-modal').classList.add('hidden');
-        }
-
         async function loadSavedCustomerAddress() {
             try {
                 if (!currentUser) return;
@@ -5072,19 +5071,26 @@
                     .eq('uid', currentUser.id)
                     .maybeSingle();
 
+                if (data) window.currentUserAddress = data;
                 const indicator = document.getElementById('saved-address-indicator');
-                if (data && data.address_line1) {
+                if (data && (data.address_line1 || data.billing_address_line1)) {
                     const line1Input = document.getElementById('valet-addr-line1');
                     const line2Input = document.getElementById('valet-addr-line2');
                     const cityInput = document.getElementById('valet-addr-city');
                     const stateInput = document.getElementById('valet-addr-state');
                     const zipInput = document.getElementById('valet-addr-zip');
 
-                    if (line1Input && !line1Input.value) line1Input.value = data.address_line1 || '';
-                    if (line2Input && !line2Input.value) line2Input.value = data.address_line2 || '';
-                    if (cityInput && !cityInput.value) cityInput.value = data.city || '';
-                    if (stateInput && !stateInput.value) stateInput.value = data.state || '';
-                    if (zipInput && !zipInput.value) zipInput.value = data.zip || '';
+                    const effectiveLine1 = data.address_line1 || data.billing_address_line1 || '';
+                    const effectiveLine2 = data.address_line2 || data.billing_address_line2 || '';
+                    const effectiveCity = data.city || data.billing_city || '';
+                    const effectiveState = data.state || data.billing_state || '';
+                    const effectiveZip = data.zip || data.billing_zip || '';
+
+                    if (line1Input && !line1Input.value) line1Input.value = effectiveLine1;
+                    if (line2Input && !line2Input.value) line2Input.value = effectiveLine2;
+                    if (cityInput && !cityInput.value) cityInput.value = effectiveCity;
+                    if (stateInput && !stateInput.value) stateInput.value = effectiveState;
+                    if (zipInput && !zipInput.value) zipInput.value = effectiveZip;
 
                     if (data.delivery_instructions && document.getElementById('valet-delivery-notes') && !document.getElementById('valet-delivery-notes').value) {
                         document.getElementById('valet-delivery-notes').value = data.delivery_instructions;
@@ -5126,12 +5132,11 @@
                 valetDot.classList.add('border-2');
                 
                 termsBox.classList.add('hidden');
-                if (valetNotesContainer) valetNotesContainer.classList.add('hidden');
+                valetNotesContainer.classList.add('hidden');
                 if (valetAddressContainer) valetAddressContainer.classList.add('hidden');
-
-                if (calTitle) calTitle.textContent = "Reserve Staging Slot Date";
-                if (dateLabel) dateLabel.textContent = "Target Pickup Date:";
-                if (slotLabel) slotLabel.textContent = "Staging Time Window:";
+                calTitle.textContent = 'Schedule Staging Pickup';
+                dateLabel.textContent = 'Pickup Date';
+                slotLabel.textContent = 'Pickup Time Window';
             } else {
                 valetOpt.classList.replace('border-gray-200', 'border-blue-500');
                 valetOpt.classList.replace('bg-white', 'bg-blue-50');
@@ -5146,15 +5151,14 @@
                 stagingDot.classList.add('border-2');
                 
                 termsBox.classList.remove('hidden');
-                if (valetNotesContainer) valetNotesContainer.classList.remove('hidden');
+                valetNotesContainer.classList.remove('hidden');
                 if (valetAddressContainer) {
                     valetAddressContainer.classList.remove('hidden');
                     loadSavedCustomerAddress();
                 }
-
-                if (calTitle) calTitle.textContent = "Schedule Valet Doorstep Delivery";
-                if (dateLabel) dateLabel.textContent = "Target Delivery Date:";
-                if (slotLabel) slotLabel.textContent = "Valet Delivery Window:";
+                calTitle.textContent = 'Schedule Valet Delivery';
+                dateLabel.textContent = 'Delivery Date';
+                slotLabel.textContent = 'Delivery Time Window';
             }
 
             updateReservationSurgeUI();
@@ -5214,14 +5218,27 @@
                 // If user checked 'Save as default address', save to customer_addresses
                 if (document.getElementById('valet-save-default-addr')?.checked) {
                     try {
-                        await supabase.rpc('save_customer_delivery_address', {
-                            p_address_line1: addrLine1,
-                            p_address_line2: addrLine2 || null,
-                            p_city: addrCity,
-                            p_state: addrState,
-                            p_zip: addrZip,
+                        const billLine1 = window.currentUserAddress?.billing_address_line1 || addrLine1;
+                        const billCity = window.currentUserAddress?.billing_city || addrCity;
+                        const billState = window.currentUserAddress?.billing_state || addrState;
+                        const billZip = window.currentUserAddress?.billing_zip || addrZip;
+                        const isSame = (billLine1 === addrLine1 && billZip === addrZip);
+
+                        const { data: saved } = await supabase.rpc('save_customer_addresses', {
+                            p_billing_line1: billLine1,
+                            p_billing_line2: window.currentUserAddress?.billing_address_line2 || null,
+                            p_billing_city: billCity,
+                            p_billing_state: billState,
+                            p_billing_zip: billZip,
+                            p_shipping_same_as_billing: isSame,
+                            p_shipping_line1: addrLine1,
+                            p_shipping_line2: addrLine2 || null,
+                            p_shipping_city: addrCity,
+                            p_shipping_state: addrState,
+                            p_shipping_zip: addrZip,
                             p_instructions: deliveryNotes || null
                         });
+                        if (saved) window.currentUserAddress = saved;
                     } catch (saveErr) {
                         console.warn("Could not save default address:", saveErr);
                     }
@@ -5876,21 +5893,40 @@
                     if (fac && facNameEl) facNameEl.textContent = fac.name;
                 }
 
-                // Load saved delivery address
+                // Load saved billing and delivery addresses
                 if (currentUser) {
                     const { data: addrData } = await supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle();
                     if (addrData) {
-                        const l1 = document.getElementById('settings-addr-line1');
-                        const l2 = document.getElementById('settings-addr-line2');
-                        const ct = document.getElementById('settings-addr-city');
-                        const st = document.getElementById('settings-addr-state');
-                        const zp = document.getElementById('settings-addr-zip');
+                        window.currentUserAddress = addrData;
+                        const b1 = document.getElementById('settings-bill-line1');
+                        const b2 = document.getElementById('settings-bill-line2');
+                        const bc = document.getElementById('settings-bill-city');
+                        const bs = document.getElementById('settings-bill-state');
+                        const bz = document.getElementById('settings-bill-zip');
 
-                        if (l1) l1.value = addrData.address_line1 || '';
-                        if (l2) l2.value = addrData.address_line2 || '';
-                        if (ct) ct.value = addrData.city || '';
-                        if (st) st.value = addrData.state || '';
-                        if (zp) zp.value = addrData.zip || '';
+                        const s1 = document.getElementById('settings-ship-line1');
+                        const s2 = document.getElementById('settings-ship-line2');
+                        const sc = document.getElementById('settings-ship-city');
+                        const ss = document.getElementById('settings-ship-state');
+                        const sz = document.getElementById('settings-ship-zip');
+
+                        const sameToggle = document.getElementById('settings-same-as-billing-toggle');
+
+                        if (b1) b1.value = addrData.billing_address_line1 || addrData.address_line1 || '';
+                        if (b2) b2.value = addrData.billing_address_line2 || addrData.address_line2 || '';
+                        if (bc) bc.value = addrData.billing_city || addrData.city || '';
+                        if (bs) bs.value = addrData.billing_state || addrData.state || '';
+                        if (bz) bz.value = addrData.billing_zip || addrData.zip || '';
+
+                        if (s1) s1.value = addrData.address_line1 || '';
+                        if (s2) s2.value = addrData.address_line2 || '';
+                        if (sc) sc.value = addrData.city || '';
+                        if (ss) ss.value = addrData.state || '';
+                        if (sz) sz.value = addrData.zip || '';
+
+                        const isSame = addrData.shipping_same_as_billing !== false;
+                        if (sameToggle) sameToggle.checked = isSame;
+                        toggleSettingsSameAsBilling();
                     }
                 }
             } catch (e) {
@@ -5898,6 +5934,43 @@
             }
             if (window.lucide) lucide.createIcons();
         }
+
+        function toggleSettingsSameAsBilling() {
+            const isSame = document.getElementById('settings-same-as-billing-toggle')?.checked;
+            const shipContainer = document.getElementById('settings-shipping-container');
+            if (shipContainer) shipContainer.classList.toggle('hidden', Boolean(isSame));
+            if (isSame) {
+                syncBillingToShippingSettings();
+            }
+        }
+
+        function onSettingsBillingInput() {
+            const isSame = document.getElementById('settings-same-as-billing-toggle')?.checked;
+            if (isSame) {
+                syncBillingToShippingSettings();
+            }
+        }
+
+        function syncBillingToShippingSettings() {
+            const b1 = document.getElementById('settings-bill-line1')?.value || '';
+            const b2 = document.getElementById('settings-bill-line2')?.value || '';
+            const bc = document.getElementById('settings-bill-city')?.value || '';
+            const bs = document.getElementById('settings-bill-state')?.value || '';
+            const bz = document.getElementById('settings-bill-zip')?.value || '';
+
+            const s1 = document.getElementById('settings-ship-line1');
+            const s2 = document.getElementById('settings-ship-line2');
+            const sc = document.getElementById('settings-ship-city');
+            const ss = document.getElementById('settings-ship-state');
+            const sz = document.getElementById('settings-ship-zip');
+
+            if (s1) s1.value = b1;
+            if (s2) s2.value = b2;
+            if (sc) sc.value = bc;
+            if (ss) ss.value = bs;
+            if (sz) sz.value = bz;
+        }
+
         function closeSettingsModal() {
             document.getElementById('settings-modal').classList.add('hidden');
         }
@@ -5928,22 +6001,36 @@
                 const { error } = await supabase.from('users').update({ avatar_color: tempColor }).eq('id', currentUser.id);
                 if (error) throw error;
 
-                // Save delivery address if filled
-                const line1 = document.getElementById('settings-addr-line1')?.value.trim();
-                const line2 = document.getElementById('settings-addr-line2')?.value.trim();
-                const city = document.getElementById('settings-addr-city')?.value.trim();
-                const state = document.getElementById('settings-addr-state')?.value.trim().toUpperCase();
-                const zip = document.getElementById('settings-addr-zip')?.value.trim();
+                // Save billing and shipping addresses
+                const bLine1 = document.getElementById('settings-bill-line1')?.value.trim();
+                const bLine2 = document.getElementById('settings-bill-line2')?.value.trim();
+                const bCity = document.getElementById('settings-bill-city')?.value.trim();
+                const bState = document.getElementById('settings-bill-state')?.value.trim().toUpperCase();
+                const bZip = document.getElementById('settings-bill-zip')?.value.trim();
+                const isSame = document.getElementById('settings-same-as-billing-toggle')?.checked !== false;
 
-                if (line1 && city && state && zip) {
-                    await supabase.rpc('save_customer_delivery_address', {
-                        p_address_line1: line1,
-                        p_address_line2: line2 || null,
-                        p_city: city,
-                        p_state: state,
-                        p_zip: zip,
+                const sLine1 = document.getElementById('settings-ship-line1')?.value.trim();
+                const sLine2 = document.getElementById('settings-ship-line2')?.value.trim();
+                const sCity = document.getElementById('settings-ship-city')?.value.trim();
+                const sState = document.getElementById('settings-ship-state')?.value.trim().toUpperCase();
+                const sZip = document.getElementById('settings-ship-zip')?.value.trim();
+
+                if (bLine1 && bCity && bState && bZip) {
+                    const { data: savedAddr } = await supabase.rpc('save_customer_addresses', {
+                        p_billing_line1: bLine1,
+                        p_billing_line2: bLine2 || null,
+                        p_billing_city: bCity,
+                        p_billing_state: bState,
+                        p_billing_zip: bZip,
+                        p_shipping_same_as_billing: isSame,
+                        p_shipping_line1: isSame ? bLine1 : (sLine1 || bLine1),
+                        p_shipping_line2: isSame ? (bLine2 || null) : (sLine2 || null),
+                        p_shipping_city: isSame ? bCity : (sCity || bCity),
+                        p_shipping_state: isSame ? bState : (sState || bState),
+                        p_shipping_zip: isSame ? bZip : (sZip || bZip),
                         p_instructions: null
                     });
+                    if (savedAddr) window.currentUserAddress = savedAddr;
                 }
 
                 currentUserColor = tempColor;
