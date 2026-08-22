@@ -2856,7 +2856,11 @@
                     const el = document.getElementById(id);
                     if (el) {
                         const curVal = el.value;
-                        el.innerHTML = facilities.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
+                        el.innerHTML = facilities.map(f => {
+                            const facZone = (operationalZones || []).find(z => z.facility_id === f.id || z.id.includes(f.id.replace('facility_', '')) || f.id.includes(z.id.replace('zone_', '')));
+                            const isPaused = facZone ? (facZone.active === false) : false;
+                            return `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}${isPaused ? ' (Paused / Pre-Launch)' : ''}</option>`;
+                        }).join('');
                         if (defaultFacId && facilities.some(f => f.id === defaultFacId)) {
                             el.value = defaultFacId;
                         } else if (curVal && facilities.some(f => f.id === curVal)) {
@@ -8826,7 +8830,7 @@
         // =========================================================================
         function renderExecutiveGlobalIntelligence(master) {
             if (!master) return;
-            const { facilities = [], subscriptions = [], inventory = [], accessRequests = [] } = master;
+            const { facilities = [], operationalZones = [], subscriptions = [], inventory = [], accessRequests = [] } = master;
 
             // 1. Active Subscriptions & Real-Time Stored Inventory (Synced from Stripe)
             const activeSubs = subscriptions.filter(s => s.status === 'active' || s.status === 'trialing');
@@ -9020,7 +9024,10 @@
                     mrr: facMRR,
                     capacityPct: capPct,
                     arpt: facARPT,
-                    active: f.is_active !== false
+                    active: (() => {
+                    const z = (operationalZones || []).find(zone => zone.facility_id === f.id || zone.id.includes(f.id.replace('facility_', '')) || f.id.includes(zone.id.replace('zone_', '')));
+                    return z ? (z.active !== false) : (f.is_active !== false);
+                })()
                 };
             });
 
@@ -9030,7 +9037,7 @@
                 facTbody.innerHTML = facDataList.map(f => `
                     <tr class="hover:bg-gray-900/40 transition">
                         <td class="py-3 font-sans font-bold text-white flex items-center gap-2">
-                            <span class="w-2 h-2 rounded-full ${f.active ? 'bg-emerald-400' : 'bg-gray-500'}"></span>
+                            <span class="w-2 h-2 rounded-full ${f.active ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
                             ${escapeHtml(f.name)}
                         </td>
                         <td class="py-3 text-gray-300">${f.subscribers} accounts</td>
@@ -9046,8 +9053,8 @@
                         <td class="py-3 text-emerald-400 font-bold">$${f.mrr.toFixed(2)}</td>
                         <td class="py-3 text-gray-300 font-bold">$${f.arpt}</td>
                         <td class="py-3 text-right">
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${f.active ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-gray-800 text-gray-500'}">
-                                ${f.active ? 'OPERATIONAL' : 'OFFLINE'}
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${f.active ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}">
+                                ${f.active ? 'OPERATIONAL' : 'PAUSED / PRE-LAUNCH'}
                             </span>
                         </td>
                     </tr>
@@ -9089,7 +9096,7 @@
                         <td class="py-3.5 text-emerald-300 font-bold">${overallARPT}</td>
                         <td class="py-3.5 text-right">
                             <span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                                ${activeCount}/${facilities.length} OPERATIONAL
+                                ${activeCount}/${facilities.length} ACTIVE ${facilities.length > activeCount ? `(${facilities.length - activeCount} PAUSED)` : ''}
                             </span>
                         </td>
                     </tr>
@@ -9120,7 +9127,7 @@
                             <div class="flex items-center justify-between font-mono">
                                 <div class="flex items-center gap-1.5">
                                     <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${color}"></span>
-                                    <span class="text-gray-300 text-[11px] font-sans">${escapeHtml(f.name)}</span>
+                                    <span class="text-gray-300 text-[11px] font-sans">${escapeHtml(f.name)}${!f.active ? ' <span class="text-amber-400 text-[9px] font-mono">(PAUSED)</span>' : ''}</span>
                                 </div>
                                 <span class="text-white font-bold">${f.totes} totes (${pct}%)</span>
                             </div>
