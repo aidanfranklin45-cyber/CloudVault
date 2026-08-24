@@ -728,7 +728,7 @@
                         </svg>
                         <span class="text-xs font-semibold">Connecting to Stripe Secure Vault...</span>
                     </div>
-                    <div id="stripe-payment-element" class="min-h-[160px] hidden"></div>
+                    <div id="stripe-payment-element" class="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus-within:bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition hidden"></div>
                     <div id="stripe-card-error" class="hidden text-xs text-red-600 font-bold bg-red-50 p-2.5 rounded-xl border border-red-200"></div>
                 </div>
 
@@ -3678,11 +3678,12 @@
         });
 
         // ============================================================
-        // Stripe Elements Payment Method Update Controller (PCI-DSS SAQ A Scope)
+        // Stripe Card Element Payment Method Controller (Card Only • SAQ A Scope)
         // ============================================================
         let stripeInstance = null;
         let stripeElementsInstance = null;
-        let paymentElementInstance = null;
+        let cardElementInstance = null;
+        let currentClientSecret = null;
 
         async function openUpdatePaymentModal() {
             const modal = document.getElementById('update-payment-modal');
@@ -3716,6 +3717,7 @@
                     throw new Error(data?.error || error?.message || 'Failed to initialize secure Stripe session.');
                 }
 
+                currentClientSecret = data.clientSecret;
                 const pubKey = data.publishableKey || 'pk_test_51U5wFeAlEAaqjcFpgDerMMeeuUqacailYJDOBIfx0nq1B0YlCh5nqMIpkOkDmgIJO2q9XpdRTYUcr9JDMOR3ZSQm00ycqCdc2d';
                 
                 if (typeof window.Stripe !== 'function') {
@@ -3723,29 +3725,37 @@
                 }
 
                 stripeInstance = window.Stripe(pubKey);
-                stripeElementsInstance = stripeInstance.elements({
-                    clientSecret: data.clientSecret,
-                    appearance: {
-                        theme: 'stripe',
-                        variables: {
-                            colorPrimary: '#2563eb',
-                            borderRadius: '12px',
-                            fontFamily: 'Inter, sans-serif'
-                        }
-                    }
-                });
+                stripeElementsInstance = stripeInstance.elements();
 
                 elementContainer.innerHTML = '';
-                paymentElementInstance = stripeElementsInstance.create('payment');
-                paymentElementInstance.mount('#stripe-payment-element');
+                cardElementInstance = stripeElementsInstance.create('card', {
+                    style: {
+                        base: {
+                            color: '#0f172a',
+                            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+                            fontSmoothing: 'antialiased',
+                            fontSize: '15px',
+                            '::placeholder': {
+                                color: '#94a3b8'
+                            }
+                        },
+                        invalid: {
+                            color: '#ef4444',
+                            iconColor: '#ef4444'
+                        }
+                    },
+                    hidePostalCode: false
+                });
 
-                paymentElementInstance.on('ready', () => {
+                cardElementInstance.mount('#stripe-payment-element');
+
+                cardElementInstance.on('ready', () => {
                     if (loader) loader.classList.add('hidden');
                     if (elementContainer) elementContainer.classList.remove('hidden');
                     if (saveBtn) saveBtn.disabled = false;
                 });
 
-                paymentElementInstance.on('change', (event) => {
+                cardElementInstance.on('change', (event) => {
                     if (event.error) {
                         if (errorEl) {
                             errorEl.textContent = event.error.message;
@@ -3757,7 +3767,7 @@
                 });
 
             } catch (err) {
-                console.error('[Stripe Elements Error]', err);
+                console.error('[Stripe Card Error]', err);
                 if (loader) loader.classList.add('hidden');
                 if (errorEl) {
                     errorEl.textContent = `⚠️ ${err.message || 'Error connecting to Stripe'}`;
@@ -3771,9 +3781,9 @@
         function closeUpdatePaymentModal() {
             const modal = document.getElementById('update-payment-modal');
             if (modal) modal.classList.add('hidden');
-            if (paymentElementInstance) {
-                try { paymentElementInstance.unmount(); } catch(e) {}
-                paymentElementInstance = null;
+            if (cardElementInstance) {
+                try { cardElementInstance.unmount(); } catch(e) {}
+                cardElementInstance = null;
             }
         }
         window.closeUpdatePaymentModal = closeUpdatePaymentModal;
@@ -3783,7 +3793,7 @@
             const btn = document.getElementById('save-pay-btn');
             const errorEl = document.getElementById('stripe-card-error');
 
-            if (!stripeInstance || !stripeElementsInstance) {
+            if (!stripeInstance || !cardElementInstance || !currentClientSecret) {
                 showToast('Stripe is not initialized. Please retry.', 'error');
                 return;
             }
@@ -3795,15 +3805,16 @@
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                     </svg>
-                    <span>Saving Securely with Stripe...</span>
+                    <span>Saving Card Securely with Stripe...</span>
                 `;
             }
 
             try {
-                // Confirm Setup directly with Stripe (0% card data touches CloudVault)
-                const { setupIntent, error } = await stripeInstance.confirmSetup({
-                    elements: stripeElementsInstance,
-                    redirect: 'if_required'
+                // Confirm Card Setup directly with Stripe
+                const { setupIntent, error } = await stripeInstance.confirmCardSetup(currentClientSecret, {
+                    payment_method: {
+                        card: cardElementInstance
+                    }
                 });
 
                 if (error) {
@@ -3855,7 +3866,7 @@
                     showToast('✅ Card securely updated with Stripe!');
                 }
             } catch (err) {
-                console.error('[Save Payment Error]', err);
+                console.error('[Save Card Error]', err);
                 if (errorEl) {
                     errorEl.textContent = err.message || 'Payment method update failed';
                     errorEl.classList.remove('hidden');
