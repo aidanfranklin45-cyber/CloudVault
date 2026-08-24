@@ -2341,7 +2341,25 @@
         document.body.appendChild(modalEl);
       }
 
-      modalEl.className = 'fixed inset-0 bg-gray-950/80 backdrop-blur-md z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto';
+      modalEl.className = 'fixed inset-0 bg-gray-950/80 backdrop-blur-md z-[9999] flex items-start justify-center p-3 sm:p-6 overflow-y-auto';
+      document.body.style.overflow = 'hidden';
+
+      // Dismiss on backdrop click
+      modalEl.onclick = function (e) {
+        if (e.target === modalEl) {
+          window.CloudVaultBilling.closePrintableInvoiceModal();
+        }
+      };
+
+      // Dismiss on Escape key
+      if (!window._invoiceEscapeListener) {
+        window._invoiceEscapeListener = function (e) {
+          if (e.key === 'Escape' || e.keyCode === 27) {
+            window.CloudVaultBilling.closePrintableInvoiceModal();
+          }
+        };
+        window.addEventListener('keydown', window._invoiceEscapeListener);
+      }
 
       const invNum = invoiceObj.invoice_number || invoiceObj.invoiceNumber || (invoiceObj.id ? String(invoiceObj.id).substring(0, 12) : 'INV-2026-0000');
       const stripeId = invoiceObj.stripe_invoice_id || 'in_live_stripe_sync';
@@ -2456,37 +2474,37 @@
       }
 
       modalEl.innerHTML = `
-        <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-auto border border-slate-200 overflow-hidden text-slate-800 my-6">
-          <!-- Top Controls Bar -->
-          <div class="no-print p-4 bg-slate-900 text-white flex justify-between items-center px-6 border-b border-slate-800">
-            <div class="flex items-center space-x-3">
-              <img src="logo.png" alt="CloudVault Logo" class="w-7 h-7 object-contain rounded-lg" />
-              <div>
-                <h3 class="text-sm font-black tracking-tight flex items-center gap-2">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-auto border border-slate-200 overflow-hidden text-slate-800 my-4 sm:my-8 relative">
+          <!-- Top Controls Bar (Sticky at top of modal) -->
+          <div class="sticky top-0 z-30 no-print p-4 bg-slate-900 text-white flex justify-between items-center px-4 sm:px-6 border-b border-slate-800 shadow-md">
+            <div class="flex items-center space-x-3 overflow-hidden">
+              <img src="logo.png" alt="CloudVault Logo" class="w-7 h-7 object-contain rounded-lg shrink-0" />
+              <div class="truncate">
+                <h3 class="text-sm font-black tracking-tight flex items-center gap-2 flex-wrap">
                   <span>Official Stripe Statement</span>
                   <span class="text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded">${invNum}</span>
                   <span class="text-[10px] font-mono font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded">$${totalAmount}</span>
                 </h3>
               </div>
             </div>
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-2 shrink-0">
               ${pdfUrl ? `
-                <a href="${pdfUrl}" target="_blank" download class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
+                <a href="${pdfUrl}" target="_blank" download class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                  <span>Download PDF</span>
+                  <span class="hidden sm:inline">Download PDF</span><span class="sm:hidden">PDF</span>
                 </a>
               ` : `
-                <button onclick="window.CloudVaultBilling.downloadInvoicePDF('${invNum}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
+                <button onclick="window.CloudVaultBilling.downloadInvoicePDF('${invNum}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                  <span>Download PDF</span>
+                  <span class="hidden sm:inline">Download PDF</span><span class="sm:hidden">PDF</span>
                 </button>
               `}
-              <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
+              <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                 <span>Print</span>
               </button>
-              <button onclick="window.CloudVaultBilling.closePrintableInvoiceModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition cursor-pointer">
-                ✕ Close
+              <button onclick="window.CloudVaultBilling.closePrintableInvoiceModal()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition cursor-pointer shadow-sm flex items-center gap-1">
+                ✕ <span>Close</span>
               </button>
             </div>
           </div>
@@ -2614,6 +2632,11 @@
       if (modalEl) {
         modalEl.classList.add('hidden');
       }
+      document.body.style.overflow = '';
+      if (window._invoiceEscapeListener) {
+        window.removeEventListener('keydown', window._invoiceEscapeListener);
+        window._invoiceEscapeListener = null;
+      }
     },
 
     /**
@@ -2698,13 +2721,6 @@
       const dailyRate = annualRate / 365;
       const interest = unpaidAmount * dailyRate * daysOverdue;
       return Math.round(interest * 100) / 100;
-    },
-
-    closePrintableInvoiceModal: function () {
-      const modalEl = document.getElementById('printable-invoice-modal');
-      if (modalEl) {
-        modalEl.classList.add('hidden');
-      }
     },
 
     /**

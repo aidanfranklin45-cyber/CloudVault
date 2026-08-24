@@ -2049,12 +2049,11 @@
                         );
                     }
 
-                    // If not matched by explicit IDs, match genuinely unactivated or staging/dispatch totes
+                    // If not matched by explicit IDs, match genuinely unactivated empty containers only
                     const expectedCount = Number(req.additional_totes) || (currentProfile?.active_totes_held || 25);
                     if (reqTotes.length === 0) {
                         const additionalCandidates = (currentInventory || []).filter(item => 
-                            item.activated === false ||
-                            ['pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery'].includes(item.status)
+                            item.activated === false || item.status === 'intake-pending' || item.status === 'pending-intake'
                         );
                         if (additionalCandidates.length > 0) {
                             reqTotes = additionalCandidates.slice(-expectedCount);
@@ -4147,12 +4146,11 @@
                     .from('inventory')
                     .select('*')
                     .eq('uid', uid)
-                    .neq('status', 'missing-tote')
-                    .neq('status', 'missing')
+                    .not('status', 'in', '("missing-tote","missing","discharged","retired","written-off")')
                     .order('tote_code', { ascending: true });
 
                 if (!error && data) {
-                    currentInventory = data.filter(item => item.status !== 'missing-tote' && item.status !== 'missing');
+                    currentInventory = data.filter(item => !['missing-tote', 'missing', 'discharged', 'retired', 'written-off'].includes(item.status));
                 } else {
                     currentInventory = [];
                 }

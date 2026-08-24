@@ -10304,9 +10304,9 @@
             if (!timestamp) return "N/A";
             const created = new Date(timestamp);
             const now = new Date();
-            const diffMs = now - created;
+            const diffMs = Math.max(0, now - created);
             const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-            if (diffDays < 1) return "Joined Today";
+            if (diffDays < 1) return "Today (0 days)";
             if (diffDays < 30) return `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
             const months = Math.floor(diffDays / 30);
             const remainingDays = diffDays % 30;
@@ -12418,23 +12418,12 @@
                     .eq('uid', item.uid)
                     .maybeSingle();
 
-                // Populate Modal Header
-                document.getElementById('tmm-tote-code').textContent = item.tote_code;
-                document.getElementById('tmm-subtitle').textContent = `ID: ${item.id}`;
-                const statusBadge = document.getElementById('tmm-status-badge');
-                if (statusBadge) {
-                    statusBadge.textContent = (item.status || 'stored').toUpperCase();
-                    statusBadge.className = `text-xs font-bold px-2.5 py-0.5 rounded-full uppercase border ${item.status === 'stored' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                        item.status === 'with-customer' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' :
-                            'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                        }`;
-                }
-
-                // Populate Customer Telemetry
+                // Populate Customer Telemetry (Active Totes only)
                 const user = item.users || {};
                 const { count: actualTotesCount } = await supabase.from('inventory')
                     .select('*', { count: 'exact', head: true })
-                    .eq('uid', item.uid);
+                    .eq('uid', item.uid)
+                    .not('status', 'in', '("missing-tote","discharged","retired","written-off","cancelled")');
 
                 const finalTotesHeld = actualTotesCount !== null ? actualTotesCount : (user.active_totes_held || 0);
 
@@ -12465,7 +12454,8 @@
                 }
 
                 // Populate Tote Telemetry
-                document.getElementById('tmm-tote-tenure').textContent = `Stored for ${calculateTenureString(item.created_at)}`;
+                const activeToteDate = item.activated_at || item.last_scanned_at || item.updated_at || item.created_at;
+                document.getElementById('tmm-tote-tenure').textContent = `Stored for ${calculateTenureString(activeToteDate)}`;
                 document.getElementById('tmm-tote-label').textContent = item.label || 'Standard Tote';
                 document.getElementById('tmm-tote-category').textContent = item.category || 'General Storage';
                 document.getElementById('tmm-tote-facility').textContent = item.facilities?.name || item.facility_id || 'Yakima FC';
