@@ -74,13 +74,13 @@
         }
 
         .fade-in {
-            animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         @keyframes fadeIn {
             from {
                 opacity: 0;
-                transform: translateY(12px);
+                transform: translateY(10px);
             }
             to {
                 opacity: 1;
@@ -88,46 +88,47 @@
             }
         }
 
-        @keyframes subtlePulse {
+        @keyframes softGlow {
             0%, 100% {
-                opacity: 0.35;
+                opacity: 0.4;
                 transform: scale(1);
             }
             50% {
-                opacity: 0.65;
-                transform: scale(1.05);
+                opacity: 0.7;
+                transform: scale(1.04);
             }
         }
 
         input, select, textarea {
-            transition: all 0.2s;
+            transition: all 0.2s ease;
         }
 
         input:focus {
             outline: none;
             border-color: #2563eb;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
         }
 
         .counter-btn {
-            width: 40px;
-            height: 40px;
+            width: 42px;
+            height: 42px;
             display: flex;
             align-items: center;
             justify-content: center;
             background: #f1f5f9;
-            border-radius: 10px;
+            border-radius: 12px;
             color: #334155;
-            font-weight: bold;
+            font-weight: 800;
             font-size: 1.25rem;
             cursor: pointer;
             user-select: none;
-            transition: all 0.15s;
+            transition: all 0.15s ease;
         }
 
         .counter-btn:hover {
             background: #e2e8f0;
             color: #0f172a;
+            transform: scale(1.05);
         }
 
         .counter-btn:active {
@@ -137,19 +138,19 @@
 
         /* Glassmorphic sticky header */
         .header-glass {
-            background: rgba(255, 255, 255, 0.92);
+            background: rgba(255, 255, 255, 0.94);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
-            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+            border-bottom: 1px solid rgba(226, 232, 240, 0.85);
         }
 
         .header-glass.scrolled {
-            box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+            box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
         }
 
-        /* Warm, High-Trust Hero Styling */
+        /* Warm, Welcoming Hero Background */
         .hero-warm-bg {
-            background: radial-gradient(120% 120% at 50% 0%, #ffffff 0%, #f1f5f9 55%, #e2e8f0 100%);
+            background: radial-gradient(100% 100% at 50% 0%, #ffffff 0%, #f8fafc 60%, #f1f5f9 100%);
             position: relative;
             overflow: hidden;
         }
@@ -157,102 +158,76 @@
         .hero-warm-bg::before {
             content: '';
             position: absolute;
-            top: -20%;
-            left: 20%;
-            width: 550px;
-            height: 550px;
-            background: radial-gradient(circle, rgba(37, 99, 235, 0.08) 0%, transparent 70%);
-            animation: subtlePulse 9s ease-in-out infinite;
+            top: -10%;
+            left: 15%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(37, 99, 235, 0.07) 0%, transparent 70%);
+            animation: softGlow 8s ease-in-out infinite;
             pointer-events: none;
         }
 
         .hero-warm-bg::after {
             content: '';
             position: absolute;
-            bottom: -15%;
-            right: 15%;
+            bottom: 0;
+            right: 10%;
             width: 450px;
             height: 450px;
-            background: radial-gradient(circle, rgba(245, 158, 11, 0.06) 0%, transparent 70%);
-            animation: subtlePulse 11s ease-in-out infinite 2s;
+            background: radial-gradient(circle, rgba(245, 158, 11, 0.05) 0%, transparent 70%);
+            animation: softGlow 10s ease-in-out infinite 2s;
             pointer-events: none;
         }
 
-        /* Physical Tote Visual Scaffolding */
-        .tote-render {
-            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-            border-radius: 12px;
-            box-shadow: 0 20px 35px -10px rgba(15, 23, 42, 0.35);
-            position: relative;
-        }
-
-        .tote-lid {
-            background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
-            border-radius: 12px 12px 4px 4px;
-            box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.5), 0 4px 10px rgba(0, 0, 0, 0.15);
-        }
-
-        .tote-seal {
-            background: #ef4444;
-            color: white;
-            font-family: monospace;
-            font-size: 10px;
-            font-weight: bold;
-            padding: 2px 8px;
-            border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        /* Value Pills */
+        /* Soft Value Pills */
         .value-pill {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 7px;
             background: #ffffff;
             border: 1px solid #e2e8f0;
             color: #334155;
-            font-size: 0.875rem;
+            font-size: 0.85rem;
             font-weight: 600;
-            padding: 8px 18px;
+            padding: 7px 16px;
             border-radius: 999px;
-            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+            box-shadow: 0 2px 5px rgba(15, 23, 42, 0.03);
             transition: all 0.2s ease;
         }
 
         .value-pill:hover {
-            border-color: #cbd5e1;
+            border-color: #93c5fd;
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.08);
         }
 
-        /* Feature & Pillar Cards */
+        /* Human-Centric Feature & Pillar Cards */
         .pillar-card {
             background: #ffffff;
             border: 1px solid #e2e8f0;
             border-radius: 1.25rem;
-            padding: 2.25rem 2rem;
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            padding: 2rem;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
             position: relative;
-            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
         }
 
         .pillar-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 16px 36px -8px rgba(15, 23, 42, 0.08);
-            border-color: #93c5fd;
+            transform: translateY(-3px);
+            box-shadow: 0 12px 28px -6px rgba(15, 23, 42, 0.07);
+            border-color: #bfdbfe;
         }
 
         /* Use Case Tab Switcher */
         .use-case-tab {
             cursor: pointer;
-            padding: 0.85rem 1.5rem;
+            padding: 0.75rem 1.4rem;
             border-radius: 999px;
             font-weight: 700;
-            font-size: 0.925rem;
+            font-size: 0.9rem;
             color: #64748b;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
             transition: all 0.2s ease;
             white-space: nowrap;
             display: flex;
@@ -260,15 +235,22 @@
             gap: 8px;
         }
 
+        .use-case-tab:hover {
+            color: #0f172a;
+            border-color: #cbd5e1;
+            transform: translateY(-1px);
+        }
+
         .use-case-tab.active {
             background: #2563eb;
             color: #ffffff;
-            box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3);
+            border-color: #2563eb;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
         }
 
         .use-case-content {
             display: none;
-            animation: fadeIn 0.35s ease;
+            animation: fadeIn 0.3s ease;
         }
 
         .use-case-content.active {
@@ -288,7 +270,7 @@
         .tier-progress-fill {
             height: 100%;
             border-radius: 999px;
-            transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1), background 0.4s;
+            transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1), background 0.35s;
             background: linear-gradient(90deg, #3b82f6, #2563eb);
         }
 
@@ -300,7 +282,7 @@
         .savings-disclosure {
             max-height: 0;
             overflow: hidden;
-            transition: max-height 0.35s ease, opacity 0.25s;
+            transition: max-height 0.3s ease, opacity 0.2s;
             opacity: 0;
         }
 
@@ -309,9 +291,10 @@
             opacity: 1;
         }
 
-        /* FAQ accordion */
+        /* Clean FAQ Accordion */
         .faq-item {
             border-bottom: 1px solid #e2e8f0;
+            transition: background-color 0.2s ease;
         }
 
         .faq-item:last-child {
@@ -322,11 +305,11 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1.35rem 0;
+            padding: 1.25rem 0;
             cursor: pointer;
             font-weight: 700;
             color: #0f172a;
-            font-size: 1.05rem;
+            font-size: 1.025rem;
             transition: color 0.2s;
         }
 
@@ -335,23 +318,30 @@
         }
 
         .faq-chevron {
-            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
             flex-shrink: 0;
         }
 
         .faq-item.open .faq-chevron {
             transform: rotate(180deg);
+            color: #2563eb;
         }
 
         .faq-answer {
             max-height: 0;
             overflow: hidden;
-            transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1), padding 0.25s;
+            transition: max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1), padding 0.2s;
         }
 
         .faq-item.open .faq-answer {
             max-height: 240px;
-            padding-bottom: 1.35rem;
+            padding-bottom: 1.25rem;
+        }
+
+        /* Subtle staging room background for How It Works */
+        .staging-room-bg {
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 50%, #f8fafc 100%);
+            position: relative;
         }
 
         /* Smooth scroll anchor offset for sticky header */
@@ -372,11 +362,11 @@
             padding: 12px 18px;
             z-index: 40;
             transform: translateY(100%);
-            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             display: flex;
             align-items: center;
             justify-content: space-between;
-            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
         }
 
         .mobile-cta-bar.visible {
@@ -436,9 +426,9 @@
         <!-- View 1: Landing Page -->
         <div id="view-landing" class="flex-grow fade-in">
 
-            <!-- Hero Section (Warm, High-Trust, Physical Aesthetic) -->
-            <section class="hero-warm-bg pt-16 pb-20 sm:pt-24 sm:pb-28 px-4 sm:px-6 lg:px-8 text-center" id="hero">
-                <div class="max-w-5xl mx-auto space-y-8 relative z-10">
+            <!-- Hero Section (Welcoming, Human-Centric, Direct) -->
+            <section class="hero-warm-bg pt-14 pb-18 sm:pt-20 sm:pb-24 px-4 sm:px-6 lg:px-8 text-center" id="hero">
+                <div class="max-w-5xl mx-auto space-y-7 relative z-10">
                     
                     <!-- Regional Context Tag -->
                     <div
@@ -448,32 +438,32 @@
                     </div>
 
                     <!-- Main Headline -->
-                    <h1 class="text-4xl sm:text-6xl lg:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.08] max-w-4xl mx-auto">
+                    <h1 class="text-4xl sm:text-6xl lg:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.1] max-w-4xl mx-auto">
                         Your Extra Closet Across Town — <span class="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Pay Only for What You Pack.</span>
                     </h1>
 
-                    <!-- Subhead -->
+                    <!-- Scannable & Direct Subhead -->
                     <p class="text-lg sm:text-xl font-normal text-slate-600 max-w-3xl mx-auto leading-relaxed">
-                        Stop paying <span class="font-bold text-slate-900">$95+/mo</span> for a cavernous self-storage unit just to stash holiday décor or seasonal gear. We provide heavy-duty 27-gal industrial totes, secure vaulted storage, and <span class="font-bold text-blue-600">24/7 free staging room pickup</span> with dynamic volume rates.
+                        Stop paying <span class="font-bold text-slate-900">$95/mo</span> for an entire self-storage unit just to stash holiday décor or seasonal gear. We give you heavy-duty 27-gal totes, secure storage, and <span class="font-bold text-blue-600">24/7 free staging room pickup</span> with dynamic rates from <span class="font-bold text-slate-900">$1/tote/mo</span>.
                     </p>
 
                     <!-- Value Chips -->
-                    <div class="flex flex-wrap justify-center gap-3 pt-1">
+                    <div class="flex flex-wrap justify-center gap-2.5 pt-1">
                         <span class="value-pill">
-                            <span class="text-emerald-500 font-black">✓</span> Heavy-Duty 27-Gal Totes Included
+                            <span class="text-emerald-600 font-black">✓</span> Heavy-Duty 27-Gal Totes Included
                         </span>
                         <span class="value-pill">
-                            <span class="text-emerald-500 font-black">✓</span> 24/7 Free Keypad Staging Access
+                            <span class="text-emerald-600 font-black">✓</span> 24/7 Free Keypad Staging Access
                         </span>
                         <span class="value-pill">
-                            <span class="text-emerald-500 font-black">✓</span> No Long-Term Contracts (Month-to-Month)
+                            <span class="text-emerald-600 font-black">✓</span> Month-to-Month (Cancel Anytime)
                         </span>
                     </div>
 
-                    <!-- Dual Hero CTAs -->
-                    <div class="flex flex-col sm:flex-row gap-4 justify-center pt-3">
+                    <!-- Hero CTAs -->
+                    <div class="flex flex-col sm:flex-row gap-3.5 justify-center pt-2">
                         <button onclick="startFlow('default')"
-                            class="bg-blue-600 text-white px-9 py-4 rounded-2xl font-extrabold text-lg shadow-xl shadow-blue-500/25 hover:bg-blue-700 transition transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2.5">
+                            class="bg-blue-600 text-white px-8 py-3.5 rounded-xl font-extrabold text-base sm:text-lg shadow-lg shadow-blue-500/25 hover:bg-blue-700 transition transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2.5">
                             <span>Configure Your Storage</span>
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
@@ -481,7 +471,7 @@
                             </svg>
                         </button>
                         <a href="#how-it-works"
-                            class="bg-white border-2 border-slate-200 text-slate-800 px-8 py-4 rounded-2xl font-bold text-lg hover:border-slate-300 hover:bg-slate-50 transition shadow-sm inline-flex items-center justify-center gap-2">
+                            class="bg-white border border-slate-300 text-slate-800 px-7 py-3.5 rounded-xl font-bold text-base sm:text-lg hover:border-slate-400 hover:bg-slate-50 transition shadow-sm inline-flex items-center justify-center gap-2">
                             <span>See How It Works</span>
                             <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -490,84 +480,82 @@
                         </a>
                     </div>
 
-                    <!-- Physical Visual Scaffolding & Mobile Mockup Grid -->
-                    <div class="pt-10 max-w-4xl mx-auto">
-                        <div class="bg-white/80 backdrop-blur-xl border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl grid md:grid-cols-2 gap-8 items-center text-left">
+                    <!-- Lifestyle & App UI Showcase Grid (Human Element) -->
+                    <div class="pt-8 max-w-4xl mx-auto">
+                        <div class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-xl grid md:grid-cols-2 gap-8 items-center text-left">
                             
-                            <!-- Left: Physical 27-Gal Tote Showcase -->
+                            <!-- Left: Lifestyle Decluttering Context -->
                             <div class="space-y-4">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-xs font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-200/60">Included Equipment</span>
-                                    <span class="text-xs font-semibold text-slate-500">30" × 20" × 15" • 400lb Crush Capacity</span>
+                                    <span class="text-xs font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-200/60">Pack at Home</span>
+                                    <span class="text-xs font-semibold text-slate-500">27-Gal Heavy Duty Bins</span>
                                 </div>
-                                <h3 class="text-xl font-extrabold text-slate-900">Commercial-Grade 27-Gal Tough Totes</h3>
+                                <h3 class="text-xl font-extrabold text-slate-900">Reclaim Your Floor Space in Minutes</h3>
                                 <p class="text-sm text-slate-600 leading-relaxed">
-                                    Weather-resistant, reinforced polymer bins with snap-tight lids and tamper-evident serialized lock seals. Delivered clean, ready to pack.
+                                    We deliver clean, durable 27-gallon tough bins straight to your door. Pack seasonal wardrobes, gear, or family keepsakes at your own pace.
                                 </p>
 
-                                <!-- Visual Styled CSS Tote Card -->
-                                <div class="tote-render p-5 text-white space-y-3">
-                                    <div class="tote-lid p-2 flex justify-between items-center text-slate-950 font-black text-xs">
-                                        <div class="flex items-center gap-1.5">
-                                            <span class="w-2.5 h-2.5 rounded-full bg-slate-900"></span>
-                                            <span>SNAP-LOCKED SAFETY LID</span>
+                                <!-- Visual Lifestyle Story Card -->
+                                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold flex-shrink-0">
+                                            🏡
                                         </div>
-                                        <span class="text-[11px] bg-amber-200/80 px-2 py-0.5 rounded font-mono">27 GALLON</span>
+                                        <div>
+                                            <div class="text-sm font-extrabold text-slate-900">Home Living Room &bull; 6 Totes Packed</div>
+                                            <div class="text-xs text-slate-500">Winter coats, ski boots &amp; holiday lights vaulted</div>
+                                        </div>
                                     </div>
-                                    <div class="pt-2 flex justify-between items-end">
-                                        <div class="space-y-1">
-                                            <div class="text-xs text-slate-400 font-mono">BARCODE / RFID #</div>
-                                            <div class="text-sm font-mono font-bold tracking-widest text-slate-100">CV-TOTE-98402</div>
-                                        </div>
-                                        <span class="tote-seal">
-                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                                            SEALED &amp; SECURED
+                                    <div class="flex items-center justify-between pt-1 border-t border-slate-200/80 text-xs">
+                                        <span class="text-emerald-700 font-bold flex items-center gap-1">
+                                            <span>🔒</span> Serialized Tamper Tags Applied
                                         </span>
+                                        <span class="font-bold text-slate-700">Ready for pickup</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Right: Smartphone Digital Catalog Mockup -->
+                            <!-- Right: Smartphone Digital Closet Catalog -->
                             <div class="space-y-4">
                                 <div class="flex items-center justify-between">
                                     <span class="text-xs font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200/60">Digital Closet App</span>
-                                    <span class="text-xs font-semibold text-slate-500">1-Tap Retrieval</span>
+                                    <span class="text-xs font-semibold text-slate-500">1-Tap Free Retrieval</span>
                                 </div>
                                 <h3 class="text-xl font-extrabold text-slate-900">Browse &amp; Retrieve From Your Phone</h3>
                                 <p class="text-sm text-slate-600 leading-relaxed">
-                                    Catalog tote contents with photos. Need your snowboard or holiday ornaments? Request by 6 PM and pick up free the next day.
+                                    Photo-catalog what is inside each tote. Request by 6 PM and pick up free tomorrow from your neighborhood 24/7 keypad room.
                                 </p>
 
-                                <!-- Phone Catalog Preview UI Card -->
-                                <div class="bg-slate-900 text-white rounded-2xl p-4 border border-slate-800 shadow-lg space-y-3">
+                                <!-- Digital App Phone Mockup -->
+                                <div class="bg-slate-900 text-white rounded-2xl p-4 border border-slate-800 shadow-md space-y-3">
                                     <div class="flex justify-between items-center border-b border-slate-800 pb-2">
-                                        <div class="text-xs font-bold text-slate-300">My Active Totes (4 Active)</div>
+                                        <div class="text-xs font-bold text-slate-300">My Storage Closet (4 Active Totes)</div>
                                         <span class="text-[11px] font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800/60">Vaulted &amp; Tracked</span>
                                     </div>
                                     <div class="space-y-2">
-                                        <div class="bg-slate-800/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
-                                            <div class="flex items-center gap-2">
+                                        <div class="bg-slate-800/90 p-2.5 rounded-xl flex items-center justify-between text-xs">
+                                            <div class="flex items-center gap-2.5">
                                                 <div class="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">#1</div>
                                                 <div>
                                                     <div class="font-bold text-slate-100">Winter Ski Jackets &amp; Gear</div>
-                                                    <div class="text-[10px] text-slate-400">Photo logged • 4 items inside</div>
+                                                    <div class="text-[10px] text-slate-400">Photo logged &bull; 4 items inside</div>
                                                 </div>
                                             </div>
-                                            <span class="text-[10px] bg-blue-600 text-white px-2 py-1 rounded-md font-bold">Staged for Free</span>
+                                            <span class="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-md font-bold">Staged for Free</span>
                                         </div>
-                                        <div class="bg-slate-800/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
-                                            <div class="flex items-center gap-2">
+                                        <div class="bg-slate-800/90 p-2.5 rounded-xl flex items-center justify-between text-xs">
+                                            <div class="flex items-center gap-2.5">
                                                 <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">#2</div>
                                                 <div>
                                                     <div class="font-bold text-slate-100">Holiday Lights &amp; Tree Ornaments</div>
-                                                    <div class="text-[10px] text-slate-400">Photo logged • Vaulted</div>
+                                                    <div class="text-[10px] text-slate-400">Photo logged &bull; Vaulted</div>
                                                 </div>
                                             </div>
                                             <span class="text-[10px] text-slate-400 font-semibold">In Vault</span>
                                         </div>
                                     </div>
                                     <div class="pt-1">
-                                        <div class="w-full bg-blue-600 text-white text-center font-bold text-xs py-2 rounded-lg shadow">
+                                        <div class="w-full bg-blue-600 text-white text-center font-bold text-xs py-2 rounded-lg shadow-sm">
                                             ✓ Ready for 24/7 Staging Pickup
                                         </div>
                                     </div>
@@ -589,7 +577,7 @@
                         </div>
                         <div>
                             <h4 class="font-extrabold text-sm text-slate-900">No Long Contracts</h4>
-                            <p class="text-xs text-slate-500">Flexible month-to-month terms. Cancel or adjust anytime.</p>
+                            <p class="text-xs text-slate-500">Flexible month-to-month terms. Cancel anytime.</p>
                         </div>
                     </div>
                     <div class="flex flex-col sm:flex-row items-center sm:items-start gap-3">
@@ -622,77 +610,77 @@
                 </div>
             </section>
 
-            <!-- Section: Why CloudVault Costs Less (Consumer-Centric Pillars) -->
-            <section id="why-cloudvault" class="py-20 sm:py-24 px-4 sm:px-6 lg:px-8 bg-slate-50">
+            <!-- Section: Why CloudVault Costs Less (Pillars with Trimmed Copy) -->
+            <section id="why-cloudvault" class="py-18 sm:py-22 px-4 sm:px-6 lg:px-8 bg-slate-50">
                 <div class="max-w-7xl mx-auto">
-                    <div class="text-center mb-16">
-                        <span class="inline-block text-blue-600 text-xs font-black uppercase tracking-[0.25em] mb-3">Smarter Storage</span>
+                    <div class="text-center mb-14">
+                        <span class="inline-block text-blue-600 text-xs font-black uppercase tracking-[0.25em] mb-2.5">Smarter Storage</span>
                         <h2 class="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">Why Pay for Empty Air?</h2>
-                        <p class="text-slate-600 mt-4 max-w-2xl mx-auto text-base sm:text-lg">
-                            Traditional self-storage forces you to rent a 100-sq-ft room just to store 6 bins. CloudVault charges only for the exact totes you use.
+                        <p class="text-slate-600 mt-3 max-w-xl mx-auto text-base sm:text-lg">
+                            Traditional self-storage charges you for empty walkway space and high ceilings. We charge only for what you store.
                         </p>
                     </div>
 
-                    <div class="grid md:grid-cols-3 gap-8">
+                    <div class="grid md:grid-cols-3 gap-6 sm:gap-8">
                         <!-- Pillar 1 -->
                         <div class="pillar-card">
-                            <div class="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-sm border border-blue-100">
-                                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-5 shadow-sm border border-blue-100">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
                                 </svg>
                             </div>
-                            <h3 class="text-2xl font-bold text-slate-900 mb-3">Pay Only for What You Pack</h3>
-                            <p class="text-slate-600 leading-relaxed text-sm sm:text-base">
-                                Traditional storage units waste 70% of their space on walkways and ceiling headroom that you still pay for. With CloudVault, your monthly bill scales exactly to your bin count.
+                            <h3 class="text-xl font-bold text-slate-900 mb-2">Pay Only for What You Pack</h3>
+                            <p class="text-slate-600 leading-relaxed text-sm">
+                                Never rent a 100 sq ft room just to store 6 bins. Your monthly bill matches your exact tote count, saving you hundreds each year.
                             </p>
                         </div>
 
                         <!-- Pillar 2 -->
                         <div class="pillar-card">
-                            <div class="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6 shadow-sm border border-indigo-100">
-                                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-5 shadow-sm border border-indigo-100">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
                                     </path>
                                 </svg>
                             </div>
-                            <h3 class="text-2xl font-bold text-slate-900 mb-3">24/7 Grab-and-Go Access</h3>
-                            <p class="text-slate-600 leading-relaxed text-sm sm:text-base">
-                                Request totes from your phone by 6 PM. We stage them overnight in your local 24/7 keypad staging room. Drive up, enter your temporary PIN, grab your items, and go—always 100% free.
+                            <h3 class="text-xl font-bold text-slate-900 mb-2">24/7 Grab-and-Go Access</h3>
+                            <p class="text-slate-600 leading-relaxed text-sm">
+                                Request totes from your phone by 6 PM. Pick them up the next day at your neighborhood staging room with your single-use PIN—always 100% free.
                             </p>
                         </div>
 
                         <!-- Pillar 3 -->
                         <div class="pillar-card">
-                            <div class="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 shadow-sm border border-emerald-100">
-                                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-5 shadow-sm border border-emerald-100">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
                                 </svg>
                             </div>
-                            <h3 class="text-2xl font-bold text-slate-900 mb-3">Automatic Volume Savings</h3>
-                            <p class="text-slate-600 leading-relaxed text-sm sm:text-base">
-                                The more you store, the lower your per-tote rate automatically drops. No calling customer service to negotiate or haggling for renewals. Every volume discount is built in.
+                            <h3 class="text-xl font-bold text-slate-900 mb-2">Automatic Volume Savings</h3>
+                            <p class="text-slate-600 leading-relaxed text-sm">
+                                As you pack and store more totes, your per-tote rate drops automatically down to our lowest regional rate. Zero haggling required.
                             </p>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <!-- Section: Interactive Use-Case Switcher (Who is CloudVault For?) -->
-            <section id="use-cases" class="py-20 sm:py-24 px-4 sm:px-6 lg:px-8 bg-white border-t border-slate-200">
+            <!-- Section: Interactive Use-Case Switcher (Who Uses CloudVault?) -->
+            <section id="use-cases" class="py-18 sm:py-22 px-4 sm:px-6 lg:px-8 bg-white border-t border-slate-200">
                 <div class="max-w-6xl mx-auto">
-                    <div class="text-center mb-12">
-                        <span class="inline-block text-blue-600 text-xs font-black uppercase tracking-[0.25em] mb-3">Tailored Solutions</span>
+                    <div class="text-center mb-10">
+                        <span class="inline-block text-blue-600 text-xs font-black uppercase tracking-[0.25em] mb-2.5">Tailored Solutions</span>
                         <h2 class="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">Who Uses CloudVault?</h2>
-                        <p class="text-slate-600 mt-4 max-w-xl mx-auto text-base sm:text-lg">
-                            See how everyday people, students, and businesses simplify their space without paying for unnecessary storage units.
+                        <p class="text-slate-600 mt-3 max-w-xl mx-auto text-base sm:text-lg">
+                            See how everyday renters, students, hobbyists, and shops declutter without paying for empty storage units.
                         </p>
                     </div>
 
                     <!-- Use Case Tabs Nav -->
-                    <div class="flex overflow-x-auto pb-4 justify-start sm:justify-center gap-2 sm:gap-3 mb-10 no-scrollbar">
+                    <div class="flex overflow-x-auto pb-3 justify-start sm:justify-center gap-2 sm:gap-3 mb-8 no-scrollbar">
                         <button class="use-case-tab active" onclick="switchUseCase('renters', this)">
                             <span>🏢</span> Apartment Renters
                         </button>
@@ -708,7 +696,7 @@
                     </div>
 
                     <!-- Tab Content Cards -->
-                    <div class="bg-slate-50 border border-slate-200 rounded-3xl p-8 sm:p-12 shadow-sm">
+                    <div class="bg-slate-50 border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm">
                         
                         <!-- 1. Apartment Renters -->
                         <div id="tab-renters" class="use-case-content active">
@@ -716,15 +704,15 @@
                                 <div class="space-y-4">
                                     <span class="text-xs font-bold bg-blue-100 text-blue-800 px-3 py-1 rounded-full">For City Living &amp; Downsizing</span>
                                     <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900">Reclaim Your Apartment Closets</h3>
-                                    <p class="text-slate-600 leading-relaxed">
-                                        Don't let seasonal coats, empty suitcases, and extra bedding crowd your high-rent apartment floor space. Stash them in CloudVault and retrieve them in minutes when needed.
+                                    <p class="text-slate-600 leading-relaxed text-sm sm:text-base">
+                                        Don't let seasonal coats, luggage, and extra bedding crowd your living space. Stash them in CloudVault and retrieve them in minutes whenever you need them.
                                     </p>
                                     <ul class="space-y-2 text-sm text-slate-700 font-medium">
                                         <li class="flex items-center gap-2">✓ <strong>Typical Need:</strong> 4–8 totes ($20–$40/mo vs $95+ storage unit)</li>
-                                        <li class="flex items-center gap-2">✓ <strong>Popular Stored Items:</strong> Winter coats, extra duvet sets, luggage, camping tents</li>
-                                        <li class="flex items-center gap-2">✓ <strong>Key Benefit:</strong> Saves over $750/year in unnecessary storage rent</li>
+                                        <li class="flex items-center gap-2">✓ <strong>Popular Items:</strong> Winter coats, extra bedding, suitcases, camping tents</li>
+                                        <li class="flex items-center gap-2">✓ <strong>Key Benefit:</strong> Saves over $750/year in wasted storage rent</li>
                                     </ul>
-                                    <div class="pt-2">
+                                    <div class="pt-1">
                                         <button onclick="prefillCalculator(6)" class="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1">
                                             Calculate 6 Totes in Your Area →
                                         </button>
@@ -755,15 +743,15 @@
                                 <div class="space-y-4">
                                     <span class="text-xs font-bold bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full">Summer Break &amp; Study Abroad</span>
                                     <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900">Store Your Dorm for the Summer</h3>
-                                    <p class="text-slate-600 leading-relaxed">
-                                        No need to haul textbooks, minifridge gear, and clothing back to your parents' house or split a massive storage unit with flaky roommates. Pack your totes, drop them off, and pick them up in the fall.
+                                    <p class="text-slate-600 leading-relaxed text-sm sm:text-base">
+                                        No need to haul textbooks, minifridge gear, and clothing back to your parents' house. Pack your bins, drop them off, and pick them up before fall classes begin.
                                     </p>
                                     <ul class="space-y-2 text-sm text-slate-700 font-medium">
                                         <li class="flex items-center gap-2">✓ <strong>Typical Need:</strong> 3–6 totes</li>
-                                        <li class="flex items-center gap-2">✓ <strong>Popular Stored Items:</strong> Textbooks, desk monitors, room decor, kitchenware</li>
-                                        <li class="flex items-center gap-2">✓ <strong>Key Benefit:</strong> Zero summer leases, 1-tap staging return before move-in day</li>
+                                        <li class="flex items-center gap-2">✓ <strong>Popular Items:</strong> Textbooks, desk monitors, room decor, kitchenware</li>
+                                        <li class="flex items-center gap-2">✓ <strong>Key Benefit:</strong> Zero summer apartment leases, 1-tap return before move-in</li>
                                     </ul>
-                                    <div class="pt-2">
+                                    <div class="pt-1">
                                         <button onclick="prefillCalculator(4)" class="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1">
                                             Calculate 4 Totes in Your Area →
                                         </button>
@@ -775,7 +763,7 @@
                                         <span class="text-xs font-bold text-blue-600">3-Month Term</span>
                                     </div>
                                     <p class="text-xs text-slate-600 leading-relaxed">
-                                        Free heavy-duty 27-gal bins delivered before finals week. Pack at your own pace and access your staging room 24/7 with zero waiting when classes resume.
+                                        Free heavy-duty 27-gal bins provided before finals week. Pack at your own pace and access your staging room 24/7 with zero waiting when classes resume.
                                     </p>
                                 </div>
                             </div>
@@ -787,15 +775,15 @@
                                 <div class="space-y-4">
                                     <span class="text-xs font-bold bg-amber-100 text-amber-800 px-3 py-1 rounded-full">E-Commerce, Pop-Ups &amp; Contractors</span>
                                     <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900">Commercial Storage Without Long Leases</h3>
-                                    <p class="text-slate-600 leading-relaxed">
-                                        Store seasonal retail inventory, pop-up booth equipment, marketing collateral, or spare tools. Unlocks our highest volume discount tiers with rates dropping down to our lowest regional tier.
+                                    <p class="text-slate-600 leading-relaxed text-sm sm:text-base">
+                                        Store seasonal retail inventory, pop-up booth equipment, marketing collateral, or spare tools. Automatically unlocks our lowest regional volume rates.
                                     </p>
                                     <ul class="space-y-2 text-sm text-slate-700 font-medium">
                                         <li class="flex items-center gap-2">✓ <strong>Typical Need:</strong> 25–50+ totes</li>
-                                        <li class="flex items-center gap-2">✓ <strong>Popular Stored Items:</strong> Trade show banners, inventory reserves, archive files</li>
+                                        <li class="flex items-center gap-2">✓ <strong>Popular Items:</strong> Trade show banners, inventory reserves, archive files</li>
                                         <li class="flex items-center gap-2">✓ <strong>Key Benefit:</strong> Automatic Tier 3 &amp; Tier 4 volume rate reduction</li>
                                     </ul>
-                                    <div class="pt-2">
+                                    <div class="pt-1">
                                         <button onclick="prefillCalculator(30)" class="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1">
                                             Calculate 30 Totes Volume Pricing →
                                         </button>
@@ -819,15 +807,15 @@
                                 <div class="space-y-4">
                                     <span class="text-xs font-bold bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full">Outdoor Enthusiasts &amp; Holidays</span>
                                     <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900">Gear Stored Safe Until Next Season</h3>
-                                    <p class="text-slate-600 leading-relaxed">
-                                        Don't let seasonal gear hijack your hallway or garage. Keep ski gear dry all summer and camping tents clean all winter in sealed, protected containers.
+                                    <p class="text-slate-600 leading-relaxed text-sm sm:text-base">
+                                        Don't let seasonal gear hijack your garage or closets. Keep ski gear dry all summer and camping gear clean all winter in sealed, protected containers.
                                     </p>
                                     <ul class="space-y-2 text-sm text-slate-700 font-medium">
                                         <li class="flex items-center gap-2">✓ <strong>Typical Need:</strong> 5–10 totes</li>
-                                        <li class="flex items-center gap-2">✓ <strong>Popular Stored Items:</strong> Snowboard boots, scuba gear, golf clubs, holiday lights</li>
+                                        <li class="flex items-center gap-2">✓ <strong>Popular Items:</strong> Snowboard boots, scuba gear, golf clubs, holiday lights</li>
                                         <li class="flex items-center gap-2">✓ <strong>Key Benefit:</strong> Protected from garage humidity, pests, and dust</li>
                                     </ul>
-                                    <div class="pt-2">
+                                    <div class="pt-1">
                                         <button onclick="prefillCalculator(8)" class="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1">
                                             Calculate 8 Totes in Your Area →
                                         </button>
@@ -850,44 +838,44 @@
                 </div>
             </section>
 
-            <!-- Section: Connected 3-Step Visual Access Flow -->
-            <section id="how-it-works" class="py-20 sm:py-24 px-4 sm:px-6 lg:px-8 bg-slate-50 border-t border-slate-200">
+            <!-- Section: Connected 3-Step Visual Access Flow with Ambient Grounding -->
+            <section id="how-it-works" class="staging-room-bg py-18 sm:py-22 px-4 sm:px-6 lg:px-8 border-t border-slate-200">
                 <div class="max-w-7xl mx-auto">
-                    <div class="text-center mb-16">
-                        <span class="inline-block text-blue-600 text-xs font-black uppercase tracking-[0.25em] mb-3">Simple 3-Step Flow</span>
+                    <div class="text-center mb-14">
+                        <span class="inline-block text-blue-600 text-xs font-black uppercase tracking-[0.25em] mb-2.5">Simple 3-Step Flow</span>
                         <h2 class="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">How CloudVault Works</h2>
-                        <p class="text-slate-600 mt-4 max-w-2xl mx-auto text-base sm:text-lg">
-                            From packing your first tote to grabbing items at 2:00 AM, the entire process is designed for speed, privacy, and zero friction.
+                        <p class="text-slate-600 mt-3 max-w-xl mx-auto text-base sm:text-lg">
+                            From packing your bins to grabbing items at 2:00 AM, the entire process is fast, private, and frictionless.
                         </p>
                     </div>
 
-                    <div class="grid md:grid-cols-3 gap-8 relative">
+                    <div class="grid md:grid-cols-3 gap-6 sm:gap-8 relative">
                         <!-- Step 1 -->
-                        <div class="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm space-y-5 text-center relative hover:shadow-md transition">
-                            <div class="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto text-2xl font-black shadow-lg shadow-blue-500/30">
+                        <div class="bg-white rounded-3xl p-7 border border-slate-200 shadow-sm space-y-4 text-center relative hover:-translate-y-1 transition duration-200 hover:shadow-md">
+                            <div class="w-14 h-14 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto text-xl font-black shadow-md shadow-blue-500/25">
                                 1
                             </div>
-                            <h3 class="text-2xl font-extrabold text-slate-900">Pack &amp; Tag</h3>
-                            <p class="text-slate-600 leading-relaxed text-sm sm:text-base">
-                                We provide heavy-duty 27-gallon totes. Fill them at home and snap a quick photo for your private digital dashboard catalog.
+                            <h3 class="text-xl font-extrabold text-slate-900">Pack &amp; Tag</h3>
+                            <p class="text-slate-600 leading-relaxed text-sm">
+                                We provide heavy-duty 27-gallon totes. Fill them at home and snap a quick photo for your private digital catalog.
                             </p>
-                            <div class="pt-2">
+                            <div class="pt-1">
                                 <span class="inline-block bg-blue-50 text-blue-700 text-xs font-bold px-3 py-1 rounded-full border border-blue-100">
-                                    📦 Free Bins Provided
+                                    📦 Free Bins Delivered
                                 </span>
                             </div>
                         </div>
 
                         <!-- Step 2 -->
-                        <div class="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm space-y-5 text-center relative hover:shadow-md transition">
-                            <div class="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto text-2xl font-black shadow-lg shadow-blue-500/30">
+                        <div class="bg-white rounded-3xl p-7 border border-slate-200 shadow-sm space-y-4 text-center relative hover:-translate-y-1 transition duration-200 hover:shadow-md">
+                            <div class="w-14 h-14 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto text-xl font-black shadow-md shadow-blue-500/25">
                                 2
                             </div>
-                            <h3 class="text-2xl font-extrabold text-slate-900">We Store Safely</h3>
-                            <p class="text-slate-600 leading-relaxed text-sm sm:text-base">
-                                Your totes are sealed with serialized tamper-evident tags and stored securely in our locked, climate-protected facility.
+                            <h3 class="text-xl font-extrabold text-slate-900">We Store Safely</h3>
+                            <p class="text-slate-600 leading-relaxed text-sm">
+                                Your totes are sealed with serialized tamper-evident tags and stored securely in our locked, monitored facility.
                             </p>
-                            <div class="pt-2">
+                            <div class="pt-1">
                                 <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full border border-emerald-100">
                                     🔒 Serialized Tamper Seals
                                 </span>
@@ -895,17 +883,17 @@
                         </div>
 
                         <!-- Step 3 -->
-                        <div class="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm space-y-5 text-center relative hover:shadow-md transition">
-                            <div class="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto text-2xl font-black shadow-lg shadow-blue-500/30">
+                        <div class="bg-white rounded-3xl p-7 border border-slate-200 shadow-sm space-y-4 text-center relative hover:-translate-y-1 transition duration-200 hover:shadow-md">
+                            <div class="w-14 h-14 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto text-xl font-black shadow-md shadow-blue-500/25">
                                 3
                             </div>
-                            <h3 class="text-2xl font-extrabold text-slate-900">Grab Anytime for Free</h3>
-                            <p class="text-slate-600 leading-relaxed text-sm sm:text-base">
+                            <h3 class="text-xl font-extrabold text-slate-900">Grab Anytime for Free</h3>
+                            <p class="text-slate-600 leading-relaxed text-sm">
                                 Request totes by 6:00 PM in your app. Enter your single-day PIN at our 24/7 staging room the next day. Zero fees, zero waiting.
                             </p>
-                            <div class="pt-2">
+                            <div class="pt-1">
                                 <span class="inline-block bg-amber-50 text-amber-700 text-xs font-bold px-3 py-1 rounded-full border border-amber-100">
-                                    ⚡ Always Free Staging Retrieval
+                                    ⚡ 100% Free Staging Pickup
                                 </span>
                             </div>
                         </div>
@@ -913,75 +901,75 @@
                 </div>
             </section>
 
-            <!-- Section: Asset Protection & Security -->
-            <section id="security" class="py-20 sm:py-24 px-4 sm:px-6 lg:px-8 bg-slate-900 text-white border-t border-slate-800">
+            <!-- Section: Asset Protection & Security (Softened, High-Trust Modern Palette) -->
+            <section id="security" class="py-18 sm:py-22 px-4 sm:px-6 lg:px-8 bg-white border-t border-slate-200">
                 <div class="max-w-7xl mx-auto">
-                    <div class="text-center mb-16">
-                        <span class="inline-block text-blue-400 text-xs font-black uppercase tracking-[0.25em] mb-3">Security First</span>
-                        <h2 class="text-3xl sm:text-5xl font-black text-white tracking-tight">Commercial Vault Protection</h2>
-                        <p class="text-slate-400 mt-4 max-w-2xl mx-auto text-base sm:text-lg">
+                    <div class="text-center mb-14">
+                        <span class="inline-block text-blue-600 text-xs font-black uppercase tracking-[0.25em] mb-2.5">Security First</span>
+                        <h2 class="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">Commercial Vault Protection</h2>
+                        <p class="text-slate-600 mt-3 max-w-xl mx-auto text-base sm:text-lg">
                             Your personal belongings are protected by restricted-access facilities, numbered seals, and optional insurance coverage.
                         </p>
                     </div>
 
-                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-                        <div class="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-6 transition duration-200 hover:border-blue-500/60 hover:bg-slate-800">
-                            <div class="w-12 h-12 bg-amber-500/10 text-amber-400 rounded-xl flex items-center justify-center mb-5 border border-amber-500/20 text-xl font-bold">
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div class="bg-slate-50 border border-slate-200/90 rounded-2xl p-6 transition duration-200 hover:-translate-y-1 hover:border-blue-300 hover:shadow-md">
+                            <div class="w-12 h-12 bg-amber-100 text-amber-700 rounded-xl flex items-center justify-center mb-4 text-xl font-bold">
                                 🔑
                             </div>
-                            <h3 class="text-lg font-bold text-white mb-2">24/7 Keypad Staging</h3>
-                            <p class="text-slate-400 text-sm leading-relaxed">Dynamic, single-use access PIN codes texted directly to your phone for secure automated pickup.</p>
+                            <h3 class="text-lg font-bold text-slate-900 mb-1.5">24/7 Keypad Staging</h3>
+                            <p class="text-slate-600 text-sm leading-relaxed">Dynamic, single-use access PIN codes texted directly to your phone for secure automated pickup.</p>
                         </div>
 
-                        <div class="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-6 transition duration-200 hover:border-blue-500/60 hover:bg-slate-800">
-                            <div class="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-xl flex items-center justify-center mb-5 border border-blue-500/20 text-xl font-bold">
+                        <div class="bg-slate-50 border border-slate-200/90 rounded-2xl p-6 transition duration-200 hover:-translate-y-1 hover:border-blue-300 hover:shadow-md">
+                            <div class="w-12 h-12 bg-blue-100 text-blue-700 rounded-xl flex items-center justify-center mb-4 text-xl font-bold">
                                 🛡️
                             </div>
-                            <h3 class="text-lg font-bold text-white mb-2">Tamper-Proof Seals</h3>
-                            <p class="text-slate-400 text-sm leading-relaxed">Heavy-duty weather-resistant totes with serialized numbered security tags logged in your app.</p>
+                            <h3 class="text-lg font-bold text-slate-900 mb-1.5">Tamper-Proof Seals</h3>
+                            <p class="text-slate-600 text-sm leading-relaxed">Heavy-duty weather-resistant totes with serialized numbered security tags logged in your app.</p>
                         </div>
 
-                        <div class="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-6 transition duration-200 hover:border-blue-500/60 hover:bg-slate-800">
-                            <div class="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center mb-5 border border-emerald-500/20 text-xl font-bold">
+                        <div class="bg-slate-50 border border-slate-200/90 rounded-2xl p-6 transition duration-200 hover:-translate-y-1 hover:border-blue-300 hover:shadow-md">
+                            <div class="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-xl flex items-center justify-center mb-4 text-xl font-bold">
                                 📄
                             </div>
-                            <h3 class="text-lg font-bold text-white mb-2">Insurance Options</h3>
-                            <p class="text-slate-400 text-sm leading-relaxed">Third-party insurance coverage options available for high-value gear and complete peace of mind.</p>
+                            <h3 class="text-lg font-bold text-slate-900 mb-1.5">Insurance Options</h3>
+                            <p class="text-slate-600 text-sm leading-relaxed">Third-party insurance coverage options available for high-value gear and complete peace of mind.</p>
                         </div>
 
-                        <div class="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-6 transition duration-200 hover:border-blue-500/60 hover:bg-slate-800">
-                            <div class="w-12 h-12 bg-indigo-500/10 text-indigo-400 rounded-xl flex items-center justify-center mb-5 border border-indigo-500/20 text-xl font-bold">
+                        <div class="bg-slate-50 border border-slate-200/90 rounded-2xl p-6 transition duration-200 hover:-translate-y-1 hover:border-blue-300 hover:shadow-md">
+                            <div class="w-12 h-12 bg-indigo-100 text-indigo-700 rounded-xl flex items-center justify-center mb-4 text-xl font-bold">
                                 🏢
                             </div>
-                            <h3 class="text-lg font-bold text-white mb-2">Off-Limits Vault</h3>
-                            <p class="text-slate-400 text-sm leading-relaxed">All totes are vaulted in restricted, monitored warehouse space closed to general public wandering.</p>
+                            <h3 class="text-lg font-bold text-slate-900 mb-1.5">Restricted Vault</h3>
+                            <p class="text-slate-600 text-sm leading-relaxed">All totes are vaulted in climate-monitored warehouse space closed to general public access.</p>
                         </div>
                     </div>
                 </div>
             </section>
 
             <!-- Dynamic Pay-Per-Tote Regional Calculator Section -->
-            <section id="pricing" class="py-20 sm:py-24 px-4 sm:px-6 lg:px-8 bg-white border-t border-slate-200">
+            <section id="pricing" class="py-18 sm:py-22 px-4 sm:px-6 lg:px-8 bg-slate-50 border-t border-slate-200">
                 <div class="max-w-4xl mx-auto">
-                    <div class="text-center mb-12">
-                        <span class="inline-block text-blue-600 text-xs font-black uppercase tracking-[0.25em] mb-3">Live Regional Pricing</span>
+                    <div class="text-center mb-10">
+                        <span class="inline-block text-blue-600 text-xs font-black uppercase tracking-[0.25em] mb-2.5">Live Regional Pricing</span>
                         <h2 class="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">Custom Built for Your Space</h2>
-                        <p class="text-slate-600 mt-4 max-w-xl mx-auto text-base sm:text-lg">
+                        <p class="text-slate-600 mt-3 max-w-xl mx-auto text-base sm:text-lg">
                             Adjust the tote counter to view real-time dynamic rates for your area. 24/7 staging room access is always free and unlimited.
                         </p>
                         
                         <!-- Inline Regional Indicator with ZIP check trigger -->
-                        <div class="mt-4 inline-flex items-center gap-2 bg-slate-100 text-slate-700 px-4 py-1.5 rounded-full text-xs font-bold">
+                        <div class="mt-3.5 inline-flex items-center gap-2 bg-white border border-slate-200/80 text-slate-700 px-4 py-1.5 rounded-full text-xs font-bold shadow-sm">
                             <span id="calc-region-indicator">📍 Showing dynamic rates for your region</span>
                             <button onclick="startFlow('calculator')" class="text-blue-600 hover:underline ml-1">Change ZIP</button>
                         </div>
                     </div>
 
-                    <div class="bg-white rounded-3xl shadow-2xl p-6 sm:p-10 border border-slate-200">
-                        <div class="grid md:grid-cols-2 gap-10 items-start">
+                    <div class="bg-white rounded-3xl shadow-xl p-6 sm:p-10 border border-slate-200">
+                        <div class="grid md:grid-cols-2 gap-8 sm:gap-10 items-start">
 
                             <!-- Controls -->
-                            <div class="space-y-7">
+                            <div class="space-y-6">
 
                                 <!-- Totes Counter & Slider -->
                                 <div>
@@ -1051,7 +1039,7 @@
                                 <!-- Logistics Option (Self Service vs Valet) -->
                                 <div>
                                     <label class="font-extrabold text-slate-900 block mb-3 text-sm">Pickup &amp; Access Option</label>
-                                    <div class="space-y-3">
+                                    <div class="space-y-2.5">
                                         <div id="calc-opt-self"
                                             class="flex items-center p-3.5 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer"
                                             onclick="selectLogistics('self_service')">
@@ -1081,7 +1069,7 @@
                             <!-- Readout & CTA -->
                             <div class="bg-slate-50 p-6 sm:p-8 rounded-2xl border border-slate-200 flex flex-col justify-center space-y-5">
                                 
-                                <!-- Dynamic Traditional Comparison Callout -->
+                                <!-- Dynamic Traditional Comparison Callout ($95 Baseline) -->
                                 <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
                                     <span class="text-xs font-bold text-emerald-800" id="comparison-badge">
                                         ⚡ Saves ~$70/mo compared to a traditional 5×5 unit ($95/mo)
@@ -1152,14 +1140,14 @@
             </section>
 
             <!-- FAQ Section -->
-            <section id="faq" class="py-20 sm:py-24 px-4 sm:px-6 lg:px-8 bg-slate-50 border-t border-slate-200">
+            <section id="faq" class="py-18 sm:py-22 px-4 sm:px-6 lg:px-8 bg-white border-t border-slate-200">
                 <div class="max-w-3xl mx-auto">
-                    <div class="text-center mb-14">
-                        <span class="inline-block text-blue-600 text-xs font-black uppercase tracking-[0.25em] mb-3">Answers</span>
+                    <div class="text-center mb-12">
+                        <span class="inline-block text-blue-600 text-xs font-black uppercase tracking-[0.25em] mb-2.5">Answers</span>
                         <h2 class="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">Frequently Asked Questions</h2>
                     </div>
 
-                    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 px-6 sm:px-10">
+                    <div class="bg-slate-50 rounded-3xl border border-slate-200/90 px-6 sm:px-10 shadow-sm">
                         <div class="faq-item" onclick="toggleFaq(this, event)">
                             <div class="faq-question">
                                 <span>How big is a CloudVault 27-gallon tote?</span>
@@ -1216,7 +1204,7 @@
                                 </svg>
                             </div>
                             <div class="faq-answer text-slate-600 text-sm leading-relaxed">
-                                Yes. All items are vaulted in climate-controlled, restricted warehouse facilities under 24/7 CCTV surveillance. Every container is secured with a serialized tamper seal upon intake. Optional comprehensive contents insurance is available during checkout.
+                                Yes. All items are vaulted in climate-monitored, restricted facilities under 24/7 CCTV surveillance. Every container is secured with a serialized tamper seal upon intake. Optional comprehensive contents insurance is available during checkout.
                             </div>
                         </div>
                     </div>
@@ -1910,7 +1898,7 @@
                 }
             }
 
-            // Update Traditional Self Storage Comparison Badge
+            // Update Traditional Self Storage Comparison Badge ($95 baseline)
             const compBadge = document.getElementById('comparison-badge');
             if (compBadge) {
                 const tradPrice = 95; // baseline 5x5 self storage comparison
