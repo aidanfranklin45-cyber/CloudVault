@@ -2304,6 +2304,14 @@
             }
         });
 
+        function normalizeRole(r) {
+            if (!r) return 'worker';
+            const clean = String(r).toLowerCase().trim();
+            if (clean === 'warehouse_worker' || clean === 'worker') return 'worker';
+            if (clean === 'warehouse_manager' || clean === 'manager') return 'manager';
+            return 'executive';
+        }
+
         // Switch role UI layout (RBAC Matrix simulation)
         function switchRole() {
             const selectedVal = document.getElementById('role-select').value;
@@ -2318,19 +2326,27 @@
                     return;
                 }
             }
-            activeRole = selectedVal;
+            activeRole = normalizeRole(selectedVal);
             switchRoleView();
-            loadManagerLiveData();
+            if (activeRole === 'manager' || activeRole === 'executive') {
+                loadManagerLiveData();
+            }
             loadWorkerQueues();
         }
 
         function switchRoleView() {
-            // Hide all views
-            document.getElementById('view-executive').classList.add('hidden');
-            document.getElementById('view-manager').classList.add('hidden');
-            document.getElementById('view-worker').classList.add('hidden');
+            const normRole = normalizeRole(activeRole);
 
-            const displayName = actualUserName || (activeRole === 'executive' ? "Alex Executive" : activeRole === 'manager' ? "Sarah Manager" : "David Worker");
+            // Hide all views
+            const execView = document.getElementById('view-executive');
+            const mgrView = document.getElementById('view-manager');
+            const workerView = document.getElementById('view-worker');
+
+            if (execView) execView.classList.add('hidden');
+            if (mgrView) mgrView.classList.add('hidden');
+            if (workerView) workerView.classList.add('hidden');
+
+            const displayName = actualUserName || (normRole === 'executive' ? "Alex Executive" : normRole === 'manager' ? "Sarah Manager" : "David Worker");
             const avatarText = displayName.substring(0, 2).toUpperCase();
 
             const mgrSel = document.getElementById('manager-facility-select');
@@ -2338,17 +2354,16 @@
             const navFacilityConfig = document.getElementById('nav-facility-config');
             const navBiAnalytics = document.getElementById('nav-bi-analytics');
             const seedBtn = document.getElementById('seed-btn');
-
             const billingAuditActions = document.getElementById('admin-billing-audit-actions');
 
-            if (activeRole === 'executive') {
+            if (normRole === 'executive') {
                 if (mgrSel) mgrSel.classList.add('hidden');
                 if (activeIndicator) activeIndicator.classList.remove('hidden');
                 if (navFacilityConfig) navFacilityConfig.classList.remove('hidden');
                 if (navBiAnalytics) navBiAnalytics.classList.remove('hidden');
                 if (seedBtn) seedBtn.classList.remove('hidden');
                 if (billingAuditActions) billingAuditActions.classList.remove('hidden');
-            } else if (activeRole === 'manager') {
+            } else if (normRole === 'manager') {
                 if (mgrSel) mgrSel.classList.add('hidden');
                 if (activeIndicator) activeIndicator.classList.add('hidden');
                 if (navFacilityConfig) navFacilityConfig.classList.add('hidden');
@@ -2365,27 +2380,42 @@
             }
 
             // Show selected (cumulatively based on role hierarchy)
-            if (activeRole === 'executive') {
-                document.getElementById('view-executive').classList.remove('hidden');
-                document.getElementById('view-manager').classList.remove('hidden');
-                document.getElementById('view-worker').classList.remove('hidden');
-                document.getElementById('user-avatar').textContent = avatarText;
-                document.getElementById('user-avatar').className = "w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-md";
-                document.getElementById('user-name').textContent = displayName;
-                document.getElementById('user-role-label').textContent = "Super Admin";
-            } else if (activeRole === 'manager') {
-                document.getElementById('view-manager').classList.remove('hidden');
-                document.getElementById('view-worker').classList.remove('hidden');
-                document.getElementById('user-avatar').textContent = avatarText;
-                document.getElementById('user-avatar').className = "w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-md";
-                document.getElementById('user-name').textContent = displayName;
-                document.getElementById('user-role-label').textContent = "Warehouse Manager";
-            } else if (activeRole === 'worker') {
-                document.getElementById('view-worker').classList.remove('hidden');
-                document.getElementById('user-avatar').textContent = avatarText;
-                document.getElementById('user-avatar').className = "w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white font-bold flex items-center justify-center text-xs shadow-md";
-                document.getElementById('user-name').textContent = displayName;
-                document.getElementById('user-role-label').textContent = "Operations Staff";
+            if (normRole === 'executive') {
+                if (execView) execView.classList.remove('hidden');
+                if (mgrView) mgrView.classList.remove('hidden');
+                if (workerView) workerView.classList.remove('hidden');
+                const av = document.getElementById('user-avatar');
+                if (av) {
+                    av.textContent = avatarText;
+                    av.className = "w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-md";
+                }
+                const un = document.getElementById('user-name');
+                if (un) un.textContent = displayName;
+                const rl = document.getElementById('user-role-label');
+                if (rl) rl.textContent = "Super Admin";
+            } else if (normRole === 'manager') {
+                if (mgrView) mgrView.classList.remove('hidden');
+                if (workerView) workerView.classList.remove('hidden');
+                const av = document.getElementById('user-avatar');
+                if (av) {
+                    av.textContent = avatarText;
+                    av.className = "w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-md";
+                }
+                const un = document.getElementById('user-name');
+                if (un) un.textContent = displayName;
+                const rl = document.getElementById('user-role-label');
+                if (rl) rl.textContent = "Warehouse Manager";
+            } else if (normRole === 'worker') {
+                if (workerView) workerView.classList.remove('hidden');
+                const av = document.getElementById('user-avatar');
+                if (av) {
+                    av.textContent = avatarText;
+                    av.className = "w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white font-bold flex items-center justify-center text-xs shadow-md";
+                }
+                const un = document.getElementById('user-name');
+                if (un) un.textContent = displayName;
+                const rl = document.getElementById('user-role-label');
+                if (rl) rl.textContent = "Operations Staff";
                 setTimeout(() => {
                     const input = document.getElementById('scan-barcode');
                     if (input) {
@@ -2399,15 +2429,16 @@
             // Toggle Simulated Mismatch Warning Banner
             const banner = document.getElementById('mismatch-warning-banner');
             if (banner) {
-                if (actualUserRole && activeRole !== (actualUserRole === 'executive' ? 'executive' : actualUserRole === 'warehouse_manager' ? 'manager' : 'worker')) {
+                const normActual = normalizeRole(actualUserRole);
+                if (actualUserRole && normRole !== normActual) {
                     let actualName = "Super Admin";
-                    if (actualUserRole === "warehouse_manager") actualName = "Warehouse Manager";
-                    if (actualUserRole === "warehouse_worker") actualName = "Warehouse Worker";
+                    if (normActual === "manager") actualName = "Warehouse Manager";
+                    if (normActual === "worker") actualName = "Warehouse Worker";
                     if (actualUserRole === "customer") actualName = "Customer (No Clearance)";
 
                     let targetSimulated = "Executive";
-                    if (activeRole === "manager") targetSimulated = "Warehouse Manager";
-                    if (activeRole === "worker") targetSimulated = "Warehouse Worker";
+                    if (normRole === "manager") targetSimulated = "Warehouse Manager";
+                    if (normRole === "worker") targetSimulated = "Warehouse Worker";
 
                     document.getElementById('mismatch-warning-text').innerHTML = `⚠️ Simulated View Active: You are simulating the <strong>${targetSimulated}</strong> layout, but you are signed in to Live Supabase with a <strong>${actualName}</strong> account. Live database actions will be evaluated using your actual role.`;
                     banner.classList.remove('hidden');
