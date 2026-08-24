@@ -454,7 +454,7 @@
 
                     <!-- Subhead -->
                     <p class="text-lg sm:text-xl font-normal text-slate-600 max-w-3xl mx-auto leading-relaxed">
-                        Stop paying <span class="font-bold text-slate-900">$150+/mo</span> for a cavernous self-storage unit just to stash holiday décor or seasonal gear. We provide heavy-duty 27-gal industrial totes, secure vaulted storage, and <span class="font-bold text-blue-600">24/7 free staging room pickup</span> with dynamic volume rates.
+                        Stop paying <span class="font-bold text-slate-900">$95+/mo</span> for a cavernous self-storage unit just to stash holiday décor or seasonal gear. We provide heavy-duty 27-gal industrial totes, secure vaulted storage, and <span class="font-bold text-blue-600">24/7 free staging room pickup</span> with dynamic volume rates.
                     </p>
 
                     <!-- Value Chips -->
@@ -720,9 +720,9 @@
                                         Don't let seasonal coats, empty suitcases, and extra bedding crowd your high-rent apartment floor space. Stash them in CloudVault and retrieve them in minutes when needed.
                                     </p>
                                     <ul class="space-y-2 text-sm text-slate-700 font-medium">
-                                        <li class="flex items-center gap-2">✓ <strong>Typical Need:</strong> 4–8 totes ($20–$40/mo vs $140+ storage unit)</li>
+                                        <li class="flex items-center gap-2">✓ <strong>Typical Need:</strong> 4–8 totes ($20–$40/mo vs $95+ storage unit)</li>
                                         <li class="flex items-center gap-2">✓ <strong>Popular Stored Items:</strong> Winter coats, extra duvet sets, luggage, camping tents</li>
-                                        <li class="flex items-center gap-2">✓ <strong>Key Benefit:</strong> Saves over $1,200/year in unnecessary storage rent</li>
+                                        <li class="flex items-center gap-2">✓ <strong>Key Benefit:</strong> Saves over $750/year in unnecessary storage rent</li>
                                     </ul>
                                     <div class="pt-2">
                                         <button onclick="prefillCalculator(6)" class="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1">
@@ -733,12 +733,12 @@
                                 <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 text-left">
                                     <div class="flex items-center justify-between border-b pb-3">
                                         <span class="font-extrabold text-slate-900 text-sm">Apartment Storage Comparison</span>
-                                        <span class="text-xs font-bold text-emerald-600">Saves ~$1,200/yr</span>
+                                        <span class="text-xs font-bold text-emerald-600">Saves ~$750/yr</span>
                                     </div>
                                     <div class="space-y-2 text-xs">
                                         <div class="flex justify-between p-3 bg-red-50 text-red-900 rounded-xl">
                                             <span>Traditional 5×5 Self-Storage</span>
-                                            <span class="font-bold">~$135 – $170/mo</span>
+                                            <span class="font-bold">~$95 – $120/mo</span>
                                         </div>
                                         <div class="flex justify-between p-3 bg-emerald-50 text-emerald-900 rounded-xl font-bold border border-emerald-200">
                                             <span>CloudVault (6 Totes @ Dynamic Tier)</span>
@@ -1084,7 +1084,7 @@
                                 <!-- Dynamic Traditional Comparison Callout -->
                                 <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
                                     <span class="text-xs font-bold text-emerald-800" id="comparison-badge">
-                                        ⚡ Saves ~$110/mo compared to a traditional 5×5 unit ($140/mo)
+                                        ⚡ Saves ~$70/mo compared to a traditional 5×5 unit ($95/mo)
                                     </span>
                                 </div>
 
@@ -1913,7 +1913,7 @@
             // Update Traditional Self Storage Comparison Badge
             const compBadge = document.getElementById('comparison-badge');
             if (compBadge) {
-                const tradPrice = 140; // baseline 5x5 self storage comparison
+                const tradPrice = 95; // baseline 5x5 self storage comparison
                 const estSavings = Math.max(10, Math.round(tradPrice - monthly));
                 compBadge.textContent = `⚡ Saves ~$${estSavings}/mo compared to a traditional 5×5 unit ($${tradPrice}/mo)`;
             }
