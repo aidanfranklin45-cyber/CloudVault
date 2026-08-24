@@ -719,18 +719,39 @@
             </div>
 
             <form onsubmit="saveUpdatePaymentModal(event)" class="space-y-4">
-                <!-- Stripe Elements Mounting Target -->
-                <div class="space-y-3">
-                    <div id="stripe-loading-indicator" class="flex flex-col items-center justify-center py-8 text-gray-500 space-y-2">
-                        <svg class="w-6 h-6 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                        </svg>
-                        <span class="text-xs font-semibold">Connecting to Stripe Secure Vault...</span>
-                    </div>
-                    <div id="stripe-payment-element" class="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus-within:bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition hidden"></div>
-                    <div id="stripe-card-error" class="hidden text-xs text-red-600 font-bold bg-red-50 p-2.5 rounded-xl border border-red-200"></div>
+                <!-- Dedicated Line: Cardholder Name -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Cardholder Name</label>
+                    <input type="text" id="pay-name" placeholder="Full Name on Card" required class="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-gray-50 focus:bg-white transition">
                 </div>
+
+                <!-- Dedicated Line: Card Number -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Card Number</label>
+                    <div id="stripe-card-number-element" class="p-3.5 bg-gray-50 border border-gray-200 rounded-xl focus-within:bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition min-h-[46px]"></div>
+                </div>
+
+                <!-- Dedicated Line: Expiry & CVC Grid -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Expiration (MM/YY)</label>
+                        <div id="stripe-card-expiry-element" class="p-3.5 bg-gray-50 border border-gray-200 rounded-xl focus-within:bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition min-h-[46px]"></div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">CVC / Security Code</label>
+                        <div id="stripe-card-cvc-element" class="p-3.5 bg-gray-50 border border-gray-200 rounded-xl focus-within:bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition min-h-[46px]"></div>
+                    </div>
+                </div>
+
+                <div id="stripe-loading-indicator" class="flex items-center justify-center py-2 text-gray-500 space-x-2">
+                    <svg class="w-4 h-4 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                    <span class="text-xs font-semibold">Initializing Secure Fields...</span>
+                </div>
+
+                <div id="stripe-card-error" class="hidden text-xs text-red-600 font-bold bg-red-50 p-2.5 rounded-xl border border-red-200"></div>
 
                 <div class="flex items-center justify-center gap-1.5 text-[10px] text-gray-400 font-medium pt-1">
                     <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
@@ -3678,29 +3699,34 @@
         });
 
         // ============================================================
-        // Stripe Card Element Payment Method Controller (Card Only • SAQ A Scope)
+        // Stripe Split Card Elements Controller (Card Only • Dedicated Lines)
         // ============================================================
         let stripeInstance = null;
         let stripeElementsInstance = null;
-        let cardElementInstance = null;
+        let cardNumberElement = null;
+        let cardExpiryElement = null;
+        let cardCvcElement = null;
         let currentClientSecret = null;
 
         async function openUpdatePaymentModal() {
             const modal = document.getElementById('update-payment-modal');
             const loader = document.getElementById('stripe-loading-indicator');
-            const elementContainer = document.getElementById('stripe-payment-element');
             const errorEl = document.getElementById('stripe-card-error');
             const saveBtn = document.getElementById('save-pay-btn');
+            const nameInput = document.getElementById('pay-name');
 
             if (!modal) return;
             modal.classList.remove('hidden');
+
+            if (nameInput && !nameInput.value && window.currentUser?.name) {
+                nameInput.value = window.currentUser.name;
+            }
 
             if (errorEl) {
                 errorEl.textContent = '';
                 errorEl.classList.add('hidden');
             }
             if (loader) loader.classList.remove('hidden');
-            if (elementContainer) elementContainer.classList.add('hidden');
             if (saveBtn) saveBtn.disabled = true;
 
             try {
@@ -3727,35 +3753,62 @@
                 stripeInstance = window.Stripe(pubKey);
                 stripeElementsInstance = stripeInstance.elements();
 
-                elementContainer.innerHTML = '';
-                cardElementInstance = stripeElementsInstance.create('card', {
-                    style: {
-                        base: {
-                            color: '#0f172a',
-                            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
-                            fontSmoothing: 'antialiased',
-                            fontSize: '15px',
-                            '::placeholder': {
-                                color: '#94a3b8'
-                            }
-                        },
-                        invalid: {
-                            color: '#ef4444',
-                            iconColor: '#ef4444'
+                const elementStyle = {
+                    base: {
+                        color: '#0f172a',
+                        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+                        fontSmoothing: 'antialiased',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        lineHeight: '22px',
+                        '::placeholder': {
+                            color: '#94a3b8',
+                            fontWeight: '500'
                         }
                     },
-                    hidePostalCode: false
+                    invalid: {
+                        color: '#ef4444',
+                        iconColor: '#ef4444'
+                    }
+                };
+
+                const numTarget = document.getElementById('stripe-card-number-element');
+                const expTarget = document.getElementById('stripe-card-expiry-element');
+                const cvcTarget = document.getElementById('stripe-card-cvc-element');
+
+                if (numTarget) numTarget.innerHTML = '';
+                if (expTarget) expTarget.innerHTML = '';
+                if (cvcTarget) cvcTarget.innerHTML = '';
+
+                cardNumberElement = stripeElementsInstance.create('cardNumber', {
+                    style: elementStyle,
+                    showIcon: true
+                });
+                cardExpiryElement = stripeElementsInstance.create('cardExpiry', {
+                    style: elementStyle
+                });
+                cardCvcElement = stripeElementsInstance.create('cardCvc', {
+                    style: elementStyle
                 });
 
-                cardElementInstance.mount('#stripe-payment-element');
+                cardNumberElement.mount('#stripe-card-number-element');
+                cardExpiryElement.mount('#stripe-card-expiry-element');
+                cardCvcElement.mount('#stripe-card-cvc-element');
 
-                cardElementInstance.on('ready', () => {
-                    if (loader) loader.classList.add('hidden');
-                    if (elementContainer) elementContainer.classList.remove('hidden');
-                    if (saveBtn) saveBtn.disabled = false;
-                });
+                let elementsReadyCount = 0;
+                const checkReady = () => {
+                    elementsReadyCount++;
+                    if (elementsReadyCount >= 3) {
+                        if (loader) loader.classList.add('hidden');
+                        if (saveBtn) saveBtn.disabled = false;
+                    }
+                };
 
-                cardElementInstance.on('change', (event) => {
+                cardNumberElement.on('ready', checkReady);
+                cardExpiryElement.on('ready', checkReady);
+                cardCvcElement.on('ready', checkReady);
+
+                const handleChange = (event) => {
                     if (event.error) {
                         if (errorEl) {
                             errorEl.textContent = event.error.message;
@@ -3764,10 +3817,14 @@
                     } else {
                         if (errorEl) errorEl.classList.add('hidden');
                     }
-                });
+                };
+
+                cardNumberElement.on('change', handleChange);
+                cardExpiryElement.on('change', handleChange);
+                cardCvcElement.on('change', handleChange);
 
             } catch (err) {
-                console.error('[Stripe Card Error]', err);
+                console.error('[Stripe Split Elements Error]', err);
                 if (loader) loader.classList.add('hidden');
                 if (errorEl) {
                     errorEl.textContent = `⚠️ ${err.message || 'Error connecting to Stripe'}`;
@@ -3781,9 +3838,17 @@
         function closeUpdatePaymentModal() {
             const modal = document.getElementById('update-payment-modal');
             if (modal) modal.classList.add('hidden');
-            if (cardElementInstance) {
-                try { cardElementInstance.unmount(); } catch(e) {}
-                cardElementInstance = null;
+            if (cardNumberElement) {
+                try { cardNumberElement.unmount(); } catch(e) {}
+                cardNumberElement = null;
+            }
+            if (cardExpiryElement) {
+                try { cardExpiryElement.unmount(); } catch(e) {}
+                cardExpiryElement = null;
+            }
+            if (cardCvcElement) {
+                try { cardCvcElement.unmount(); } catch(e) {}
+                cardCvcElement = null;
             }
         }
         window.closeUpdatePaymentModal = closeUpdatePaymentModal;
@@ -3792,8 +3857,10 @@
             e.preventDefault();
             const btn = document.getElementById('save-pay-btn');
             const errorEl = document.getElementById('stripe-card-error');
+            const nameInput = document.getElementById('pay-name');
+            const cardholderName = nameInput ? nameInput.value.trim() : (currentUser?.name || '');
 
-            if (!stripeInstance || !cardElementInstance || !currentClientSecret) {
+            if (!stripeInstance || !cardNumberElement || !currentClientSecret) {
                 showToast('Stripe is not initialized. Please retry.', 'error');
                 return;
             }
@@ -3813,7 +3880,10 @@
                 // Confirm Card Setup directly with Stripe
                 const { setupIntent, error } = await stripeInstance.confirmCardSetup(currentClientSecret, {
                     payment_method: {
-                        card: cardElementInstance
+                        card: cardNumberElement,
+                        billing_details: {
+                            name: cardholderName
+                        }
                     }
                 });
 
