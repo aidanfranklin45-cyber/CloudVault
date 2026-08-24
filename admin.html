@@ -4050,8 +4050,10 @@
             loadWorkerQueues();
         }
 
-        function switchWorkerPhase(phase) {
-            window.hasManuallySwitchedPhase = true;
+        function switchWorkerPhase(phase, isManual = true) {
+            if (isManual) {
+                window.hasManuallySwitchedPhase = true;
+            }
             const phases = ['activate', 'stage', 'customer', 'dispatch', 'returned'];
             const colors = {
                 activate: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
@@ -4065,12 +4067,19 @@
             phases.forEach(p => {
                 const btn = document.getElementById(`wtab-${p}`);
                 const view = document.getElementById(`wview-${p}`);
-                if (p === phase) {
-                    btn.className = `worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border transition-all ${colors[p]}`;
-                    if (view) view.classList.remove('hidden');
-                } else {
-                    btn.className = `worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border ${inactive} hover:${colors[p].split(' ').slice(0, 3).join(' hover:')} transition-all`;
-                    if (view) view.classList.add('hidden');
+                if (btn) {
+                    if (p === phase) {
+                        btn.className = `worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border transition-all ${colors[p]}`;
+                    } else {
+                        btn.className = `worker-phase-tab flex flex-col items-center gap-1 p-3 rounded-2xl border ${inactive} hover:${colors[p].split(' ').slice(0, 3).join(' hover:')} transition-all`;
+                    }
+                }
+                if (view) {
+                    if (p === phase) {
+                        view.classList.remove('hidden');
+                    } else {
+                        view.classList.add('hidden');
+                    }
                 }
             });
             setTimeout(focusDefaultScanner, 50);
@@ -4562,7 +4571,7 @@
                 } else if (window._masterAdminData && window._masterAdminData.inventory && window._masterAdminData.inventory.length > 0) {
                     allItems = window._masterAdminData.inventory.filter(i => matchesFacilityTarget(i, queryFacilityId));
                 } else {
-                    const statuses = ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer'];
+                    const statuses = ['stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer', 'intake', 'missing-tote'];
                     const [facRes, nullRes] = await Promise.all([
                         supabase.from('inventory').select('*, users!uid(name, onboarding_status, assigned_facility_id)').eq('facility_id', queryFacilityId).in('status', statuses),
                         supabase.from('inventory').select('*, users!uid(name, onboarding_status, assigned_facility_id)').is('facility_id', null).in('status', statuses)
@@ -4579,11 +4588,11 @@
                     allRequests = window._masterAdminData.accessRequests.filter(r => matchesFacilityTarget(r, queryFacilityId));
                 } else {
                     const [facManifestsRes, nullManifestsRes] = await Promise.all([
-                        supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room, delivery_notes, users!uid(name, assigned_facility_id)')
+                        supabase.from('access_requests').select('*, users!uid(id, name, email, active_zone, assigned_facility_id)')
                             .eq('facility_id', queryFacilityId)
                             .order('requested_at', { ascending: false })
                             .limit(200),
-                        supabase.from('access_requests').select('id, uid, pin, fulfillment_type, additional_totes, target_date, time_slot, surge_tier, surge_fee, request_type, status, requested_items, requested_tote_codes, driver_name, vehicle_info, requested_at, assigned_room, delivery_notes, users!uid(name, assigned_facility_id)')
+                        supabase.from('access_requests').select('*, users!uid(id, name, email, active_zone, assigned_facility_id)')
                             .is('facility_id', null)
                             .order('requested_at', { ascending: false })
                             .limit(100)
@@ -8170,7 +8179,7 @@
 
                 if (lastSyncEl) {
                     const now = new Date();
-                    lastSyncEl.textContent = `Synced ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+                    lastSyncEl.textContent = `Synced ${now.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
                 }
 
                 // 2. Render Tables
@@ -8222,7 +8231,7 @@
                 const invoiceRef = escapeHtml(item.invoice_number || item.stripe_invoice_id || item.id || 'N/A');
                 const amt = Number(item.amount_due || item.total_amount || item.subtotal || 0);
                 const reason = escapeHtml(item.decline_reason || item.notes || (item.payment_status === 'overdue' ? 'Payment past due date' : 'insufficient_funds / card_declined'));
-                const dateStr = new Date(item.created_at || item.due_date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const rawTime = item.created_at || item.due_date || Date.now(); const dateObj = new Date(rawTime); const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
                 const invId = item.id || item.invoice_number;
 
                 return `
@@ -8268,7 +8277,7 @@
             tbody.innerHTML = latest10.map(ev => {
                 const eventId = escapeHtml(ev.stripe_event_id || ev.id || 'evt_unknown');
                 const eventType = escapeHtml(ev.event_type || 'unknown_event');
-                const dateStr = new Date(ev.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const rawTime = ev.created_at || (ev.payload?.created ? ev.payload.created * 1000 : null) || Date.now(); const dateObj = new Date(rawTime); const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
                 const status = (ev.status || 'processed').toLowerCase();
 
                 let typeColor = 'bg-blue-500/10 border-blue-500/30 text-blue-300';
@@ -8349,7 +8358,7 @@
             }
 
             tbody.innerHTML = allRefunds.map(ref => {
-                const dateStr = new Date(ref.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const rawTime = ref.date || Date.now(); const dateObj = new Date(rawTime); const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
                 return `
                     <tr class="hover:bg-gray-900/50 transition">
                         <td class="py-2.5 px-3 text-white text-xs font-medium">${escapeHtml(ref.customer)}</td>

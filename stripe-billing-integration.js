@@ -284,9 +284,11 @@
           rawDue = new Date(createdMs + 3 * 24 * 60 * 60 * 1000).toISOString();
         }
       }
-      if (!rawDue) return 'Due: Aug 15, 2026';
+      if (!rawDue) {
+        rawDue = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+      }
       const d = new Date(rawDue);
-      if (isNaN(d.getTime())) return 'Due: Aug 15, 2026';
+      if (isNaN(d.getTime())) return 'Due: Upon receipt';
       const formatted = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       return `Due: ${formatted}`;
     },
