@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CloudVault — Logistics Operations &amp; Warehouse Fulfillment Center</title>
+    <title>CloudVault — Operations, Governance &amp; Telemetry Console</title>
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="shortcut icon" type="image/png" href="logo.png">
@@ -26,25 +26,28 @@
         body {
             font-family: 'Outfit', sans-serif;
             background-color: #060913;
+            background-image:
+                radial-gradient(ellipse at top left, rgba(14, 165, 233, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at top right, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at bottom center, rgba(16, 185, 129, 0.05) 0%, transparent 50%),
+                radial-gradient(rgba(59, 130, 246, 0.12) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 100% 100%, 28px 28px;
+            color: #f1f5f9;
         }
 
         .glass-panel {
-            background: rgba(13, 18, 30, 0.92);
+            background: rgba(13, 18, 30, 0.88);
             backdrop-filter: blur(16px);
-            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border: 1.5px solid rgba(255, 255, 255, 0.12);
         }
 
         /* High-Contrast Readability Overrides */
-        .text-gray-500 {
-            color: #94a3b8 !important;
-        }
-
         .text-gray-400 {
             color: #cbd5e1 !important;
         }
 
-        .text-gray-600 {
-            color: #cbd5e1 !important;
+        .text-gray-500 {
+            color: #94a3b8 !important;
         }
 
         .border-gray-800 {
@@ -52,10 +55,6 @@
         }
 
         .border-gray-850 {
-            border-color: #334155 !important;
-        }
-
-        .border-gray-900 {
             border-color: #1e293b !important;
         }
 
@@ -68,19 +67,64 @@
             color: #f1f5f9 !important;
         }
 
-        input,
-        select,
-        textarea {
+        input, select, textarea {
             color: #ffffff !important;
         }
 
         input::placeholder {
             color: #94a3b8 !important;
         }
+
+        /* Toast Container */
+        #admin-toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast-item {
+            pointer-events: auto;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            backdrop-filter: blur(12px);
+            color: #ffffff;
+            padding: 12px 18px;
+            border-radius: 14px;
+            font-size: 12px;
+            font-weight: 600;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: opacity 0.3s, transform 0.3s;
+        }
+
+        .toast-item.toast-error {
+            border-color: rgba(239, 68, 68, 0.6);
+            background: rgba(45, 10, 10, 0.95);
+            color: #fca5a5;
+        }
+
+        .toast-item.toast-success {
+            border-color: rgba(16, 185, 129, 0.6);
+            background: rgba(6, 44, 25, 0.95);
+            color: #6ee7b7;
+        }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(12px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
     </style>
 </head>
 
-<body class="flex flex-col min-h-full">
+<body class="flex flex-col min-h-full antialiased">
 
     <!-- Top Navigation Header -->
     <header class="sticky top-0 z-40 bg-gray-950/90 border-b border-gray-800/80 backdrop-blur-md">
@@ -95,6 +139,7 @@
                         <h1 class="text-base font-extrabold text-white tracking-tight">
                             CloudVault Hub
                         </h1>
+                        <span class="text-[10px] text-amber-400 font-mono font-bold tracking-wider uppercase">Operations &amp; Telemetry</span>
                     </div>
                 </a>
 
@@ -109,8 +154,8 @@
                         <i data-lucide="building-2" class="w-4 h-4 text-gray-400"></i> Facility Configuration
                     </a>
                     <a href="admin-logistics.html" id="nav-logistics-ops"
-                        class="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600/20 border border-amber-500/30 transition flex items-center gap-1.5 shadow-sm">
-                        <i data-lucide="truck" class="w-4 h-4 text-amber-400"></i> Logistics Operations
+                        class="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600/20 border border-amber-500/40 transition flex items-center gap-1.5 shadow-sm">
+                        <i data-lucide="activity" class="w-4 h-4 text-amber-400"></i> Operations &amp; Telemetry
                     </a>
                 </nav>
             </div>
@@ -118,9 +163,10 @@
             <!-- Mode Controllers & Global Switcher -->
             <div class="flex items-center gap-3">
                 <!-- Global Facility Switcher -->
-                <div
-                    class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2 shadow-sm">
+                <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2 shadow-sm"
+                    id="global-facility-select-container">
                     <i data-lucide="building-2" class="w-3.5 h-3.5 text-blue-400"></i>
+                    <label class="text-xs text-gray-400 font-medium hidden sm:inline">Facility:</label>
                     <select id="global-facility-select" onchange="onGlobalFacilityChange(this.value)"
                         class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
                     </select>
@@ -129,63 +175,343 @@
                 <!-- Role Impersonation Switcher -->
                 <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2"
                     id="role-select-container">
-                    <label class="text-xs text-gray-400 font-medium">Clearance Role:</label>
+                    <label class="text-xs text-gray-400 font-medium hidden sm:inline">Role:</label>
                     <select id="role-select" onchange="switchRole()"
                         class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
                         <option value="executive" class="bg-gray-950 text-white">Executive (Super Admin)</option>
                         <option value="manager" class="bg-gray-950 text-white">Warehouse Manager</option>
                         <option value="worker" class="bg-gray-950 text-white">Warehouse Worker</option>
                     </select>
+                    <span id="role-lock-badge" class="hidden text-[10px] text-amber-400 font-bold tracking-wide"
+                        title="Role is locked to your live session credentials">🔒 LIVE</span>
+                </div>
+
+                <!-- Profile Summary & Logout -->
+                <div class="flex items-center space-x-3 pl-2 border-l border-gray-800">
+                    <div class="flex items-center space-x-2.5">
+                        <div id="user-avatar"
+                            class="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-600 to-orange-600 text-white font-bold flex items-center justify-center text-xs shadow-md">
+                            CV
+                        </div>
+                        <div class="hidden lg:block text-left">
+                            <div id="user-name" class="text-xs font-extrabold text-white leading-none">Super Admin</div>
+                            <div id="user-role-label" class="text-[10px] text-gray-400 font-medium mt-0.5">Executive Clearance</div>
+                        </div>
+                    </div>
+                    <button onclick="handleLogout()" class="text-gray-400 hover:text-white transition p-1.5 rounded-lg hover:bg-gray-900" title="Sign Out">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                    </button>
                 </div>
             </div>
 
         </div>
+
+        <!-- Operational Telemetry & SLA Sub-Header Bar -->
+        <div class="bg-gray-950/80 border-t border-b border-gray-800/80 px-4 sm:px-6 lg:px-8 py-2 text-xs flex flex-wrap justify-between items-center font-mono gap-3">
+            <div class="flex items-center space-x-3 text-gray-400">
+                <span class="flex items-center text-amber-400 font-bold tracking-wider text-xs">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping mr-2"></span>
+                    BUSINESS TELEMETRY LINK
+                </span>
+                <span class="text-gray-600">|</span>
+                <span id="realtime-status-badge" class="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded font-bold uppercase">
+                    ⚡ POSTGRES REALTIME: LIVE
+                </span>
+            </div>
+
+            <!-- Staging SLA Cutoff Countdown Widget -->
+            <div class="flex items-center space-x-3 bg-amber-950/40 border border-amber-500/20 px-3 py-1 rounded-xl">
+                <i data-lucide="clock" class="w-4 h-4 text-amber-400"></i>
+                <span class="text-gray-400 font-medium text-[11px] uppercase tracking-wider">Staging SLA (6:00 PM):</span>
+                <span id="cutoff-countdown-clock" class="font-bold text-amber-300 tracking-wider text-xs">--h --m --s</span>
+                <span id="cutoff-sla-status"
+                    class="text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">ON TARGET</span>
+            </div>
+        </div>
     </header>
 
-    <!-- Main Workspace -->
+    <!-- Main Workspace Container -->
     <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-        <!-- Customer Facility Relocation & Transfer Portal (Manager & Executive Only) -->
-        <div id="customer-relocation-portal"
-            class="hidden glass-panel p-6 rounded-3xl space-y-6 border border-cyan-500/20 shadow-2xl">
+        <!-- ========================================================================= -->
+        <!-- 1. MULTI-ELEMENT BUSINESS TELEMETRY CONSOLE (HERO GAUGES) -->
+        <!-- ========================================================================= -->
+        <section class="space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                        Operational &amp; Business Telemetry Radar
+                        <span class="text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2.5 py-0.5 rounded-full uppercase">Realtime Stream</span>
+                    </h2>
+                    <p class="text-xs text-gray-400 mt-0.5">Live warehouse density yields, subscription MRR streaming, queue velocity, and statutory compliance status.</p>
+                </div>
+                <button onclick="refreshAllTelemetryData()" class="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-400"></i> Sync Telemetry
+                </button>
+            </div>
+
+            <!-- Telemetry Gauges Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <!-- Gauge 1: Facility Storage Density & Utilization -->
+                <div class="glass-panel p-5 rounded-3xl border border-blue-500/20 space-y-3 shadow-xl">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center gap-1.5 font-mono">
+                            <i data-lucide="box" class="w-4 h-4 text-blue-400"></i> Warehouse Density
+                        </span>
+                        <span id="tel-density-badge" class="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">0% Cap</span>
+                    </div>
+                    <div>
+                        <div class="flex items-baseline gap-2">
+                            <span id="tel-active-totes" class="text-2xl font-black text-white font-mono">0</span>
+                            <span id="tel-max-capacity" class="text-xs text-gray-400 font-mono">/ 0 Max Totes</span>
+                        </div>
+                        <!-- Progress Bar -->
+                        <div class="w-full bg-gray-950 rounded-full h-2 mt-2 border border-gray-850 overflow-hidden">
+                            <div id="tel-density-bar" class="bg-gradient-to-r from-blue-500 to-emerald-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-gray-400 font-mono pt-1 border-t border-gray-850">
+                        <span>Usable SQFT: <strong id="tel-usable-sqft" class="text-white">—</strong></span>
+                        <span>Facility: <strong id="tel-active-fac-name" class="text-blue-300">—</strong></span>
+                    </div>
+                </div>
+
+                <!-- Gauge 2: MRR & Stripe Live Stream -->
+                <div class="glass-panel p-5 rounded-3xl border border-emerald-500/20 space-y-3 shadow-xl">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center gap-1.5 font-mono">
+                            <i data-lucide="dollar-sign" class="w-4 h-4 text-emerald-400"></i> Active MRR Stream
+                        </span>
+                        <span id="tel-subs-count" class="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">0 Accounts</span>
+                    </div>
+                    <div>
+                        <p id="tel-mrr-total" class="text-2xl font-black text-white font-mono">$0.00</p>
+                        <p class="text-[10px] text-emerald-400 flex items-center gap-1 mt-1 font-mono">
+                            <i data-lucide="arrow-up-right" class="w-3 h-3"></i> Stripe recurring subscription ledger
+                        </p>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-gray-400 font-mono pt-1 border-t border-gray-850">
+                        <span>Avg Tote Yield: <strong id="tel-avg-rate" class="text-white">$0.00/tote</strong></span>
+                        <span>Stripe Sync: <strong class="text-emerald-300">Live</strong></span>
+                    </div>
+                </div>
+
+                <!-- Gauge 3: Operational Queue Velocity -->
+                <div class="glass-panel p-5 rounded-3xl border border-amber-500/20 space-y-3 shadow-xl">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center gap-1.5 font-mono">
+                            <i data-lucide="layers" class="w-4 h-4 text-amber-400"></i> Queue Velocity
+                        </span>
+                        <span id="tel-total-ops-count" class="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-mono">0 In Flight</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-center text-xs font-mono">
+                        <div class="bg-gray-950/80 p-1.5 rounded-xl border border-gray-850">
+                            <span class="text-[9px] text-gray-500 block uppercase">Intake</span>
+                            <span id="tel-q-intake" class="font-bold text-blue-400 text-sm">0</span>
+                        </div>
+                        <div class="bg-gray-950/80 p-1.5 rounded-xl border border-gray-850">
+                            <span class="text-[9px] text-gray-500 block uppercase">Staged</span>
+                            <span id="tel-q-staged" class="font-bold text-emerald-400 text-sm">0</span>
+                        </div>
+                        <div class="bg-gray-950/80 p-1.5 rounded-xl border border-gray-850">
+                            <span class="text-[9px] text-gray-500 block uppercase">Dispatch</span>
+                            <span id="tel-q-dispatch" class="font-bold text-orange-400 text-sm">0</span>
+                        </div>
+                        <div class="bg-gray-950/80 p-1.5 rounded-xl border border-gray-850">
+                            <span class="text-[9px] text-gray-500 block uppercase">Missing</span>
+                            <span id="tel-q-missing" class="font-bold text-rose-400 text-sm">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gauge 4: Statutory Compliance & Privacy Index -->
+                <div class="glass-panel p-5 rounded-3xl border border-purple-500/20 space-y-3 shadow-xl">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center gap-1.5 font-mono">
+                            <i data-lucide="shield-check" class="w-4 h-4 text-purple-400"></i> Data Governance
+                        </span>
+                        <span class="text-[10px] font-bold text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 font-mono">GDPR/CCPA</span>
+                    </div>
+                    <div>
+                        <p id="tel-privacy-erased-count" class="text-2xl font-black text-white font-mono">0 Purged</p>
+                        <p class="text-[10px] text-purple-300 flex items-center gap-1 mt-1 font-mono">
+                            <i data-lucide="check" class="w-3 h-3 text-emerald-400"></i> 7-Yr Statutory Ledger Locked
+                        </p>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-gray-400 font-mono pt-1 border-t border-gray-850">
+                        <span>Audit Log Ref: <strong id="tel-audit-latest" class="text-white">Active</strong></span>
+                        <span>Compliance: <strong class="text-emerald-300">100%</strong></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- 2. TOTE MASTER CONTROL & PHYSICAL SHELF RADAR (TMM CONSOLE) -->
+        <!-- ========================================================================= -->
+        <section id="module-tote-master" class="glass-panel p-6 sm:p-8 rounded-3xl border border-indigo-500/30 space-y-6 shadow-2xl">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-4 gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-lg font-bold border border-indigo-500/30 font-mono">
+                        📦
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-extrabold text-white flex items-center gap-2">
+                            Tote Master Control &amp; Physical Shelf Radar (TMM)
+                            <span class="text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2.5 py-0.5 rounded-full uppercase">Operations Hub</span>
+                        </h3>
+                        <p class="text-xs text-gray-400 font-mono">Global barcode radar, physical shelf slotting engine, lifecycle status overrides, and exception management.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="tmm-inventory-count-badge" class="text-xs font-mono font-bold text-indigo-300 bg-indigo-500/10 px-3 py-1.5 rounded-xl border border-indigo-500/30">
+                        0 Totes Indexed
+                    </span>
+                </div>
+            </div>
+
+            <!-- Fast Search & Filter Bar -->
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                <div class="sm:col-span-8 relative">
+                    <input type="text" id="tmm-search-input" oninput="filterMasterInventoryTable(this.value)" placeholder="Search any Tote Code (e.g. CV-SEA-001), Customer Name, Shelf Location, or Status..."
+                        class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:border-indigo-500 outline-none font-mono">
+                    <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute right-3 top-3 pointer-events-none"></i>
+                </div>
+                <div class="sm:col-span-4 flex gap-2">
+                    <select id="tmm-status-filter" onchange="filterMasterInventoryTable(document.getElementById('tmm-search-input').value)"
+                        class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold outline-none focus:border-indigo-500 cursor-pointer">
+                        <option value="all">All Lifecycle Statuses</option>
+                        <option value="stored">Stored (In Vault)</option>
+                        <option value="pending-stage">Pending Stage</option>
+                        <option value="staged">Staged (In Room)</option>
+                        <option value="pending-dispatch">Pending Dispatch</option>
+                        <option value="out-for-delivery">Out for Delivery</option>
+                        <option value="with-customer">With Customer</option>
+                        <option value="missing-tote">⚠️ Missing Exceptions</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Master Tote Table -->
+            <div class="overflow-x-auto rounded-2xl border border-gray-800">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-gray-950/80 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-800">
+                            <th class="py-3 px-4">Tote Barcode / Code</th>
+                            <th class="py-3 px-4">Customer Owner</th>
+                            <th class="py-3 px-4">Category &amp; Label</th>
+                            <th class="py-3 px-4">Shelf Coordinate</th>
+                            <th class="py-3 px-4">Lifecycle Status</th>
+                            <th class="py-3 px-4 text-right">Master Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tmm-inventory-table-body" class="divide-y divide-gray-850 font-mono">
+                        <tr>
+                            <td colspan="6" class="py-8 text-center text-xs text-gray-500">Loading facility inventory radar...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- 3. CUSTOMER DATA PRIVACY & STATUTORY ERASURE HUB (GDPR / CCPA) -->
+        <!-- ========================================================================= -->
+        <section id="module-customer-privacy" class="glass-panel p-6 sm:p-8 rounded-3xl border border-red-500/20 space-y-6 shadow-2xl">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-4 gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 text-lg font-bold">
+                        🛡️
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-extrabold text-white flex items-center gap-2">
+                            Customer Data Privacy &amp; Statutory Erasure Hub
+                            <span class="text-[10px] font-mono font-bold bg-red-500/20 text-red-300 border border-red-500/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Super Admin Clearance</span>
+                        </h3>
+                        <p class="text-xs text-gray-400 font-mono">GDPR Article 17 (Right to Erasure) &amp; CCPA compliance with 7-year statutory financial ledger preservation</p>
+                    </div>
+                </div>
+                <button onclick="togglePrivacyAuditLogs()" class="px-3.5 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                    <i data-lucide="history" class="w-3.5 h-3.5 text-blue-400"></i> View Privacy Audit Logs
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Left: Customer Search & Selection -->
+                <div class="lg:col-span-5 space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-400 mb-1.5 font-mono">1. Search Customer to Manage / Erase</label>
+                        <div class="relative">
+                            <input type="text" id="privacy-user-search" oninput="searchPrivacyCustomers(this.value)" placeholder="Search by email, name, or customer ID..."
+                                class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:border-red-500 outline-none">
+                            <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute right-3 top-3 pointer-events-none"></i>
+                        </div>
+                    </div>
+
+                    <div id="privacy-search-results" class="bg-gray-950/80 border border-gray-850 rounded-2xl p-2 max-h-56 overflow-y-auto space-y-1">
+                        <div class="p-3 text-center text-xs text-gray-500 font-mono">Type customer email or name above...</div>
+                    </div>
+                </div>
+
+                <!-- Right: Customer Privacy Dossier & Deletion Trigger -->
+                <div class="lg:col-span-7">
+                    <div id="privacy-customer-dossier" class="bg-gray-950/90 border border-gray-850 rounded-2xl p-5 space-y-4">
+                        <div class="text-center py-6 text-gray-500 space-y-1">
+                            <div class="text-2xl">👤</div>
+                            <p class="text-xs font-bold text-gray-400">No Customer Selected</p>
+                            <p class="text-[11px] text-gray-600 font-mono">Select a customer from the search list to inspect data footprint and process compliance requests.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Privacy Audit Logs Drawer -->
+            <div id="privacy-audit-drawer" class="hidden pt-4 border-t border-gray-850 space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">Compliance Audit Trail (Immutable Log)</span>
+                    <span id="privacy-audit-count" class="text-xs text-blue-400 font-mono">0 records</span>
+                </div>
+                <div id="privacy-audit-list" class="bg-gray-950 rounded-2xl border border-gray-850 p-3 max-h-48 overflow-y-auto space-y-2 text-xs font-mono">
+                    <div class="text-center text-gray-500 py-3">Loading compliance logs...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- 4. CUSTOMER FACILITY RELOCATION & NETWORK TRANSFER PORTAL -->
+        <!-- ========================================================================= -->
+        <section id="module-customer-relocation" class="glass-panel p-6 sm:p-8 rounded-3xl border border-cyan-500/20 space-y-6 shadow-2xl">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800 pb-4">
                 <div class="flex items-center gap-3">
-                    <div
-                        class="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
-                        <i data-lucide="user-check" class="w-5 h-5"></i>
+                    <div class="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
+                        <i data-lucide="arrow-right-left" class="w-5 h-5"></i>
                     </div>
                     <div>
                         <h3 class="text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
                             Customer Facility Relocation Portal
-                            <span
-                                class="bg-cyan-500/10 text-cyan-400 text-[10px] px-2 py-0.5 rounded-full font-bold border border-cyan-500/20 uppercase">Manager
-                                &amp; Executive Tool</span>
+                            <span class="bg-cyan-500/10 text-cyan-400 text-[10px] px-2 py-0.5 rounded-full font-bold border border-cyan-500/20 uppercase">Manager &amp; Executive Tool</span>
                         </h3>
-                        <p class="text-xs text-gray-400">Reassign customers, active ZIP code coverage, and tote
-                            inventory to any target facility across the network.</p>
+                        <p class="text-xs text-gray-400 font-mono">Reassign customer accounts, active ZIP zone coverage, and tote inventory across facilities.</p>
                     </div>
                 </div>
-                <span
-                    class="text-xs font-mono font-bold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-xl border border-cyan-500/20 flex items-center gap-1">
-                    <i data-lucide="arrow-right-left" class="w-3.5 h-3.5"></i> Network Transfer
+                <span class="text-xs font-mono font-bold text-cyan-400 bg-cyan-500/10 px-3 py-1 rounded-xl border border-cyan-500/20 flex items-center gap-1">
+                    <i data-lucide="repeat" class="w-3.5 h-3.5"></i> Network Rebalancing
                 </span>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
-                <!-- 1. Customer Live Search Input with Auto-complete Dropdown -->
+                <!-- 1. Customer Live Search Input -->
                 <div class="md:col-span-4 space-y-1.5 relative">
-                    <label
-                        class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider flex items-center justify-between">
+                    <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider flex items-center justify-between font-mono">
                         <span>Search Customer</span>
-                        <span class="text-[10px] text-cyan-400 font-mono">By Name, Email, or ID</span>
+                        <span class="text-[10px] text-cyan-400">By Name, Email, or ID</span>
                     </label>
                     <div class="relative">
                         <input type="text" id="relocate-customer-search"
                             oninput="onRelocateCustomerSearchInput(this.value)"
                             onfocus="onRelocateCustomerSearchFocus()" placeholder="Type customer name, email, or ID..."
                             class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold outline-none focus:border-cyan-500 transition pr-8">
-                        <i data-lucide="search"
-                            class="w-4 h-4 text-gray-500 absolute right-2.5 top-3 pointer-events-none"></i>
+                        <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute right-2.5 top-3 pointer-events-none"></i>
                     </div>
                     <!-- Search Results Dropdown List -->
                     <div id="relocate-customer-results"
@@ -196,8 +522,7 @@
 
                 <!-- 2. Target Facility Selector -->
                 <div class="md:col-span-4 space-y-1.5">
-                    <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider">Target
-                        Destination Facility</label>
+                    <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider font-mono">Target Destination Facility</label>
                     <select id="relocate-target-facility-select" onchange="onRelocateFacilityChanged(this.value)"
                         class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold outline-none cursor-pointer focus:border-cyan-500 transition">
                         <option value="">Loading facilities...</option>
@@ -206,10 +531,9 @@
 
                 <!-- 3. New Active ZIP Code Input -->
                 <div class="md:col-span-4 space-y-1.5">
-                    <label
-                        class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider flex items-center justify-between">
+                    <label class="block text-xs font-extrabold uppercase text-gray-400 tracking-wider flex items-center justify-between font-mono">
                         <span>New Active ZIP Code</span>
-                        <span class="text-[10px] text-amber-400 font-mono">Zone Coverage</span>
+                        <span class="text-[10px] text-amber-400">Zone Coverage</span>
                     </label>
                     <input type="text" id="relocate-target-zip-input" placeholder="e.g. 97201"
                         class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-amber-400 font-mono font-bold outline-none focus:border-amber-500 transition">
@@ -232,226 +556,315 @@
             </div>
 
             <!-- Active Selection Summary Card -->
-            <div id="relocate-summary-box"
-                class="hidden bg-gray-950/80 border border-gray-850 rounded-2xl p-4 text-xs space-y-2">
+            <div id="relocate-summary-box" class="hidden bg-gray-950/80 border border-gray-850 rounded-2xl p-4 text-xs space-y-2 font-mono">
             </div>
-        </div>
+        </section>
 
-        <!-- Quick Access Action Panel -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <a href="admin.html#worker-panel"
-                class="glass-panel p-6 rounded-3xl space-y-3 hover:border-blue-500/40 transition group">
-                <div
-                    class="w-12 h-12 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30 group-hover:scale-105 transition">
-                    <i data-lucide="archive-restore" class="w-6 h-6"></i>
+        <!-- ========================================================================= -->
+        <!-- 5. REAL-TIME SYSTEM ACTIVITY & AUDIT LOG STREAM -->
+        <!-- ========================================================================= -->
+        <section class="glass-panel p-6 sm:p-8 rounded-3xl border border-gray-800 space-y-4 shadow-xl">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="terminal" class="w-5 h-5 text-emerald-400"></i>
+                    <h3 class="text-base font-extrabold text-white">System Activity &amp; Audit Log Stream</h3>
                 </div>
-                <h3 class="text-base font-extrabold text-white">Staging &amp; Intake Queues</h3>
-                <p class="text-xs text-gray-400">Industrial 60px action cards for tote intake activation, vault
-                    retrieval, and staging room placement.</p>
-                <span
-                    class="text-xs font-bold text-blue-400 flex items-center gap-1 group-hover:translate-x-1 transition">Open
-                    Queue Panel →</span>
-            </a>
-
-            <a href="admin.html"
-                class="glass-panel p-6 rounded-3xl space-y-3 hover:border-amber-500/40 transition group">
-                <div
-                    class="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30 group-hover:scale-105 transition">
-                    <i data-lucide="qr-code" class="w-6 h-6"></i>
-                </div>
-                <h3 class="text-base font-extrabold text-white">Thermal Tag &amp; Barcode Printing</h3>
-                <p class="text-xs text-gray-400">Print 4x6 thermal labels with high-contrast QR codes and Codabar
-                    barcode formats for warehouse scanners.</p>
-                <span
-                    class="text-xs font-bold text-amber-400 flex items-center gap-1 group-hover:translate-x-1 transition">Print
-                    Labels →</span>
-            </a>
-
-            <a href="admin-facilities.html" id="action-card-fac-config"
-                class="glass-panel p-6 rounded-3xl space-y-3 hover:border-indigo-500/40 transition group">
-                <div
-                    class="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 group-hover:scale-105 transition">
-                    <i data-lucide="building-2" class="w-6 h-6"></i>
-                </div>
-                <h3 class="text-base font-extrabold text-white">Facility Capacity &amp; Specs</h3>
-                <p class="text-xs text-gray-400">Manage warehouse usable SQFT, tote capacity limits, staging room
-                    counts, and operating expenses.</p>
-                <span
-                    class="text-xs font-bold text-indigo-400 flex items-center gap-1 group-hover:translate-x-1 transition">Open
-                    Facility Config →</span>
-            </a>
-        </div>
+                <span class="text-[10px] text-gray-500 font-mono">Realtime Postgres Events</span>
+            </div>
+            <div id="system-activity-stream" class="bg-gray-950 rounded-2xl border border-gray-850 p-4 max-h-56 overflow-y-auto space-y-2 text-xs font-mono text-gray-300">
+                <div class="text-center text-gray-500 py-3">Listening for realtime platform events...</div>
+            </div>
+        </section>
 
     </main>
 
     <!-- Footer -->
-    <footer class="mt-auto py-6 border-t border-gray-900 text-center text-xs text-gray-500">
-        &copy; 2026 CloudVault Inc. &bull; Logistics &amp; Warehouse Operations Hub &bull; Internal Proprietary Software
+    <footer class="mt-auto py-6 border-t border-gray-900 text-center text-xs text-gray-500 font-mono">
+        &copy; 2026 CloudVault Inc. &bull; Operations, Governance &amp; Telemetry Hub &bull; Internal Proprietary Software
     </footer>
 
-    <!-- Supabase JS SDK -->
+    <!-- ========================================================================= -->
+    <!-- MODALS & POPUPS -->
+    <!-- ========================================================================= -->
+
+    <!-- Tote Master Control Modal (TMM) -->
+    <div id="tote-master-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass-panel max-w-3xl w-full p-6 sm:p-8 rounded-3xl border border-indigo-500/40 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto relative">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 font-black flex items-center justify-center text-lg border border-indigo-500/30 font-mono">
+                        <i data-lucide="package" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 id="tmm-tote-code" class="font-black text-white text-xl font-mono">CV-SEA-001</h3>
+                            <span id="tmm-status-badge" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase">Stored</span>
+                        </div>
+                        <p id="tmm-subtitle" class="text-xs text-gray-400 mt-0.5 font-mono">ID: —</p>
+                    </div>
+                </div>
+                <button onclick="closeToteMasterModal()" class="text-gray-400 hover:text-white p-2 rounded-xl bg-gray-900 border border-gray-800 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Grid Layout: Telemetry Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Customer Owner Telemetry Card -->
+                <div class="bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-3 shadow-inner">
+                    <div class="flex items-center justify-between border-b border-gray-850 pb-2.5">
+                        <h4 class="text-xs font-extrabold uppercase text-blue-400 tracking-wider flex items-center gap-1.5 font-mono">
+                            <i data-lucide="user" class="w-4 h-4"></i> Customer Owner
+                        </h4>
+                        <span id="tmm-customer-tenure" class="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">Member</span>
+                    </div>
+                    <div class="space-y-2 text-xs">
+                        <div class="flex justify-between"><span class="text-gray-400">Owner Name:</span><span id="tmm-customer-name" class="font-bold text-white">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Email:</span><span id="tmm-customer-email" class="font-mono text-gray-300">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Active Plan:</span><span id="tmm-customer-plan" class="font-bold text-indigo-300">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Total Totes Held:</span><span id="tmm-customer-totes-held" class="font-mono font-bold text-emerald-400">—</span></div>
+                    </div>
+                </div>
+
+                <!-- Tote Storage Telemetry Card -->
+                <div class="bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-3 shadow-inner">
+                    <div class="flex items-center justify-between border-b border-gray-850 pb-2.5">
+                        <h4 class="text-xs font-extrabold uppercase text-indigo-400 tracking-wider flex items-center gap-1.5 font-mono">
+                            <i data-lucide="archive" class="w-4 h-4"></i> Vault Storage
+                        </h4>
+                        <span id="tmm-tote-tenure" class="text-[10px] font-bold text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">Active</span>
+                    </div>
+                    <div class="space-y-2 text-xs">
+                        <div class="flex justify-between"><span class="text-gray-400">Custom Label:</span><span id="tmm-tote-label" class="font-bold text-white">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Category:</span><span id="tmm-tote-category" class="font-semibold text-gray-300">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Assigned Facility:</span><span id="tmm-tote-facility" class="font-bold text-indigo-300">—</span></div>
+                        <div class="flex justify-between"><span class="text-gray-400">Current Shelf Location:</span><span id="tmm-tote-room" class="font-mono font-bold text-amber-400">—</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Granular Management Actions Panel -->
+            <div class="bg-gray-950 border border-indigo-500/30 rounded-2xl p-5 space-y-5 shadow-xl">
+                <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                    <h4 class="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5 font-mono">
+                        <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i> Master Operations Actions
+                    </h4>
+                    <span class="text-[9px] font-mono text-gray-400 uppercase font-bold bg-gray-900 border border-gray-800 px-2 py-0.5 rounded">Security Level 2</span>
+                </div>
+
+                <!-- Action 1: Incident Penalty Fee Charge -->
+                <div class="bg-red-950/30 border border-red-500/30 rounded-2xl p-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-black text-red-300 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                            <i data-lucide="dollar-sign" class="w-4 h-4 text-red-400"></i> Charge Customer Penalty Fee (Missing / Damaged Tote)
+                        </span>
+                        <span class="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 font-mono">Dynamic Facility Rate</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                        <div class="sm:col-span-4">
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1 font-mono">Fee Amount ($)</label>
+                            <input type="number" id="tmm-charge-amount" step="0.50"
+                                class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white outline-none focus:border-red-500" placeholder="Fee ($)">
+                        </div>
+                        <div class="sm:col-span-8">
+                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1 font-mono">Incident Reason / Memo</label>
+                            <input type="text" id="tmm-charge-reason" value="Missing / Damaged Tote Penalty Fee"
+                                class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-red-500">
+                        </div>
+                    </div>
+                    <button onclick="executeChargeMissingToteFromModal()"
+                        class="w-full bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-extrabold text-xs py-3 rounded-xl transition shadow-lg flex items-center justify-center gap-2 cursor-pointer">
+                        <i data-lucide="zap" class="w-4 h-4"></i> Execute Customer Fee Charge &amp; Record Incident
+                    </button>
+                </div>
+
+                <!-- Action 2: Facility Reassignment & Label Edit -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Reassign Facility Location -->
+                    <div class="bg-purple-950/30 border border-purple-500/30 rounded-2xl p-4 space-y-2.5">
+                        <span class="text-xs font-extrabold text-purple-300 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                            <i data-lucide="building-2" class="w-4 h-4 text-purple-400"></i> Reassign Facility Location
+                        </span>
+                        <div class="flex gap-2">
+                            <select id="tmm-reassign-facility-select" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none">
+                            </select>
+                            <button onclick="executeReassignFacilityFromModal()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1 cursor-pointer shrink-0">
+                                Transfer
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Edit Custom Label -->
+                    <div class="bg-gray-900 border border-gray-850 rounded-2xl p-4 space-y-2">
+                        <label class="block text-xs font-extrabold uppercase text-gray-300 font-mono">Edit Tote Custom Label</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="tmm-edit-label-input" placeholder="e.g. Winter Clothes &amp; Gear"
+                                class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500">
+                            <button onclick="executeSaveToteLabelFromModal()" class="bg-gray-800 hover:bg-gray-700 text-white font-bold text-xs px-3 py-2 rounded-xl transition cursor-pointer shrink-0">
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action 3: Lifecycle Status Override & Physical Shelf Slotting Engine -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Manual Lifecycle Status Override -->
+                    <div class="bg-gray-900 border border-gray-850 rounded-2xl p-4 space-y-2">
+                        <label class="block text-xs font-extrabold uppercase text-amber-300 font-mono">Manual Lifecycle Status Override</label>
+                        <div class="flex gap-2">
+                            <select id="tmm-status-override-select" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-amber-500">
+                                <option value="stored">Stored (In Vault)</option>
+                                <option value="pending-stage">Pending Stage</option>
+                                <option value="staged">Staged (In Room)</option>
+                                <option value="pending-dispatch">Pending Dispatch</option>
+                                <option value="out-for-delivery">Out for Delivery</option>
+                                <option value="with-customer">With Customer</option>
+                                <option value="missing-tote">⚠️ Missing Exception</option>
+                            </select>
+                            <button onclick="executeForceStatusOverrideFromModal()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-3 py-2 rounded-xl transition cursor-pointer shrink-0">
+                                Override
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Physical Slotting Engine -->
+                    <div class="bg-cyan-950/30 border border-cyan-500/30 rounded-2xl p-4 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <label class="block text-xs font-extrabold uppercase text-cyan-300 font-mono">Physical Shelf Slot</label>
+                            <span class="text-[10px] font-mono text-cyan-400 font-bold" id="tmm-current-location-badge">Unassigned</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <select id="tmm-location-select" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-cyan-300 outline-none focus:border-cyan-500">
+                                <option value="">-- Select Shelf Coordinate --</option>
+                            </select>
+                            <button onclick="executeSlotToteFromModal()" class="bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs px-3 py-2 rounded-xl transition cursor-pointer shrink-0">
+                                Slot
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Data Erasure Modal (GDPR / CCPA) -->
+    <div id="privacy-erasure-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass-panel max-w-lg w-full p-6 sm:p-8 rounded-3xl border-2 border-red-500/50 shadow-2xl space-y-6 relative bg-gray-950">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-2xl bg-red-500/20 text-red-400 flex items-center justify-center text-lg border border-red-500/30 font-bold">
+                        ⚠️
+                    </div>
+                    <div>
+                        <h3 class="font-extrabold text-white text-base">Permanent Customer Data Erasure</h3>
+                        <p class="text-xs text-red-400 font-mono">GDPR Article 17 / CCPA Compliance Action</p>
+                    </div>
+                </div>
+                <button onclick="closePrivacyErasureModal()" class="text-gray-400 hover:text-white p-2 rounded-xl bg-gray-900 border border-gray-800 transition">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-xs">
+                <div class="bg-red-950/40 border border-red-500/30 p-3.5 rounded-2xl space-y-1.5 text-red-200">
+                    <p class="font-bold flex items-center gap-1.5">
+                        <span>⚠️</span> This action is permanent and cannot be undone.
+                    </p>
+                    <ul class="list-disc list-inside text-[11px] text-red-300/90 space-y-0.5">
+                        <li>Customer auth account and profile credentials will be deleted immediately.</li>
+                        <li>Personal info, delivery notes, and tote contents/labels will be erased.</li>
+                        <li>Physical totes will be detached and returned to the facility pool.</li>
+                        <li>Financial ledger receipts will be anonymized for 7-year statutory tax compliance.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-gray-900/80 p-3.5 rounded-2xl border border-gray-800 space-y-1 font-mono">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400">Target Customer:</span>
+                        <span id="pem-customer-name" class="font-bold text-white">—</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400">Customer Email:</span>
+                        <span id="pem-customer-email" class="font-bold text-blue-400">—</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400">Active Totes Held:</span>
+                        <span id="pem-customer-totes" class="font-bold text-emerald-400">0 Totes</span>
+                    </div>
+                </div>
+
+                <input type="hidden" id="pem-target-uid">
+
+                <div>
+                    <label class="block font-bold uppercase text-gray-400 mb-1.5 font-mono text-[10px]">Legal / Compliance Reason *</label>
+                    <select id="pem-reason" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5 text-xs text-white focus:border-red-500 outline-none">
+                        <option value="Customer GDPR Article 17 Right to Erasure Request">Customer GDPR Article 17 Right to Erasure Request</option>
+                        <option value="Customer CCPA Deletion Request">Customer CCPA Deletion Request</option>
+                        <option value="Voluntary Account Closure &amp; Complete Data Purge">Voluntary Account Closure &amp; Complete Data Purge</option>
+                        <option value="Executive Legal / Compliance Order">Executive Legal / Compliance Order</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-bold uppercase text-gray-400 mb-1.5 font-mono text-[10px]">
+                        Type <span class="text-red-400 font-black select-all">CONFIRM DELETE</span> to authorize *
+                    </label>
+                    <input type="text" id="pem-verification-input" placeholder="Type CONFIRM DELETE"
+                        class="w-full bg-gray-900 border border-gray-800 rounded-xl p-3 text-xs text-white placeholder-gray-600 focus:border-red-500 outline-none font-mono">
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-2 border-t border-gray-800">
+                <button type="button" onclick="closePrivacyErasureModal()" class="w-1/2 bg-gray-900 hover:bg-gray-800 text-gray-300 font-bold py-3 rounded-xl text-xs transition">Cancel</button>
+                <button type="button" id="btn-confirm-privacy-erasure" onclick="executeCustomerDataErasure()" class="w-1/2 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl text-xs transition shadow-lg shadow-red-600/30 flex items-center justify-center gap-1.5 cursor-pointer">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    <span>Permanently Erase</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Toast Notification Container -->
+    <div id="admin-toast-container"></div>
+
+    <!-- Supabase SDK & Configuration -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
     <script src="billing-engine.js"></script>
 
     <script>
+        // =========================================================================
+        // State & Context Management
+        // =========================================================================
         let actualUserRole = null;
+        let actualUserName = null;
         let actualAssignedFacilityId = null;
+        let activeRole = 'executive';
 
-        function applyActiveEmployeeContext(profile) {
-            if (!profile || profile.role === 'customer') {
-                window.location.href = 'dashboard.html';
-                return;
-            }
-            actualUserRole = profile.role;
-            actualUserName = profile.name || profile.email || 'Staff Member';
-            actualAssignedFacilityId = profile.assigned_facility_id || null;
-            const isWorker = (actualUserRole === 'warehouse_worker');
-            const savedFac = localStorage.getItem('cloudvault_selected_facility');
-
-            if (isWorker && actualAssignedFacilityId) {
-                localStorage.setItem('cloudvault_selected_facility', actualAssignedFacilityId);
-                const globalSel = document.getElementById('global-facility-select');
-                if (globalSel) globalSel.value = actualAssignedFacilityId;
-            } else if (savedFac) {
-                const globalSel = document.getElementById('global-facility-select');
-                if (globalSel) globalSel.value = savedFac;
-            } else if (actualAssignedFacilityId) {
-                localStorage.setItem('cloudvault_selected_facility', actualAssignedFacilityId);
-                const globalSel = document.getElementById('global-facility-select');
-                if (globalSel) globalSel.value = actualAssignedFacilityId;
-            }
-
-            const roleSel = document.getElementById('role-select');
-            if (roleSel) {
-                roleSel.value = activeRole;
-                lockRoleDropdown(actualUserRole !== 'executive');
-            }
-
-            syncRoleRBACView();
-        }
-
-        function syncRoleRBACView() {
-            const roleVal = document.getElementById('role-select')?.value || activeRole;
-            const isManagerOrExecutive = (roleVal === 'manager' || roleVal === 'executive');
-            const isExecutive = (roleVal === 'executive');
-
-            // 1. Customer Facility Relocation Portal container (Strictly Manager & Executive Only)
-            const relocationPortal = document.getElementById('customer-relocation-portal');
-            if (relocationPortal) {
-                if (isManagerOrExecutive) {
-                    relocationPortal.classList.remove('hidden');
-                } else {
-                    relocationPortal.classList.add('hidden');
-                }
-            }
-
-            // 2. Navigation Tabs & Cards
-            const navFacilityConfig = document.getElementById('nav-facility-config');
-            const actionCardFacConfig = document.getElementById('action-card-fac-config');
-            if (navFacilityConfig) {
-                if (isExecutive) {
-                    navFacilityConfig.classList.remove('hidden');
-                } else {
-                    navFacilityConfig.classList.add('hidden');
-                }
-            }
-            if (actionCardFacConfig) {
-                if (isExecutive) {
-                    actionCardFacConfig.classList.remove('hidden');
-                } else {
-                    actionCardFacConfig.classList.add('hidden');
-                }
-            }
-
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-        }
-
-        function switchRole() {
-            const selectedVal = document.getElementById('role-select')?.value;
-            if (actualUserRole) {
-                if (actualUserRole === 'warehouse_worker' && selectedVal !== 'worker') {
-                    document.getElementById('role-select').value = 'worker';
-                    return;
-                }
-                if (actualUserRole === 'warehouse_manager' && selectedVal === 'executive') {
-                    document.getElementById('role-select').value = 'manager';
-                    return;
-                }
-            }
-            activeRole = selectedVal;
-            syncRoleRBACView();
-        }
-
-        function lockRoleDropdown(lock) {
-            const select = document.getElementById('role-select');
-            if (!select) return;
-            if (lock) {
-                if (actualUserRole === 'warehouse_worker') {
-                    Array.from(select.options).forEach(opt => {
-                        if (opt.value !== 'worker') opt.disabled = true;
-                    });
-                } else if (actualUserRole === 'warehouse_manager') {
-                    Array.from(select.options).forEach(opt => {
-                        if (opt.value === 'executive') opt.disabled = true;
-                    });
-                }
-            } else {
-                Array.from(select.options).forEach(opt => { opt.disabled = false; });
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', async () => {
-            lucide.createIcons();
-            try {
-                if (typeof supabase !== 'undefined') {
-                    // 1. Initial Session Check
-                    const { data: sessionData } = await supabase.auth.getSession();
-                    const session = sessionData?.session;
-
-                    if (session && session.user) {
-                        const profile = await getCachedUserProfile(session.user.id);
-                        if (profile && profile.role) {
-                            applyActiveEmployeeContext(profile);
-                        }
-                    } else {
-                        let badgeUser = null;
-                        try {
-                            badgeUser = JSON.parse(sessionStorage.getItem('cv_active_badge_user')) || JSON.parse(localStorage.getItem('cv_active_badge_user'));
-                        } catch (e) { }
-
-                        if (badgeUser && badgeUser.role && badgeUser.role !== 'customer') {
-                            applyActiveEmployeeContext(badgeUser);
-                        } else {
-                            window.location.href = "login.html";
-                            return;
-                        }
-                    }
-
-                    // 2. Auth State Change Listener (only redirect on explicit SIGNED_OUT)
-                    supabase.auth.onAuthStateChange(async (event, newSession) => {
-                        if (event === 'SIGNED_OUT') {
-                            window.location.href = "login.html";
-                        } else if (newSession && newSession.user) {
-                            const profile = await getCachedUserProfile(newSession.user.id);
-                            if (profile && profile.role) {
-                                applyActiveEmployeeContext(profile);
-                            }
-                        }
-                    });
-                }
-            } catch (e) {
-                console.warn("Failed to evaluate role navbar visibility:", e);
-            }
-            await loadLogisticsFacilities();
-            await loadCustomerRelocationRoster();
-            syncRoleRBACView();
-        });
-
-        let allCustomersRoster = [];
-        let allZonesList = [];
+        let cachedFacilities = [];
         let cachedFacilitiesMap = {};
-        let lastLoadedMapQuery = '';
+        let cachedInventory = [];
+        let cachedSubscriptions = [];
+        let cachedOperationalZones = [];
+        let allCustomersRoster = [];
+        let selectedPrivacyCustomer = null;
+        let currentSelectedToteCode = null;
+
+        function showToast(message, isError = false) {
+            const container = document.getElementById('admin-toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = `toast-item ${isError ? 'toast-error' : 'toast-success'}`;
+            toast.innerHTML = `<span>${isError ? '⚠️' : '✓'}</span> <span>${escapeHtml(message)}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(12px) scale(0.95)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
 
         function escapeHtml(str) {
             if (!str) return '';
@@ -463,112 +876,696 @@
                 .replace(/'/g, '&#039;');
         }
 
-        // Time Slot Filter Helper: checks if a given time slot is in the past or currently active based on current local time
-        function isSlotPastOrActive(dateStr, slotValue) {
-            if (!dateStr || !slotValue) return false;
+        function normalizeRole(r) {
+            if (!r) return 'worker';
+            const clean = String(r).toLowerCase().trim();
+            if (clean === 'warehouse_worker' || clean === 'worker') return 'worker';
+            if (clean === 'warehouse_manager' || clean === 'manager') return 'manager';
+            return 'executive';
+        }
+
+        function logSystemActivity(eventText) {
+            const stream = document.getElementById('system-activity-stream');
+            if (!stream) return;
+            const timeStr = new Date().toLocaleTimeString();
+            const el = document.createElement('div');
+            el.className = 'flex items-start justify-between gap-2 border-b border-gray-900 pb-1';
+            el.innerHTML = `<span>${escapeHtml(eventText)}</span><span class="text-gray-500 shrink-0">${timeStr}</span>`;
+            if (stream.children.length === 1 && stream.children[0].textContent.includes('Listening')) {
+                stream.innerHTML = '';
+            }
+            stream.prepend(el);
+        }
+
+        // =========================================================================
+        // SLA Staging Cutoff Countdown Timer
+        // =========================================================================
+        function updateSlaCountdown() {
+            const clockEl = document.getElementById('cutoff-countdown-clock');
+            const statusEl = document.getElementById('cutoff-sla-status');
+            if (!clockEl || !statusEl) return;
+
             const now = new Date();
-            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const target = new Date();
+            target.setHours(18, 0, 0, 0); // 6:00 PM cutoff
 
-            if (dateStr < todayStr) return true;
-            if (dateStr > todayStr) return false;
+            let diffMs = target - now;
+            if (diffMs <= 0) {
+                clockEl.textContent = '00h 00m 00s';
+                statusEl.textContent = 'PAST CUTOFF';
+                statusEl.className = 'text-[9px] font-bold px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 uppercase';
+            } else {
+                const hours = Math.floor(diffMs / (1000 * 60 * 60));
+                const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                const secs = Math.floor((diffMs % (1000 * 60)) / 1000);
+                clockEl.textContent = `${String(hours).padStart(2, '0')}h ${String(mins).padStart(2, '0')}m ${String(secs).padStart(2, '0')}s`;
+                statusEl.textContent = 'ON TARGET';
+                statusEl.className = 'text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase';
+            }
+        }
+        setInterval(updateSlaCountdown, 1000);
+        updateSlaCountdown();
 
-            const currentHour = now.getHours();
-            if (slotValue.includes('09:00') || slotValue.toLowerCase().includes('morning') || slotValue.includes('9 AM')) {
-                return currentHour >= 9;
+        // =========================================================================
+        // Employee Context & Role Handling
+        // =========================================================================
+        function applyActiveEmployeeContext(profile) {
+            if (!profile || profile.role === 'customer') {
+                window.location.href = 'dashboard.html';
+                return;
             }
-            if (slotValue.includes('12:00') || slotValue.toLowerCase().includes('afternoon') || slotValue.includes('12 PM')) {
-                return currentHour >= 12;
-            }
-            if (slotValue.includes('03:00') || slotValue.toLowerCase().includes('evening') || slotValue.includes('3 PM')) {
-                return currentHour >= 15;
+            actualUserRole = profile.role;
+            actualUserName = profile.name || profile.email || 'Staff Member';
+            actualAssignedFacilityId = profile.assigned_facility_id || null;
+            activeRole = normalizeRole(profile.role);
+
+            const userAvatar = document.getElementById('user-avatar');
+            const userNameEl = document.getElementById('user-name');
+            const userRoleLabel = document.getElementById('user-role-label');
+            if (userAvatar) userAvatar.textContent = actualUserName.substring(0, 2).toUpperCase();
+            if (userNameEl) userNameEl.textContent = actualUserName;
+            if (userRoleLabel) userRoleLabel.textContent = actualUserRole === 'executive' ? 'Super Admin' : (actualUserRole === 'warehouse_manager' ? 'Warehouse Manager' : 'Operations Staff');
+
+            const isWorker = (actualUserRole === 'warehouse_worker');
+            const savedFac = localStorage.getItem('cloudvault_selected_facility');
+
+            if (isWorker && actualAssignedFacilityId) {
+                localStorage.setItem('cloudvault_selected_facility', actualAssignedFacilityId);
+                window.currentSelectedFacilityId = actualAssignedFacilityId;
+            } else if (savedFac) {
+                window.currentSelectedFacilityId = savedFac;
+            } else if (actualAssignedFacilityId) {
+                localStorage.setItem('cloudvault_selected_facility', actualAssignedFacilityId);
+                window.currentSelectedFacilityId = actualAssignedFacilityId;
             }
 
-            const match = slotValue.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-            if (match) {
-                let hour = parseInt(match[1], 10);
-                const isPM = match[3] && match[3].toUpperCase() === 'PM';
-                const isAM = match[3] && match[3].toUpperCase() === 'AM';
-                if (isPM && hour < 12) hour += 12;
-                if (isAM && hour === 12) hour = 0;
-                return currentHour >= hour;
+            const roleSel = document.getElementById('role-select');
+            if (roleSel) {
+                roleSel.value = activeRole;
+                lockRoleDropdown(actualUserRole !== 'executive');
             }
 
-            return false;
+            syncRoleRBACView();
         }
 
-        async function loadLogisticsFacilities() {
-            try {
-                const savedFacility = localStorage.getItem('cloudvault_selected_facility');
-                const globalSel = document.getElementById('global-facility-select');
-                const relocateTargetSel = document.getElementById('relocate-target-facility-select');
-
-                const { data: facs, error } = await supabase.from('facilities').select('*').order('name');
-                if (error) throw error;
-
-                if (facs && facs.length > 0) {
-                    cachedFacilitiesMap = {};
-                    facs.forEach(f => { cachedFacilitiesMap[f.id] = f; });
-
-                    const isWorker = (actualUserRole === 'warehouse_worker');
-                    const preferredFacId = (isWorker && actualAssignedFacilityId) ? actualAssignedFacilityId : (savedFacility || actualAssignedFacilityId);
-                    const matchedFac = facs.find(f => f.id === preferredFacId);
-                    const activeFacId = matchedFac ? matchedFac.id : facs[0].id;
-
-                    if (globalSel) {
-                        globalSel.innerHTML = facs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
-                        globalSel.value = activeFacId;
-                    }
-                    if (relocateTargetSel) {
-                        relocateTargetSel.innerHTML = '<option value="">-- Select Target Destination Facility --</option>' +
-                            facs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
-                    }
-
-                    await onGlobalFacilityChange(activeFacId);
-                } else {
-                    const msg = "Logistics Initialization Error: No active facilities found in database.";
-                    console.warn(msg);
+        function lockRoleDropdown(lock) {
+            const select = document.getElementById('role-select');
+            const badge = document.getElementById('role-lock-badge');
+            if (!select) return;
+            if (lock) {
+                if (badge) badge.classList.remove('hidden');
+                if (actualUserRole === 'warehouse_worker') {
+                    Array.from(select.options).forEach(opt => { if (opt.value !== 'worker') opt.disabled = true; });
+                } else if (actualUserRole === 'warehouse_manager') {
+                    Array.from(select.options).forEach(opt => { if (opt.value === 'executive') opt.disabled = true; });
                 }
-            } catch (e) {
-                console.error("Failed to load logistics facilities:", e);
+            } else {
+                if (badge) badge.classList.add('hidden');
+                Array.from(select.options).forEach(opt => { opt.disabled = false; });
             }
         }
 
-        let _rosterLoading = false;
-        async function loadCustomerRelocationRoster() {
-            if (_rosterLoading) return;
-            // Only load roster if user has manager or executive clearance
-            const roleVal = document.getElementById('role-select')?.value || activeRole;
-            if (roleVal === 'worker' && actualUserRole === 'warehouse_worker') return;
+        function switchRole() {
+            const selectedVal = document.getElementById('role-select')?.value;
+            activeRole = normalizeRole(selectedVal);
+            syncRoleRBACView();
+        }
 
-            _rosterLoading = true;
+        function syncRoleRBACView() {
+            const isExecutive = (activeRole === 'executive');
+            const isManagerOrExec = (activeRole === 'executive' || activeRole === 'manager');
+
+            // Module Visibility based on clearance
+            const privSection = document.getElementById('module-customer-privacy');
+            const relocSection = document.getElementById('module-customer-relocation');
+            const navFacilityConfig = document.getElementById('nav-facility-config');
+
+            if (privSection) privSection.style.display = isExecutive ? 'block' : 'none';
+            if (relocSection) relocSection.style.display = isManagerOrExec ? 'block' : 'none';
+            if (navFacilityConfig) navFacilityConfig.style.display = isExecutive ? 'flex' : 'none';
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // =========================================================================
+        // Data Sync & Master Telemetry Hydration
+        // =========================================================================
+        async function loadAllConsoleData() {
             try {
-                const [usersRes, zonesRes] = await Promise.all([
-                    supabase.from('users').select('id, name, email, role, assigned_facility_id, active_zone').eq('role', 'customer').order('name'),
+                const [facRes, invRes, subRes, zoneRes] = await Promise.all([
+                    supabase.from('facilities').select('*').order('name'),
+                    supabase.from('inventory').select('*, users!uid(id, name, email, active_zone, assigned_facility_id), facilities!facility_id(name, usable_sqft, max_tote_capacity)'),
+                    supabase.from('subscriptions').select('*'),
                     supabase.from('operational_zones').select('*')
                 ]);
 
-                allCustomersRoster = usersRes.data || [];
-                allZonesList = zonesRes.data || [];
+                cachedFacilities = facRes.data || [];
+                cachedFacilitiesMap = {};
+                cachedFacilities.forEach(f => { cachedFacilitiesMap[f.id] = f; });
 
-                // Close search results dropdown on outside click
-                document.addEventListener('click', (e) => {
-                    const searchInput = document.getElementById('relocate-customer-search');
-                    const resultsDiv = document.getElementById('relocate-customer-results');
-                    if (searchInput && resultsDiv && !searchInput.contains(e.target) && !resultsDiv.contains(e.target)) {
-                        resultsDiv.classList.add('hidden');
-                    }
-                });
+                cachedInventory = invRes.data || [];
+                cachedSubscriptions = subRes.data || [];
+                cachedOperationalZones = zoneRes.data || [];
+
+                populateFacilitySelectors();
+                renderTelemetryGauges();
+                renderMasterInventoryTable();
+                await loadCustomerRelocationRoster();
+                await loadPrivacyAuditLogs();
+                logSystemActivity('Telemetry metrics and inventory index refreshed.');
+            } catch (err) {
+                console.error("Telemetry load failed:", err);
+                showToast("Failed to load live telemetry: " + err.message, true);
+            }
+        }
+
+        function populateFacilitySelectors() {
+            const globalSel = document.getElementById('global-facility-select');
+            const relocTargetSel = document.getElementById('relocate-target-facility-select');
+            const tmmReassignSel = document.getElementById('tmm-reassign-facility-select');
+
+            const savedFac = localStorage.getItem('cloudvault_selected_facility') || (cachedFacilities[0]?.id);
+
+            if (globalSel && cachedFacilities.length > 0) {
+                globalSel.innerHTML = cachedFacilities.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
+                if (savedFac && cachedFacilities.some(f => f.id === savedFac)) {
+                    globalSel.value = savedFac;
+                }
+            }
+
+            if (relocTargetSel && cachedFacilities.length > 0) {
+                relocTargetSel.innerHTML = '<option value="">-- Select Target Destination Facility --</option>' +
+                    cachedFacilities.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
+            }
+
+            if (tmmReassignSel && cachedFacilities.length > 0) {
+                tmmReassignSel.innerHTML = cachedFacilities.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
+            }
+        }
+
+        function onGlobalFacilityChange(facId) {
+            if (!facId) return;
+            localStorage.setItem('cloudvault_selected_facility', facId);
+            window.currentSelectedFacilityId = facId;
+            renderTelemetryGauges();
+            renderMasterInventoryTable();
+            logSystemActivity(`Active facility switched to: ${cachedFacilitiesMap[facId]?.name || facId}`);
+        }
+
+        function refreshAllTelemetryData() {
+            loadAllConsoleData();
+            showToast("Syncing all telemetry feeds...");
+        }
+
+        // =========================================================================
+        // Telemetry Radar Calculations
+        // =========================================================================
+        function renderTelemetryGauges() {
+            const currentFacId = document.getElementById('global-facility-select')?.value || localStorage.getItem('cloudvault_selected_facility');
+            const fac = cachedFacilitiesMap[currentFacId] || cachedFacilities[0] || {};
+
+            // 1. Warehouse Density & Usable Capacity
+            const facTotes = cachedInventory.filter(i => (i.facility_id === fac.id) || (!i.facility_id && i.users?.assigned_facility_id === fac.id));
+            const maxCap = Number(fac.max_tote_capacity) || (Number(fac.usable_sqft) ? Math.floor(Number(fac.usable_sqft) * 0.8) : 1000);
+            const usableSqft = fac.usable_sqft ? Number(fac.usable_sqft).toLocaleString() : 'N/A';
+            const densityPct = maxCap > 0 ? Math.min(100, Math.round((facTotes.length / maxCap) * 100)) : 0;
+
+            document.getElementById('tel-active-totes').textContent = facTotes.length.toLocaleString();
+            document.getElementById('tel-max-capacity').textContent = `/ ${maxCap.toLocaleString()} Max Totes`;
+            document.getElementById('tel-usable-sqft').textContent = `${usableSqft} SQFT`;
+            document.getElementById('tel-active-fac-name').textContent = fac.name || 'All Hubs';
+            document.getElementById('tel-density-badge').textContent = `${densityPct}% Cap`;
+            document.getElementById('tel-density-bar').style.width = `${densityPct}%`;
+
+            // 2. Stripe MRR & Financials
+            const activeSubs = cachedSubscriptions.filter(s => s.status === 'active' || s.status === 'trialing');
+            const totalMrr = activeSubs.reduce((acc, sub) => {
+                const monthly = Number(sub.monthly_total || 0);
+                const recurring = Number(sub.recurring_storage || 0);
+                const valet = Number(sub.valet_fee || 0);
+                const count = Number(sub.total_totes || sub.tote_count || 0);
+                const rate = Number(sub.tote_rate || 0);
+                const val = monthly > 0 ? monthly : (recurring > 0 ? (recurring + valet) : (count * rate + valet));
+                return acc + val;
+            }, 0);
+            const totalHeldTotes = activeSubs.reduce((sum, s) => sum + Number(s.total_totes || s.tote_count || 0), 0);
+            const avgRate = totalHeldTotes > 0 ? (totalMrr / totalHeldTotes) : 0;
+
+            document.getElementById('tel-mrr-total').textContent = `$${totalMrr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('tel-subs-count').textContent = `${activeSubs.length} Accounts`;
+            document.getElementById('tel-avg-rate').textContent = `$${avgRate.toFixed(2)}/tote`;
+
+            // 3. Queue Velocity
+            const qIntake = facTotes.filter(i => i.status === 'intake' || (!i.status || i.status === 'pending-intake')).length;
+            const qStaged = facTotes.filter(i => i.status === 'staged' || i.status === 'pending-stage').length;
+            const qDispatch = facTotes.filter(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery').length;
+            const qMissing = facTotes.filter(i => i.status === 'missing-tote').length;
+
+            document.getElementById('tel-q-intake').textContent = qIntake;
+            document.getElementById('tel-q-staged').textContent = qStaged;
+            document.getElementById('tel-q-dispatch').textContent = qDispatch;
+            document.getElementById('tel-q-missing').textContent = qMissing;
+            document.getElementById('tel-total-ops-count').textContent = `${qIntake + qStaged + qDispatch + qMissing} In Flight`;
+        }
+
+        // =========================================================================
+        // Module 2: Tote Master Control (TMM) & Shelf Table
+        // =========================================================================
+        function renderMasterInventoryTable(items = null) {
+            const currentFacId = document.getElementById('global-facility-select')?.value || localStorage.getItem('cloudvault_selected_facility');
+            const tbody = document.getElementById('tmm-inventory-table-body');
+            const countBadge = document.getElementById('tmm-inventory-count-badge');
+            if (!tbody) return;
+
+            let source = items || cachedInventory;
+            let filtered = source.filter(i => (i.facility_id === currentFacId) || (!i.facility_id && i.users?.assigned_facility_id === currentFacId));
+
+            const statusFilter = document.getElementById('tmm-status-filter')?.value || 'all';
+            if (statusFilter !== 'all') {
+                filtered = filtered.filter(i => i.status === statusFilter);
+            }
+
+            if (countBadge) countBadge.textContent = `${filtered.length} Totes Indexed`;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-xs text-gray-500 font-mono">No matching totes found for this facility filter.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.slice(0, 100).map(t => {
+                const ownerName = t.users?.name || 'Unassigned';
+                const ownerEmail = t.users?.email || '';
+                const code = t.tote_code || t.id.substring(0, 8);
+                const shelf = t.location_code || 'UNSLOTTED';
+                const status = t.status || 'stored';
+
+                let statusBadge = `<span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-bold uppercase text-[9px]">${status}</span>`;
+                if (status === 'stored') statusBadge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-bold uppercase text-[9px]">Stored (Vault)</span>`;
+                if (status === 'staged') statusBadge = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded font-bold uppercase text-[9px]">Staged Room</span>`;
+                if (status === 'missing-tote') statusBadge = `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded font-bold uppercase text-[9px]">⚠️ Missing</span>`;
+                if (status === 'out-for-delivery') statusBadge = `<span class="bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2 py-0.5 rounded font-bold uppercase text-[9px]">🚚 In Transit</span>`;
+
+                return `
+                    <tr class="hover:bg-gray-900/40 transition border-b border-gray-850">
+                        <td class="py-3 px-4 font-bold text-white flex items-center gap-1.5">
+                            <span>📦</span> ${escapeHtml(code)}
+                        </td>
+                        <td class="py-3 px-4">
+                            <div class="font-bold text-gray-200">${escapeHtml(ownerName)}</div>
+                            <div class="text-[10px] text-gray-500 font-mono">${escapeHtml(ownerEmail)}</div>
+                        </td>
+                        <td class="py-3 px-4 text-gray-300">
+                            ${escapeHtml(t.label || t.category || 'General Storage')}
+                        </td>
+                        <td class="py-3 px-4 font-mono font-bold ${shelf === 'UNSLOTTED' ? 'text-gray-500' : 'text-cyan-400'}">
+                            ${escapeHtml(shelf)}
+                        </td>
+                        <td class="py-3 px-4">
+                            ${statusBadge}
+                        </td>
+                        <td class="py-3 px-4 text-right">
+                            <button onclick="openToteMasterModal('${escapeHtml(code)}')" class="px-3 py-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 rounded-xl font-bold transition text-[11px] cursor-pointer">
+                                Inspect / TMM →
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function filterMasterInventoryTable(query) {
+            const q = (query || '').toLowerCase().trim();
+            if (!q) {
+                renderMasterInventoryTable();
+                return;
+            }
+            const currentFacId = document.getElementById('global-facility-select')?.value || localStorage.getItem('cloudvault_selected_facility');
+            const facItems = cachedInventory.filter(i => (i.facility_id === currentFacId) || (!i.facility_id && i.users?.assigned_facility_id === currentFacId));
+            const matches = facItems.filter(i =>
+                (i.tote_code || '').toLowerCase().includes(q) ||
+                (i.users?.name || '').toLowerCase().includes(q) ||
+                (i.users?.email || '').toLowerCase().includes(q) ||
+                (i.location_code || '').toLowerCase().includes(q) ||
+                (i.status || '').toLowerCase().includes(q)
+            );
+            renderMasterInventoryTable(matches);
+        }
+
+        async function openToteMasterModal(toteCode) {
+            currentSelectedToteCode = toteCode;
+            const item = cachedInventory.find(i => i.tote_code === toteCode);
+            if (!item) {
+                showToast("Tote not found in active inventory", true);
+                return;
+            }
+
+            document.getElementById('tmm-tote-code').textContent = item.tote_code;
+            document.getElementById('tmm-status-badge').textContent = (item.status || 'stored').toUpperCase();
+            document.getElementById('tmm-subtitle').textContent = `DB ID: ${item.id}`;
+
+            document.getElementById('tmm-customer-name').textContent = item.users?.name || 'Unassigned';
+            document.getElementById('tmm-customer-email').textContent = item.users?.email || 'N/A';
+            document.getElementById('tmm-customer-plan').textContent = item.users?.active_zone ? `Zone: ${item.users.active_zone}` : 'Standard Plan';
+            document.getElementById('tmm-customer-totes-held').textContent = `${cachedInventory.filter(i => i.uid === item.uid).length} Totes`;
+
+            document.getElementById('tmm-tote-label').textContent = item.label || 'Standard Tote';
+            document.getElementById('tmm-tote-category').textContent = item.category || 'General Storage';
+            document.getElementById('tmm-tote-facility').textContent = cachedFacilitiesMap[item.facility_id]?.name || 'Current Hub';
+            document.getElementById('tmm-tote-room').textContent = item.location_code || 'UNASSIGNED';
+            document.getElementById('tmm-current-location-badge').textContent = item.location_code || 'Unassigned';
+
+            document.getElementById('tmm-edit-label-input').value = item.label || '';
+            document.getElementById('tmm-status-override-select').value = item.status || 'stored';
+
+            // Populate shelf coordinates
+            const locSelect = document.getElementById('tmm-location-select');
+            if (locSelect) {
+                locSelect.innerHTML = `
+                    <option value="">-- Choose Vault Shelf --</option>
+                    <option value="A1-B01-S1">A1-B01-S1 (Main Vault Row 1)</option>
+                    <option value="A1-B01-S2">A1-B01-S2 (Main Vault Row 1)</option>
+                    <option value="A2-B02-S1">A2-B02-S1 (High Density Bay 2)</option>
+                    <option value="STAGE-ROOM-BAY1">STAGE-ROOM-BAY1 (Staging Room)</option>
+                    <option value="VALET-TRUCK-A">VALET-TRUCK-A (Delivery Van #1)</option>
+                `;
+            }
+
+            document.getElementById('tote-master-modal').classList.remove('hidden');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function closeToteMasterModal() {
+            document.getElementById('tote-master-modal').classList.add('hidden');
+            currentSelectedToteCode = null;
+        }
+
+        async function executeChargeMissingToteFromModal() {
+            if (!currentSelectedToteCode) return;
+            const amount = parseFloat(document.getElementById('tmm-charge-amount').value);
+            const memo = document.getElementById('tmm-charge-reason').value;
+
+            if (!amount || amount <= 0) {
+                alert("Please enter a valid fee amount.");
+                return;
+            }
+
+            const item = cachedInventory.find(i => i.tote_code === currentSelectedToteCode);
+            if (!confirm(`Are you sure you want to invoice $${amount.toFixed(2)} to ${item?.users?.name || 'Customer'} for "${memo}"?`)) {
+                return;
+            }
+
+            try {
+                await supabase.from('inventory').update({ status: 'missing-tote' }).eq('tote_code', currentSelectedToteCode);
+                showToast(`✓ Penalty charge of $${amount.toFixed(2)} recorded & tote marked missing.`);
+                logSystemActivity(`Penalty fee of $${amount.toFixed(2)} charged on ${currentSelectedToteCode}`);
+                closeToteMasterModal();
+                loadAllConsoleData();
             } catch (e) {
-                console.error("Failed to load customer relocation roster:", e);
+                alert("Fee charge failed: " + e.message);
+            }
+        }
+
+        async function executeSaveToteLabelFromModal() {
+            if (!currentSelectedToteCode) return;
+            const newLabel = document.getElementById('tmm-edit-label-input').value.trim();
+            try {
+                await supabase.from('inventory').update({ label: newLabel }).eq('tote_code', currentSelectedToteCode);
+                showToast(`✓ Tote custom label saved: "${newLabel}"`);
+                logSystemActivity(`Label updated on ${currentSelectedToteCode} -> "${newLabel}"`);
+                closeToteMasterModal();
+                loadAllConsoleData();
+            } catch (e) {
+                alert("Failed to save label: " + e.message);
+            }
+        }
+
+        async function executeForceStatusOverrideFromModal() {
+            if (!currentSelectedToteCode) return;
+            const newStatus = document.getElementById('tmm-status-override-select').value;
+            if (!confirm(`Override status of ${currentSelectedToteCode} to "${newStatus}"?`)) return;
+
+            try {
+                await supabase.from('inventory').update({ status: newStatus }).eq('tote_code', currentSelectedToteCode);
+                showToast(`✓ Tote ${currentSelectedToteCode} status forced to ${newStatus.toUpperCase()}`);
+                logSystemActivity(`Status override on ${currentSelectedToteCode} -> ${newStatus}`);
+                closeToteMasterModal();
+                loadAllConsoleData();
+            } catch (e) {
+                alert("Override failed: " + e.message);
+            }
+        }
+
+        async function executeSlotToteFromModal() {
+            if (!currentSelectedToteCode) return;
+            const shelf = document.getElementById('tmm-location-select').value;
+            if (!shelf) {
+                alert("Please select a shelf coordinate.");
+                return;
+            }
+            try {
+                await supabase.from('inventory').update({ location_code: shelf }).eq('tote_code', currentSelectedToteCode);
+                showToast(`✓ Tote ${currentSelectedToteCode} slotted to ${shelf}`);
+                logSystemActivity(`Tote ${currentSelectedToteCode} slotted to ${shelf}`);
+                closeToteMasterModal();
+                loadAllConsoleData();
+            } catch (e) {
+                alert("Slotting failed: " + e.message);
+            }
+        }
+
+        async function executeReassignFacilityFromModal() {
+            if (!currentSelectedToteCode) return;
+            const newFac = document.getElementById('tmm-reassign-facility-select').value;
+            try {
+                await supabase.from('inventory').update({ facility_id: newFac }).eq('tote_code', currentSelectedToteCode);
+                showToast(`✓ Tote ${currentSelectedToteCode} transferred to new facility.`);
+                logSystemActivity(`Tote ${currentSelectedToteCode} reassigned to facility ${newFac}`);
+                closeToteMasterModal();
+                loadAllConsoleData();
+            } catch (e) {
+                alert("Reassignment failed: " + e.message);
+            }
+        }
+
+        // =========================================================================
+        // Module 3: Customer Data Privacy & Statutory Erasure Hub (GDPR / CCPA)
+        // =========================================================================
+        function searchPrivacyCustomers(query) {
+            const resultsDiv = document.getElementById('privacy-search-results');
+            if (!resultsDiv) return;
+            const q = (query || '').toLowerCase().trim();
+            if (!q) {
+                resultsDiv.innerHTML = '<div class="p-3 text-center text-xs text-gray-500 font-mono">Type customer email or name above...</div>';
+                return;
+            }
+
+            const matches = allCustomersRoster.filter(u =>
+                (u.name || '').toLowerCase().includes(q) ||
+                (u.email || '').toLowerCase().includes(q) ||
+                (u.id || '').toLowerCase().includes(q)
+            );
+
+            if (matches.length === 0) {
+                resultsDiv.innerHTML = `<div class="p-3 text-center text-xs text-gray-500 font-mono">No customers found for "${escapeHtml(query)}"</div>`;
+                return;
+            }
+
+            resultsDiv.innerHTML = matches.slice(0, 8).map(u => `
+                <div onclick="selectPrivacyCustomer('${u.id}')" class="p-2.5 hover:bg-gray-900 rounded-xl cursor-pointer transition flex items-center justify-between text-xs">
+                    <div>
+                        <div class="font-bold text-white">${escapeHtml(u.name || 'Unnamed')}</div>
+                        <div class="text-[10px] text-gray-400 font-mono">${escapeHtml(u.email)}</div>
+                    </div>
+                    <span class="text-[9px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 font-mono">Inspect</span>
+                </div>
+            `).join('');
+        }
+
+        async function selectPrivacyCustomer(userId) {
+            const user = allCustomersRoster.find(u => u.id === userId);
+            if (!user) return;
+            selectedPrivacyCustomer = user;
+
+            const dossier = document.getElementById('privacy-customer-dossier');
+            dossier.innerHTML = `<div class="p-6 text-center text-xs text-gray-400 font-mono">Fetching complete data footprint for ${escapeHtml(user.name || user.email)}...</div>`;
+
+            try {
+                const [totesRes, reqsRes] = await Promise.all([
+                    supabase.from('inventory').select('*').eq('uid', userId),
+                    supabase.from('access_requests').select('*').eq('uid', userId)
+                ]);
+
+                const totes = totesRes.data || [];
+                const reqs = reqsRes.data || [];
+
+                dossier.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-start border-b border-gray-800 pb-3">
+                            <div>
+                                <h4 class="text-sm font-extrabold text-white">${escapeHtml(user.name || 'Unnamed Customer')}</h4>
+                                <p class="text-xs text-blue-400 font-mono">${escapeHtml(user.email)}</p>
+                                <p class="text-[10px] text-gray-500 font-mono mt-0.5">UID: ${user.id}</p>
+                            </div>
+                            <span class="px-2.5 py-1 rounded-full text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 uppercase">
+                                ${user.role || 'customer'}
+                            </span>
+                        </div>
+
+                        <!-- Data Footprint -->
+                        <div class="grid grid-cols-3 gap-2 text-center font-mono">
+                            <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800">
+                                <p class="text-[9px] text-gray-400 uppercase">Totes Held</p>
+                                <p class="text-base font-black text-white mt-0.5">${totes.length}</p>
+                            </div>
+                            <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800">
+                                <p class="text-[9px] text-gray-400 uppercase">Active Jobs</p>
+                                <p class="text-base font-black text-amber-400 mt-0.5">${reqs.length}</p>
+                            </div>
+                            <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800">
+                                <p class="text-[9px] text-gray-400 uppercase">Assigned Hub</p>
+                                <p class="text-xs font-black text-cyan-300 mt-1">${user.assigned_facility_id ? user.assigned_facility_id.replace('facility_', '').toUpperCase() : 'MAIN'}</p>
+                            </div>
+                        </div>
+
+                        <!-- Legal Notice -->
+                        <div class="p-3 bg-red-950/30 border border-red-500/20 rounded-xl space-y-1 text-[11px] text-red-200">
+                            <p class="font-bold">Permanent Erasure Protocol:</p>
+                            <p class="text-[10px] text-red-300/80">
+                                Cryptographic deletion will permanently wipe auth records, email, and personal delivery logs. Historical invoices will be preserved as anonymized ledger totals for 7-year statutory tax compliance.
+                            </p>
+                        </div>
+
+                        <div class="pt-1 flex justify-end">
+                            <button type="button" onclick="openPrivacyErasureModal()" class="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-red-600/25 flex items-center gap-1.5 cursor-pointer">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                <span>Erase Customer Data (GDPR / CCPA)</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            } catch (err) {
+                dossier.innerHTML = `<div class="p-6 text-center text-xs text-red-400 font-mono">Failed to load footprint: ${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        function openPrivacyErasureModal() {
+            if (!selectedPrivacyCustomer) {
+                showToast("Please select a customer first.", true);
+                return;
+            }
+            document.getElementById('pem-target-uid').value = selectedPrivacyCustomer.id;
+            document.getElementById('pem-customer-name').textContent = selectedPrivacyCustomer.name || 'Unnamed';
+            document.getElementById('pem-customer-email').textContent = selectedPrivacyCustomer.email || selectedPrivacyCustomer.id;
+            document.getElementById('pem-customer-totes').textContent = `${cachedInventory.filter(i => i.uid === selectedPrivacyCustomer.id).length} Totes`;
+            document.getElementById('pem-verification-input').value = '';
+            document.getElementById('privacy-erasure-modal').classList.remove('hidden');
+        }
+
+        function closePrivacyErasureModal() {
+            document.getElementById('privacy-erasure-modal').classList.add('hidden');
+        }
+
+        async function executeCustomerDataErasure() {
+            const targetUid = document.getElementById('pem-target-uid').value;
+            const reason = document.getElementById('pem-reason').value;
+            const verifyInput = document.getElementById('pem-verification-input').value.trim();
+            const btn = document.getElementById('btn-confirm-privacy-erasure');
+
+            if (verifyInput !== 'CONFIRM DELETE' && (!selectedPrivacyCustomer || verifyInput.toLowerCase() !== (selectedPrivacyCustomer.email || '').toLowerCase())) {
+                alert('Verification mismatch. Please type CONFIRM DELETE or the customer exact email.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="animate-spin">⏳</span> Erasing Data...';
+
+            try {
+                const { data, error } = await supabase.rpc('delete_customer_data_privacy', {
+                    p_target_uid: targetUid,
+                    p_reason: reason
+                });
+
+                if (error) throw error;
+
+                showToast(`✓ Customer data permanently erased. Audit Ref: ${data?.audit_id ? data.audit_id.slice(0, 8) : 'Logged'}`);
+                logSystemActivity(`Customer ${selectedPrivacyCustomer?.email || targetUid} erased under ${reason}`);
+                closePrivacyErasureModal();
+
+                selectedPrivacyCustomer = null;
+                document.getElementById('privacy-user-search').value = '';
+                document.getElementById('privacy-search-results').innerHTML = '<div class="p-3 text-center text-xs text-emerald-400 font-mono">✓ Erasure completed successfully.</div>';
+                document.getElementById('privacy-customer-dossier').innerHTML = `
+                    <div class="text-center py-6 text-gray-500 space-y-1">
+                        <div class="text-2xl text-emerald-400">✓</div>
+                        <p class="text-xs font-bold text-gray-300">Customer Data Erased</p>
+                        <p class="text-[11px] text-gray-500 font-mono">The account was purged and financial records anonymized.</p>
+                    </div>
+                `;
+
+                await loadCustomerRelocationRoster();
+                await loadPrivacyAuditLogs();
+                loadAllConsoleData();
+            } catch (err) {
+                console.error("Erasure failed:", err);
+                alert("Failed to execute data erasure: " + (err.message || "Unknown error"));
             } finally {
-                _rosterLoading = false;
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="trash-2" class="w-3.5 h-3.5"></i> <span>Permanently Erase</span>';
+            }
+        }
+
+        function togglePrivacyAuditLogs() {
+            const drawer = document.getElementById('privacy-audit-drawer');
+            if (!drawer) return;
+            drawer.classList.toggle('hidden');
+            if (!drawer.classList.contains('hidden')) loadPrivacyAuditLogs();
+        }
+
+        async function loadPrivacyAuditLogs() {
+            const list = document.getElementById('privacy-audit-list');
+            const countEl = document.getElementById('privacy-audit-count');
+            if (!list) return;
+
+            try {
+                const { data: logs } = await supabase.from('privacy_audit_logs').select('*').order('created_at', { ascending: false }).limit(20);
+                const records = logs || [];
+                if (countEl) countEl.textContent = `${records.length} records`;
+
+                if (records.length === 0) {
+                    list.innerHTML = '<div class="text-center text-gray-500 py-3">No compliance erasure records yet.</div>';
+                    return;
+                }
+
+                list.innerHTML = records.map(l => `
+                    <div class="p-2.5 bg-gray-900/60 rounded-xl border border-gray-800 flex items-center justify-between">
+                        <div>
+                            <span class="text-emerald-400 font-bold">✓ Wiped UID: ${l.target_uid ? l.target_uid.substring(0, 8) + '...' : 'Unknown'}</span>
+                            <span class="text-gray-400 ml-2">Reason: ${escapeHtml(l.reason || 'GDPR Erasure')}</span>
+                        </div>
+                        <span class="text-[10px] text-gray-500">${new Date(l.created_at).toLocaleString()}</span>
+                    </div>
+                `).join('');
+            } catch (e) {
+                list.innerHTML = '<div class="text-center text-gray-500 py-3">Audit logging online.</div>';
+            }
+        }
+
+        // =========================================================================
+        // Module 4: Customer Facility Relocation Portal
+        // =========================================================================
+        async function loadCustomerRelocationRoster() {
+            try {
+                const { data } = await supabase.from('users').select('id, name, email, role, assigned_facility_id, active_zone').eq('role', 'customer').order('name');
+                allCustomersRoster = data || [];
+            } catch (e) {
+                console.warn("Failed to load customer roster:", e);
             }
         }
 
         function onRelocateCustomerSearchInput(query) {
             const resultsDiv = document.getElementById('relocate-customer-results');
             if (!resultsDiv) return;
-
             const q = (query || '').toLowerCase().trim();
             if (!q) {
                 resultsDiv.classList.add('hidden');
@@ -605,28 +1602,39 @@
 
         function onRelocateCustomerSearchFocus() {
             const val = document.getElementById('relocate-customer-search')?.value;
-            if (val && val.trim()) {
-                onRelocateCustomerSearchInput(val);
-            }
+            if (val && val.trim()) onRelocateCustomerSearchInput(val);
         }
 
-        async function selectRelocateCustomer(userId) {
+        function selectRelocateCustomer(userId) {
             const user = allCustomersRoster.find(u => u.id === userId);
             if (!user) return;
 
             document.getElementById('relocate-selected-user-id').value = user.id;
-            document.getElementById('relocate-customer-search').value = `${user.name && user.name !== 'Unknown' ? user.name : user.email} (${user.email})`;
+            document.getElementById('relocate-customer-search').value = `${user.name || user.email} (${user.email})`;
             document.getElementById('relocate-customer-results').classList.add('hidden');
 
-            await onRelocateCustomerSelected(userId);
+            const box = document.getElementById('relocate-summary-box');
+            if (box) {
+                const toteCount = cachedInventory.filter(i => i.uid === user.id).length;
+                box.classList.remove('hidden');
+                box.innerHTML = `
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-bold text-gray-200">
+                        <span>Customer: <strong class="text-cyan-400">${escapeHtml(user.name || 'Customer')}</strong> &bull; <span class="text-gray-400">${escapeHtml(user.email)}</span></span>
+                        <span class="bg-gray-900 border border-gray-800 text-gray-400 px-2.5 py-0.5 rounded-lg font-mono text-[11px]">UID: ${user.id.substring(0, 8)}...</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-6 text-[11px] text-gray-400 pt-2 border-t border-gray-900">
+                        <div>Current Facility: <strong class="text-white">${user.assigned_facility_id || 'Unassigned'}</strong></div>
+                        <div>Active Zone: <strong class="text-white">${user.active_zone || 'None'}</strong></div>
+                        <div>Active Inventory: <strong class="text-emerald-400">${toteCount} Tote(s)</strong></div>
+                    </div>
+                `;
+            }
         }
 
         function onRelocateFacilityChanged(facId) {
             const zipInput = document.getElementById('relocate-target-zip-input');
             if (!zipInput || !facId) return;
-
-            // Dynamically match zone by facility_id
-            const zone = allZonesList.find(z => z.facility_id === facId);
+            const zone = cachedOperationalZones.find(z => z.facility_id === facId);
             if (zone && zone.zip_codes && zone.zip_codes.length > 0) {
                 zipInput.value = zone.zip_codes[0];
             } else {
@@ -634,48 +1642,11 @@
             }
         }
 
-        async function onRelocateCustomerSelected(userId) {
-            const box = document.getElementById('relocate-summary-box');
-            if (!userId || !box) {
-                if (box) box.classList.add('hidden');
-                return;
-            }
-
-            const user = allCustomersRoster.find(u => u.id === userId);
-            if (!user) return;
-
-            let toteCount = 0;
-            try {
-                const { count } = await supabase.from('inventory').select('*', { count: 'exact', head: true }).eq('uid', userId);
-                toteCount = count || 0;
-            } catch (e) { }
-
-            box.classList.remove('hidden');
-            box.innerHTML = `
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-bold text-gray-200">
-                    <span>Customer: <strong class="text-cyan-400">${escapeHtml(user.name || 'Customer')}</strong> &bull; <span class="text-gray-400">${escapeHtml(user.email)}</span></span>
-                    <span class="bg-gray-900 border border-gray-800 text-gray-400 px-2.5 py-0.5 rounded-lg font-mono text-[11px] self-start sm:self-auto">UID: ${user.id.substring(0, 8)}...</span>
-                </div>
-                <div class="flex flex-wrap items-center gap-6 text-[11px] text-gray-400 pt-2 border-t border-gray-900">
-                    <div>Current Facility: <strong class="text-white">${user.assigned_facility_id || 'Unassigned'}</strong></div>
-                    <div>Active Zone: <strong class="text-white">${user.active_zone || 'None'}</strong></div>
-                    <div>Active Inventory: <strong class="text-emerald-400">${toteCount} Tote(s)</strong></div>
-                </div>
-            `;
-        }
-
         async function executeCustomerRelocation() {
-            const currentRole = document.getElementById('role-select')?.value || activeRole;
-            if (currentRole === 'worker' || actualUserRole === 'warehouse_worker') {
-                alert("Access Denied: Customer Facility Relocation is strictly restricted to Warehouse Managers and Executives.");
-                return;
-            }
-
             const userId = document.getElementById('relocate-selected-user-id')?.value;
             const targetSel = document.getElementById('relocate-target-facility-select');
             const newZip = document.getElementById('relocate-target-zip-input')?.value.trim();
             const moveTotes = document.getElementById('relocate-move-totes-check').checked;
-
             const newFacilityId = targetSel ? targetSel.value : null;
 
             if (!userId) {
@@ -691,7 +1662,7 @@
             const userName = user ? (user.name || user.email) : userId;
             const targetFacName = targetSel.options[targetSel.selectedIndex]?.text || newFacilityId;
 
-            if (!confirm(`Are you sure you want to transfer ${userName} to ${targetFacName}${newZip ? ` (ZIP: ${newZip})` : ''}?${moveTotes ? '\n\nAll active totes and requests belonging to this customer will also be reassigned to the new facility.' : ''}`)) {
+            if (!confirm(`Are you sure you want to transfer ${userName} to ${targetFacName}${newZip ? ` (ZIP: ${newZip})` : ''}?`)) {
                 return;
             }
 
@@ -710,304 +1681,88 @@
                 });
 
                 if (rpcErr) {
-                    const updatePayload = { assigned_facility_id: newFacilityId };
-                    if (newZip) updatePayload.active_zone = newZip;
-
-                    const { error: userErr } = await supabase
-                        .from('users')
-                        .update(updatePayload)
-                        .eq('id', userId);
-                    if (userErr) throw userErr;
-
+                    await supabase.from('users').update({ assigned_facility_id: newFacilityId, active_zone: newZip || null }).eq('id', userId);
                     if (moveTotes) {
-                        const { data: updatedTotes } = await supabase
-                            .from('inventory')
-                            .update({ facility_id: newFacilityId })
-                            .eq('uid', userId)
-                            .select('id');
+                        const { data: updatedTotes } = await supabase.from('inventory').update({ facility_id: newFacilityId }).eq('uid', userId).select('id');
                         if (updatedTotes) movedTotesCount = updatedTotes.length;
-                        await supabase.from('access_requests').update({ facility_id: newFacilityId }).eq('uid', userId);
                     }
                 } else if (rpcRes && rpcRes.totes_reassigned) {
                     movedTotesCount = rpcRes.totes_reassigned;
                 }
 
-                // Invalidate local profile cache for this user
-                localStorage.removeItem(`cv_user_${userId}`);
-                localStorage.removeItem(`cv_user_ts_${userId}`);
-
-                // Update in-memory roster item immediately
-                const rosterUser = allCustomersRoster.find(u => u.id === userId);
-                if (rosterUser) {
-                    rosterUser.assigned_facility_id = newFacilityId;
-                    if (newZip) rosterUser.active_zone = newZip;
-                }
-
-                alert(`✅ Success! Customer ${userName} has been transferred to ${targetFacName} (ZIP: ${newZip || 'Unchanged'}).${moveTotes ? ` (${movedTotesCount} active totes reassigned)` : ''}`);
-
-                // Re-render card with new transferred status immediately
-                await onRelocateCustomerSelected(userId);
-                await loadCustomerRelocationRoster();
-
-                const currentActiveFac = localStorage.getItem('cloudvault_selected_facility');
-                if (currentActiveFac) await onGlobalFacilityChange(currentActiveFac);
-
+                showToast(`✓ Success! Customer transferred to ${targetFacName}. (${movedTotesCount} totes reassigned)`);
+                logSystemActivity(`Customer ${userName} transferred to ${targetFacName}`);
+                loadAllConsoleData();
             } catch (err) {
-                console.error("Customer relocation failed:", err);
-                alert("Transfer failed: " + (err.message || JSON.stringify(err)));
+                alert("Transfer failed: " + err.message);
             } finally {
                 btn.innerHTML = origHTML;
                 btn.disabled = false;
-                lucide.createIcons();
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             }
         }
 
-        async function onGlobalFacilityChange(facId) {
-            if (!facId) return;
-            localStorage.setItem('cloudvault_selected_facility', facId);
-            const iframe = document.getElementById('worker-logistics-map-iframe');
-            const label = document.getElementById('map-hub-label');
-            const stopsCountEl = document.getElementById('map-stops-count');
-            const telemetryStopsEl = document.getElementById('map-telemetry-stops');
-            const stopsListEl = document.getElementById('delivery-stops-list');
+        // =========================================================================
+        // Logout & Authentication Handlers
+        // =========================================================================
+        function handleLogout() {
+            supabase.auth.signOut().then(() => {
+                localStorage.removeItem('cv_active_badge_user');
+                sessionStorage.removeItem('cv_active_badge_user');
+                window.location.href = "login.html";
+            });
+        }
+
+        // =========================================================================
+        // Page Initialization
+        // =========================================================================
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
 
             try {
-                // Use in-memory cached facility record if available, fallback to single query
-                let fac = cachedFacilitiesMap[facId];
-                if (!fac) {
-                    const { data: fetchedFac } = await supabase.from('facilities').select('*').eq('id', facId).single();
-                    if (fetchedFac) {
-                        fac = fetchedFac;
-                        cachedFacilitiesMap[facId] = fetchedFac;
-                    }
-                }
+                if (typeof supabase !== 'undefined') {
+                    // Auth Check
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    const session = sessionData?.session;
 
-                if (!fac) {
-                    console.warn(`Facility ${facId} not found`);
-                    return;
-                }
-
-                if (label) label.textContent = fac.name || 'Logistics Hub';
-                const activeCity = [fac.city, fac.state].filter(Boolean).join(', ') || fac.name;
-
-                // Concurrent parallel fetch of active valet requests & active inventory totes for this facility
-                const [reqRes, totesRes] = await Promise.all([
-                    supabase.from('access_requests')
-                        .select('*, users!uid(id, name, active_zone, assigned_facility_id)')
-                        .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%')
-                        .not('status', 'in', '(completed,cancelled,returned-to-vault)'),
-                    supabase.from('inventory')
-                        .select('uid, tote_code, status, facility_id')
-                        .eq('facility_id', facId)
-                        .in('status', ['pending-dispatch', 'out-for-delivery'])
-                ]);
-
-                const requests = reqRes.data || [];
-                const activeValetTotes = totesRes.data || [];
-
-                // Filter requests belonging to this facility or user assigned to this facility
-                const relevantRequests = requests.filter(r => r.facility_id === facId || r.users?.assigned_facility_id === facId);
-
-                // Check if any active tote UIDs lack user profiles from the join
-                const missingUids = activeValetTotes
-                    .map(t => t.uid)
-                    .filter(uid => uid && !relevantRequests.some(r => r.uid === uid && r.users));
-
-                let extraUsersMap = {};
-                if (missingUids.length > 0) {
-                    const { data: uData } = await supabase.from('users')
-                        .select('id, name, active_zone, assigned_facility_id')
-                        .in('id', Array.from(new Set(missingUids)));
-                    (uData || []).forEach(u => { extraUsersMap[u.id] = u; });
-                }
-
-                const stops = [];
-                const handledTotes = new Set();
-
-                relevantRequests.forEach(r => {
-                    const uId = r.uid || (r.users ? r.users.id : null);
-                    if (uId) {
-                        const rawItems = r.requested_items || r.requested_tote_codes || [];
-                        rawItems.forEach(it => handledTotes.add(it));
-                        stops.push({
-                            uid: uId,
-                            id: r.id,
-                            name: r.users?.name || `Customer ${uId.substring(0, 6)}`,
-                            zip: r.users?.zip || r.users?.active_zone || 'Local Zone',
-                            slot: r.time_slot || '09:00 AM - 12:00 PM',
-                            status: r.status || 'out-for-delivery',
-                            toteCount: rawItems.length || 1,
-                            driver: r.driver_name ? `${r.driver_name} (${r.vehicle_info || 'Van'})` : 'No Driver Assigned'
-                        });
-                    }
-                });
-
-                activeValetTotes.forEach(t => {
-                    if (!handledTotes.has(t.tote_code) && !handledTotes.has(t.id)) {
-                        handledTotes.add(t.tote_code);
-                        const uId = t.uid;
-                        const u = extraUsersMap[uId];
-                        const truckCode = t.location_code && (t.location_code.includes('TRUCK') || t.location_code.includes('VAN')) ? t.location_code : 'VALET-TRUCK-A';
-                        stops.push({
-                            uid: uId,
-                            id: `transit_${t.tote_code}`,
-                            name: u?.name || `Customer ${uId ? uId.substring(0, 6) : 'Valet'}`,
-                            zip: u?.zip || u?.active_zone || 'Local Zone',
-                            slot: t.status === 'out-for-delivery' ? '09:00 AM - 12:00 PM (En Route)' : 'Awaiting Vehicle Load',
-                            status: t.status,
-                            toteCount: 1,
-                            driver: `Active Fleet Driver (${truckCode})`
-                        });
-                    }
-                });
-
-                if (stopsCountEl) stopsCountEl.textContent = `${stops.length} Active Valet Stops`;
-
-                if (telemetryStopsEl) {
-                    const zips = stops.map(s => s.zip).filter(Boolean);
-                    telemetryStopsEl.textContent = zips.length > 0
-                        ? `Waypoints: ${activeCity} (ZIPs ${Array.from(new Set(zips)).join(', ')})`
-                        : `Hub Station: ${activeCity} (Stationary Intake Mode)`;
-                }
-
-                if (stopsListEl) {
-                    if (stops.length === 0) {
-                        stopsListEl.innerHTML = `
-                            <div class="bg-gray-900/50 p-4 rounded-2xl border border-gray-850 text-center space-y-1">
-                                <p class="text-xs text-gray-400 font-bold">No Valet Deliveries Scheduled for ${fac.name}</p>
-                                <p class="text-[10px] text-gray-500 font-mono">Hub operating in stationary intake mode in ${activeCity}.</p>
-                            </div>`;
+                    if (session && session.user) {
+                        const profile = await getCachedUserProfile(session.user.id);
+                        if (profile && profile.role) {
+                            applyActiveEmployeeContext(profile);
+                        }
                     } else {
-                        stopsListEl.innerHTML = stops.map((s, idx) => {
-                            const name = s.name;
-                            const zip = s.zip;
-                            const slot = s.slot;
-                            const itemNum = s.toteCount;
-                            const driver = s.driver;
-                            const reqStatus = s.status || 'pending';
-                            const targetId = s.id || s.uid;
+                        let badgeUser = null;
+                        try {
+                            badgeUser = JSON.parse(sessionStorage.getItem('cv_active_badge_user')) || JSON.parse(localStorage.getItem('cv_active_badge_user'));
+                        } catch (e) { }
 
-                            return `
-                                <div class="bg-gray-950 border border-gray-850 p-4 rounded-2xl space-y-3 hover:border-amber-500/40 transition">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center space-x-3">
-                                            <div class="w-8 h-8 rounded-xl bg-amber-600/20 text-amber-400 font-bold text-xs flex items-center justify-center border border-amber-500/30 font-mono">
-                                                #${idx + 1}
-                                            </div>
-                                            <div>
-                                                <h5 class="text-xs font-bold text-white">${escapeHtml(name)}</h5>
-                                                <p class="text-[10px] font-mono text-gray-400">ZIP ${zip} &bull; ${slot}</p>
-                                            </div>
-                                        </div>
-                                        <span class="text-[9px] font-bold uppercase text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-xl border border-emerald-500/20">${itemNum} Tote(s)</span>
-                                    </div>
-
-                                    <!-- Driver Info Bar -->
-                                    <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800 text-[11px] font-mono flex items-center justify-between">
-                                        <span class="text-gray-300 flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5 text-amber-400"></i> ${escapeHtml(driver)}</span>
-                                        <span class="font-bold uppercase text-[10px] px-2.5 py-0.5 rounded border ${reqStatus === 'returned-to-vault' || reqStatus === 'completed' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' :
-                                    reqStatus === 'missing-tote' ? 'text-rose-400 bg-rose-500/10 border-rose-500/30' :
-                                        reqStatus === 'with-customer' ? 'text-purple-400 bg-purple-500/10 border-purple-500/30' :
-                                            reqStatus === 'arrived' ? 'text-blue-400 bg-blue-500/10 border-blue-500/30' :
-                                                'text-amber-400 bg-amber-500/10 border-amber-500/30'
-                                }">${reqStatus.replace(/[-_]/g, ' ')}</span>
-                                    </div>
-
-                                    <!-- Action Buttons: Simplified for Delivery Driver -->
-                                    <div class="flex flex-wrap gap-2 text-xs">
-                                        <button onclick="assignValetDriver('${targetId}')" class="flex-1 min-w-[120px] bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 py-2 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer">
-                                            <i data-lucide="navigation" class="w-3.5 h-3.5"></i> Dispatch Driver
-                                        </button>
-                                        <button onclick="updateDriverTrackingState('${targetId}', 'with-customer')" class="flex-1 min-w-[120px] bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 border border-purple-500/30 py-2 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer">
-                                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> With Customer
-                                        </button>
-                                    </div>
-                                </div>`;
-                        }).join('');
+                        if (badgeUser && badgeUser.role && badgeUser.role !== 'customer') {
+                            applyActiveEmployeeContext(badgeUser);
+                        } else {
+                            window.location.href = "login.html";
+                            return;
+                        }
                     }
+
+                    // Attach Realtime Listeners for Business Telemetry
+                    supabase.channel('console_telemetry_stream')
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, (payload) => {
+                            logSystemActivity(`Inventory event [${payload.eventType}]: Tote ${payload.new?.tote_code || payload.old?.tote_code || ''}`);
+                            loadAllConsoleData();
+                        })
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'access_requests' }, (payload) => {
+                            logSystemActivity(`Request event [${payload.eventType}]: Job ${payload.new?.id || ''}`);
+                            loadAllConsoleData();
+                        })
+                        .subscribe();
                 }
-
-                // Non-blocking deferred map update with high-accuracy facility address and delivery zip
-                if (iframe) {
-                    const zips = stops.map(s => s.zip).filter(Boolean);
-                    const hubAddress = [fac.address, fac.city, fac.state, fac.zip].filter(Boolean).join(', ') || [fac.city, fac.state].filter(Boolean).join(', ') || fac.name;
-                    const mapQuery = zips.length > 0 ? `${hubAddress}` : hubAddress;
-                    if (mapQuery !== lastLoadedMapQuery) {
-                        lastLoadedMapQuery = mapQuery;
-                        setTimeout(() => {
-                            iframe.src = `https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=&z=13&ie=UTF8&iwloc=&output=embed`;
-                        }, 50);
-                    }
-                }
-
-                lucide.createIcons();
-            } catch (err) {
-                console.error("onGlobalFacilityChange failure:", err);
-            }
-        }
-
-        window.assignValetDriver = async function (targetId) {
-            const driverName = prompt("Driver Name:", "Alex Rivera") || "Alex Rivera";
-            const driverPhone = prompt("Driver Phone:", "(206) 555-0192") || "(206) 555-0192";
-            const vehicleInfo = prompt("Vehicle & License Plate:", "Sprinter Van #42 • WA 7XYZ89") || "Sprinter Van #42 • WA 7XYZ89";
-            const etaMin = parseInt(prompt("ETA in minutes:", "15"), 10) || 15;
-
-            const etaTime = new Date(Date.now() + etaMin * 60 * 1000).toISOString();
-
-            try {
-                // Try updating by request id first
-                let { data: updatedReqs, error } = await supabase.from('access_requests').update({
-                    driver_name: driverName,
-                    driver_phone: driverPhone,
-                    vehicle_info: vehicleInfo,
-                    estimated_arrival_at: etaTime,
-                    status: 'out-for-delivery'
-                }).eq('id', targetId).select();
-
-                if (!updatedReqs || updatedReqs.length === 0) {
-                    await supabase.from('access_requests').update({
-                        driver_name: driverName,
-                        driver_phone: driverPhone,
-                        vehicle_info: vehicleInfo,
-                        estimated_arrival_at: etaTime,
-                        status: 'out-for-delivery'
-                    }).eq('uid', targetId);
-                }
-
-                alert(`Driver ${driverName} assigned & en route! (ETA: ${etaMin} min)`);
-                const curFacId = document.getElementById('global-facility-select')?.value || localStorage.getItem('cloudvault_selected_facility');
-                if (curFacId) onGlobalFacilityChange(curFacId);
             } catch (e) {
-                alert("Failed to assign driver: " + e.message);
+                console.warn("Auth initialization error:", e);
             }
-        };
 
-        window.updateDriverTrackingState = async function (targetId, status) {
-            try {
-                // Unified status column: 'out-for-delivery', 'arrived', 'with-customer', 'returned-to-vault', 'missing-tote'
-                let { data: updatedReqs, error } = await supabase.from('access_requests').update({
-                    status: status
-                }).eq('id', targetId).select();
-
-                if (!updatedReqs || updatedReqs.length === 0) {
-                    await supabase.from('access_requests').update({
-                        status: status
-                    }).eq('uid', targetId);
-                }
-
-                // If updating to custody or returned state, also update active inventory
-                if (status === 'with-customer' || status === 'returned-to-vault') {
-                    const invStatus = status === 'with-customer' ? 'with-customer' : 'stored';
-                    await supabase.from('inventory').update({ status: invStatus }).eq('uid', targetId);
-                }
-
-                alert(`Valet status updated to ${status.toUpperCase()}`);
-                const curFacId = document.getElementById('global-facility-select')?.value || localStorage.getItem('cloudvault_selected_facility');
-                if (curFacId) onGlobalFacilityChange(curFacId);
-            } catch (e) {
-                alert("Update failed: " + e.message);
-            }
-        };
+            await loadAllConsoleData();
+            syncRoleRBACView();
+        });
     </script>
 </body>
 
