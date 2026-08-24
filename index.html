@@ -1874,19 +1874,20 @@
         // Dynamic Location & Regional Pricing State
         // =========================================================================
         let regionalRates = {
-            tier1: 5.00,
+            tier1: 5.10,
             tier2: 3.50,
-            tier3: 2.00,
+            tier3: 2.50,
             tier4: 1.00,
-            valet_base: 15.00,
+            valet_base: 16.00,
             valet_tote_adder: 1.00,
             missing_tote_fee: 15.00,
             traditional_unit_baseline: 95.00,
             facility_id: 'facility_seattle_north',
-            facility_name: 'Pacific Northwest Hub',
+            facility_name: 'Seattle North Fulfillment Center',
             city: 'Seattle',
             state: 'WA'
         };
+        window.regionalRates = regionalRates;
 
         // State
         let currentStep = 1;
@@ -2010,6 +2011,7 @@
 
                 updatePricingUIWithRates();
                 calculateTotal();
+                calculateFlowTotal();
             } catch (err) {
                 console.warn('Notice loading dynamic regional rates:', err);
             }
