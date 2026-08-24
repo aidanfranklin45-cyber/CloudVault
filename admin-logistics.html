@@ -795,7 +795,7 @@
                     supabase.from('access_requests')
                         .select('*, users!uid(id, name, active_zone, assigned_facility_id)')
                         .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%')
-                        .not('status', 'in', '("completed","cancelled","returned-to-vault")'),
+                        .not('status', 'in', '(completed,cancelled,returned-to-vault)'),
                     supabase.from('inventory')
                         .select('uid, tote_code, status, facility_id')
                         .eq('facility_id', facId)

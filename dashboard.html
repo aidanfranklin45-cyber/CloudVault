@@ -4145,11 +4145,11 @@
                     .from('inventory')
                     .select('*')
                     .eq('uid', uid)
-                    .not('status', 'in', '("missing-tote","missing","discharged","retired","written-off")')
+                    .not('status', 'in', '(missing-tote,missing)')
                     .order('tote_code', { ascending: true });
 
                 if (!error && data) {
-                    currentInventory = data.filter(item => !['missing-tote', 'missing', 'discharged', 'retired', 'written-off'].includes(item.status));
+                    currentInventory = data.filter(item => !['missing-tote', 'missing'].includes(item.status));
                 } else {
                     currentInventory = [];
                 }

@@ -10301,21 +10301,12 @@
         // =========================================================================
 
         function calculateTenureString(timestamp) {
-            if (!timestamp) return "N/A";
+            if (!timestamp) return '0 days';
             const created = new Date(timestamp);
             const now = new Date();
             const diffMs = Math.max(0, now - created);
             const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-            if (diffDays < 1) return "Today (0 days)";
-            if (diffDays < 30) return `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
-            const months = Math.floor(diffDays / 30);
-            const remainingDays = diffDays % 30;
-            if (months < 12) {
-                return `${months} mo${months !== 1 ? 's' : ''}${remainingDays > 0 ? `, ${remainingDays}d` : ''}`;
-            }
-            const years = Math.floor(months / 12);
-            const remMonths = months % 12;
-            return `${years} yr${years !== 1 ? 's' : ''}${remMonths > 0 ? `, ${remMonths}mo` : ''}`;
+            return `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
         }
 
         async function onMasterToteSearchInput(query) {
@@ -12423,7 +12414,7 @@
                 const { count: actualTotesCount } = await supabase.from('inventory')
                     .select('*', { count: 'exact', head: true })
                     .eq('uid', item.uid)
-                    .not('status', 'in', '("missing-tote","discharged","retired","written-off","cancelled")');
+                    .not('status', 'in', '(missing-tote,missing)');
 
                 const finalTotesHeld = actualTotesCount !== null ? actualTotesCount : (user.active_totes_held || 0);
 
@@ -12444,7 +12435,7 @@
                     const { data: req } = await supabase.from('access_requests')
                         .select('assigned_room')
                         .eq('uid', item.uid)
-                        .not('status', 'in', '("completed","cancelled","returned-to-vault")')
+                        .not('status', 'in', '(completed,cancelled,returned-to-vault)')
                         .order('requested_at', { ascending: false })
                         .limit(1)
                         .maybeSingle();
@@ -12460,7 +12451,8 @@
                 document.getElementById('tmm-tote-category').textContent = item.category || 'General Storage';
                 document.getElementById('tmm-tote-facility').textContent = item.facilities?.name || item.facility_id || 'Yakima FC';
                 document.getElementById('tmm-tote-room').textContent = resolvedRoomText;
-                document.getElementById('tmm-tote-created-at').textContent = item.created_at ? new Date(item.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+                const activeToteDate = item.last_scanned_at || item.updated_at || item.created_at;
+                document.getElementById('tmm-tote-created-at').textContent = activeToteDate ? new Date(activeToteDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
                 // Populate Dynamic Missing Tote Replacement Fee from Facility
                 const feeInput = document.getElementById('tmm-charge-amount');
@@ -13872,8 +13864,7 @@
                                 id="tmm-tote-category" class="font-semibold text-gray-300">—</span></div>
                         <div class="flex justify-between"><span class="text-gray-400">Assigned Facility:</span><span
                                 id="tmm-tote-facility" class="font-bold text-indigo-300">—</span></div>
-                        <div class="flex justify-between"><span class="text-gray-400">Staging Room
-                                Allocation:</span><span id="tmm-tote-room"
+                        <div class="flex justify-between"><span class="text-gray-400">Current Location:</span><span id="tmm-tote-room"
                                 class="font-mono font-bold text-amber-400">—</span></div>
                         <div class="flex justify-between"><span class="text-gray-400">Date Activated:</span><span
                                 id="tmm-tote-created-at" class="font-mono text-gray-400">—</span></div>
