@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+    const stripeSecretKey = Deno.env.get("Str1pe_Secret_Key") || Deno.env.get("STRIPE_SECRET_KEY") || Deno.env.get("stripe_secret_key") || "";
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 

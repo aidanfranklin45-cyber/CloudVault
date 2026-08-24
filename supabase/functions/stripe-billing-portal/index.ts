@@ -31,7 +31,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+    const stripeSecretKey = Deno.env.get("Stripe_Secret_Key") || Deno.env.get("STRIPE_SECRET_KEY") || Deno.env.get("Str1pe_Secret_Key") || Deno.env.get("stripe_secret_key") || "";
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
@@ -99,6 +99,92 @@ Deno.serve(async (req: Request) => {
           .from("users")
           .update({ stripe_customer_id: customerId })
           .eq("id", userId);
+      }
+    }
+
+    const publishableKey = Deno.env.get("STRIPE_PUBLISHABLE_KEY") || Deno.env.get("Stripe_Publishable_Key") || Deno.env.get("STRIPE_PK") || "";
+
+    // If client requested SetupIntent for Stripe Elements
+    if (body.mode === "setup_intent") {
+      try {
+        const setupIntent = await stripe.setupIntents.create({
+          customer: customerId,
+          payment_method_types: ["card"],
+          metadata: { supabase_uid: userId || "" },
+        });
+
+        return new Response(
+          JSON.stringify({
+            clientSecret: setupIntent.client_secret,
+            publishableKey: publishableKey,
+            customerId: customerId,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (setupErr: any) {
+        console.error("[StripeBillingPortal] Error creating SetupIntent:", setupErr.message);
+        return new Response(
+          JSON.stringify({ error: setupErr.message || "Failed to create SetupIntent" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // If client requested attaching a newly tokenized payment method
+    if (body.mode === "attach_payment_method" && body.paymentMethodId) {
+      try {
+        let pm: Stripe.PaymentMethod;
+        try {
+          pm = await stripe.paymentMethods.attach(body.paymentMethodId, {
+            customer: customerId,
+          });
+        } catch (attachErr: any) {
+          // If already attached to customer by SetupIntent or needs retrieval
+          pm = await stripe.paymentMethods.retrieve(body.paymentMethodId);
+        }
+
+        try {
+          await stripe.customers.update(customerId, {
+            invoice_settings: { default_payment_method: body.paymentMethodId },
+          });
+        } catch (custErr: any) {
+          console.warn("[StripeBillingPortal] Customer default PM update notice:", custErr.message);
+        }
+
+        const brand = pm.card?.brand || "visa";
+        const last4 = pm.card?.last4 || "4242";
+        const expMonth = pm.card?.exp_month ? String(pm.card.exp_month).padStart(2, "0") : "12";
+        const expYear = pm.card?.exp_year ? String(pm.card.exp_year).slice(-2) : "28";
+        const expStr = `${expMonth}/${expYear}`;
+
+        if (userId) {
+          await supabase
+            .from("users")
+            .update({
+              default_payment_method_id: body.paymentMethodId,
+              card_brand: brand,
+              card_last4: last4,
+              card_exp: expStr,
+            })
+            .eq("id", userId);
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            paymentMethodId: body.paymentMethodId,
+            brand: brand,
+            last4: last4,
+            exp: expStr,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (attachErr: any) {
+        console.error("[StripeBillingPortal] Error attaching payment method:", attachErr.message);
+        return new Response(
+          JSON.stringify({ error: attachErr.message || "Failed to attach payment method" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
     }
 
@@ -180,6 +266,7 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({
           url: portalUrl,
           customerId: customerId,
+          publishableKey: publishableKey,
           isSimulated: false,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -189,6 +276,7 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({
           url: null,
           customerId: customerId,
+          publishableKey: publishableKey,
           isSimulated: true,
           error: lastErrorMsg || "Failed to create portal or setup session",
         }),

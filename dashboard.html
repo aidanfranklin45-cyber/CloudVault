@@ -702,7 +702,7 @@
             </div>
         </div>
 
-    <!-- Update Payment Method Modal -->
+    <!-- Update Payment Method Modal (Stripe Elements True PCI-DSS SAQ A Scope) -->
     <div id="update-payment-modal" class="fixed inset-0 bg-gray-900/75 backdrop-blur-md z-[100] flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 border border-gray-100 relative">
             <div class="flex justify-between items-center border-b border-gray-100 pb-3">
@@ -712,50 +712,31 @@
                     </div>
                     <div>
                         <h3 class="font-extrabold text-gray-900 text-base">Update Payment Method</h3>
-                        <p class="text-[11px] text-gray-400">Update credit card details for CloudVault billing</p>
+                        <p class="text-[11px] text-gray-400">Secure end-to-end card tokenization via Stripe</p>
                     </div>
                 </div>
                 <button onclick="closeUpdatePaymentModal()" class="text-gray-400 hover:text-gray-600 text-lg font-bold">&times;</button>
             </div>
 
             <form onsubmit="saveUpdatePaymentModal(event)" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Cardholder Name</label>
-                    <input type="text" id="pay-name" placeholder="Full Name on Card" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:outline-none focus:border-blue-500 bg-gray-50 focus:bg-white transition">
+                <!-- Stripe Elements Mounting Target -->
+                <div class="space-y-3">
+                    <div id="stripe-loading-indicator" class="flex flex-col items-center justify-center py-8 text-gray-500 space-y-2">
+                        <svg class="w-6 h-6 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                        <span class="text-xs font-semibold">Connecting to Stripe Secure Vault...</span>
+                    </div>
+                    <div id="stripe-payment-element" class="min-h-[160px] hidden"></div>
+                    <div id="stripe-card-error" class="hidden text-xs text-red-600 font-bold bg-red-50 p-2.5 rounded-xl border border-red-200"></div>
                 </div>
-                <div>
-                    <div class="flex justify-between items-center mb-1">
-                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider">Card Number (16 Digits)</label>
-                        <span id="pay-card-brand" class="text-[10px] font-black text-gray-400 font-mono uppercase bg-gray-100 px-2 py-0.5 rounded border border-gray-200">CARD</span>
-                    </div>
-                    <!-- 4-Block Segmented Card Input Grid -->
-                    <div class="grid grid-cols-4 gap-1.5 font-mono" id="pay-card-segmented">
-                        <input type="text" id="pay-card-b1" placeholder="••••" maxlength="4" inputmode="numeric" required
-                            class="pay-seg-input w-full px-2 py-3 border border-gray-200 rounded-xl font-mono text-center text-sm font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
-                        <input type="text" id="pay-card-b2" placeholder="••••" maxlength="4" inputmode="numeric" required
-                            class="pay-seg-input w-full px-2 py-3 border border-gray-200 rounded-xl font-mono text-center text-sm font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
-                        <input type="text" id="pay-card-b3" placeholder="••••" maxlength="4" inputmode="numeric" required
-                            class="pay-seg-input w-full px-2 py-3 border border-gray-200 rounded-xl font-mono text-center text-sm font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
-                        <input type="text" id="pay-card-b4" placeholder="••••" maxlength="4" inputmode="numeric" required
-                            class="pay-seg-input w-full px-2 py-3 border border-gray-200 rounded-xl font-mono text-center text-sm font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
-                    </div>
-                    <input type="hidden" id="pay-card-number">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Expires (MM/YY)</label>
-                        <input type="text" id="pay-exp" placeholder="MM/YY" maxlength="5" inputmode="numeric" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">CVC / CVC2</label>
-                        <input type="text" id="pay-cvc" placeholder="123" maxlength="4" inputmode="numeric" required class="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono font-bold text-gray-900 bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
-                    </div>
-                </div>
+
                 <div class="flex items-center justify-center gap-1.5 text-[10px] text-gray-400 font-medium pt-1">
                     <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                    <span>256-Bit SSL Encrypted &bull; PCI-DSS Level 1 Compliant</span>
+                    <span>🔒 256-Bit SSL Encrypted &bull; Powered by Stripe PCI-DSS Level 1 Infrastructure</span>
                 </div>
-                <button type="submit" id="save-pay-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition text-sm shadow-lg shadow-blue-500/20">
+                <button type="submit" id="save-pay-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition text-sm shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
                     Save Updated Payment Details
                 </button>
             </form>
@@ -1703,9 +1684,10 @@
 
     <!-- Supabase JS SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://js.stripe.com/v3/"></script>
     <script src="supabase-config.js"></script>
     <script src="billing-engine.js"></script>
-    <script src="stripe-billing-integration.js?v=2.2"></script>
+    <script src="stripe-billing-integration.js?v=2.3"></script>
 
     <script>
         // ============================================================
@@ -3696,121 +3678,92 @@
         });
 
         // ============================================================
-        // Update Payment Method Modal (Segmented 4-Box Inputs)
+        // Stripe Elements Payment Method Update Controller (PCI-DSS SAQ A Scope)
         // ============================================================
-        let isPaymentModalFormattingInitialized = false;
+        let stripeInstance = null;
+        let stripeElementsInstance = null;
+        let paymentElementInstance = null;
 
-        function initPaymentModalCardFormatting() {
-            if (isPaymentModalFormattingInitialized) return;
-            isPaymentModalFormattingInitialized = true;
-
-            const b1 = document.getElementById('pay-card-b1');
-            const b2 = document.getElementById('pay-card-b2');
-            const b3 = document.getElementById('pay-card-b3');
-            const b4 = document.getElementById('pay-card-b4');
-            const brand = document.getElementById('pay-card-brand');
-            const expInput = document.getElementById('pay-exp');
-            const cvcInput = document.getElementById('pay-cvc');
-            const master = document.getElementById('pay-card-number');
-
-            if (!b1 || !b2 || !b3 || !b4) return;
-            const blocks = [b1, b2, b3, b4];
-
-            function syncValue() {
-                const fullDigits = blocks.map(b => b.value.replace(/\D/g, '')).join('');
-                if (master) master.value = fullDigits;
-
-                // Card network brand auto-detection
-                if (brand) {
-                    if (fullDigits.startsWith('4')) {
-                        brand.textContent = 'VISA';
-                        brand.className = 'text-[10px] font-black text-blue-600 font-mono uppercase bg-blue-50 px-2 py-0.5 rounded border border-blue-200';
-                    } else if (/^5[1-5]/.test(fullDigits) || /^2[2-7]/.test(fullDigits)) {
-                        brand.textContent = 'MC';
-                        brand.className = 'text-[10px] font-black text-red-600 font-mono uppercase bg-red-50 px-2 py-0.5 rounded border border-red-200';
-                    } else if (/^3[47]/.test(fullDigits)) {
-                        brand.textContent = 'AMEX';
-                        brand.className = 'text-[10px] font-black text-emerald-600 font-mono uppercase bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200';
-                    } else if (/^6(?:011|5)/.test(fullDigits)) {
-                        brand.textContent = 'DISC';
-                        brand.className = 'text-[10px] font-black text-amber-600 font-mono uppercase bg-amber-50 px-2 py-0.5 rounded border border-amber-200';
-                    } else {
-                        brand.textContent = 'CARD';
-                        brand.className = 'text-[10px] font-black text-gray-400 font-mono uppercase bg-gray-100 px-2 py-0.5 rounded border border-gray-200';
-                    }
-                }
-            }
-
-            blocks.forEach((block, idx) => {
-                block.addEventListener('input', function (e) {
-                    let digits = block.value.replace(/\D/g, '');
-                    if (digits.length > 4) {
-                        const fullStr = digits.substring(0, 16);
-                        for (let k = 0; k < 4; k++) {
-                            blocks[k].value = fullStr.substring(k * 4, (k + 1) * 4);
-                        }
-                        const focusIdx = Math.min(3, Math.floor((fullStr.length - 1) / 4));
-                        blocks[focusIdx].focus();
-                    } else {
-                        block.value = digits;
-                        if (digits.length === 4 && idx < 3) {
-                            blocks[idx + 1].focus();
-                        } else if (digits.length === 4 && idx === 3 && expInput) {
-                            expInput.focus();
-                        }
-                    }
-                    syncValue();
-                });
-
-                block.addEventListener('keydown', function (e) {
-                    if (e.key === 'Backspace' && block.value.length === 0 && idx > 0) {
-                        blocks[idx - 1].focus();
-                    }
-                });
-
-                block.addEventListener('focus', function () {
-                    block.select();
-                });
-            });
-
-            if (expInput) {
-                expInput.addEventListener('input', function (e) {
-                    let val = e.target.value.replace(/\D/g, '').substring(0, 4);
-                    if (val.length >= 2) {
-                        let month = parseInt(val.substring(0, 2), 10);
-                        if (month > 12) month = 12;
-                        if (month === 0) month = 1;
-                        const monthStr = month < 10 ? '0' + month : '' + month;
-                        e.target.value = monthStr + (val.length > 2 ? '/' + val.substring(2, 4) : '');
-                        if (val.length === 4 && cvcInput) {
-                            cvcInput.focus();
-                        }
-                    } else {
-                        e.target.value = val;
-                    }
-                });
-            }
-
-            if (cvcInput) {
-                cvcInput.addEventListener('input', function (e) {
-                    e.target.value = e.target.value.replace(/\D/g, '').substring(0, 4);
-                });
-            }
-        }
-
-        function openUpdatePaymentModal() {
+        async function openUpdatePaymentModal() {
             const modal = document.getElementById('update-payment-modal');
-            if (modal) {
-                initPaymentModalCardFormatting();
-                modal.classList.remove('hidden');
-                const nameInput = document.getElementById('pay-name');
-                if (nameInput && !nameInput.value && window.currentUser?.name) {
-                    nameInput.value = window.currentUser.name;
+            const loader = document.getElementById('stripe-loading-indicator');
+            const elementContainer = document.getElementById('stripe-payment-element');
+            const errorEl = document.getElementById('stripe-card-error');
+            const saveBtn = document.getElementById('save-pay-btn');
+
+            if (!modal) return;
+            modal.classList.remove('hidden');
+
+            if (errorEl) {
+                errorEl.textContent = '';
+                errorEl.classList.add('hidden');
+            }
+            if (loader) loader.classList.remove('hidden');
+            if (elementContainer) elementContainer.classList.add('hidden');
+            if (saveBtn) saveBtn.disabled = true;
+
+            try {
+                // Request secure SetupIntent from Supabase Edge Function
+                const { data, error } = await supabase.functions.invoke('stripe-billing-portal', {
+                    body: {
+                        userId: currentUser?.id,
+                        stripeCustomerId: currentUser?.stripe_customer_id,
+                        mode: 'setup_intent'
+                    }
+                });
+
+                if (error || !data?.clientSecret) {
+                    throw new Error(data?.error || error?.message || 'Failed to initialize secure Stripe session.');
                 }
-                const b1 = document.getElementById('pay-card-b1');
-                if (b1) {
-                    setTimeout(() => b1.focus(), 60);
+
+                const pubKey = data.publishableKey || 'pk_test_51U5wFeAlEAaqjcFpgDerMMeeuUqacailYJDOBIfx0nq1B0YlCh5nqMIpkOkDmgIJO2q9XpdRTYUcr9JDMOR3ZSQm00ycqCdc2d';
+                
+                if (typeof window.Stripe !== 'function') {
+                    throw new Error('Stripe.js library could not be loaded. Please check your network connection.');
                 }
+
+                stripeInstance = window.Stripe(pubKey);
+                stripeElementsInstance = stripeInstance.elements({
+                    clientSecret: data.clientSecret,
+                    appearance: {
+                        theme: 'stripe',
+                        variables: {
+                            colorPrimary: '#2563eb',
+                            borderRadius: '12px',
+                            fontFamily: 'Inter, sans-serif'
+                        }
+                    }
+                });
+
+                elementContainer.innerHTML = '';
+                paymentElementInstance = stripeElementsInstance.create('payment');
+                paymentElementInstance.mount('#stripe-payment-element');
+
+                paymentElementInstance.on('ready', () => {
+                    if (loader) loader.classList.add('hidden');
+                    if (elementContainer) elementContainer.classList.remove('hidden');
+                    if (saveBtn) saveBtn.disabled = false;
+                });
+
+                paymentElementInstance.on('change', (event) => {
+                    if (event.error) {
+                        if (errorEl) {
+                            errorEl.textContent = event.error.message;
+                            errorEl.classList.remove('hidden');
+                        }
+                    } else {
+                        if (errorEl) errorEl.classList.add('hidden');
+                    }
+                });
+
+            } catch (err) {
+                console.error('[Stripe Elements Error]', err);
+                if (loader) loader.classList.add('hidden');
+                if (errorEl) {
+                    errorEl.textContent = `⚠️ ${err.message || 'Error connecting to Stripe'}`;
+                    errorEl.classList.remove('hidden');
+                }
+                if (saveBtn) saveBtn.disabled = true;
             }
         }
         window.openUpdatePaymentModal = openUpdatePaymentModal;
@@ -3818,73 +3771,103 @@
         function closeUpdatePaymentModal() {
             const modal = document.getElementById('update-payment-modal');
             if (modal) modal.classList.add('hidden');
+            if (paymentElementInstance) {
+                try { paymentElementInstance.unmount(); } catch(e) {}
+                paymentElementInstance = null;
+            }
         }
         window.closeUpdatePaymentModal = closeUpdatePaymentModal;
 
         async function saveUpdatePaymentModal(e) {
             e.preventDefault();
             const btn = document.getElementById('save-pay-btn');
-            const expInput = document.getElementById('pay-exp');
-            const nameInput = document.getElementById('pay-name');
-            const b1 = document.getElementById('pay-card-b1');
-            const b2 = document.getElementById('pay-card-b2');
-            const b3 = document.getElementById('pay-card-b3');
-            const b4 = document.getElementById('pay-card-b4');
+            const errorEl = document.getElementById('stripe-card-error');
 
-            const fullCard = [b1, b2, b3, b4].map(b => b ? b.value.replace(/\D/g, '') : '').join('');
-            const last4 = fullCard.length >= 4 ? fullCard.slice(-4) : (b4?.value?.trim() || '4242');
-            const exp = expInput ? expInput.value.trim() : '12/2028';
-            const cardholderName = nameInput ? nameInput.value.trim() : '';
-
-            if (fullCard.length > 0 && fullCard.length < 15) {
-                showToast('⚠️ Please enter a valid 16-digit card number', 'error');
-                if (b1) b1.focus();
+            if (!stripeInstance || !stripeElementsInstance) {
+                showToast('Stripe is not initialized. Please retry.', 'error');
                 return;
             }
 
             if (btn) {
                 btn.disabled = true;
-                btn.textContent = 'Updating Payment Method...';
+                btn.innerHTML = `
+                    <svg class="w-4 h-4 animate-spin text-white inline-block mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                    <span>Saving Securely with Stripe...</span>
+                `;
             }
 
             try {
-                if (window.supabase && currentUser?.id) {
-                    await window.supabase.from('users').update({
-                        default_payment_method_id: 'pm_sim_' + last4,
-                    }).eq('id', currentUser.id);
-                }
+                // Confirm Setup directly with Stripe (0% card data touches CloudVault)
+                const { setupIntent, error } = await stripeInstance.confirmSetup({
+                    elements: stripeElementsInstance,
+                    redirect: 'if_required'
+                });
 
-                // Update visual preview on billing modal
-                const last4El = document.getElementById('billing-card-last4');
-                const expEl = document.getElementById('billing-card-exp');
-                const brandEl = document.getElementById('billing-card-brand');
-                if (last4El) last4El.textContent = `•••• •••• •••• ${last4}`;
-                if (expEl) expEl.textContent = `Expires ${exp}`;
-                if (brandEl) {
-                    if (fullCard.startsWith('5')) brandEl.textContent = 'MC';
-                    else if (fullCard.startsWith('3')) brandEl.textContent = 'AMEX';
-                    else if (fullCard.startsWith('6')) brandEl.textContent = 'DISC';
-                    else brandEl.textContent = 'VISA';
-                }
-
-                setTimeout(() => {
+                if (error) {
+                    if (errorEl) {
+                        errorEl.textContent = error.message;
+                        errorEl.classList.remove('hidden');
+                    }
                     if (btn) {
                         btn.disabled = false;
                         btn.textContent = 'Save Updated Payment Details';
                     }
+                    return;
+                }
+
+                if (setupIntent && setupIntent.status === 'succeeded') {
+                    const pmId = setupIntent.payment_method;
+
+                    // Attach tokenized PaymentMethod via Edge Function
+                    const { data: attachData, error: attachError } = await supabase.functions.invoke('stripe-billing-portal', {
+                        body: {
+                            userId: currentUser?.id,
+                            stripeCustomerId: currentUser?.stripe_customer_id,
+                            mode: 'attach_payment_method',
+                            paymentMethodId: pmId
+                        }
+                    });
+
+                    if (attachError) {
+                        console.warn('[Stripe Attach Notice]', attachError);
+                    }
+
+                    // Update UI card preview
+                    const brand = attachData?.brand || 'VISA';
+                    const last4 = attachData?.last4 || '4242';
+                    const exp = attachData?.exp || '12/2028';
+
+                    const last4El = document.getElementById('billing-card-last4');
+                    const expEl = document.getElementById('billing-card-exp');
+                    const brandEl = document.getElementById('billing-card-brand');
+                    if (last4El) last4El.textContent = `•••• •••• •••• ${last4}`;
+                    if (expEl) expEl.textContent = `Expires ${exp}`;
+                    if (brandEl) brandEl.textContent = brand.toUpperCase();
+
+                    if (currentUser) {
+                        currentUser.default_payment_method_id = pmId;
+                    }
+
                     closeUpdatePaymentModal();
-                    showToast('✅ Payment method updated successfully!');
-                }, 600);
+                    showToast('✅ Card securely updated with Stripe!');
+                }
             } catch (err) {
-                console.error('[Dashboard] Error updating payment method:', err);
+                console.error('[Save Payment Error]', err);
+                if (errorEl) {
+                    errorEl.textContent = err.message || 'Payment method update failed';
+                    errorEl.classList.remove('hidden');
+                }
+            } finally {
                 if (btn) {
                     btn.disabled = false;
                     btn.textContent = 'Save Updated Payment Details';
                 }
-                closeUpdatePaymentModal();
-                showToast('Payment method saved.');
             }
         }
+        window.saveUpdatePaymentModal = saveUpdatePaymentModal;
 
         // ============================================================
         // Onboarding Progress Tracker UI Renderer

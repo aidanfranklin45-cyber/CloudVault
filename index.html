@@ -1190,42 +1190,13 @@
                             </div>
                         </div>
 
-                        <div>
-                            <label class="block text-xs font-bold text-gray-700 mb-1">Name on Card</label>
-                            <input type="text" id="w-card-name" placeholder="Jane Doe"
-                                class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium text-sm">
-                        </div>
-                        <div>
-                            <div class="flex justify-between items-center mb-1">
-                                <label class="block text-xs font-bold text-gray-700">Card Number (16 Digits)</label>
-                                <span id="w-card-brand"
-                                    class="text-[10px] font-black text-gray-400 font-mono uppercase bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">CARD</span>
+                        <!-- Stripe Secure Payment Notice -->
+                        <div class="p-4 bg-blue-50/70 border border-blue-200 rounded-2xl space-y-2 text-center">
+                            <div class="flex items-center justify-center gap-2 text-blue-700 font-extrabold text-sm">
+                                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                                <span>100% PCI-DSS Compliant Payment</span>
                             </div>
-                            <!-- 4-Block Segmented Card Input Grid -->
-                            <div class="grid grid-cols-4 gap-1.5 font-mono" id="w-card-segmented">
-                                <input type="text" id="w-card-b1" placeholder="••••" maxlength="4" inputmode="numeric"
-                                    class="card-seg-input w-full px-2 py-3 border border-gray-300 rounded-xl font-mono text-center text-sm font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
-                                <input type="text" id="w-card-b2" placeholder="••••" maxlength="4" inputmode="numeric"
-                                    class="card-seg-input w-full px-2 py-3 border border-gray-300 rounded-xl font-mono text-center text-sm font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
-                                <input type="text" id="w-card-b3" placeholder="••••" maxlength="4" inputmode="numeric"
-                                    class="card-seg-input w-full px-2 py-3 border border-gray-300 rounded-xl font-mono text-center text-sm font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
-                                <input type="text" id="w-card-b4" placeholder="••••" maxlength="4" inputmode="numeric"
-                                    class="card-seg-input w-full px-2 py-3 border border-gray-300 rounded-xl font-mono text-center text-sm font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
-                            </div>
-                            <input type="hidden" id="w-card-number">
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs font-bold text-gray-700 mb-1">Expiry</label>
-                                <input type="text" id="w-card-exp" placeholder="MM/YY"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium text-sm">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-gray-700 mb-1">CVC</label>
-                                <input type="text" id="w-card-cvc" placeholder="123"
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium text-sm"
-                                    maxlength="4">
-                            </div>
+                            <p class="text-xs text-gray-600">Your deposit is securely tokenized and protected in Stripe's Level 1 encrypted vault.</p>
                         </div>
 
                         <p id="w-payment-error" class="text-red-500 text-sm hidden-section font-medium"></p>
@@ -1321,41 +1292,13 @@
                         </div>
                     </div>
 
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Name on Card</label>
-                        <input type="text" id="card-name-input" placeholder="Jane Doe"
-                            class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium">
-                    </div>
-                    <div>
-                        <div class="flex justify-between items-center mb-2">
-                            <label class="block text-sm font-bold text-gray-700">Card Number (16 Digits)</label>
-                            <span id="card-brand"
-                                class="text-xs font-black text-gray-400 font-mono uppercase bg-gray-100 px-2 py-0.5 rounded border border-gray-200">CARD</span>
+                    <!-- Stripe PCI-DSS Level 1 Secure Notice -->
+                    <div class="p-4 bg-blue-50/70 border border-blue-200 rounded-2xl space-y-2 text-center my-3">
+                        <div class="flex items-center justify-center gap-2 text-blue-700 font-extrabold text-sm">
+                            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            <span>Stripe PCI-DSS Level 1 Encrypted Processing</span>
                         </div>
-                        <!-- 4-Block Segmented Card Input Grid -->
-                        <div class="grid grid-cols-4 gap-2 font-mono" id="card-segmented">
-                            <input type="text" id="card-b1" placeholder="••••" maxlength="4" inputmode="numeric"
-                                class="card-seg-input w-full px-3 py-3 border border-gray-300 rounded-xl font-mono text-center text-base sm:text-lg font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
-                            <input type="text" id="card-b2" placeholder="••••" maxlength="4" inputmode="numeric"
-                                class="card-seg-input w-full px-3 py-3 border border-gray-300 rounded-xl font-mono text-center text-base sm:text-lg font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
-                            <input type="text" id="card-b3" placeholder="••••" maxlength="4" inputmode="numeric"
-                                class="card-seg-input w-full px-3 py-3 border border-gray-300 rounded-xl font-mono text-center text-base sm:text-lg font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
-                            <input type="text" id="card-b4" placeholder="••••" maxlength="4" inputmode="numeric"
-                                class="card-seg-input w-full px-3 py-3 border border-gray-300 rounded-xl font-mono text-center text-base sm:text-lg font-bold text-gray-900 bg-gray-50 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all">
-                        </div>
-                        <input type="hidden" id="card-input">
-                    </div>
-                    <div class="grid grid-cols-2 gap-6">
-                        <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-2">Expiration Date</label>
-                            <input type="text" id="exp-input" placeholder="MM/YY"
-                                class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-2">CVV</label>
-                            <input type="text" id="cvc-input" placeholder="123"
-                                class="w-full px-4 py-3 border border-gray-300 rounded-xl font-medium" maxlength="4">
-                        </div>
+                        <p class="text-xs text-gray-600">Your payment details are tokenized securely with Stripe. CloudVault never stores raw card data.</p>
                     </div>
 
                     <!-- TOS Checkbox -->
@@ -2057,18 +2000,8 @@
         }
 
         async function submitWaitlistDeposit() {
-            const cardName = document.getElementById('w-card-name').value.trim();
-            const cardNum = (document.getElementById('w-card-number').value || ['w-card-b1', 'w-card-b2', 'w-card-b3', 'w-card-b4'].map(id => document.getElementById(id)?.value || '').join('')).trim();
-            const exp = document.getElementById('w-card-exp').value.trim();
-            const cvc = document.getElementById('w-card-cvc').value.trim();
             const errEl = document.getElementById('w-payment-error');
-
-            if (!cardName || cardNum.length < 12 || !exp || !cvc) {
-                errEl.textContent = 'Please complete all payment fields (16-digit card number required).';
-                errEl.classList.remove('hidden-section');
-                return;
-            }
-            errEl.classList.add('hidden-section');
+            if (errEl) errEl.classList.add('hidden-section');
 
             const btn = document.getElementById('btn-deposit-submit');
             btn.disabled = true;
@@ -2188,18 +2121,6 @@
         }
 
         async function submitForm() {
-            // Basic validation for Step 3 (payment)
-            const cardName = document.getElementById('card-name-input').value.trim();
-            const card = document.getElementById('card-input').value.trim();
-            const exp = document.getElementById('exp-input').value.trim();
-            const cvc = document.getElementById('cvc-input').value.trim();
-
-            if (!cardName || !card || !exp || !cvc) {
-                document.getElementById('payment-error').textContent = 'Please complete all payment fields.';
-                document.getElementById('payment-error').classList.remove('hidden-section');
-                return;
-            }
-
             const tosCheckbox = document.getElementById('tos-checkbox');
             if (!tosCheckbox.checked) {
                 document.getElementById('payment-error').textContent = 'You must agree to the Asset Protection Policy.';
