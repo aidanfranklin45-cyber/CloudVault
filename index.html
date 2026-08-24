@@ -1826,6 +1826,11 @@
         </button>
     </div>
 
+    <!-- External Scripts: Supabase SDK & Billing Engine (Loaded first for SSOT) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="billing-engine.js"></script>
+
     <!-- Scripts Section -->
     <script>
         // Web Funnel Analytics Tracker using PostHog & Supabase Sync
@@ -2063,8 +2068,11 @@
             }
         }
 
-        // Dynamic Pricing engine
+        // Dynamic Pricing engine (Delegates to SSOT CloudVaultBilling)
         function getTierRate(toteCount) {
+            if (typeof window !== 'undefined' && window.CloudVaultBilling && typeof window.CloudVaultBilling.getTierRate === 'function') {
+                return window.CloudVaultBilling.getTierRate(toteCount, regionalRates);
+            }
             const count = Math.max(1, Number(toteCount) || 1);
             if (count >= 50) return { rate: regionalRates.tier4, tier: 4, label: `Tier 4 — $${regionalRates.tier4.toFixed(2)}/tote` };
             if (count >= 25) return { rate: regionalRates.tier3, tier: 3, label: `Tier 3 — $${regionalRates.tier3.toFixed(2)}/tote` };
@@ -2570,13 +2578,23 @@
 
             try {
                 let reqDeposit = 20.00;
-                try {
-                    const { data: meta } = await supabase.from('metadata').select('value').eq('id', 'unlaunched_deposit').maybeSingle();
-                    if (meta && meta.value) reqDeposit = Number(meta.value);
+                let priceLockYears = 3;
+                let refundGuaranteeDays = 365;
 
-                    const { data: zone } = await supabase.from('operational_zones').select('required_deposit').contains('zip_codes', [zip]).maybeSingle();
-                    if (zone && zone.required_deposit) reqDeposit = Number(zone.required_deposit);
-                } catch (e) { console.warn('Dynamic deposit fetch notice:', e); }
+                if (typeof window !== 'undefined' && window.CloudVaultBilling && typeof window.CloudVaultBilling.resolveWaitlistDeposit === 'function') {
+                    const depInfo = await window.CloudVaultBilling.resolveWaitlistDeposit(zip);
+                    reqDeposit = depInfo.depositAmount;
+                    priceLockYears = depInfo.priceLockYears;
+                    refundGuaranteeDays = depInfo.refundGuaranteeDays;
+                } else {
+                    try {
+                        const { data: meta } = await supabase.from('metadata').select('value').eq('id', 'unlaunched_deposit').maybeSingle();
+                        if (meta && meta.value) reqDeposit = Number(meta.value);
+
+                        const { data: zone } = await supabase.from('operational_zones').select('required_deposit').contains('zip_codes', [zip]).maybeSingle();
+                        if (zone && zone.required_deposit) reqDeposit = Number(zone.required_deposit);
+                    } catch (e) { console.warn('Dynamic deposit fetch notice:', e); }
+                }
 
                 activeWaitlistDeposit = reqDeposit;
                 const depositDisplay = document.getElementById('waitlist-deposit-display');
@@ -2587,8 +2605,8 @@
                     zip_code: zip,
                     requested_totes: flowData.totes || 5,
                     deposit_amount: reqDeposit,
-                    price_lock_years: 3,
-                    refund_guarantee_days: 365,
+                    price_lock_years: priceLockYears,
+                    refund_guarantee_days: refundGuaranteeDays,
                     payment_status: 'pending_deposit',
                     status: 'pending_deposit'
                 }).select();
@@ -3018,11 +3036,6 @@
             } catch (e) {}
         });
     </script>
-
-    <!-- Supabase JS SDK & Billing Engine -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="supabase-config.js"></script>
-    <script src="billing-engine.js"></script>
 </body>
 
 </html>

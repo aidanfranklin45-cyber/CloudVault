@@ -164,20 +164,26 @@ function generateToteCode(facilityId = 'facility_seattle_north') {
     return `CV-${prefix}-${chars.join('')}`;
 }
 
-// Dynamic Pricing Engine Helper (Delegates to window.CloudVaultBilling or active regional state)
+// Dynamic Pricing Engine Helper (Delegates to window.CloudVaultBilling)
 function getTierRate(toteCount, customRates = null) {
-    const rates = customRates || (typeof regionalRates !== 'undefined' ? regionalRates : (window.regionalRates || { tier1: 5.00, tier2: 3.50, tier3: 2.50, tier4: 1.00 }));
+    if (typeof window !== 'undefined' && window.CloudVaultBilling && typeof window.CloudVaultBilling.getTierRate === 'function') {
+        return window.CloudVaultBilling.getTierRate(toteCount, customRates);
+    }
+    const rates = customRates || (typeof regionalRates !== 'undefined' ? regionalRates : (window.regionalRates || { tier1: 5.10, tier2: 3.50, tier3: 2.50, tier4: 1.00 }));
     const count = Math.max(1, Number(toteCount) || 1);
     if (count >= 50) return { rate: Number(rates.tier4) || 1.00, tier: 4, label: `Tier 4 — $${(Number(rates.tier4) || 1.00).toFixed(2)}/tote` };
     if (count >= 25) return { rate: Number(rates.tier3) || 2.50, tier: 3, label: `Tier 3 — $${(Number(rates.tier3) || 2.50).toFixed(2)}/tote` };
     if (count >= 10) return { rate: Number(rates.tier2) || 3.50, tier: 2, label: `Tier 2 — $${(Number(rates.tier2) || 3.50).toFixed(2)}/tote` };
-    return { rate: Number(rates.tier1) || 5.00, tier: 1, label: `Tier 1 — $${(Number(rates.tier1) || 5.00).toFixed(2)}/tote` };
+    return { rate: Number(rates.tier1) || 5.10, tier: 1, label: `Tier 1 — $${(Number(rates.tier1) || 5.10).toFixed(2)}/tote` };
 }
 if (typeof window !== 'undefined') {
     window.getTierRate = getTierRate;
 }
 
 function getValetFee(toteCount, customValet = null) {
+    if (typeof window !== 'undefined' && window.CloudVaultBilling && typeof window.CloudVaultBilling.getValetFee === 'function') {
+        return window.CloudVaultBilling.getValetFee(toteCount, customValet);
+    }
     const valet = customValet || (typeof regionalRates !== 'undefined' ? regionalRates : (window.regionalRates || { valet_base: 16.00, valet_tote_adder: 1.00 }));
     const count = Math.max(0, Number(toteCount) || 0);
     const base = Number(valet.valet_base != null ? valet.valet_base : 16.00);

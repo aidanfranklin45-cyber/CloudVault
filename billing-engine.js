@@ -7,6 +7,125 @@
 
   const CloudVaultBilling = {
     /**
+     * Authoritative volume tier calculation. Pure function from rate schedule and tote count.
+     * @param {number} toteCount - Number of storage totes
+     * @param {Object} [customRates] - Optional rate matrix { tier1, tier2, tier3, tier4 }
+     * @returns {{rate: number, tier: number, tierName: string, label: string}}
+     */
+    getTierRate: function (toteCount, customRates = null) {
+      const rates = customRates || (typeof window !== 'undefined' && window.regionalRates) || { tier1: 5.10, tier2: 3.50, tier3: 2.50, tier4: 1.00 };
+      const count = Math.max(1, Number(toteCount) || 1);
+      const t4 = Number(rates.tier4 != null ? rates.tier4 : 1.00);
+      const t3 = Number(rates.tier3 != null ? rates.tier3 : 2.50);
+      const t2 = Number(rates.tier2 != null ? rates.tier2 : 3.50);
+      const t1 = Number(rates.tier1 != null ? rates.tier1 : 5.10);
+
+      if (count >= 50) return { rate: t4, tier: 4, tierName: 'Tier 4 Enterprise Volume', label: `Tier 4 — $${t4.toFixed(2)}/tote` };
+      if (count >= 25) return { rate: t3, tier: 3, tierName: 'Tier 3 Commercial Volume', label: `Tier 3 — $${t3.toFixed(2)}/tote` };
+      if (count >= 10) return { rate: t2, tier: 2, tierName: 'Tier 2 Preferred Volume', label: `Tier 2 — $${t2.toFixed(2)}/tote` };
+      return { rate: t1, tier: 1, tierName: 'Tier 1 Standard Volume', label: `Tier 1 — $${t1.toFixed(2)}/tote` };
+    },
+
+    /**
+     * Authoritative valet logistics fee calculation.
+     * @param {number} toteCount - Number of storage totes
+     * @param {Object} [customValet] - Optional valet config { valet_base, valet_tote_adder }
+     * @returns {number} Calculated valet fee
+     */
+    getValetFee: function (toteCount, customValet = null) {
+      const valet = customValet || (typeof window !== 'undefined' && window.regionalRates) || { valet_base: 16.00, valet_tote_adder: 1.00 };
+      const count = Math.max(0, Number(toteCount) || 0);
+      const base = Number(valet.valet_base != null ? valet.valet_base : 16.00);
+      const adder = Number(valet.valet_tote_adder != null ? valet.valet_tote_adder : 1.00);
+      return base + (count * adder);
+    },
+
+    /**
+     * Dynamically resolves the missing tote replacement fee for a facility.
+     * @param {string} facilityId - Facility ID
+     * @returns {Promise<number>} Missing tote fee
+     */
+    getMissingToteFee: async function (facilityId) {
+      const sb = global.supabase || (typeof window !== 'undefined' ? window.supabase : null);
+      if (sb && facilityId) {
+        try {
+          const { data: fac } = await sb.from('facilities').select('missing_tote_fee').eq('id', facilityId).maybeSingle();
+          if (fac && fac.missing_tote_fee != null) {
+            return Number(fac.missing_tote_fee);
+          }
+        } catch (err) {
+          console.warn('[CloudVaultBilling] Error querying facility missing_tote_fee:', err.message);
+        }
+      }
+      return 15.00;
+    },
+
+    /**
+     * Dynamically resolves the expansion waitlist deposit and terms for an unlaunched market.
+     * @param {string} zipCode - Target postal code
+     * @returns {Promise<{depositAmount: number, priceLockYears: number, refundGuaranteeDays: number}>}
+     */
+    resolveWaitlistDeposit: async function (zipCode) {
+      const sb = global.supabase || (typeof window !== 'undefined' ? window.supabase : null);
+      let deposit = 20.00;
+      let priceLockYears = 3;
+      let refundGuaranteeDays = 365;
+
+      if (sb) {
+        try {
+          if (zipCode) {
+            const { data: zone } = await sb.from('operational_zones')
+              .select('required_deposit, price_lock_years, refund_guarantee_days')
+              .contains('zip_codes', [zipCode])
+              .maybeSingle();
+
+            if (zone && zone.required_deposit != null) {
+              deposit = Number(zone.required_deposit);
+              if (zone.price_lock_years) priceLockYears = Number(zone.price_lock_years);
+              if (zone.refund_guarantee_days) refundGuaranteeDays = Number(zone.refund_guarantee_days);
+              return { depositAmount: deposit, priceLockYears, refundGuaranteeDays };
+            }
+          }
+
+          const { data: meta } = await sb.from('metadata').select('value').eq('id', 'unlaunched_deposit').maybeSingle();
+          if (meta && meta.value != null) {
+            deposit = Number(meta.value);
+          }
+        } catch (err) {
+          console.warn('[CloudVaultBilling] Error resolving waitlist deposit:', err.message);
+        }
+      }
+
+      return { depositAmount: deposit, priceLockYears, refundGuaranteeDays };
+    },
+
+    /**
+     * Dispatches checkout initialization to the stripe-checkout Edge Function.
+     * @param {Object} payload - Checkout parameters
+     * @returns {Promise<{data?: Object, error?: Object}>}
+     */
+    initiateStripeCheckout: async function (payload) {
+      const sb = global.supabase || (typeof window !== 'undefined' ? window.supabase : null);
+      if (!sb || !sb.functions) {
+        throw new Error('Supabase client or Edge Functions unavailable.');
+      }
+      return await sb.functions.invoke('stripe-checkout', { body: payload });
+    },
+
+    /**
+     * Dispatches one-time fee billing to the stripe-service-charge Edge Function.
+     * @param {Object} payload - Service charge parameters
+     * @returns {Promise<{data?: Object, error?: Object}>}
+     */
+    initiateServiceCharge: async function (payload) {
+      const sb = global.supabase || (typeof window !== 'undefined' ? window.supabase : null);
+      if (!sb || !sb.functions) {
+        throw new Error('Supabase client or Edge Functions unavailable.');
+      }
+      return await sb.functions.invoke('stripe-service-charge', { body: payload });
+    },
+
+    /**
      * Dynamically resolves rate schedules and volume tier rate for a customer at billing execution time.
      * Evaluates customer price lock (price lock immunity) first, then falls back to live regional facility rates.
      * Tier thresholds: 50+ (Tier 4), 25-49 (Tier 3), 10-24 (Tier 2), 1-9 (Tier 1).
@@ -17,7 +136,7 @@
      */
     resolveCustomerPricing: async function (userId, facilityId, toteCount = 1) {
       const sb = global.supabase;
-      let rates = { tier1: 5.00, tier2: 3.50, tier3: 2.00, tier4: 1.00 };
+      let rates = { tier1: 5.10, tier2: 3.50, tier3: 2.50, tier4: 1.00 };
       let isPriceLock = false;
       let assignedFacId = facilityId || null;
 

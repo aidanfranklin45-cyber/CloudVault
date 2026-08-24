@@ -1822,13 +1822,16 @@
         // ============================================================
         function getAddTierRate(count) {
             const fac = window.currentActiveFacility || activeFacilityPricing || {};
+            if (window.CloudVaultBilling && typeof window.CloudVaultBilling.getTierRate === 'function') {
+                return window.CloudVaultBilling.getTierRate(count, fac);
+            }
             if (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.calculateTierRate === 'function' && fac.tier1_rate != null) {
                 return window.StripeBillingIntegration.calculateTierRate(fac, count);
             }
-            const t1 = Number(fac.tier1_rate != null ? fac.tier1_rate : (window.regionalRates?.tier1 || 0));
-            const t2 = Number(fac.tier2_rate != null ? fac.tier2_rate : (window.regionalRates?.tier2 || 0));
-            const t3 = Number(fac.tier3_rate != null ? fac.tier3_rate : (window.regionalRates?.tier3 || 0));
-            const t4 = Number(fac.tier4_rate != null ? fac.tier4_rate : (window.regionalRates?.tier4 || 0));
+            const t1 = Number(fac.tier1_rate != null ? fac.tier1_rate : (window.regionalRates?.tier1 || 5.10));
+            const t2 = Number(fac.tier2_rate != null ? fac.tier2_rate : (window.regionalRates?.tier2 || 3.50));
+            const t3 = Number(fac.tier3_rate != null ? fac.tier3_rate : (window.regionalRates?.tier3 || 2.50));
+            const t4 = Number(fac.tier4_rate != null ? fac.tier4_rate : (window.regionalRates?.tier4 || 1.00));
 
             if (count >= 50) return { rate: t4, tier: 4, label: `Tier 4 — $${t4.toFixed(2)}/tote`, tierName: 'Tier 4' };
             if (count >= 25) return { rate: t3, tier: 3, label: `Tier 3 — $${t3.toFixed(2)}/tote`, tierName: 'Tier 3' };
@@ -3136,10 +3139,10 @@
         function getWizardTierRate(count) {
             const fac = window.currentActiveFacility || activeFacilityPricing || {};
             let rates = window.regionalRates || {
-                tier1: Number(fac.tier1_rate != null ? fac.tier1_rate : 0),
-                tier2: Number(fac.tier2_rate != null ? fac.tier2_rate : 0),
-                tier3: Number(fac.tier3_rate != null ? fac.tier3_rate : 0),
-                tier4: Number(fac.tier4_rate != null ? fac.tier4_rate : 0)
+                tier1: Number(fac.tier1_rate != null ? fac.tier1_rate : 5.10),
+                tier2: Number(fac.tier2_rate != null ? fac.tier2_rate : 3.50),
+                tier3: Number(fac.tier3_rate != null ? fac.tier3_rate : 2.50),
+                tier4: Number(fac.tier4_rate != null ? fac.tier4_rate : 1.00)
             };
             if (window.currentUserData && window.currentUserData.has_price_lock && window.currentUserData.price_lock_rates) {
                 const plr = window.currentUserData.price_lock_rates;
@@ -3149,6 +3152,9 @@
                     tier3: Number(plr.tier3_rate != null ? plr.tier3_rate : (plr.tier3 || rates.tier3)),
                     tier4: Number(plr.tier4_rate != null ? plr.tier4_rate : (plr.tier4 || rates.tier4))
                 };
+            }
+            if (window.CloudVaultBilling && typeof window.CloudVaultBilling.getTierRate === 'function') {
+                return window.CloudVaultBilling.getTierRate(count, rates);
             }
             if (count >= 50) return { rate: rates.tier4, tier: 4, label: `Tier 4 — $${rates.tier4.toFixed(2)}/tote`, tierName: 'Tier 4' };
             if (count >= 25) return { rate: rates.tier3, tier: 3, label: `Tier 3 — $${rates.tier3.toFixed(2)}/tote`, tierName: 'Tier 3' };
