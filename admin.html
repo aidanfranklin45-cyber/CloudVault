@@ -9227,8 +9227,15 @@
             if (!master) return;
             const { inventory = [], subscriptions = [], accessRequests = [], facilities = [] } = master;
 
-            // 1. Missing / Damaged Totes
-            const missingTotes = inventory.filter(i => i.status === 'missing-tote' || i.location_type === 'missing' || (i.status || '').includes('missing'));
+                        // 1. Unresolved Missing / Damaged Totes (Active open incidents only)
+            const missingTotes = inventory.filter(i => {
+                const isMissing = i.status === 'missing-tote' || i.location_type === 'missing' || (i.status || '').includes('missing');
+                if (!isMissing) return false;
+                // Exclude resolved/discharged cases where penalty fee was billed or case was settled
+                const isResolved = i.status === 'discharged' || 
+                                   ['discharged_paid', 'billed_customer', 'paid', 'reshelved', 'written_off'].includes(i.missing_resolution);
+                return !isResolved;
+            });
             
             // 2. Dunning / Past Due Subscriptions
             const dunningSubs = subscriptions.filter(s => s.status === 'past_due' || s.status === 'unpaid' || s.dunning_status || s.payment_failed_at);
@@ -12410,6 +12417,7 @@
                     .maybeSingle();
 
                 // Populate Customer Telemetry (Active Totes only)
+                // Populate Customer Telemetry (Active Totes only)
                 const user = item.users || {};
                 const { count: actualTotesCount } = await supabase.from('inventory')
                     .select('*', { count: 'exact', head: true })
@@ -12451,7 +12459,6 @@
                 document.getElementById('tmm-tote-category').textContent = item.category || 'General Storage';
                 document.getElementById('tmm-tote-facility').textContent = item.facilities?.name || item.facility_id || 'Yakima FC';
                 document.getElementById('tmm-tote-room').textContent = resolvedRoomText;
-                const activeToteDate = item.last_scanned_at || item.updated_at || item.created_at;
                 document.getElementById('tmm-tote-created-at').textContent = activeToteDate ? new Date(activeToteDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
                 // Populate Dynamic Missing Tote Replacement Fee from Facility
