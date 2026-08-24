@@ -5569,6 +5569,23 @@
                     }).join('');
                 }
 
+                // Auto-navigate to first non-empty operational phase tab on initial load
+                if (!window.hasManuallySwitchedPhase) {
+                    if (isPastCutoff || (pullItems.length > 0 && activateItems.length === 0)) {
+                        switchWorkerPhase('stage', false);
+                    } else if (activateItems.length > 0) {
+                        switchWorkerPhase('activate', false);
+                    } else if (stagedItems.length > 0) {
+                        switchWorkerPhase('customer', false);
+                    } else if (dispatchItems.length > 0) {
+                        switchWorkerPhase('dispatch', false);
+                    } else if (returnedItems.length > 0) {
+                        switchWorkerPhase('returned', false);
+                    }
+                }
+
+                if (window.lucide) lucide.createIcons();
+
             } catch (e) {
                 console.error("Worker data loading failed:", e);
             }
@@ -8513,7 +8530,7 @@
                 const stops = [];
 
                 (requests || []).forEach(r => {
-                    if (r.facility_id === queryFacilityId || r.users?.assigned_facility_id === queryFacilityId) {
+                    if (matchesFacilityTarget(r, queryFacilityId)) {
                         const uId = r.uid || (r.users ? r.users.id : null);
                         if (uId) {
                             const rawItems = r.requested_items || r.requested_tote_codes || [];
