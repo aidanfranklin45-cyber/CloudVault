@@ -5126,6 +5126,11 @@
             document.getElementById('retrieval-modal').classList.remove('hidden');
         }
 
+        function closeRetrievalModal() {
+            stopQuoteLockTimer();
+            document.getElementById('retrieval-modal').classList.add('hidden');
+        }
+
         async function loadSavedCustomerAddress() {
             try {
                 if (!currentUser) return;
