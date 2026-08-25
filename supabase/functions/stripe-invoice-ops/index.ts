@@ -1,4 +1,4 @@
-﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "npm:stripe@^14.25.0";
 import { createClient } from "npm:@supabase/supabase-js@2.42.0";
 
@@ -94,13 +94,20 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Dynamic rate calculation based on facility tier matrix
-    const t1 = Number(facility.tier1_rate || 5.00);
-    const t2 = Number(facility.tier2_rate || 3.50);
-    const t3 = Number(facility.tier3_rate || 2.00);
-    const t4 = Number(facility.tier4_rate || 1.00);
-    const vBase = Number(facility.valet_base || 8.00);
-    const vAdder = Number(facility.valet_tote_adder || 1.00);
+    // Enforce dynamic rate calculation strictly from facility database matrix
+    if (facility.tier1_rate === undefined || facility.tier1_rate === null) {
+      return new Response(JSON.stringify({ error: `Facility '${facilityId}' is missing dynamic rate configuration.` }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const t1 = Number(facility.tier1_rate);
+    const t2 = Number(facility.tier2_rate != null ? facility.tier2_rate : facility.tier1_rate);
+    const t3 = Number(facility.tier3_rate != null ? facility.tier3_rate : t2);
+    const t4 = Number(facility.tier4_rate != null ? facility.tier4_rate : t3);
+    const vBase = Number(facility.valet_base != null ? facility.valet_base : 0);
+    const vAdder = Number(facility.valet_tote_adder != null ? facility.valet_tote_adder : 0);
 
     let unitRate = t1;
     if (toteCount >= 50) unitRate = t4;
@@ -112,11 +119,11 @@ Deno.serve(async (req: Request) => {
     const valetAmount = isValet ? Math.round((vBase + (toteCount * vAdder)) * 100) / 100 : 0.00;
     const grossSubtotal = Math.round((storageAmount + valetAmount) * 100) / 100;
 
-    // Dynamic Regional Tax Resolution
-    let taxRatePct = facility.state === "OR" ? 0.00 : (facility.city === "Seattle" ? 10.25 : 8.50);
-    let taxLabel = facility.state === "OR" ? "Oregon Sales Tax (0.00%)" : `${facility.state || "WA"} State & Local Sales Tax (${taxRatePct.toFixed(2)}%)`;
+    // Dynamic Regional Tax Resolution from database configuration
+    const taxRatePct = Number(facility.tax_rate_pct != null ? facility.tax_rate_pct : (facility.state === "OR" ? 0.00 : (facility.state_tax_rate_pct != null ? facility.state_tax_rate_pct : 0.00)));
+    const taxLabel = facility.tax_label || (facility.state === "OR" ? "Oregon Sales Tax (0.00%)" : `${facility.state || "WA"} State & Local Sales Tax (${taxRatePct.toFixed(2)}%)`);
 
-    // 2. Promo Code & Creator Attribution Resolution
+    // 2. Promo Code & Creator Attribution Resolution from Database
     let promoDiscountPct = 0;
     let promoCreatorId: string | null = null;
     let promoCodeId: string | null = null;
@@ -130,11 +137,9 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       if (promoData) {
-        promoDiscountPct = Number(promoData.discount_percent || 20);
+        promoDiscountPct = Number(promoData.customer_discount_pct != null ? promoData.customer_discount_pct : (promoData.discount_percent || 0));
         promoCreatorId = promoData.creator_id || null;
         promoCodeId = promoData.id || null;
-      } else if (promoCodeInput.includes("20") || promoCodeInput.includes("ROSS")) {
-        promoDiscountPct = 20;
       }
     }
 

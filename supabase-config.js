@@ -164,17 +164,25 @@ function generateToteCode(facilityId = 'facility_seattle_north') {
     return `CV-${prefix}-${chars.join('')}`;
 }
 
-// Dynamic Pricing Engine Helper (Delegates to window.CloudVaultBilling)
+// Dynamic Pricing Engine Helper (Delegates to window.CloudVaultBilling or active facility context)
 function getTierRate(toteCount, customRates = null) {
     if (typeof window !== 'undefined' && window.CloudVaultBilling && typeof window.CloudVaultBilling.getTierRate === 'function') {
         return window.CloudVaultBilling.getTierRate(toteCount, customRates);
     }
-    const rates = customRates || (typeof regionalRates !== 'undefined' ? regionalRates : (window.regionalRates || { tier1: 5.10, tier2: 3.50, tier3: 2.50, tier4: 1.00 }));
+    const rates = customRates || (typeof activeFacilityPricing !== 'undefined' ? activeFacilityPricing : (typeof window !== 'undefined' ? (window.activeFacilityPricing || window.regionalRates) : null));
+    if (!rates) {
+        throw new Error("Dynamic pricing context is missing. Cannot calculate tier rate without active facility configuration.");
+    }
     const count = Math.max(1, Number(toteCount) || 1);
-    if (count >= 50) return { rate: Number(rates.tier4) || 1.00, tier: 4, label: `Tier 4 — $${(Number(rates.tier4) || 1.00).toFixed(2)}/tote` };
-    if (count >= 25) return { rate: Number(rates.tier3) || 2.50, tier: 3, label: `Tier 3 — $${(Number(rates.tier3) || 2.50).toFixed(2)}/tote` };
-    if (count >= 10) return { rate: Number(rates.tier2) || 3.50, tier: 2, label: `Tier 2 — $${(Number(rates.tier2) || 3.50).toFixed(2)}/tote` };
-    return { rate: Number(rates.tier1) || 5.10, tier: 1, label: `Tier 1 — $${(Number(rates.tier1) || 5.10).toFixed(2)}/tote` };
+    const t1 = Number(rates.tier1_rate != null ? rates.tier1_rate : rates.tier1);
+    const t2 = Number(rates.tier2_rate != null ? rates.tier2_rate : (rates.tier2 != null ? rates.tier2 : t1));
+    const t3 = Number(rates.tier3_rate != null ? rates.tier3_rate : (rates.tier3 != null ? rates.tier3 : t2));
+    const t4 = Number(rates.tier4_rate != null ? rates.tier4_rate : (rates.tier4 != null ? rates.tier4 : t3));
+
+    if (count >= 50) return { rate: t4, tier: 4, label: `Tier 4 — $${t4.toFixed(2)}/tote` };
+    if (count >= 25) return { rate: t3, tier: 3, label: `Tier 3 — $${t3.toFixed(2)}/tote` };
+    if (count >= 10) return { rate: t2, tier: 2, label: `Tier 2 — $${t2.toFixed(2)}/tote` };
+    return { rate: t1, tier: 1, label: `Tier 1 — $${t1.toFixed(2)}/tote` };
 }
 if (typeof window !== 'undefined') {
     window.getTierRate = getTierRate;
@@ -184,10 +192,13 @@ function getValetFee(toteCount, customValet = null) {
     if (typeof window !== 'undefined' && window.CloudVaultBilling && typeof window.CloudVaultBilling.getValetFee === 'function') {
         return window.CloudVaultBilling.getValetFee(toteCount, customValet);
     }
-    const valet = customValet || (typeof regionalRates !== 'undefined' ? regionalRates : (window.regionalRates || { valet_base: 16.00, valet_tote_adder: 1.00 }));
+    const valet = customValet || (typeof activeFacilityPricing !== 'undefined' ? activeFacilityPricing : (typeof window !== 'undefined' ? (window.activeFacilityPricing || window.regionalRates) : null));
+    if (!valet) {
+        throw new Error("Dynamic valet pricing context is missing. Cannot calculate valet fee without active facility configuration.");
+    }
     const count = Math.max(0, Number(toteCount) || 0);
-    const base = Number(valet.valet_base != null ? valet.valet_base : 16.00);
-    const adder = Number(valet.valet_tote_adder != null ? valet.valet_tote_adder : 1.00);
+    const base = Number(valet.valet_base != null ? valet.valet_base : 0);
+    const adder = Number(valet.valet_tote_adder != null ? valet.valet_tote_adder : 0);
     return base + (count * adder);
 }
 if (typeof window !== 'undefined') {
