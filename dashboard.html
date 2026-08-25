@@ -6117,11 +6117,17 @@
             if (currentSubscription) {
                 const totalTotes = currentSubscription.total_totes || 0;
                 const toteRate = Number(currentSubscription.tote_rate) || 5.00;
-                const monthly = Number(currentSubscription.recurring_storage) || 0;
+                const baseMonthly = Number(currentSubscription.recurring_storage) || (totalTotes * toteRate);
+
+                // Dynamic tax resolution based on active user facility/state
+                const userFac = currentUser?.assigned_facility_id || currentSubscription?.facility_id || 'facility_yakima';
+                const userTaxRate = (userFac === 'facility_seattle_north' ? 0.1025 : (userFac === 'facility_portland_central' ? 0.00 : 0.085));
+                const monthlyTax = Math.round(baseMonthly * userTaxRate * 100) / 100;
+                const afterTaxMonthly = Math.round((baseMonthly + monthlyTax) * 100) / 100;
 
                 if (planNameEl) planNameEl.textContent = `${totalTotes} Tote${totalTotes !== 1 ? 's' : ''} Storage Plan`;
-                if (monthlyAmountEl) monthlyAmountEl.innerHTML = `$${monthly.toFixed(2)}<span class="text-xs font-normal text-blue-200">/mo</span>`;
-                if (tierLabelEl) tierLabelEl.textContent = `Tier @ $${toteRate.toFixed(2)}/tote`;
+                if (monthlyAmountEl) monthlyAmountEl.innerHTML = `$${afterTaxMonthly.toFixed(2)}<span class="text-xs font-normal text-blue-200">/mo</span>`;
+                if (tierLabelEl) tierLabelEl.textContent = `Tier @ $${toteRate.toFixed(2)}/tote${monthlyTax > 0 ? ` ($${baseMonthly.toFixed(2)} + $${monthlyTax.toFixed(2)} tax)` : ''}`;
 
                 if (lastDateEl) {
                     const sub = currentSubscription;
@@ -6298,12 +6304,24 @@
                 function resolveInvoiceAfterTaxTotal(inv) {
                     if (!inv) return 0;
                     const rawTotal = Number(inv.total_amount !== undefined ? inv.total_amount : (inv.totalAmount !== undefined ? inv.totalAmount : 0));
-                    if (rawTotal > 0) return rawTotal;
+                    const rawTax = Number(inv.tax !== undefined ? inv.tax : (inv.taxAmount !== undefined ? inv.taxAmount : 0));
                     
+                    if (rawTotal > 0 && rawTax > 0) return rawTotal;
+                    if (rawTotal > 0 && String(inv.facility_id || '').includes('portland')) return rawTotal; // Oregon has 0 tax
+
                     const subtotal = Number(inv.subtotal || 0);
-                    const tax = Number(inv.tax || 0);
                     const discount = Number(inv.discount || 0);
-                    return Math.max(0, Math.round((subtotal - discount + tax) * 100) / 100);
+                    const netTaxable = Math.max(0, subtotal - discount);
+
+                    // If tax was recorded, use it; otherwise dynamically calculate based on facility
+                    let tax = rawTax;
+                    if (tax === 0 && subtotal > 0) {
+                        const fac = inv.facility_id || currentUser?.assigned_facility_id || 'facility_yakima';
+                        const rate = (fac === 'facility_seattle_north' ? 0.1025 : (fac === 'facility_portland_central' ? 0.00 : 0.085));
+                        tax = Math.round(netTaxable * rate * 100) / 100;
+                    }
+
+                    return Math.max(0, Math.round((netTaxable + tax) * 100) / 100);
                 }
 
                 // Display official invoice records

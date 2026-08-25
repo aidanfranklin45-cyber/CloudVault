@@ -232,10 +232,11 @@ Deno.serve(async (req: Request) => {
     let promoDetails: any = null;
 
     if (promoCodeInput) {
+      const cleanCode = promoCodeInput.replace(/[% ]/g, "").toUpperCase();
       const { data: promo, error: promoErr } = await supabase
         .from("promo_codes")
         .select("id, code, creator_id, stripe_coupon_id, stripe_promo_code_id, customer_discount_pct, is_active, expires_at, max_redemptions, current_redemptions")
-        .ilike("code", promoCodeInput)
+        .or(`code.ilike.${promoCodeInput},code.ilike.${cleanCode},code.ilike.${cleanCode}%`)
         .maybeSingle();
 
       if (promoErr) {

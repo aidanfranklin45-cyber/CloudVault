@@ -129,10 +129,11 @@ Deno.serve(async (req: Request) => {
     let promoCodeId: string | null = null;
 
     if (promoCodeInput) {
+      const cleanCode = promoCodeInput.replace(/[% ]/g, "").toUpperCase();
       const { data: promoData } = await supabase
         .from("promo_codes")
         .select("*, creators(*)")
-        .ilike("code", promoCodeInput)
+        .or(`code.ilike.${promoCodeInput},code.ilike.${cleanCode},code.ilike.${cleanCode}%`)
         .eq("is_active", true)
         .maybeSingle();
 

@@ -3599,7 +3599,8 @@
             const input = document.getElementById('waitlist-promo-input');
             const feedback = document.getElementById('waitlist-promo-feedback');
             const btn = document.getElementById('btn-apply-waitlist-promo');
-            const code = (overrideCode || (input ? input.value : '')).trim().toUpperCase();
+            const rawCode = (overrideCode || (input ? input.value : '')).trim();
+            const code = rawCode.replace(/[% ]/g, '').toUpperCase();
 
             if (!code) {
                 if (feedback) {
@@ -3610,7 +3611,7 @@
                 return;
             }
 
-            if (input) input.value = code;
+            if (input) input.value = rawCode.toUpperCase();
             if (btn) {
                 btn.textContent = '...';
                 btn.disabled = true;
@@ -4343,7 +4344,8 @@
             const feedback = document.getElementById('promo-code-feedback');
             const discountRow = document.getElementById('invoice-promo-discount-row');
 
-            const code = (customCode || (input ? input.value : '')).trim().toUpperCase();
+            const rawCode = (customCode || (input ? input.value : '')).trim();
+            const code = rawCode.replace(/[% ]/g, '').toUpperCase();
             if (!code) {
                 if (feedback) {
                     feedback.textContent = 'Please enter a promotional code.';
@@ -4353,7 +4355,7 @@
                 return;
             }
 
-            if (input) input.value = code;
+            if (input) input.value = rawCode.toUpperCase();
 
             try {
                 const { rate } = getTierRate(flowData.totes || 5);

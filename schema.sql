@@ -5021,19 +5021,25 @@ CREATE OR REPLACE FUNCTION public.validate_promo_code_for_checkout(
 DECLARE
     v_promo RECORD;
     v_creator RECORD;
+    v_discount_pct NUMERIC(5,2) := 0.00;
     v_discount_amt NUMERIC(10,2) := 0.00;
     v_net_amt NUMERIC(10,2) := p_gross_amount;
     v_clean_code TEXT;
+    v_normalized_code TEXT;
 BEGIN
     IF p_code IS NULL OR TRIM(p_code) = '' THEN
         RETURN jsonb_build_object('valid', false, 'message', 'Please enter a valid promotional code');
     END IF;
 
     v_clean_code := UPPER(TRIM(p_code));
+    v_normalized_code := UPPER(REGEXP_REPLACE(TRIM(p_code), '[% ]', '', 'g'));
 
     SELECT * INTO v_promo
     FROM public.promo_codes
     WHERE UPPER(code) = v_clean_code
+       OR UPPER(code) = v_normalized_code
+       OR REGEXP_REPLACE(UPPER(code), '[% ]', '', 'g') = v_normalized_code
+       OR UPPER(code) = v_normalized_code || '%'
     LIMIT 1;
 
     IF v_promo.id IS NULL THEN
@@ -5058,24 +5064,29 @@ BEGIN
 
     -- Calculate Discount Amount Dynamically
     v_discount_pct := COALESCE(v_promo.customer_discount_pct, 20.00);
-    v_discount_duration := COALESCE(v_promo.customer_discount_duration_months, 2);
-    v_discount_amt := ROUND(p_gross_amount * (v_discount_pct / 100.0), 2);
-    v_net_amt := GREATEST(0.00, p_gross_amount - v_discount_amt);
+    IF p_gross_amount > 0 THEN
+        v_discount_amt := ROUND(p_gross_amount * (v_discount_pct / 100.0), 2);
+        v_net_amt := GREATEST(0.00, p_gross_amount - v_discount_amt);
+    END IF;
 
-    SELECT name, handle INTO v_creator FROM public.creators WHERE id = v_promo.creator_id;
+    IF v_promo.creator_id IS NOT NULL THEN
+        SELECT name, handle INTO v_creator FROM public.creators WHERE id = v_promo.creator_id;
+    END IF;
 
     RETURN jsonb_build_object(
         'valid', true,
         'promo_id', v_promo.id,
         'code', v_promo.code,
-        'creator_name', COALESCE(v_creator.name, 'Creator Partner'),
+        'clean_code', v_normalized_code,
+        'creator_id', v_promo.creator_id,
+        'creator_name', COALESCE(v_creator.name, 'Partner Creator'),
+        'creator_handle', COALESCE(v_creator.handle, ''),
         'customer_discount_pct', v_discount_pct,
-        'customer_discount_duration_months', v_discount_duration,
-        'gross_amount', p_gross_amount,
+        'customer_discount_duration_months', COALESCE(v_promo.customer_discount_duration_months, 2),
         'discount_amount', v_discount_amt,
         'net_amount', v_net_amt,
-        'lifecycle_status', v_promo.lifecycle_status,
-        'message', 'Success! ' || v_discount_pct::text || '% off applied for your first ' || v_discount_duration::text || ' months!'
+        'stripe_coupon_id', v_promo.stripe_coupon_id,
+        'stripe_promo_code_id', v_promo.stripe_promo_code_id
     );
 END;
 $$ LANGUAGE plpgsql;
@@ -5093,8 +5104,9 @@ DECLARE
     v_creator RECORD;
     v_user RECORD;
     v_clean_code TEXT;
+    v_normalized_code TEXT;
     v_discount_amt NUMERIC(10,2) := 0.00;
-    v_net_paid NUMERIC(10,2);
+    v_net_paid NUMERIC(10,2) := 0.00;
     v_first_ref_date TIMESTAMPTZ;
     v_month_diff INT := 1;
     v_commission_eligible BOOLEAN := true;
@@ -5110,8 +5122,14 @@ BEGIN
     END IF;
 
     v_clean_code := UPPER(TRIM(p_code));
+    v_normalized_code := UPPER(REGEXP_REPLACE(TRIM(p_code), '[% ]', '', 'g'));
 
-    SELECT * INTO v_promo FROM public.promo_codes WHERE UPPER(code) = v_clean_code LIMIT 1;
+    SELECT * INTO v_promo FROM public.promo_codes 
+    WHERE UPPER(code) = v_clean_code
+       OR UPPER(code) = v_normalized_code
+       OR REGEXP_REPLACE(UPPER(code), '[% ]', '', 'g') = v_normalized_code
+       OR UPPER(code) = v_normalized_code || '%'
+    LIMIT 1;
     IF v_promo.id IS NULL THEN
         RETURN jsonb_build_object('success', false, 'message', 'Promo code not recognized');
     END IF;
@@ -5637,16 +5655,21 @@ DECLARE
     v_discount_amt NUMERIC(10,2) := 0.00;
     v_net_amt NUMERIC(10,2) := p_deposit_amount;
     v_clean_code TEXT;
+    v_normalized_code TEXT;
 BEGIN
     IF p_code IS NULL OR TRIM(p_code) = '' THEN
         RETURN jsonb_build_object('valid', false, 'message', 'Please enter a valid promotional or creator code.');
     END IF;
 
     v_clean_code := UPPER(TRIM(p_code));
+    v_normalized_code := UPPER(REGEXP_REPLACE(TRIM(p_code), '[% ]', '', 'g'));
 
     SELECT * INTO v_promo
     FROM public.promo_codes
     WHERE UPPER(code) = v_clean_code
+       OR UPPER(code) = v_normalized_code
+       OR REGEXP_REPLACE(UPPER(code), '[% ]', '', 'g') = v_normalized_code
+       OR UPPER(code) = v_normalized_code || '%'
     LIMIT 1;
 
     IF v_promo.id IS NULL THEN
@@ -5705,6 +5728,7 @@ DECLARE
     v_promo RECORD;
     v_creator RECORD;
     v_clean_code TEXT;
+    v_normalized_code TEXT;
     v_comm_rate NUMERIC(5,2) := 10.00;
     v_comm_amt NUMERIC(10,2) := 0.00;
     v_redemption_id UUID;
@@ -5714,8 +5738,14 @@ BEGIN
     END IF;
 
     v_clean_code := UPPER(TRIM(p_code));
+    v_normalized_code := UPPER(REGEXP_REPLACE(TRIM(p_code), '[% ]', '', 'g'));
 
-    SELECT * INTO v_promo FROM public.promo_codes WHERE UPPER(code) = v_clean_code LIMIT 1;
+    SELECT * INTO v_promo FROM public.promo_codes 
+    WHERE UPPER(code) = v_clean_code
+       OR UPPER(code) = v_normalized_code
+       OR REGEXP_REPLACE(UPPER(code), '[% ]', '', 'g') = v_normalized_code
+       OR UPPER(code) = v_normalized_code || '%'
+    LIMIT 1;
     IF v_promo.id IS NULL THEN
         RETURN jsonb_build_object('success', false, 'message', 'Promo code not recognized');
     END IF;
@@ -5792,3 +5822,159 @@ BEGIN
     );
 END;
 $$ LANGUAGE plpgsql;
+
+-- Trigger Function: Auto-generate subscription invoice with dynamic regional sales tax
+CREATE OR REPLACE FUNCTION public.auto_generate_subscription_invoice()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_user RECORD;
+    v_sa RECORD;
+    v_fac RECORD;
+    v_inv_exists BOOLEAN;
+    v_inv_num TEXT;
+    v_facility_id TEXT;
+    v_tax_rate NUMERIC := 0.00;
+    v_tax_label TEXT := 'Sales Tax';
+    v_subtotal NUMERIC;
+    v_valet NUMERIC;
+    v_tax NUMERIC := 0.00;
+    v_total NUMERIC;
+    v_line_items JSONB;
+BEGIN
+    SELECT EXISTS(
+        SELECT 1 FROM public.invoices 
+        WHERE subscription_id = NEW.id 
+           OR (uid = NEW.uid AND invoice_type IN ('initial_reservation', 'subscription'))
+    ) INTO v_inv_exists;
+
+    IF NOT v_inv_exists THEN
+        SELECT * INTO v_user FROM public.users WHERE id = NEW.uid;
+        
+        IF v_user IS NOT NULL AND v_user.active_zone IS NOT NULL THEN
+            SELECT facility_id, tax_rate, tax_label INTO v_sa
+            FROM public.service_areas
+            WHERE zip_code = v_user.active_zone AND active = true
+            LIMIT 1;
+            
+            IF FOUND AND v_sa.tax_rate IS NOT NULL THEN
+                v_facility_id := v_sa.facility_id;
+                v_tax_rate := COALESCE(v_sa.tax_rate, 0.00);
+                v_tax_label := COALESCE(v_sa.tax_label, 'Sales Tax (' || (v_tax_rate * 100)::text || '%)');
+            END IF;
+        END IF;
+
+        IF v_facility_id IS NULL THEN
+            v_facility_id := COALESCE(v_user.assigned_facility_id, 'facility_yakima');
+        END IF;
+
+        IF v_tax_rate = 0.00 AND v_facility_id IS NOT NULL THEN
+            SELECT * INTO v_fac FROM public.facilities WHERE id = v_facility_id;
+            IF FOUND THEN
+                IF v_fac.tax_rate_pct IS NOT NULL AND v_fac.tax_rate_pct > 0 THEN
+                    v_tax_rate := v_fac.tax_rate_pct / 100.0;
+                    v_tax_label := COALESCE(v_fac.tax_label, (v_fac.state || ' State & Local Sales Tax (' || v_fac.tax_rate_pct::text || '%)'));
+                END IF;
+            END IF;
+        END IF;
+
+        v_subtotal := COALESCE(NEW.total_totes * NEW.tote_rate, NEW.recurring_storage, 0.00);
+        v_valet := COALESCE(NEW.valet_fee, 0.00);
+        
+        IF v_tax_rate > 0 THEN
+            v_tax := ROUND(v_subtotal * v_tax_rate, 2);
+        END IF;
+        
+        v_total := v_subtotal + v_valet + v_tax;
+        v_inv_num := 'INV-' || TO_CHAR(COALESCE(NEW.created_at, NOW()), 'YYYY') || '-' || SUBSTRING(MD5(RANDOM()::TEXT) FROM 1 FOR 6);
+
+        v_line_items := jsonb_build_array(
+            jsonb_build_object(
+                'description', 'CloudVault Storage Subscription (' || NEW.total_totes || ' totes @ $' || TO_CHAR(NEW.tote_rate, 'FM990.00') || '/mo)',
+                'qty', NEW.total_totes,
+                'unit_price', NEW.tote_rate,
+                'amount', v_subtotal
+            )
+        );
+
+        IF v_valet > 0 THEN
+            v_line_items := v_line_items || jsonb_build_array(
+                jsonb_build_object(
+                    'description', 'Valet Doorstep Delivery Service Fee',
+                    'qty', 1,
+                    'unit_price', v_valet,
+                    'amount', v_valet
+                )
+            );
+        END IF;
+
+        IF v_tax > 0 THEN
+            v_line_items := v_line_items || jsonb_build_array(
+                jsonb_build_object(
+                    'description', v_tax_label,
+                    'qty', 1,
+                    'unit_price', v_tax,
+                    'amount', v_tax,
+                    'tax_rate', v_tax_rate
+                )
+            );
+        END IF;
+
+        INSERT INTO public.invoices (
+            invoice_number,
+            uid,
+            subscription_id,
+            customer_name,
+            customer_email,
+            facility_id,
+            invoice_type,
+            payment_status,
+            subtotal,
+            delivery_fee,
+            surge_fee,
+            tax,
+            discount,
+            total_amount,
+            amount_paid,
+            payment_method,
+            transaction_reference,
+            notes,
+            line_items,
+            due_date,
+            created_at,
+            paid_at
+        ) VALUES (
+            v_inv_num,
+            NEW.uid,
+            NEW.id,
+            COALESCE(v_user.name, 'Valued Customer'),
+            v_user.email,
+            v_facility_id,
+            'initial_reservation',
+            'paid',
+            v_subtotal,
+            v_valet,
+            0.00,
+            v_tax,
+            0.00,
+            v_total,
+            v_total,
+            'card',
+            'SUB-INIT-' || SUBSTRING(MD5(RANDOM()::TEXT) FROM 1 FOR 8),
+            'Initial storage reservation invoice with dynamic facility and sales tax.',
+            v_line_items,
+            COALESCE(NEW.created_at, NOW()) + INTERVAL '3 days',
+            COALESCE(NEW.created_at, NOW()),
+            COALESCE(NEW.created_at, NOW())
+        );
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_auto_generate_subscription_invoice ON public.subscriptions;
+CREATE TRIGGER trg_auto_generate_subscription_invoice
+AFTER INSERT ON public.subscriptions
+FOR EACH ROW
+EXECUTE FUNCTION public.auto_generate_subscription_invoice();
+
