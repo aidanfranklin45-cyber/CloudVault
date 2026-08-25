@@ -5369,3 +5369,48 @@ AFTER INSERT OR UPDATE OF location_code, location_id, status, facility_id
 ON public.inventory
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_warehouse_location_occupancy();
+
+-- ============================================================
+-- 10. Consumer App Feedback & Bug Reporting System
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.feedback_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_uid UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    user_email TEXT,
+    user_name TEXT,
+    report_type TEXT NOT NULL CHECK (report_type IN ('bug', 'enhancement')),
+    flow_area TEXT NOT NULL DEFAULT 'general',
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    severity TEXT DEFAULT 'medium' CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+    diagnostics JSONB DEFAULT '{}'::jsonb,
+    github_issue_number INT,
+    github_issue_url TEXT,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.feedback_reports ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'feedback_reports' AND policyname = 'Anyone can insert feedback reports'
+    ) THEN
+        CREATE POLICY "Anyone can insert feedback reports" 
+        ON public.feedback_reports 
+        FOR INSERT 
+        WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'feedback_reports' AND policyname = 'Users can view own feedback reports'
+    ) THEN
+        CREATE POLICY "Users can view own feedback reports" 
+        ON public.feedback_reports 
+        FOR SELECT 
+        USING (user_uid IS NULL OR auth.uid() = user_uid OR auth.role() = 'authenticated');
+    END IF;
+END $$;
