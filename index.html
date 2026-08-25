@@ -3612,15 +3612,20 @@
             if (input) input.value = code;
 
             try {
-                const subtotal = Number(flowData.price || 0) + Number(flowData.upfront || 0);
+                const { rate } = getTierRate(flowData.totes || 5);
+                const monthly = Math.round((flowData.totes || 5) * rate * 100) / 100;
+                const isValet = flowData.logisticsType === 'valet_pickup';
+                const upfront = isValet ? (regionalRates.valet_base + ((flowData.totes || 5) * regionalRates.valet_tote_adder)) : 0;
+                const surgeFee = Number(flowData.surgeFee || 0);
+                const subtotal = monthly + upfront + surgeFee;
                 let res = null;
 
                 if (typeof StripeBillingIntegration !== 'undefined' && typeof StripeBillingIntegration.validatePromoCode === 'function') {
-                    res = await StripeBillingIntegration.validatePromoCode(code, null, subtotal);
+                    res = await StripeBillingIntegration.validatePromoCode(code, flowData.userId || null, subtotal);
                 } else if (typeof supabase !== 'undefined' && supabase) {
                     const { data, error } = await supabase.rpc('validate_promo_code_for_checkout', {
                         p_code: code,
-                        p_user_uid: null,
+                        p_user_uid: flowData.userId || null,
                         p_gross_amount: Number(subtotal) || 0.00
                     });
                     if (error) {
