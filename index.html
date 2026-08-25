@@ -2440,6 +2440,13 @@
                     const { data: fac } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
                     if (fac) {
                         isPriceLocked = true;
+                        const vEnabled = fac.valet_enabled !== false || (fac.valet_disabled_until && new Date(fac.valet_disabled_until) <= new Date());
+                        const sEnabled = fac.staging_enabled !== false || (fac.staging_disabled_until && new Date(fac.staging_disabled_until) <= new Date());
+                        regionalRates.isValetAvailable = vEnabled;
+                        regionalRates.isStagingAvailable = sEnabled;
+                        regionalRates.valetDisableReason = fac.valet_disable_reason || '';
+                        regionalRates.stagingDisableReason = fac.staging_disable_reason || '';
+
                         regionalRates.tier1 = Number(fac.tier1_rate) || regionalRates.tier1;
                         regionalRates.tier2 = Number(fac.tier2_rate) || regionalRates.tier2;
                         regionalRates.tier3 = Number(fac.tier3_rate) || regionalRates.tier3;
@@ -3032,7 +3039,37 @@
             }
 
             if (step === 4) {
+                setupStep4LogisticsUI();
                 setTimeout(initCheckoutStripe, 50);
+            }
+        }
+
+        function setupStep4LogisticsUI() {
+            const selfOpt = document.getElementById('step4-opt-self');
+            const valetOpt = document.getElementById('step4-opt-valet');
+            const grid = selfOpt?.parentElement;
+
+            const isValetAvail = regionalRates.isValetAvailable !== false;
+            const isStagingAvail = regionalRates.isStagingAvailable !== false;
+
+            if (isValetAvail && isStagingAvail) {
+                // Both methodologies active: render 2-column selector
+                if (grid) grid.className = 'grid grid-cols-2 gap-2';
+                if (selfOpt) selfOpt.classList.remove('hidden');
+                if (valetOpt) valetOpt.classList.remove('hidden');
+                selectFlowLogistics(flowData.logisticsType || 'self_service');
+            } else if (isValetAvail && !isStagingAvail) {
+                // Valet only: render single full-width card cleanly
+                if (grid) grid.className = 'grid grid-cols-1 gap-2';
+                if (selfOpt) selfOpt.classList.add('hidden');
+                if (valetOpt) valetOpt.classList.remove('hidden');
+                selectFlowLogistics('valet_pickup');
+            } else if (!isValetAvail && isStagingAvail) {
+                // Staging room only: render single full-width card cleanly
+                if (grid) grid.className = 'grid grid-cols-1 gap-2';
+                if (valetOpt) valetOpt.classList.add('hidden');
+                if (selfOpt) selfOpt.classList.remove('hidden');
+                selectFlowLogistics('self_service');
             }
         }
 
@@ -3086,6 +3123,10 @@
         }
 
         function selectFlowLogistics(type) {
+            // Guard against selecting disabled methodologies
+            if (type === 'valet_pickup' && regionalRates.isValetAvailable === false) return;
+            if (type === 'self_service' && regionalRates.isStagingAvailable === false) return;
+
             flowData.logisticsType = type;
             const selfEl = document.getElementById('flow-opt-self');
             const valetEl = document.getElementById('flow-opt-valet');

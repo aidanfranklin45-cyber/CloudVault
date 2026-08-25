@@ -518,6 +518,134 @@
                 <!-- Right Column: Pricing Engine & Serviced ZIP Coverage (5 cols) -->
                 <div class="lg:col-span-5 space-y-8">
 
+                    <!-- Card 2.5: Fulfillment Methodologies & Service Availability Controls -->
+                    <div class="glass-panel p-6 rounded-3xl space-y-5 border border-indigo-500/20 shadow-xl shadow-indigo-950/20">
+                        <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                            <h3 class="text-sm font-extrabold uppercase text-indigo-400 tracking-wider flex items-center gap-2">
+                                <i data-lucide="shield-alert" class="w-4 h-4 text-indigo-400"></i> Service Availability &amp; Methodology Controls
+                            </h3>
+                            <span class="text-[9px] font-bold uppercase text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">Live Dispatch Gating</span>
+                        </div>
+
+                        <div class="space-y-4 text-xs">
+                            <!-- Valet Fulfillment Control Block -->
+                            <div id="method-valet-card" class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-3 transition">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                                            <i data-lucide="truck" class="w-4 h-4"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-black text-white text-xs">Doorstep Valet Service</h4>
+                                            <p class="text-[10px] text-gray-400">Door pickup &amp; delivery route fulfillment</p>
+                                        </div>
+                                    </div>
+                                    <div id="valet-status-badge" class="font-mono text-[10px] font-bold px-2 py-0.5 rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                        🟢 ACTIVE
+                                    </div>
+                                </div>
+
+                                <!-- Valet Action Row -->
+                                <div class="pt-2 border-t border-gray-850 flex items-center justify-between gap-2">
+                                    <div id="valet-info-text" class="text-[11px] text-gray-400 font-medium truncate flex-1">
+                                        Fully operational across all assigned market ZIPs.
+                                    </div>
+                                    <div class="flex items-center gap-2 flex-shrink-0">
+                                        <button type="button" id="btn-valet-pause-toggle" onclick="toggleMethodologyPauseForm('valet')" class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1">
+                                            <i data-lucide="pause-circle" class="w-3.5 h-3.5"></i> Pause Service
+                                        </button>
+                                        <button type="button" id="btn-valet-resume" onclick="resumeMethodology('valet')" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition shadow-md cursor-pointer flex items-center gap-1">
+                                            <i data-lucide="play-circle" class="w-3.5 h-3.5"></i> Resume Now
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Valet Pause Form (Expandable) -->
+                                <div id="valet-pause-form" class="hidden p-3 bg-gray-900/90 border border-gray-800 rounded-xl space-y-3 mt-2">
+                                    <p class="text-[10px] font-extrabold uppercase text-amber-400">Select Pause Duration:</p>
+                                    <div class="grid grid-cols-3 gap-1.5">
+                                        <button type="button" onclick="setPausePreset('valet', '1_day', this)" class="valet-preset-btn text-[10px] font-bold py-1 px-2 rounded-lg bg-gray-800 text-gray-300 border border-gray-700 hover:border-amber-400 transition">1 Day</button>
+                                        <button type="button" onclick="setPausePreset('valet', '3_days', this)" class="valet-preset-btn text-[10px] font-bold py-1 px-2 rounded-lg bg-gray-800 text-gray-300 border border-gray-700 hover:border-amber-400 transition">3 Days</button>
+                                        <button type="button" onclick="setPausePreset('valet', '1_week', this)" class="valet-preset-btn active-preset text-[10px] font-bold py-1 px-2 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/50 transition">1 Week</button>
+                                        <button type="button" onclick="setPausePreset('valet', '2_weeks', this)" class="valet-preset-btn text-[10px] font-bold py-1 px-2 rounded-lg bg-gray-800 text-gray-300 border border-gray-700 hover:border-amber-400 transition">2 Weeks</button>
+                                        <button type="button" onclick="setPausePreset('valet', 'indefinite', this)" class="valet-preset-btn text-[10px] font-bold py-1 px-2 rounded-lg bg-gray-800 text-gray-300 border border-gray-700 hover:border-amber-400 transition">Indefinite</button>
+                                        <button type="button" onclick="setPausePreset('valet', 'custom', this)" class="valet-preset-btn text-[10px] font-bold py-1 px-2 rounded-lg bg-gray-800 text-gray-300 border border-gray-700 hover:border-amber-400 transition">Custom Date</button>
+                                    </div>
+                                    <div id="valet-custom-date-container" class="hidden">
+                                        <label class="block text-[10px] font-bold text-gray-400 mb-1">Resume On Date:</label>
+                                        <input type="datetime-local" id="valet-custom-date-input" class="fspec-input w-full py-1 text-xs text-white">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-bold text-gray-400 mb-1">Operational Reason (Optional):</label>
+                                        <input type="text" id="valet-pause-reason-input" placeholder="e.g. Fleet maintenance, severe weather route block" class="fspec-input w-full py-1 text-xs text-white">
+                                    </div>
+                                    <div class="flex items-center justify-end gap-2 pt-1">
+                                        <button type="button" onclick="toggleMethodologyPauseForm('valet', false)" class="text-[10px] font-bold text-gray-400 hover:text-white px-2 py-1">Cancel</button>
+                                        <button type="button" onclick="confirmPauseMethodology('valet')" class="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] px-3 py-1 rounded-lg transition shadow-md">Confirm Pause</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Staging Room Fulfillment Control Block -->
+                            <div id="method-staging-card" class="bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-3 transition">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                                            <i data-lucide="warehouse" class="w-4 h-4"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-black text-white text-xs">Self-Service Staging Rooms</h4>
+                                            <p class="text-[10px] text-gray-400">Direct customer PIN staging access bays</p>
+                                        </div>
+                                    </div>
+                                    <div id="staging-status-badge" class="font-mono text-[10px] font-bold px-2 py-0.5 rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                        🟢 ACTIVE
+                                    </div>
+                                </div>
+
+                                <!-- Staging Action Row -->
+                                <div class="pt-2 border-t border-gray-850 flex items-center justify-between gap-2">
+                                    <div id="staging-info-text" class="text-[11px] text-gray-400 font-medium truncate flex-1">
+                                        Fully operational with active PIN keypads.
+                                    </div>
+                                    <div class="flex items-center gap-2 flex-shrink-0">
+                                        <button type="button" id="btn-staging-pause-toggle" onclick="toggleMethodologyPauseForm('staging')" class="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1">
+                                            <i data-lucide="pause-circle" class="w-3.5 h-3.5"></i> Pause Staging
+                                        </button>
+                                        <button type="button" id="btn-staging-resume" onclick="resumeMethodology('staging')" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition shadow-md cursor-pointer flex items-center gap-1">
+                                            <i data-lucide="play-circle" class="w-3.5 h-3.5"></i> Resume Now
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Staging Pause Form (Expandable) -->
+                                <div id="staging-pause-form" class="hidden p-3 bg-gray-900/90 border border-gray-800 rounded-xl space-y-3 mt-2">
+                                    <p class="text-[10px] font-extrabold uppercase text-cyan-400">Select Pause Duration:</p>
+                                    <div class="grid grid-cols-3 gap-1.5">
+                                        <button type="button" onclick="setPausePreset('staging', '1_day', this)" class="staging-preset-btn text-[10px] font-bold py-1 px-2 rounded-lg bg-gray-800 text-gray-300 border border-gray-700 hover:border-cyan-400 transition">1 Day</button>
+                                        <button type="button" onclick="setPausePreset('staging', '3_days', this)" class="staging-preset-btn text-[10px] font-bold py-1 px-2 rounded-lg bg-gray-800 text-gray-300 border border-gray-700 hover:border-cyan-400 transition">3 Days</button>
+                                        <button type="button" onclick="setPausePreset('staging', '1_week', this)" class="staging-preset-btn active-preset text-[10px] font-bold py-1 px-2 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 transition">1 Week</button>
+                                        <button type="button" onclick="setPausePreset('staging', '2_weeks', this)" class="staging-preset-btn text-[10px] font-bold py-1 px-2 rounded-lg bg-gray-800 text-gray-300 border border-gray-700 hover:border-cyan-400 transition">2 Weeks</button>
+                                        <button type="button" onclick="setPausePreset('staging', 'indefinite', this)" class="staging-preset-btn text-[10px] font-bold py-1 px-2 rounded-lg bg-gray-800 text-gray-300 border border-gray-700 hover:border-cyan-400 transition">Indefinite</button>
+                                        <button type="button" onclick="setPausePreset('staging', 'custom', this)" class="staging-preset-btn text-[10px] font-bold py-1 px-2 rounded-lg bg-gray-800 text-gray-300 border border-gray-700 hover:border-cyan-400 transition">Custom Date</button>
+                                    </div>
+                                    <div id="staging-custom-date-container" class="hidden">
+                                        <label class="block text-[10px] font-bold text-gray-400 mb-1">Resume On Date:</label>
+                                        <input type="datetime-local" id="staging-custom-date-input" class="fspec-input w-full py-1 text-xs text-white">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-bold text-gray-400 mb-1">Operational Reason (Optional):</label>
+                                        <input type="text" id="staging-pause-reason-input" placeholder="e.g. Access door keypad upgrade, facility remodel" class="fspec-input w-full py-1 text-xs text-white">
+                                    </div>
+                                    <div class="flex items-center justify-end gap-2 pt-1">
+                                        <button type="button" onclick="toggleMethodologyPauseForm('staging', false)" class="text-[10px] font-bold text-gray-400 hover:text-white px-2 py-1">Cancel</button>
+                                        <button type="button" onclick="confirmPauseMethodology('staging')" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[10px] px-3 py-1 rounded-lg transition shadow-md">Confirm Pause</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Card 3: Economic Pricing Engine -->
                     <div class="glass-panel p-6 rounded-3xl space-y-5">
                         <div class="flex items-center justify-between border-b border-gray-800 pb-3">
@@ -1786,6 +1914,9 @@
                     // Fetch operational zone data first so currentLoadedZone is set before telemetry & schedule check active state
                     await loadMarketZoneData(fac.id);
 
+                    // Render live fulfillment methodology controls (Valet & Staging availability)
+                    renderMethodologyUI();
+
                     await Promise.all([
                         loadFacilityTelemetry(fac.id),
                         loadStagingRoomSchedule(fac.id, selectedStagingDate),
@@ -1795,6 +1926,225 @@
                     ]);
                     calculatePnL();
                 }
+
+                // ─────────────────────────────────────────────────────────────────────
+                // FULFILLMENT METHODOLOGY & SERVICE AVAILABILITY CONTROLS
+                // ─────────────────────────────────────────────────────────────────────
+                let activeValetPreset = '1_week';
+                let activeStagingPreset = '1_week';
+
+                function isMethodologyActive(type, fac) {
+                    const f = fac || currentLoadedFac;
+                    if (!f) return true;
+                    if (type === 'valet') {
+                        if (f.valet_enabled === false) {
+                            if (!f.valet_disabled_until) return false;
+                            return new Date(f.valet_disabled_until) <= new Date();
+                        }
+                        return true;
+                    } else {
+                        if (f.staging_enabled === false) {
+                            if (!f.staging_disabled_until) return false;
+                            return new Date(f.staging_disabled_until) <= new Date();
+                        }
+                        return true;
+                    }
+                }
+
+                function renderMethodologyUI() {
+                    if (!currentLoadedFac) return;
+
+                    const vActive = isMethodologyActive('valet', currentLoadedFac);
+                    const sActive = isMethodologyActive('staging', currentLoadedFac);
+
+                    // 1. Valet UI Updates
+                    const vBadge = document.getElementById('valet-status-badge');
+                    const vInfo = document.getElementById('valet-info-text');
+                    const vPauseBtn = document.getElementById('btn-valet-pause-toggle');
+                    const vResumeBtn = document.getElementById('btn-valet-resume');
+                    const vCard = document.getElementById('method-valet-card');
+
+                    if (vActive) {
+                        if (vBadge) {
+                            vBadge.className = 'font-mono text-[10px] font-bold px-2 py-0.5 rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+                            vBadge.textContent = '🟢 ACTIVE';
+                        }
+                        if (vInfo) vInfo.textContent = 'Fully operational across all assigned market ZIPs.';
+                        if (vPauseBtn) vPauseBtn.classList.remove('hidden');
+                        if (vResumeBtn) vResumeBtn.classList.add('hidden');
+                        if (vCard) vCard.className = 'bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-3 transition';
+                    } else {
+                        const isIndefinite = !currentLoadedFac.valet_disabled_until;
+                        const dateStr = !isIndefinite ? new Date(currentLoadedFac.valet_disabled_until).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Indefinite';
+                        const reasonStr = currentLoadedFac.valet_disable_reason ? ` • ${currentLoadedFac.valet_disable_reason}` : '';
+                        
+                        if (vBadge) {
+                            vBadge.className = 'font-mono text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-500/10 text-amber-400 border-amber-500/30';
+                            vBadge.textContent = isIndefinite ? '🔴 PAUSED (INDEFINITE)' : `🟡 PAUSED UNTIL ${dateStr.toUpperCase()}`;
+                        }
+                        if (vInfo) vInfo.textContent = `Paused: Resumes ${dateStr}${reasonStr}`;
+                        if (vPauseBtn) vPauseBtn.classList.add('hidden');
+                        if (vResumeBtn) vResumeBtn.classList.remove('hidden');
+                        if (vCard) vCard.className = 'bg-amber-950/20 p-4 rounded-2xl border border-amber-500/30 space-y-3 transition';
+                    }
+
+                    // 2. Staging Room UI Updates
+                    const sBadge = document.getElementById('staging-status-badge');
+                    const sInfo = document.getElementById('staging-info-text');
+                    const sPauseBtn = document.getElementById('btn-staging-pause-toggle');
+                    const sResumeBtn = document.getElementById('btn-staging-resume');
+                    const sCard = document.getElementById('method-staging-card');
+
+                    if (sActive) {
+                        if (sBadge) {
+                            sBadge.className = 'font-mono text-[10px] font-bold px-2 py-0.5 rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+                            sBadge.textContent = '🟢 ACTIVE';
+                        }
+                        if (sInfo) sInfo.textContent = 'Fully operational with active PIN keypads.';
+                        if (sPauseBtn) sPauseBtn.classList.remove('hidden');
+                        if (sResumeBtn) sResumeBtn.classList.add('hidden');
+                        if (sCard) sCard.className = 'bg-gray-950 p-4 rounded-2xl border border-gray-800 space-y-3 transition';
+                    } else {
+                        const isIndefinite = !currentLoadedFac.staging_disabled_until;
+                        const dateStr = !isIndefinite ? new Date(currentLoadedFac.staging_disabled_until).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Indefinite';
+                        const reasonStr = currentLoadedFac.staging_disable_reason ? ` • ${currentLoadedFac.staging_disable_reason}` : '';
+                        
+                        if (sBadge) {
+                            sBadge.className = 'font-mono text-[10px] font-bold px-2 py-0.5 rounded border bg-cyan-500/10 text-cyan-400 border-cyan-500/30';
+                            sBadge.textContent = isIndefinite ? '🔴 PAUSED (INDEFINITE)' : `🟡 PAUSED UNTIL ${dateStr.toUpperCase()}`;
+                        }
+                        if (sInfo) sInfo.textContent = `Paused: Resumes ${dateStr}${reasonStr}`;
+                        if (sPauseBtn) sPauseBtn.classList.add('hidden');
+                        if (sResumeBtn) sResumeBtn.classList.remove('hidden');
+                        if (sCard) sCard.className = 'bg-cyan-950/20 p-4 rounded-2xl border border-cyan-500/30 space-y-3 transition';
+                    }
+
+                    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+                }
+
+                function toggleMethodologyPauseForm(type, show = true) {
+                    const form = document.getElementById(`${type}-pause-form`);
+                    if (!form) return;
+                    if (show) {
+                        form.classList.remove('hidden');
+                    } else {
+                        form.classList.add('hidden');
+                    }
+                }
+
+                function setPausePreset(type, preset, btnEl) {
+                    if (type === 'valet') activeValetPreset = preset;
+                    else activeStagingPreset = preset;
+
+                    const container = document.getElementById(`${type}-pause-form`);
+                    if (container) {
+                        container.querySelectorAll(`.${type}-preset-btn`).forEach(b => {
+                            b.className = `${type}-preset-btn text-[10px] font-bold py-1 px-2 rounded-lg bg-gray-800 text-gray-300 border border-gray-700 hover:border-gray-500 transition`;
+                        });
+                        if (btnEl) {
+                            const highlightClass = type === 'valet' ? 'bg-amber-500/20 text-amber-300 border-amber-500/50' : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50';
+                            btnEl.className = `${type}-preset-btn active-preset text-[10px] font-bold py-1 px-2 rounded-lg ${highlightClass} border transition`;
+                        }
+                    }
+
+                    const customContainer = document.getElementById(`${type}-custom-date-container`);
+                    if (customContainer) {
+                        if (preset === 'custom') {
+                            customContainer.classList.remove('hidden');
+                            const dtInput = document.getElementById(`${type}-custom-date-input`);
+                            if (dtInput && !dtInput.value) {
+                                const defDate = new Date();
+                                defDate.setDate(defDate.getDate() + 7);
+                                dtInput.value = defDate.toISOString().slice(0, 16);
+                            }
+                        } else {
+                            customContainer.classList.add('hidden');
+                        }
+                    }
+                }
+
+                async function confirmPauseMethodology(type) {
+                    if (!currentLoadedFac) return;
+
+                    const valetIsActive = isMethodologyActive('valet', currentLoadedFac);
+                    const stagingIsActive = isMethodologyActive('staging', currentLoadedFac);
+
+                    // HARD SAFETY CONSTRAINT: Block disabling both
+                    if (type === 'valet' && !stagingIsActive) {
+                        alert("⚠️ Operation Blocked: At least one fulfillment methodology must remain active for every operating facility. You cannot pause Doorstep Valet while Self-Service Staging Rooms are also paused.");
+                        return;
+                    }
+                    if (type === 'staging' && !valetIsActive) {
+                        alert("⚠️ Operation Blocked: At least one fulfillment methodology must remain active for every operating facility. You cannot pause Self-Service Staging Rooms while Doorstep Valet is also paused.");
+                        return;
+                    }
+
+                    const preset = (type === 'valet') ? activeValetPreset : activeStagingPreset;
+                    const reasonInput = document.getElementById(`${type}-pause-reason-input`);
+                    const reason = reasonInput ? reasonInput.value.trim() : '';
+
+                    let disabledUntil = null;
+                    const now = new Date();
+
+                    if (preset === '1_day') {
+                        now.setDate(now.getDate() + 1);
+                        disabledUntil = now.toISOString();
+                    } else if (preset === '3_days') {
+                        now.setDate(now.getDate() + 3);
+                        disabledUntil = now.toISOString();
+                    } else if (preset === '1_week') {
+                        now.setDate(now.getDate() + 7);
+                        disabledUntil = now.toISOString();
+                    } else if (preset === '2_weeks') {
+                        now.setDate(now.getDate() + 14);
+                        disabledUntil = now.toISOString();
+                    } else if (preset === 'custom') {
+                        const customVal = document.getElementById(`${type}-custom-date-input`)?.value;
+                        if (!customVal) {
+                            alert("Please select a valid custom resume date.");
+                            return;
+                        }
+                        disabledUntil = new Date(customVal).toISOString();
+                    } else if (preset === 'indefinite') {
+                        disabledUntil = null;
+                    }
+
+                    if (type === 'valet') {
+                        currentLoadedFac.valet_enabled = false;
+                        currentLoadedFac.valet_disabled_until = disabledUntil;
+                        currentLoadedFac.valet_disable_reason = reason;
+                    } else {
+                        currentLoadedFac.staging_enabled = false;
+                        currentLoadedFac.staging_disabled_until = disabledUntil;
+                        currentLoadedFac.staging_disable_reason = reason;
+                    }
+
+                    toggleMethodologyPauseForm(type, false);
+                    renderMethodologyUI();
+                    await saveFacilityConfig({ silent: true });
+                }
+
+                async function resumeMethodology(type) {
+                    if (!currentLoadedFac) return;
+
+                    if (type === 'valet') {
+                        currentLoadedFac.valet_enabled = true;
+                        currentLoadedFac.valet_disabled_until = null;
+                        currentLoadedFac.valet_disable_reason = '';
+                    } else {
+                        currentLoadedFac.staging_enabled = true;
+                        currentLoadedFac.staging_disabled_until = null;
+                        currentLoadedFac.staging_disable_reason = '';
+                    }
+
+                    renderMethodologyUI();
+                    await saveFacilityConfig({ silent: true });
+                }
+
+                window.toggleMethodologyPauseForm = toggleMethodologyPauseForm;
+                window.setPausePreset = setPausePreset;
+                window.confirmPauseMethodology = confirmPauseMethodology;
+                window.resumeMethodology = resumeMethodology;
 
                 // ─────────────────────────────────────────────────────────────────────
                 // FACILITY STAFF & TEAM PROVISIONING ENGINE
@@ -4304,6 +4654,12 @@
                         max_scheduling_days_out: parseInt(document.getElementById('conf-max-days-out')?.value, 10) || 30,
                         min_lead_time_days: getNumVal('conf-min-lead-days', 0),
                         evening_peak_slot_fee: getNumVal('conf-slot-fee-evening', getNumVal('conf-evening-peak-slot-fee', 0)),
+                        valet_enabled: (currentLoadedFac.valet_enabled !== undefined) ? currentLoadedFac.valet_enabled : true,
+                        valet_disabled_until: currentLoadedFac.valet_disabled_until || null,
+                        valet_disable_reason: currentLoadedFac.valet_disable_reason || null,
+                        staging_enabled: (currentLoadedFac.staging_enabled !== undefined) ? currentLoadedFac.staging_enabled : true,
+                        staging_disabled_until: currentLoadedFac.staging_disabled_until || null,
+                        staging_disable_reason: currentLoadedFac.staging_disable_reason || null,
                         staging_config: {
                             ...(currentLoadedFac.staging_config || {}),
                             allowed_slots: ["09:00 AM - 12:00 PM", "12:00 PM - 03:00 PM", "03:00 PM - 06:00 PM"],

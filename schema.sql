@@ -79,6 +79,17 @@ ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS next_day_promo_free BOOLE
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS max_scheduling_days_out INTEGER DEFAULT 30;
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS min_lead_time_days INTEGER DEFAULT 0;
 ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS staging_config JSONB DEFAULT '{"allowed_days": [1,2,3,4,5,6,0], "allowed_slots": ["09:00 AM - 12:00 PM", "12:00 PM - 03:00 PM", "03:00 PM - 06:00 PM"]}'::jsonb;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS valet_enabled BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS valet_disabled_until TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS valet_disable_reason TEXT DEFAULT NULL;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS staging_enabled BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS staging_disabled_until TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE public.facilities ADD COLUMN IF NOT EXISTS staging_disable_reason TEXT DEFAULT NULL;
+
+ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS override_reason TEXT DEFAULT NULL;
+ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS override_notes TEXT DEFAULT NULL;
+ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS overridden_at TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE public.access_requests ADD COLUMN IF NOT EXISTS overridden_by_name TEXT DEFAULT NULL;
 
 -- Users table (extends auth.users)
 CREATE TABLE public.users (

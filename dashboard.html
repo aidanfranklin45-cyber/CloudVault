@@ -2356,6 +2356,10 @@
                     const isPendingDispatch = groupTotesToDisplay.some(i => i.status === 'pending-dispatch') || primaryReq.status === 'pending-dispatch' || primaryReq.status === 'dispatched';
                     const isStagedReady = groupTotesToDisplay.some(i => i.status === 'staged') || primaryReq.status === 'staged' || primaryReq.status === 'ready';
 
+                    const overrideNoticeStr = primaryReq.overridden_at 
+                        ? `This retrieval request was switched to ${fulfillmentType === 'valet_delivery' ? 'Doorstep Valet Delivery' : 'Staging Room Access'}${primaryReq.override_reason ? ` (${primaryReq.override_reason})` : ''}. Our staff has logged this operational change.`
+                        : null;
+
                     if (fulfillmentType === 'valet_delivery' || primaryReq.request_type === 'valet_delivery') {
                         if (isOutForDelivery) {
                             cards.push(buildFlowCard({
@@ -2373,6 +2377,7 @@
                                 ],
                                 totes: groupTotesToDisplay,
                                 pinBlock: buildValetBlock(timeStr, dateStr, primaryReq),
+                                overrideNotice: overrideNoticeStr,
                             }));
                         } else if (isPendingDispatch) {
                             cards.push(buildFlowCard({
@@ -2390,6 +2395,7 @@
                                 ],
                                 totes: groupTotesToDisplay,
                                 pinBlock: buildValetBlock(timeStr, dateStr, primaryReq),
+                                overrideNotice: overrideNoticeStr,
                             }));
                         } else {
                             // Order in vault awaiting pull
@@ -2408,6 +2414,7 @@
                                 ],
                                 totes: groupTotesToDisplay,
                                 pinBlock: buildValetBlock(timeStr, dateStr, primaryReq),
+                                overrideNotice: overrideNoticeStr,
                             }));
                         }
                     } else {
@@ -2429,6 +2436,7 @@
                             ],
                             totes: groupTotesToDisplay,
                             pinBlock: isStagedReady ? buildPinBlock(pin, roomNum, dateStr, timeStr) : buildPendingPinBlock(dateStr, timeStr),
+                            overrideNotice: overrideNoticeStr,
                         }));
                     }
                 });
@@ -2517,7 +2525,7 @@
         }
 
         // ── Flow card builder helpers ─────────────────────────────────────────
-        function buildFlowCard({ icon, title, subtitle, badgeText, badgeColor, steps, totes, pinBlock }) {
+        function buildFlowCard({ icon, title, subtitle, badgeText, badgeColor, steps, totes, pinBlock, overrideNotice }) {
             const badgeClasses = {
                 emerald: 'text-emerald-400 bg-emerald-500/20 border-emerald-500/40',
                 blue:    'text-blue-300 bg-blue-500/20 border-blue-500/40',
@@ -2553,6 +2561,16 @@
 
             return `
             <div class="bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 text-white rounded-2xl p-4 shadow-lg border border-blue-500/25 space-y-3">
+                <!-- Operational Override Notice if Staff modified methodology -->
+                ${overrideNotice ? `
+                <div class="bg-amber-950/50 border border-amber-500/50 rounded-xl p-2.5 flex items-start gap-2.5 text-xs text-amber-200">
+                    <span class="text-base flex-shrink-0">⚠️</span>
+                    <div>
+                        <strong class="font-bold text-amber-300">Methodology Update by Operations:</strong>
+                        <p class="text-[11px] text-amber-200/90 mt-0.5 leading-snug">${escapeHtml(overrideNotice)}</p>
+                    </div>
+                </div>` : ''}
+
                 <!-- Header -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-800/40 pb-2.5">
                     <div class="flex items-center gap-2.5">
@@ -4402,11 +4420,19 @@
                 // Dynamically fetch live facility configuration from database
                 const { data: fac } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
                 if (fac) {
-                    window.currentActiveFacility = fac;
+                    const vAvailable = fac.valet_enabled !== false || (fac.valet_disabled_until && new Date(fac.valet_disabled_until) <= new Date());
+                    const sAvailable = fac.staging_enabled !== false || (fac.staging_disabled_until && new Date(fac.staging_disabled_until) <= new Date());
+
                     activeFacilityPricing = {
                         id: fac.id,
                         name: fac.name,
                         city: fac.city,
+                        valet_available: vAvailable,
+                        staging_available: sAvailable,
+                        valet_disabled_until: fac.valet_disabled_until,
+                        staging_disabled_until: fac.staging_disabled_until,
+                        valet_disable_reason: fac.valet_disable_reason,
+                        staging_disable_reason: fac.staging_disable_reason,
                         tier1_rate: Number(fac.tier1_rate != null ? fac.tier1_rate : 0),
                         tier2_rate: Number(fac.tier2_rate != null ? fac.tier2_rate : 0),
                         tier3_rate: Number(fac.tier3_rate != null ? fac.tier3_rate : 0),
@@ -5001,8 +5027,31 @@
                 dateInput.value = earliestDate;
             }
 
-            // Reset to default logistics & trigger availability + surge check immediately
-            selectRetrievalLogistics('staging');
+            // Adapt methodology options based on facility active availability
+            const isValetAvail = (activeFacilityPricing && activeFacilityPricing.valet_available !== undefined) ? activeFacilityPricing.valet_available : true;
+            const isStagingAvail = (activeFacilityPricing && activeFacilityPricing.staging_available !== undefined) ? activeFacilityPricing.staging_available : true;
+
+            const stagingOpt = document.getElementById('retrieval-opt-staging');
+            const valetOpt = document.getElementById('retrieval-opt-valet');
+            const grid = stagingOpt?.parentElement;
+
+            if (isValetAvail && isStagingAvail) {
+                if (grid) grid.className = 'grid grid-cols-1 md:grid-cols-2 gap-4';
+                if (stagingOpt) stagingOpt.classList.remove('hidden');
+                if (valetOpt) valetOpt.classList.remove('hidden');
+                selectRetrievalLogistics('staging');
+            } else if (isValetAvail && !isStagingAvail) {
+                if (grid) grid.className = 'grid grid-cols-1 gap-4';
+                if (stagingOpt) stagingOpt.classList.add('hidden');
+                if (valetOpt) valetOpt.classList.remove('hidden');
+                selectRetrievalLogistics('valet_delivery');
+            } else if (!isValetAvail && isStagingAvail) {
+                if (grid) grid.className = 'grid grid-cols-1 gap-4';
+                if (valetOpt) valetOpt.classList.add('hidden');
+                if (stagingOpt) stagingOpt.classList.remove('hidden');
+                selectRetrievalLogistics('staging');
+            }
+
             await handleReservationDateChange();
             startQuoteLockTimer();
             document.getElementById('retrieval-modal').classList.remove('hidden');
@@ -5056,6 +5105,9 @@
         }
 
         function selectRetrievalLogistics(type) {
+            if (type === 'valet_delivery' && activeFacilityPricing && activeFacilityPricing.valet_available === false) return;
+            if (type === 'staging' && activeFacilityPricing && activeFacilityPricing.staging_available === false) return;
+
             retrievalLogisticsType = type;
             
             const stagingOpt = document.getElementById('retrieval-opt-staging');
