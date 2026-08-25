@@ -1714,6 +1714,23 @@
                                 Address</label>
                             <input type="email" id="waitlist-email" placeholder="you@example.com"
                                 class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium text-xs sm:text-sm">
+                            <div id="waitlist-email-collision-warning" class="hidden-section mt-1.5 p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 space-y-2">
+                                <div class="flex items-start gap-2">
+                                    <span class="text-amber-600 font-bold text-base leading-none">⚠️</span>
+                                    <div>
+                                        <p class="font-bold text-slate-900">An account already exists for this email.</p>
+                                        <p class="text-[11px] text-slate-600 mt-0.5">Please sign in, or enter a different email address to join the waitlist.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 pt-0.5">
+                                    <a id="waitlist-collision-signin-btn" href="login.html" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] rounded-lg transition inline-flex items-center gap-1 shadow-sm">
+                                        Sign In Here →
+                                    </a>
+                                    <button type="button" onclick="clearAndFocusWaitlistEmail()" class="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-semibold text-[11px] rounded-lg transition cursor-pointer">
+                                        Change Email
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-slate-700 mb-1" for="waitlist-password">Create
@@ -1849,6 +1866,23 @@
                             <label for="email-input" class="block text-xs font-extrabold text-slate-700 mb-1">Email</label>
                             <input type="email" id="email-input" placeholder="jane@example.com"
                                 class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium text-xs sm:text-sm">
+                            <div id="email-collision-warning" class="hidden-section mt-1.5 p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 space-y-2">
+                                <div class="flex items-start gap-2">
+                                    <span class="text-amber-600 font-bold text-base leading-none">⚠️</span>
+                                    <div>
+                                        <p class="font-bold text-slate-900">An account already exists for this email.</p>
+                                        <p class="text-[11px] text-slate-600 mt-0.5">Please sign in to your existing account or use a different email.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 pt-0.5">
+                                    <a id="email-collision-signin-btn" href="login.html" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] rounded-lg transition inline-flex items-center gap-1 shadow-sm">
+                                        Sign In Here →
+                                    </a>
+                                    <button type="button" onclick="clearAndFocusEmailInput()" class="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-semibold text-[11px] rounded-lg transition cursor-pointer">
+                                        Change Email
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label for="phone-input" class="block text-xs font-extrabold text-slate-700 mb-1">Phone</label>
@@ -2315,6 +2349,35 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Account Collision & Protection Modal -->
+    <div id="account-collision-modal" class="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-200 text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div class="w-14 h-14 bg-amber-100 border border-amber-300 text-amber-600 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-inner">
+                ⚠️
+            </div>
+            <div class="space-y-1.5">
+                <h3 class="text-lg font-black text-slate-900 tracking-tight">Account Already Exists</h3>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    We found an existing CloudVault account registered to <strong id="collision-modal-email" class="text-blue-950 font-bold">you@example.com</strong>.
+                </p>
+            </div>
+            <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-600 text-left space-y-1">
+                <p class="font-bold text-slate-800 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-blue-600"></span> Sign In or Choose a New Email
+                </p>
+                <p class="text-[11px] text-slate-500 leading-relaxed">To protect account security and prevent duplicate charges, please sign in to manage your totes or choose a different email address.</p>
+            </div>
+            <div class="flex flex-col gap-2 pt-2">
+                <a id="collision-modal-signin-link" href="login.html" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs sm:text-sm rounded-xl transition shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2">
+                    Sign In to Your Account →
+                </a>
+                <button type="button" onclick="closeAccountCollisionModal(true)" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition border border-slate-200 cursor-pointer">
+                    Change Email Address
+                </button>
+            </div>
         </div>
     </div>
 
@@ -2898,6 +2961,106 @@
             startCheckoutFlow({ source: source || 'default' });
         }
 
+        // =========================================================================
+        // Email Collision & Account Protection Gatekeeper
+        // =========================================================================
+        async function checkEmailAvailability(email, currentUid = null) {
+            if (!email || !email.includes('@')) {
+                return { available: true, exists: false };
+            }
+            try {
+                if (typeof supabase !== 'undefined' && supabase) {
+                    const { data, error } = await supabase.rpc('check_email_availability', {
+                        p_email: email.trim().toLowerCase(),
+                        p_current_uid: currentUid || null
+                    });
+                    if (error) {
+                        console.warn('[Email Check RPC Notice]', error.message);
+                        return { available: true, exists: false };
+                    }
+                    return data || { available: true, exists: false };
+                }
+            } catch (err) {
+                console.warn('[checkEmailAvailability Exception]', err);
+            }
+            return { available: true, exists: false };
+        }
+
+        let lastCollisionSource = 'onboarding';
+
+        function showAccountCollisionModal(email, source = 'onboarding') {
+            lastCollisionSource = source;
+            const modal = document.getElementById('account-collision-modal');
+            const emailEl = document.getElementById('collision-modal-email');
+            const signinLink = document.getElementById('collision-modal-signin-link');
+
+            const cleanEmail = email ? email.trim() : '';
+            if (emailEl) emailEl.textContent = cleanEmail || 'your account';
+            if (signinLink) {
+                signinLink.href = cleanEmail ? `login.html?email=${encodeURIComponent(cleanEmail)}` : 'login.html';
+            }
+
+            if (modal) modal.classList.remove('hidden');
+
+            if (source === 'onboarding') {
+                showEmailCollisionWarning(cleanEmail, 'onboarding');
+            } else {
+                showEmailCollisionWarning(cleanEmail, 'waitlist');
+            }
+        }
+
+        function closeAccountCollisionModal(focusInput = false) {
+            const modal = document.getElementById('account-collision-modal');
+            if (modal) modal.classList.add('hidden');
+
+            if (focusInput) {
+                if (lastCollisionSource === 'onboarding') {
+                    clearAndFocusEmailInput();
+                } else {
+                    clearAndFocusWaitlistEmail();
+                }
+            }
+        }
+
+        function showEmailCollisionWarning(email, source = 'onboarding') {
+            const warningEl = document.getElementById(source === 'onboarding' ? 'email-collision-warning' : 'waitlist-email-collision-warning');
+            const signinBtn = document.getElementById(source === 'onboarding' ? 'email-collision-signin-btn' : 'waitlist-collision-signin-btn');
+            
+            if (signinBtn) {
+                signinBtn.href = email ? `login.html?email=${encodeURIComponent(email)}` : 'login.html';
+            }
+            if (warningEl) {
+                warningEl.classList.remove('hidden-section');
+            }
+        }
+
+        function hideEmailCollisionWarning(source = 'onboarding') {
+            const warningEl = document.getElementById(source === 'onboarding' ? 'email-collision-warning' : 'waitlist-email-collision-warning');
+            if (warningEl) {
+                warningEl.classList.add('hidden-section');
+            }
+        }
+
+        function clearAndFocusEmailInput() {
+            const emailInput = document.getElementById('email-input');
+            hideEmailCollisionWarning('onboarding');
+            closeAccountCollisionModal(false);
+            if (emailInput) {
+                emailInput.value = '';
+                emailInput.focus();
+            }
+        }
+
+        function clearAndFocusWaitlistEmail() {
+            const waitlistEmail = document.getElementById('waitlist-email');
+            hideEmailCollisionWarning('waitlist');
+            closeAccountCollisionModal(false);
+            if (waitlistEmail) {
+                waitlistEmail.value = '';
+                waitlistEmail.focus();
+            }
+        }
+
         async function checkActiveSessionForCheckout() {
             if (typeof supabase === 'undefined' || !supabase) return;
             try {
@@ -3401,6 +3564,16 @@
                 }
                 document.getElementById('contact-error').classList.add('hidden-section');
 
+                // Real-time Email Collision & Account Protection Check
+                if (!isAlreadyAuth) {
+                    const check = await checkEmailAvailability(email, flowData.userId);
+                    if (check && !check.available) {
+                        showAccountCollisionModal(email, 'onboarding');
+                        return;
+                    }
+                }
+                hideEmailCollisionWarning('onboarding');
+
                 flowData.name = name;
                 flowData.email = email;
                 flowData.phone = phone;
@@ -3713,10 +3886,22 @@
             if (errEl) errEl.classList.add('hidden-section');
 
             const btn = document.getElementById('btn-waitlist-submit');
-            btn.textContent = "Processing...";
+            btn.textContent = "Checking Account...";
             btn.disabled = true;
 
             try {
+                // 0. Collision Prevention Check
+                const check = await checkEmailAvailability(email, activeWaitlistUserId);
+                if (check && !check.available) {
+                    showAccountCollisionModal(email, 'waitlist');
+                    btn.textContent = "Drop a Deposit & Lock In My Rate →";
+                    btn.disabled = false;
+                    return;
+                }
+                hideEmailCollisionWarning('waitlist');
+
+                btn.textContent = "Processing...";
+
                 let reqDeposit = 20.00;
                 let priceLockYears = 3;
                 let refundGuaranteeDays = 365;
@@ -3748,7 +3933,13 @@
                     options: { data: { name: email.split('@')[0], role: 'customer' } }
                 });
                 if (authData && authData.user) activeWaitlistUserId = authData.user.id;
-                if (authErr && authErr.message && !authErr.message.includes('already registered')) {
+                if (authErr) {
+                    if (authErr.message?.toLowerCase().includes('already registered') || authErr.message?.toLowerCase().includes('already exists')) {
+                        showAccountCollisionModal(email, 'waitlist');
+                        btn.textContent = "Drop a Deposit & Lock In My Rate →";
+                        btn.disabled = false;
+                        return;
+                    }
                     console.warn('[Waitlist Auth Step 1]', authErr.message);
                 }
 
@@ -3826,10 +4017,22 @@
             if (errEl) errEl.classList.add('hidden-section');
 
             const btn = document.getElementById('btn-free-waitlist-submit');
-            btn.textContent = "Joining...";
+            btn.textContent = "Checking Account...";
             btn.disabled = true;
 
             try {
+                // 0. Collision Prevention Check
+                const check = await checkEmailAvailability(email, null);
+                if (check && !check.available) {
+                    showAccountCollisionModal(email, 'waitlist');
+                    btn.textContent = "Just join the free waitlist";
+                    btn.disabled = false;
+                    return;
+                }
+                hideEmailCollisionWarning('waitlist');
+
+                btn.textContent = "Joining...";
+
                 // 1. Create auth account
                 let createdUserId = null;
                 const { data: authData, error: authErr } = await supabase.auth.signUp({
@@ -3838,7 +4041,13 @@
                     options: { data: { name: email.split('@')[0], role: 'customer' } }
                 });
                 if (authData && authData.user) createdUserId = authData.user.id;
-                if (authErr && authErr.message && !authErr.message.includes('already registered')) {
+                if (authErr) {
+                    if (authErr.message?.toLowerCase().includes('already registered') || authErr.message?.toLowerCase().includes('already exists')) {
+                        showAccountCollisionModal(email, 'waitlist');
+                        btn.textContent = "Just join the free waitlist";
+                        btn.disabled = false;
+                        return;
+                    }
                     console.warn('[Free Waitlist Auth]', authErr.message);
                 }
 
@@ -4203,10 +4412,27 @@
                             }
                         }
                     });
-                    if (signUpErr && !signUpErr.message?.toLowerCase().includes('already registered')) {
+                    if (signUpErr) {
+                        if (signUpErr.message?.toLowerCase().includes('already registered') || signUpErr.message?.toLowerCase().includes('already exists')) {
+                            showAccountCollisionModal(email, 'onboarding');
+                            btnText.textContent = 'Complete Storage Reservation';
+                            btnLoader.classList.add('hidden-section');
+                            if (confirmBtn) confirmBtn.disabled = false;
+                            return;
+                        }
                         throw signUpErr;
                     }
                     activeUserId = signUpData?.user?.id || null;
+                    if (!activeUserId) {
+                        const check = await checkEmailAvailability(email, null);
+                        if (!check.available) {
+                            showAccountCollisionModal(email, 'onboarding');
+                            btnText.textContent = 'Complete Storage Reservation';
+                            btnLoader.classList.add('hidden-section');
+                            if (confirmBtn) confirmBtn.disabled = false;
+                            return;
+                        }
+                    }
                 }
 
                 // 2b. Save Address into customer_addresses & user profile
@@ -4589,6 +4815,43 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadRegionalRates();
             setupScrollSpy();
+
+            // Real-time Email Collision Checking Listeners
+            const emailInput = document.getElementById('email-input');
+            if (emailInput) {
+                emailInput.addEventListener('blur', async function () {
+                    const val = (this.value || '').trim();
+                    if (val && val.includes('@') && !flowData.userId) {
+                        const check = await checkEmailAvailability(val, flowData.userId);
+                        if (check && !check.available) {
+                            showEmailCollisionWarning(val, 'onboarding');
+                        } else {
+                            hideEmailCollisionWarning('onboarding');
+                        }
+                    }
+                });
+                emailInput.addEventListener('input', function () {
+                    hideEmailCollisionWarning('onboarding');
+                });
+            }
+
+            const waitlistEmail = document.getElementById('waitlist-email');
+            if (waitlistEmail) {
+                waitlistEmail.addEventListener('blur', async function () {
+                    const val = (this.value || '').trim();
+                    if (val && val.includes('@')) {
+                        const check = await checkEmailAvailability(val, null);
+                        if (check && !check.available) {
+                            showEmailCollisionWarning(val, 'waitlist');
+                        } else {
+                            hideEmailCollisionWarning('waitlist');
+                        }
+                    }
+                });
+                waitlistEmail.addEventListener('input', function () {
+                    hideEmailCollisionWarning('waitlist');
+                });
+            }
 
             setTimeout(() => {
                 logMilestone('landed');

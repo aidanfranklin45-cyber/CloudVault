@@ -6202,3 +6202,70 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- RPC: Check Email Availability & Prevent Onboarding Collisions
+CREATE OR REPLACE FUNCTION public.check_email_availability(
+    p_email TEXT,
+    p_current_uid UUID DEFAULT NULL
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+    v_clean_email TEXT;
+    v_user RECORD;
+BEGIN
+    IF p_email IS NULL OR TRIM(p_email) = '' THEN
+        RETURN jsonb_build_object('available', false, 'exists', false, 'message', 'Please provide an email address.');
+    END IF;
+
+    v_clean_email := LOWER(TRIM(p_email));
+
+    IF p_current_uid IS NOT NULL THEN
+        SELECT id, email, name INTO v_user
+        FROM public.users
+        WHERE id = p_current_uid AND LOWER(email) = v_clean_email
+        LIMIT 1;
+
+        IF v_user.id IS NOT NULL THEN
+            RETURN jsonb_build_object(
+                'available', true,
+                'exists', true,
+                'is_current_user', true,
+                'email', v_clean_email,
+                'message', 'Email belongs to current session.'
+            );
+        END IF;
+    END IF;
+
+    SELECT id, email, name, role, is_active INTO v_user
+    FROM public.users
+    WHERE LOWER(email) = v_clean_email
+    LIMIT 1;
+
+    IF v_user.id IS NOT NULL THEN
+        IF p_current_uid IS NOT NULL AND v_user.id = p_current_uid THEN
+            RETURN jsonb_build_object(
+                'available', true,
+                'exists', true,
+                'is_current_user', true,
+                'email', v_clean_email
+            );
+        END IF;
+
+        RETURN jsonb_build_object(
+            'available', false,
+            'exists', true,
+            'is_current_user', false,
+            'email', v_clean_email,
+            'user_name', COALESCE(v_user.name, 'Valued Customer'),
+            'message', 'We already have an account registered to this email address.',
+            'action', 'sign_in'
+        );
+    END IF;
+
+    RETURN jsonb_build_object(
+        'available', true,
+        'exists', false,
+        'email', v_clean_email,
+        'message', 'Email is available.'
+    );
+END;
+$$ LANGUAGE plpgsql;
+
