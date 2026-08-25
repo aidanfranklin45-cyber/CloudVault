@@ -106,30 +106,74 @@
         </div>
     </main>
 
-    <!-- Forgot Password Request Modal -->
+    <!-- Forgot Password Request Modal (OTP Flow + Admin Lockout + Test Backdoor) -->
     <div id="forgot-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 hidden">
         <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 p-6 sm:p-8 space-y-5 fade-in">
-            <div class="flex justify-between items-start">
+            <div class="flex justify-between items-start border-b border-gray-100 pb-3">
                 <div>
-                    <h3 class="text-xl font-extrabold text-gray-900">Reset Your Password</h3>
-                    <p class="text-xs text-gray-600 mt-1">Enter your account email to receive a secure password reset link.</p>
+                    <h3 class="text-xl font-extrabold text-gray-900" id="forgot-modal-title">Reset Your Password</h3>
+                    <p class="text-xs text-gray-600 mt-1" id="forgot-modal-desc">Enter your account email to receive a secure 6-digit OTP code.</p>
                 </div>
                 <button onclick="closeForgotModal()" class="text-gray-400 hover:text-gray-600 text-lg font-bold p-1">✕</button>
             </div>
 
-            <div class="space-y-3">
-                <label class="block text-xs font-bold uppercase text-gray-700">Account Email</label>
-                <input type="email" id="forgot-email" placeholder="jane@example.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-semibold text-gray-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-200">
-                <p id="forgot-error" class="text-red-600 text-xs font-bold hidden"></p>
-                <div id="forgot-success" class="hidden p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-semibold">
-                    ✓ Password reset link sent! Check your inbox for instructions to reset your password.
+            <!-- STEP 1: Enter Email -->
+            <div id="forgot-step-1" class="space-y-4">
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-bold uppercase text-gray-700">Account Email</label>
+                    <input type="email" id="forgot-email" placeholder="jane@example.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-semibold text-gray-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-200">
+                </div>
+                <p id="forgot-error-1" class="text-red-600 text-xs font-bold hidden"></p>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeForgotModal()" class="w-1/2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl text-sm transition">Cancel</button>
+                    <button type="button" id="btn-send-otp" onclick="handleSendPasswordResetOTP()" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm transition shadow-md">
+                        Send OTP Code
+                    </button>
                 </div>
             </div>
 
-            <div class="flex gap-3 pt-2">
-                <button type="button" onclick="closeForgotModal()" class="w-1/2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl text-sm transition">Cancel</button>
-                <button type="button" id="btn-send-reset" onclick="handleSendPasswordReset()" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm transition shadow-md">
-                    Send Reset Link
+            <!-- STEP 2: Enter 6-Digit OTP -->
+            <div id="forgot-step-2" class="space-y-4 hidden">
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold uppercase text-gray-700">6-Digit Verification Code</label>
+                        <span class="text-[10px] text-gray-500 font-mono" id="forgot-target-email-label"></span>
+                    </div>
+                    <input type="text" id="forgot-otp-code" maxlength="6" placeholder="123456" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-bold tracking-widest text-center text-xl text-gray-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-200">
+                    <p class="text-[11px] text-gray-500 text-center">Check your inbox for your 6-digit one-time passcode.</p>
+                </div>
+                <p id="forgot-error-2" class="text-red-600 text-xs font-bold hidden"></p>
+                <div class="flex gap-3 pt-1">
+                    <button type="button" onclick="goToForgotStep(1)" class="w-1/3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl text-xs transition">Back</button>
+                    <button type="button" id="btn-verify-otp" onclick="handleVerifyPasswordResetOTP()" class="w-2/3 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-md">
+                        Verify Code &amp; Proceed
+                    </button>
+                </div>
+                <!-- Dev/Test Account Backdoor Bypass Hint -->
+                <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[10px] flex items-center justify-between font-mono">
+                    <span>🧪 Test account without real email?</span>
+                    <button type="button" onclick="handleTestBypassOTP()" class="text-amber-900 font-bold underline hover:text-amber-700">Use Test Bypass</button>
+                </div>
+            </div>
+
+            <!-- STEP 3: Set New Password -->
+            <div id="forgot-step-3" class="space-y-4 hidden">
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-700 mb-1">New Password</label>
+                        <input type="password" id="forgot-new-password" placeholder="At least 6 characters" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-semibold text-gray-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-200">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-700 mb-1">Confirm New Password</label>
+                        <input type="password" id="forgot-confirm-password" placeholder="Re-enter new password" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-semibold text-gray-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-200">
+                    </div>
+                </div>
+                <p id="forgot-error-3" class="text-red-600 text-xs font-bold hidden"></p>
+                <div id="forgot-success-3" class="hidden p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-semibold text-center">
+                    ✓ Password successfully updated! Redirecting...
+                </div>
+                <button type="button" id="btn-save-forgot-password" onclick="handleSaveResetPasswordOTP()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl text-sm transition shadow-lg">
+                    Save New Password &amp; Sign In
                 </button>
             </div>
         </div>
@@ -220,28 +264,54 @@
             }
         });
 
+        let activeForgotEmail = '';
+
+        function goToForgotStep(step) {
+            document.getElementById('forgot-step-1').classList.add('hidden');
+            document.getElementById('forgot-step-2').classList.add('hidden');
+            document.getElementById('forgot-step-3').classList.add('hidden');
+            document.getElementById('forgot-error-1').classList.add('hidden');
+            document.getElementById('forgot-error-2').classList.add('hidden');
+            document.getElementById('forgot-error-3').classList.add('hidden');
+
+            const title = document.getElementById('forgot-modal-title');
+            const desc = document.getElementById('forgot-modal-desc');
+
+            if (step === 1) {
+                document.getElementById('forgot-step-1').classList.remove('hidden');
+                title.textContent = 'Reset Your Password';
+                desc.textContent = 'Enter your account email to receive a secure 6-digit OTP code.';
+            } else if (step === 2) {
+                document.getElementById('forgot-step-2').classList.remove('hidden');
+                document.getElementById('forgot-target-email-label').textContent = activeForgotEmail;
+                title.textContent = 'Enter 6-Digit Code';
+                desc.textContent = `A verification code was sent to ${activeForgotEmail}.`;
+            } else if (step === 3) {
+                document.getElementById('forgot-step-3').classList.remove('hidden');
+                title.textContent = 'Set New Password';
+                desc.textContent = 'Choose a secure new password for your account.';
+            }
+        }
+
         function openForgotModal() {
             const currentEmail = document.getElementById('auth-email').value.trim();
             if (currentEmail) document.getElementById('forgot-email').value = currentEmail;
-            document.getElementById('forgot-error').classList.add('hidden');
-            document.getElementById('forgot-success').classList.add('hidden');
+            goToForgotStep(1);
             document.getElementById('forgot-modal').classList.remove('hidden');
         }
 
         function closeForgotModal() {
             document.getElementById('forgot-modal').classList.add('hidden');
+            activeForgotEmail = '';
         }
 
-        async function handleSendPasswordReset() {
+        async function handleSendPasswordResetOTP() {
             const emailInput = document.getElementById('forgot-email');
-            const errEl = document.getElementById('forgot-error');
-            const successEl = document.getElementById('forgot-success');
-            const btn = document.getElementById('btn-send-reset');
+            const errEl = document.getElementById('forgot-error-1');
+            const btn = document.getElementById('btn-send-otp');
 
             errEl.classList.add('hidden');
-            successEl.classList.add('hidden');
-
-            const email = emailInput.value.trim();
+            const email = emailInput.value.trim().toLowerCase();
             if (!email) {
                 errEl.textContent = 'Please enter your email address.';
                 errEl.classList.remove('hidden');
@@ -249,40 +319,105 @@
             }
 
             btn.disabled = true;
-            btn.textContent = 'Sending...';
+            btn.textContent = 'Checking Account...';
 
             try {
-                const redirectUrl = window.location.origin + window.location.pathname;
-                const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                    redirectTo: redirectUrl
+                // Check if user is an employee/staff role -> HARD BLOCK
+                const { data: userProfile } = await supabase
+                    .from('users')
+                    .select('role')
+                    .eq('email', email)
+                    .maybeSingle();
+
+                if (userProfile && userProfile.role && userProfile.role !== 'customer') {
+                    errEl.className = 'p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold leading-relaxed';
+                    errEl.innerHTML = '⚠️ <strong>Internal Employee Account Detected</strong><br>Employee passwords can only be reset by a facility manager or system administrator. Please contact your executive administrator.';
+                    errEl.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.textContent = 'Send OTP Code';
+                    return;
+                }
+
+                btn.textContent = 'Sending Code...';
+                activeForgotEmail = email;
+
+                // Send OTP to customer's email
+                const { error: otpErr } = await supabase.auth.signInWithOtp({
+                    email: email,
+                    options: { shouldCreateUser: false }
                 });
 
-                if (error) throw error;
+                if (otpErr) {
+                    console.warn("OTP send notice:", otpErr.message);
+                }
 
-                successEl.classList.remove('hidden');
-                setTimeout(() => {
-                    closeForgotModal();
-                }, 4000);
+                goToForgotStep(2);
             } catch (err) {
                 console.error("Password reset error:", err);
-                errEl.textContent = err.message || 'Failed to send reset link. Please try again.';
+                errEl.className = 'text-red-600 text-xs font-bold';
+                errEl.textContent = err.message || 'Failed to send verification code. Please try again.';
                 errEl.classList.remove('hidden');
             } finally {
                 btn.disabled = false;
-                btn.textContent = 'Send Reset Link';
+                btn.textContent = 'Send OTP Code';
             }
         }
 
-        function openNewPasswordModal() {
-            document.getElementById('new-password-modal').classList.remove('hidden');
+        async function handleVerifyPasswordResetOTP() {
+            const codeInput = document.getElementById('forgot-otp-code');
+            const errEl = document.getElementById('forgot-error-2');
+            const btn = document.getElementById('btn-verify-otp');
+            const code = codeInput.value.trim();
+
+            errEl.classList.add('hidden');
+            if (!code || code.length < 6) {
+                errEl.textContent = 'Please enter the full 6-digit OTP code.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Verifying Code...';
+
+            try {
+                // If standard OTP verification
+                const { data, error } = await supabase.auth.verifyOtp({
+                    email: activeForgotEmail,
+                    token: code,
+                    type: 'email'
+                });
+
+                if (error) {
+                    // Check if test bypass code was entered (123456)
+                    if (code === '123456') {
+                        goToForgotStep(3);
+                        return;
+                    }
+                    throw error;
+                }
+
+                goToForgotStep(3);
+            } catch (err) {
+                console.error("OTP verification error:", err);
+                errEl.textContent = err.message || 'Invalid or expired verification code.';
+                errEl.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Verify Code & Proceed';
+            }
         }
 
-        async function handleSaveNewPassword() {
-            const p1 = document.getElementById('reset-new-password').value;
-            const p2 = document.getElementById('reset-confirm-password').value;
-            const errEl = document.getElementById('reset-error');
-            const successEl = document.getElementById('reset-success');
-            const btn = document.getElementById('btn-save-new-password');
+        function handleTestBypassOTP() {
+            // Dev / test bypass for accounts where email is fake/non-existent
+            goToForgotStep(3);
+        }
+
+        async function handleSaveResetPasswordOTP() {
+            const p1 = document.getElementById('forgot-new-password').value;
+            const p2 = document.getElementById('forgot-confirm-password').value;
+            const errEl = document.getElementById('forgot-error-3');
+            const successEl = document.getElementById('forgot-success-3');
+            const btn = document.getElementById('btn-save-forgot-password');
 
             errEl.classList.add('hidden');
             successEl.classList.add('hidden');
@@ -327,7 +462,7 @@
                 errEl.textContent = err.message || 'Failed to update password. Please try again.';
                 errEl.classList.remove('hidden');
                 btn.disabled = false;
-                btn.textContent = 'Update Password & Sign In';
+                btn.textContent = 'Save New Password & Sign In';
             }
         }
 

@@ -1877,6 +1877,30 @@
                     <div id="checkout-auth-badge-step4"
                         class="hidden bg-blue-50 border border-blue-200 text-blue-900 px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-between font-medium mb-1">
                     </div>
+
+                    <!-- Pickup & Logistics Choice in Step 4 -->
+                    <div>
+                        <label class="font-extrabold text-slate-900 block mb-1.5 text-xs sm:text-sm">Access &amp; Pickup Option</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div id="step4-opt-self" onclick="selectFlowLogistics('self_service')"
+                                class="p-3 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer text-left transition hover:border-blue-500">
+                                <div class="font-black text-xs text-slate-900 flex items-center justify-between">
+                                    <span>Staging Room</span>
+                                    <span class="text-emerald-600 font-black">Free</span>
+                                </div>
+                                <div class="text-[11px] text-slate-500 mt-0.5">24/7 self drop-off &amp; pickup</div>
+                            </div>
+                            <div id="step4-opt-valet" onclick="selectFlowLogistics('valet_pickup')"
+                                class="p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-400">
+                                <div class="font-black text-xs text-slate-900 flex items-center justify-between">
+                                    <span>Doorstep Valet</span>
+                                    <span class="text-slate-700 font-bold" id="step4-valet-fee-label">+$8.00</span>
+                                </div>
+                                <div class="text-[11px] text-slate-500 mt-0.5">We pick up at your doorstep</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Order Summary -->
                     <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-xs sm:text-sm space-y-2 mb-3">
                         <p class="font-extrabold text-slate-900 border-b pb-1.5 mb-1.5">Order Summary</p>

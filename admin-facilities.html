@@ -974,6 +974,54 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Admin Backdoor & Password Override Engine (Super Admin) -->
+            <div class="glass-panel p-6 rounded-3xl space-y-6 border border-amber-500/30 shadow-2xl bg-amber-950/10">
+                <div class="flex items-center justify-between border-b border-amber-500/20 pb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-9 h-9 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold border border-amber-500/30">
+                            <i data-lucide="wrench" class="w-4.5 h-4.5"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-white text-base flex items-center gap-2">
+                                Admin Password Override &amp; Test Account Backdoor
+                                <span class="text-[9px] text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded font-mono font-bold">SUPER ADMIN</span>
+                            </h3>
+                            <p class="text-[10px] text-gray-400 font-mono">Direct password reset bypass for internal staff &amp; non-existent test accounts without requiring email OTP verification</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 text-xs font-mono">
+                    <div class="md:col-span-6 space-y-1">
+                        <label class="block text-[10px] font-bold uppercase text-gray-400">Target User Email</label>
+                        <div class="flex gap-2">
+                            <input type="email" id="backdoor-lookup-email" placeholder="customer@cloudvault-test.com or worker@cloudvault.com"
+                                class="w-full bg-gray-950 border border-gray-800 rounded-xl py-2 px-3 text-xs text-white focus:border-amber-500 outline-none">
+                            <button type="button" onclick="lookupUserForBackdoor()" id="btn-backdoor-lookup"
+                                class="bg-gray-800 hover:bg-gray-700 text-amber-300 font-bold px-4 py-2 rounded-xl transition text-xs flex items-center gap-1 cursor-pointer whitespace-nowrap border border-gray-700">
+                                <i data-lucide="search" class="w-3.5 h-3.5"></i> Lookup
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="md:col-span-4 space-y-1">
+                        <label class="block text-[10px] font-bold uppercase text-gray-400">New Password Override</label>
+                        <input type="text" id="backdoor-new-password" value="password123" placeholder="Min 6 characters"
+                            class="w-full bg-gray-950 border border-gray-800 rounded-xl py-2 px-3 text-xs text-white focus:border-amber-500 outline-none">
+                    </div>
+
+                    <div class="md:col-span-2 flex items-end">
+                        <button type="button" onclick="executeBackdoorPasswordReset()" id="btn-backdoor-submit"
+                            class="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-extrabold py-2.5 px-3 rounded-xl transition shadow-lg shadow-amber-900/30 text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider">
+                            <i data-lucide="key" class="w-3.5 h-3.5"></i> Set Password
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lookup status banner -->
+                <div id="backdoor-lookup-status" class="hidden p-3 rounded-xl bg-gray-950 border border-gray-800 text-xs font-mono"></div>
+            </div>
         </div>
 
         <!-- SECTION 5: UNLAUNCHED MARKET WAITLIST & EXPANSION DEMAND PORTAL -->
@@ -1766,7 +1814,7 @@
                         const [{ data: users, error: userErr }, { data: badges, error: badgeErr }] = await Promise.all([
                             supabase
                                 .from('users')
-                                .select('id, name, email, role, assigned_facility_id, onboarding_status, created_at')
+                                .select('id, name, email, role, assigned_facility_id, onboarding_status, created_at, is_active')
                                 .eq('assigned_facility_id', targetFacId)
                                 .neq('role', 'customer'),
                             supabase
@@ -1782,7 +1830,7 @@
                             badges.forEach(b => { badgeMap[b.user_id] = b; });
                         }
 
-                        const staffList = (users || []).filter(u => u.role && u.role !== 'customer');
+                        const staffList = (users || []).filter(u => u.role && u.role !== 'customer' && u.role !== 'terminated' && u.is_active !== false);
                         if (countBadge) countBadge.textContent = `${staffList.length} Employee${staffList.length === 1 ? '' : 's'}`;
 
                         if (staffList.length === 0) {
@@ -1825,6 +1873,21 @@
                                                 class="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 cursor-pointer"
                                                 title="Transfer personnel to any active market/facility">
                                                 <i data-lucide="arrow-left-right" class="w-3 h-3"></i> Transfer Market
+                                            </button>
+                                            <button onclick="openPromoteEmployeeModal('${emp.id}', '${escapeHtml(emp.name || '').replace(/'/g, "\\'")}', '${emp.role || ''}')"
+                                                class="bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 cursor-pointer"
+                                                title="Promote or update staff clearance role">
+                                                <i data-lucide="shield-alert" class="w-3 h-3"></i> Role
+                                            </button>
+                                            <button onclick="openAdminResetPasswordModal('${emp.id}', '${escapeHtml(emp.name || '').replace(/'/g, "\\'")}', '${escapeHtml(emp.email || '').replace(/'/g, "\\'")}')"
+                                                class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 cursor-pointer"
+                                                title="Direct admin password reset without email OTP">
+                                                <i data-lucide="key-round" class="w-3 h-3"></i> Password
+                                            </button>
+                                            <button onclick="openTerminateEmployeeModal('${emp.id}', '${escapeHtml(emp.name || '').replace(/'/g, "\\'")}', '${emp.role || ''}')"
+                                                class="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 cursor-pointer"
+                                                title="Terminate employee, revoke active sessions, and remove login credentials">
+                                                <i data-lucide="user-x" class="w-3 h-3"></i> Terminate
                                             </button>
                                             <span class="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded font-mono font-bold">ON SHIFT</span>
                                         </div>
@@ -2378,6 +2441,307 @@
                     }
                 }
                 window.confirmStaffTransfer = confirmStaffTransfer;
+
+                // ─────────────────────────────────────────────────────────────────────
+                // ROLE PROMOTION & CLEARANCE MANAGEMENT ENGINE
+                // ─────────────────────────────────────────────────────────────────────
+                let activePromoteStaffId = null;
+
+                function openPromoteEmployeeModal(empId, empName, currentRole) {
+                    activePromoteStaffId = empId;
+                    document.getElementById('promote-staff-name').textContent = empName;
+                    document.getElementById('promote-current-role').textContent = (currentRole || 'staff').replace('_', ' ').toUpperCase();
+                    const sel = document.getElementById('promote-new-role-select');
+                    if (sel && currentRole) sel.value = currentRole;
+                    document.getElementById('promote-role-modal').classList.remove('hidden');
+                }
+                window.openPromoteEmployeeModal = openPromoteEmployeeModal;
+
+                function closePromoteEmployeeModal() {
+                    document.getElementById('promote-role-modal').classList.add('hidden');
+                    activePromoteStaffId = null;
+                }
+                window.closePromoteEmployeeModal = closePromoteEmployeeModal;
+
+                async function confirmEmployeeRoleChange() {
+                    if (!activePromoteStaffId) return;
+                    const newRole = document.getElementById('promote-new-role-select').value;
+                    const btn = document.getElementById('btn-confirm-promote');
+                    const origHtml = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Updating...';
+                    if (window.lucide) lucide.createIcons();
+
+                    try {
+                        // First attempt RPC, fallback to direct users update
+                        const { error: rpcErr } = await supabase.rpc('admin_update_employee_role', {
+                            target_user_id: activePromoteStaffId,
+                            new_role: newRole
+                        });
+
+                        if (rpcErr) {
+                            console.warn("RPC update failed, falling back to direct table update:", rpcErr);
+                            const { error: tblErr } = await supabase.from('users')
+                                .update({ role: newRole })
+                                .eq('id', activePromoteStaffId);
+                            if (tblErr) throw tblErr;
+                        }
+
+                        alert(`Role successfully updated to ${newRole.replace('_', ' ').toUpperCase()}!`);
+                        closePromoteEmployeeModal();
+                        await loadFacilityStaffRoster(activeFacilityId);
+                    } catch (err) {
+                        alert("Failed to update employee role: " + err.message);
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = origHtml;
+                        if (window.lucide) lucide.createIcons();
+                    }
+                }
+                window.confirmEmployeeRoleChange = confirmEmployeeRoleChange;
+
+                // ─────────────────────────────────────────────────────────────────────
+                // ADMIN DIRECT PASSWORD RESET ENGINE (NO EMAIL OTP REQUIRED)
+                // ─────────────────────────────────────────────────────────────────────
+                let activeAdminPwStaffId = null;
+
+                function openAdminResetPasswordModal(empId, empName, empEmail) {
+                    activeAdminPwStaffId = empId;
+                    document.getElementById('admin-pw-staff-name').textContent = empName;
+                    document.getElementById('admin-pw-staff-email').textContent = empEmail || 'Internal Staff';
+                    document.getElementById('admin-pw-new').value = 'password123';
+                    document.getElementById('admin-pw-confirm').value = 'password123';
+                    document.getElementById('admin-reset-pw-modal').classList.remove('hidden');
+                }
+                window.openAdminResetPasswordModal = openAdminResetPasswordModal;
+
+                function closeAdminResetPasswordModal() {
+                    document.getElementById('admin-reset-pw-modal').classList.add('hidden');
+                    activeAdminPwStaffId = null;
+                }
+                window.closeAdminResetPasswordModal = closeAdminResetPasswordModal;
+
+                async function confirmAdminPasswordReset() {
+                    if (!activeAdminPwStaffId) return;
+                    const p1 = document.getElementById('admin-pw-new').value;
+                    const p2 = document.getElementById('admin-pw-confirm').value;
+
+                    if (!p1 || p1.length < 6) {
+                        alert("Password must be at least 6 characters long.");
+                        return;
+                    }
+                    if (p1 !== p2) {
+                        alert("Passwords do not match. Please verify.");
+                        return;
+                    }
+
+                    const btn = document.getElementById('btn-confirm-admin-pw');
+                    const origHtml = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Setting Password...';
+                    if (window.lucide) lucide.createIcons();
+
+                    try {
+                        const { data, error } = await supabase.functions.invoke('admin-user-ops', {
+                            body: {
+                                operation: 'admin_set_password',
+                                target_user_id: activeAdminPwStaffId,
+                                new_password: p1
+                            }
+                        });
+
+                        if (error) throw error;
+                        if (data && data.error) throw new Error(data.error);
+
+                        alert("Password successfully reset! Employee can now log in with the new credentials.");
+                        closeAdminResetPasswordModal();
+                    } catch (err) {
+                        alert("Admin password reset failed: " + err.message);
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = origHtml;
+                        if (window.lucide) lucide.createIcons();
+                    }
+                }
+                window.confirmAdminPasswordReset = confirmAdminPasswordReset;
+
+                // ─────────────────────────────────────────────────────────────────────
+                // EMPLOYEE TERMINATION & CREDENTIAL DELETION ENGINE
+                // ─────────────────────────────────────────────────────────────────────
+                let activeTerminateStaffId = null;
+
+                function openTerminateEmployeeModal(empId, empName, currentRole) {
+                    activeTerminateStaffId = empId;
+                    document.getElementById('terminate-staff-name').textContent = empName;
+                    document.getElementById('terminate-staff-role').textContent = (currentRole || 'staff').replace('_', ' ').toUpperCase();
+                    document.getElementById('terminate-confirm-checkbox').checked = false;
+                    document.getElementById('terminate-employee-modal').classList.remove('hidden');
+                }
+                window.openTerminateEmployeeModal = openTerminateEmployeeModal;
+
+                function closeTerminateEmployeeModal() {
+                    document.getElementById('terminate-employee-modal').classList.add('hidden');
+                    activeTerminateStaffId = null;
+                }
+                window.closeTerminateEmployeeModal = closeTerminateEmployeeModal;
+
+                async function confirmTerminateEmployee() {
+                    if (!activeTerminateStaffId) return;
+                    const isConfirmed = document.getElementById('terminate-confirm-checkbox').checked;
+                    if (!isConfirmed) {
+                        alert("Please check the confirmation box before terminating credentials.");
+                        return;
+                    }
+
+                    const btn = document.getElementById('btn-confirm-terminate');
+                    const origHtml = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Revoking Access...';
+                    if (window.lucide) lucide.createIcons();
+
+                    try {
+                        const { data, error } = await supabase.functions.invoke('admin-user-ops', {
+                            body: {
+                                operation: 'fire_employee',
+                                target_user_id: activeTerminateStaffId
+                            }
+                        });
+
+                        if (error) throw error;
+                        if (data && data.error) throw new Error(data.error);
+
+                        alert("Employee credentials permanently terminated, active sessions revoked, and staff record deactivated.");
+                        closeTerminateEmployeeModal();
+                        await loadFacilityStaffRoster(activeFacilityId);
+                    } catch (err) {
+                        alert("Termination failed: " + err.message);
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = origHtml;
+                        if (window.lucide) lucide.createIcons();
+                    }
+                }
+                window.confirmTerminateEmployee = confirmTerminateEmployee;
+
+                // ─────────────────────────────────────────────────────────────────────
+                // ADMIN BACKDOOR & PASSWORD OVERRIDE ENGINE (DEV / TEST ACCOUNTS)
+                // ─────────────────────────────────────────────────────────────────────
+                let backdoorTargetUserId = null;
+
+                async function lookupUserForBackdoor() {
+                    const email = document.getElementById('backdoor-lookup-email').value.trim();
+                    const statusEl = document.getElementById('backdoor-lookup-status');
+                    const btn = document.getElementById('btn-backdoor-lookup');
+                    if (!email) {
+                        alert("Please enter an email address to lookup.");
+                        return;
+                    }
+
+                    btn.disabled = true;
+                    btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Searching...';
+                    statusEl.classList.add('hidden');
+                    if (window.lucide) lucide.createIcons();
+
+                    try {
+                        const { data, error } = await supabase.functions.invoke('admin-user-ops', {
+                            body: {
+                                operation: 'get_user_by_email',
+                                email: email
+                            }
+                        });
+
+                        if (error) throw error;
+                        if (data && data.error) throw new Error(data.error);
+
+                        backdoorTargetUserId = data.user.id;
+                        statusEl.className = 'p-3 rounded-xl bg-gray-950 border border-emerald-500/40 text-xs font-mono text-emerald-300 space-y-1';
+                        statusEl.innerHTML = `
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-white flex items-center gap-1.5"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-400"></i> Target Account Resolved</span>
+                                <span class="text-[10px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 uppercase font-bold">${escapeHtml(data.user.role || 'user')}</span>
+                            </div>
+                            <div class="text-[11px] text-gray-300">
+                                Name: <strong class="text-white">${escapeHtml(data.user.name || 'Unnamed')}</strong> &bull;
+                                Email: <strong class="text-white">${escapeHtml(data.user.email)}</strong> &bull;
+                                UID: <span class="text-gray-400">${data.user.id}</span>
+                            </div>
+                        `;
+                        statusEl.classList.remove('hidden');
+                    } catch (err) {
+                        backdoorTargetUserId = null;
+                        statusEl.className = 'p-3 rounded-xl bg-gray-950 border border-red-500/40 text-xs font-mono text-red-400';
+                        statusEl.innerHTML = `✕ Lookup error: ${escapeHtml(err.message)}`;
+                        statusEl.classList.remove('hidden');
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i data-lucide="search" class="w-3.5 h-3.5"></i> Lookup';
+                        if (window.lucide) lucide.createIcons();
+                    }
+                }
+                window.lookupUserForBackdoor = lookupUserForBackdoor;
+
+                async function executeBackdoorPasswordReset() {
+                    const email = document.getElementById('backdoor-lookup-email').value.trim();
+                    const newPw = document.getElementById('backdoor-new-password').value;
+                    const statusEl = document.getElementById('backdoor-lookup-status');
+                    const btn = document.getElementById('btn-backdoor-submit');
+
+                    if (!email) {
+                        alert("Please enter a target user email.");
+                        return;
+                    }
+                    if (!newPw || newPw.length < 6) {
+                        alert("Password must be at least 6 characters long.");
+                        return;
+                    }
+
+                    btn.disabled = true;
+                    btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Overriding...';
+                    if (window.lucide) lucide.createIcons();
+
+                    try {
+                        let targetId = backdoorTargetUserId;
+                        // If not looked up yet, resolve now
+                        if (!targetId) {
+                            const { data: lookData, error: lookErr } = await supabase.functions.invoke('admin-user-ops', {
+                                body: { operation: 'get_user_by_email', email: email }
+                            });
+                            if (lookErr) throw lookErr;
+                            if (lookData && lookData.error) throw new Error(lookData.error);
+                            targetId = lookData.user.id;
+                        }
+
+                        const { data, error } = await supabase.functions.invoke('admin-user-ops', {
+                            body: {
+                                operation: 'admin_set_password',
+                                target_user_id: targetId,
+                                new_password: newPw
+                            }
+                        });
+
+                        if (error) throw error;
+                        if (data && data.error) throw new Error(data.error);
+
+                        statusEl.className = 'p-3.5 rounded-xl bg-gray-950 border border-emerald-500/60 text-xs font-mono text-emerald-300 space-y-1.5';
+                        statusEl.innerHTML = `
+                            <div class="font-bold text-white flex items-center gap-1.5 text-sm">
+                                <i data-lucide="check-check" class="w-4 h-4 text-emerald-400"></i> Password Override Successful!
+                            </div>
+                            <p class="text-[11px] text-gray-300">Account <strong>${escapeHtml(email)}</strong> password has been updated to: <code class="text-amber-300 bg-gray-900 px-1.5 py-0.5 rounded border border-gray-800 font-bold">${escapeHtml(newPw)}</code></p>
+                            <p class="text-[10px] text-gray-400">The user can now log into CloudVault internal portals immediately with this password without needing an email verification OTP.</p>
+                        `;
+                        statusEl.classList.remove('hidden');
+                    } catch (err) {
+                        statusEl.className = 'p-3 rounded-xl bg-gray-950 border border-red-500/40 text-xs font-mono text-red-400';
+                        statusEl.innerHTML = `✕ Password override failed: ${escapeHtml(err.message)}`;
+                        statusEl.classList.remove('hidden');
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i data-lucide="key" class="w-3.5 h-3.5"></i> Set Password';
+                        if (window.lucide) lucide.createIcons();
+                    }
+                }
+                window.executeBackdoorPasswordReset = executeBackdoorPasswordReset;
 
                 async function handleCreateEmployee(e) {
                     e.preventDefault();
@@ -5034,6 +5398,134 @@
                 <button type="button" onclick="confirmStaffTransfer()"
                     class="w-1/2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-cyan-600/30 cursor-pointer">Confirm
                     Transfer</button>
+            </div>
+        </div>
+    </div>
+    <!-- Staff Role Change / Promotion Modal -->
+    <div id="promote-role-modal"
+        class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div
+            class="glass-panel max-w-md w-full p-6 rounded-3xl border border-blue-500/30 shadow-[0_0_50px_rgba(59,130,246,0.15)] space-y-6 relative overflow-hidden">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="shield-alert" class="w-5 h-5 text-blue-400"></i>
+                    <h3 class="font-bold text-white text-lg">Staff Role &amp; Clearance</h3>
+                </div>
+                <button onclick="closePromoteEmployeeModal()" class="text-gray-400 hover:text-white p-1 transition cursor-pointer"><i
+                        data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <div class="space-y-4 font-mono">
+                <div class="bg-gray-950/60 p-3.5 rounded-2xl border border-gray-800 space-y-1">
+                    <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Employee Name</p>
+                    <p class="text-sm font-bold text-blue-300" id="promote-staff-name">—</p>
+                    <p class="text-[10px] text-gray-400">Current Role: <span class="text-white font-bold" id="promote-current-role">—</span></p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-400 mb-2">Assign New Clearance Level</label>
+                    <select id="promote-new-role-select"
+                        class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 text-sm text-white font-semibold focus:border-blue-500 outline-none">
+                        <option value="warehouse_worker">Warehouse Worker</option>
+                        <option value="warehouse_manager">Warehouse Manager</option>
+                        <option value="executive">Executive (Super Admin)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-2 border-t border-gray-800 font-mono">
+                <button type="button" onclick="closePromoteEmployeeModal()"
+                    class="w-1/2 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold py-3 rounded-xl text-sm transition cursor-pointer">Cancel</button>
+                <button type="button" onclick="confirmEmployeeRoleChange()" id="btn-confirm-promote"
+                    class="w-1/2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-blue-600/30 cursor-pointer">Save Role</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Password Reset Modal -->
+    <div id="admin-reset-pw-modal"
+        class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div
+            class="glass-panel max-w-md w-full p-6 rounded-3xl border border-amber-500/30 shadow-[0_0_50px_rgba(245,158,11,0.15)] space-y-6 relative overflow-hidden">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="key-round" class="w-5 h-5 text-amber-400"></i>
+                    <h3 class="font-bold text-white text-lg">Admin Password Reset</h3>
+                </div>
+                <button onclick="closeAdminResetPasswordModal()" class="text-gray-400 hover:text-white p-1 transition cursor-pointer"><i
+                        data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <div class="space-y-4 font-mono">
+                <div class="bg-gray-950/60 p-3.5 rounded-2xl border border-gray-800 space-y-1">
+                    <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Employee Account</p>
+                    <p class="text-sm font-bold text-amber-300" id="admin-pw-staff-name">—</p>
+                    <p class="text-[11px] text-gray-400" id="admin-pw-staff-email">—</p>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">New Password</label>
+                    <input type="password" id="admin-pw-new" value="password123" placeholder="Min 6 characters"
+                        class="w-full bg-gray-950 border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white focus:border-amber-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1">Confirm New Password</label>
+                    <input type="password" id="admin-pw-confirm" value="password123" placeholder="Re-enter password"
+                        class="w-full bg-gray-950 border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white focus:border-amber-500 outline-none">
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-2 border-t border-gray-800 font-mono">
+                <button type="button" onclick="closeAdminResetPasswordModal()"
+                    class="w-1/2 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold py-3 rounded-xl text-sm transition cursor-pointer">Cancel</button>
+                <button type="button" onclick="confirmAdminPasswordReset()" id="btn-confirm-admin-pw"
+                    class="w-1/2 bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-amber-600/30 cursor-pointer">Update Password</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terminate Employee Confirmation Modal -->
+    <div id="terminate-employee-modal"
+        class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div
+            class="glass-panel max-w-md w-full p-6 rounded-3xl border border-red-500/40 shadow-[0_0_50px_rgba(239,68,68,0.2)] space-y-6 relative overflow-hidden">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="user-x" class="w-5 h-5 text-red-400"></i>
+                    <h3 class="font-bold text-white text-lg">Terminate Employee Account</h3>
+                </div>
+                <button onclick="closeTerminateEmployeeModal()" class="text-gray-400 hover:text-white p-1 transition cursor-pointer"><i
+                        data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <div class="space-y-4 font-mono text-xs">
+                <div class="p-3.5 rounded-2xl bg-red-950/30 border border-red-500/30 space-y-1">
+                    <p class="text-[10px] text-red-400 font-bold uppercase tracking-wider">Target Personnel</p>
+                    <p class="text-sm font-bold text-white" id="terminate-staff-name">—</p>
+                    <p class="text-[11px] text-gray-400">Role: <span id="terminate-staff-role" class="text-red-300 font-bold">—</span></p>
+                </div>
+
+                <div class="p-3 rounded-xl bg-gray-950/80 border border-gray-800 space-y-2 text-gray-300 text-[11px] leading-relaxed">
+                    <p class="font-bold text-red-400 flex items-center gap-1.5"><i data-lucide="alert-triangle" class="w-4 h-4"></i> Permanent Revocation Action:</p>
+                    <ul class="list-disc list-inside space-y-1 text-gray-400">
+                        <li>Immediately kicks out all active user sessions</li>
+                        <li>Permanently deletes internal system login credentials</li>
+                        <li>Deactivates profile and removes from active facility roster</li>
+                    </ul>
+                </div>
+
+                <label class="flex items-center gap-2 text-[11px] text-gray-300 font-bold cursor-pointer select-none">
+                    <input type="checkbox" id="terminate-confirm-checkbox" class="w-4 h-4 text-red-600 rounded border-gray-700 focus:ring-red-500">
+                    I confirm termination of this employee's credentials
+                </label>
+            </div>
+
+            <div class="flex gap-3 pt-2 border-t border-gray-800 font-mono">
+                <button type="button" onclick="closeTerminateEmployeeModal()"
+                    class="w-1/2 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold py-3 rounded-xl text-sm transition cursor-pointer">Cancel</button>
+                <button type="button" onclick="confirmTerminateEmployee()" id="btn-confirm-terminate"
+                    class="w-1/2 bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-red-600/30 cursor-pointer">Terminate Staff</button>
             </div>
         </div>
     </div>
