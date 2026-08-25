@@ -102,28 +102,34 @@ test.describe('Admin Facility Pricing Matrix & Dynamic Propagation', () => {
   test('dynamically resolves pricing matrices per facility in admin context', async ({ page }) => {
     await page.goto('/admin', { waitUntil: 'domcontentloaded' });
 
-    // Test dynamic calculation for Seattle
-    const seattleCalc = await page.evaluate((facs) => {
-      const seattle = facs.find(f => f.id === 'facility_seattle_north');
-      const rate = window.getTierRate(5, seattle);
-      const valet = window.getValetFee(5, seattle);
+    // Test dynamic calculation for Seattle derived from fixture
+    const seattleFacility = MOCK_FACILITIES.find(f => f.id === 'facility_seattle_north');
+    const seattleCalc = await page.evaluate((fac) => {
+      const rate = window.getTierRate(5, fac);
+      const valet = window.getValetFee(5, fac);
       return { rate, valet };
-    }, MOCK_FACILITIES);
+    }, seattleFacility);
+
+    const expectedSeattleRate = seattleFacility.tier1_rate;
+    const expectedSeattleValet = seattleFacility.valet_base + (5 * seattleFacility.valet_tote_adder);
 
     expect(seattleCalc.rate.tier).toBe(1);
-    expect(seattleCalc.rate.rate).toBe(5.10);
-    expect(seattleCalc.valet).toBe(21.00); // 16 + 5*1
+    expect(seattleCalc.rate.rate).toBe(expectedSeattleRate);
+    expect(seattleCalc.valet).toBe(expectedSeattleValet);
 
-    // Test dynamic calculation for Yakima
-    const yakimaCalc = await page.evaluate((facs) => {
-      const yakima = facs.find(f => f.id === 'facility_yakima');
-      const rate = window.getTierRate(5, yakima);
-      const valet = window.getValetFee(5, yakima);
+    // Test dynamic calculation for Yakima derived from fixture
+    const yakimaFacility = MOCK_FACILITIES.find(f => f.id === 'facility_yakima');
+    const yakimaCalc = await page.evaluate((fac) => {
+      const rate = window.getTierRate(5, fac);
+      const valet = window.getValetFee(5, fac);
       return { rate, valet };
-    }, MOCK_FACILITIES);
+    }, yakimaFacility);
+
+    const expectedYakimaRate = yakimaFacility.tier1_rate;
+    const expectedYakimaValet = yakimaFacility.valet_base + (5 * yakimaFacility.valet_tote_adder);
 
     expect(yakimaCalc.rate.tier).toBe(1);
-    expect(yakimaCalc.rate.rate).toBe(4.50);
-    expect(yakimaCalc.valet).toBe(15.75); // 12 + 5*0.75
+    expect(yakimaCalc.rate.rate).toBe(expectedYakimaRate);
+    expect(yakimaCalc.valet).toBe(expectedYakimaValet);
   });
 });

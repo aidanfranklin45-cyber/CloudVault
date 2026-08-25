@@ -130,63 +130,91 @@ Deno.test("Dual Source of Truth - Admin Facility Pricing & Stripe Invoicing", as
   };
 
   await t.step("Source 1: Generates invoice strictly honoring Supabase facility matrix", () => {
+    const facility = db.facilities[0];
+    const toteCount = 12; // Tier 2
+    const isValet = true;
+
     const { quote, stripeInvoice } = generateStripeInvoicePayload(db, {
-      facilityId: "facility_seattle_north",
-      toteCount: 12, // Tier 2 ($3.50/tote)
-      isValet: true,  // $16 + 12*$1 = $28
+      facilityId: facility.id,
+      toteCount,
+      isValet,
       customerId: "cus_customer_123",
     });
 
-    // 12 * $3.50 = $42.00 storage + $28.00 valet = $70.00 gross
-    assertEquals(quote.unitRate, 3.50);
-    assertEquals(quote.storageAmount, 42.00);
-    assertEquals(quote.valetAmount, 28.00);
-    assertEquals(quote.grossSubtotal, 70.00);
+    // Derive all expected values dynamically from facility object (Zero magic numbers)
+    const expectedRate = facility.tier2_rate;
+    const expectedStorage = Number((toteCount * expectedRate).toFixed(2));
+    const expectedValet = Number((facility.valet_base + toteCount * facility.valet_tote_adder).toFixed(2));
+    const expectedGross = Number((expectedStorage + expectedValet).toFixed(2));
+    const expectedTax = Number((expectedGross * (facility.tax_rate_pct / 100)).toFixed(2));
+    const expectedTotal = Number((expectedGross + expectedTax).toFixed(2));
+
+    assertEquals(quote.unitRate, expectedRate);
+    assertEquals(quote.storageAmount, expectedStorage);
+    assertEquals(quote.valetAmount, expectedValet);
+    assertEquals(quote.grossSubtotal, expectedGross);
     assertEquals(quote.discountAmount, 0.00);
-    // 10.25% tax on $70.00 = $7.17 -> Total = $77.17
-    assertEquals(quote.taxAmount, 7.17);
-    assertEquals(quote.totalAmount, 77.17);
-    assertEquals(stripeInvoice.total, 7717); // In cents for Stripe
+    assertEquals(quote.taxAmount, expectedTax);
+    assertEquals(quote.totalAmount, expectedTotal);
+    assertEquals(stripeInvoice.total, Math.round(expectedTotal * 100));
   });
 
   await t.step("Source 2: Applies coupon discount from promo_codes DB and reconciles in Stripe invoice", () => {
+    const facility = db.facilities[0];
+    const promo = db.promo_codes[0];
+    const toteCount = 10;
+    const isValet = false;
+
     const { quote, stripeInvoice } = generateStripeInvoicePayload(db, {
-      facilityId: "facility_seattle_north",
-      toteCount: 10,
-      isValet: false,
-      promoCode: "SUMMER20",
+      facilityId: facility.id,
+      toteCount,
+      isValet,
+      promoCode: promo.code,
       customerId: "cus_customer_123",
     });
 
-    // 10 totes @ $3.50 = $35.00 gross
-    // 20% discount on $35.00 = $7.00
-    // Taxable = $28.00, Tax (10.25%) = $2.87, Total = $30.87
-    assertEquals(quote.grossSubtotal, 35.00);
-    assertEquals(quote.discountAmount, 7.00);
-    assertEquals(quote.taxAmount, 2.87);
-    assertEquals(quote.totalAmount, 30.87);
-    assertEquals(stripeInvoice.applied_promo, "SUMMER20");
-    assertEquals(stripeInvoice.total, 3087);
+    // Derive all expected values dynamically
+    const expectedRate = facility.tier2_rate;
+    const expectedGross = Number((toteCount * expectedRate).toFixed(2));
+    const expectedDiscount = Number((expectedGross * (promo.customer_discount_pct / 100)).toFixed(2));
+    const expectedTaxable = Number((expectedGross - expectedDiscount).toFixed(2));
+    const expectedTax = Number((expectedTaxable * (facility.tax_rate_pct / 100)).toFixed(2));
+    const expectedTotal = Number((expectedTaxable + expectedTax).toFixed(2));
+
+    assertEquals(quote.grossSubtotal, expectedGross);
+    assertEquals(quote.discountAmount, expectedDiscount);
+    assertEquals(quote.taxAmount, expectedTax);
+    assertEquals(quote.totalAmount, expectedTotal);
+    assertEquals(stripeInvoice.applied_promo, promo.code);
+    assertEquals(stripeInvoice.total, Math.round(expectedTotal * 100));
   });
 
   await t.step("Source 1 Update Propagation: Admin changes facility rates and quotes update dynamically", () => {
-    // Admin updates Seattle Tier 1 rate from $5.10 to $5.75 and Valet Base to $18.00 in Supabase
     const seattle = db.facilities.find((f) => f.id === "facility_seattle_north")!;
+    // Admin updates rates dynamically
     seattle.tier1_rate = 5.75;
     seattle.valet_base = 18.00;
 
+    const toteCount = 5;
+    const isValet = true;
+
     const { quote } = generateStripeInvoicePayload(db, {
-      facilityId: "facility_seattle_north",
-      toteCount: 5, // Tier 1 ($5.75/tote)
-      isValet: true,  // $18 + 5*$1 = $23
+      facilityId: seattle.id,
+      toteCount,
+      isValet,
       customerId: "cus_customer_123",
     });
 
-    // 5 * $5.75 = $28.75 storage + $23.00 valet = $51.75 gross + 10.25% tax ($5.30) = $57.05
-    assertEquals(quote.unitRate, 5.75);
-    assertEquals(quote.storageAmount, 28.75);
-    assertEquals(quote.valetAmount, 23.00);
-    assertEquals(quote.grossSubtotal, 51.75);
-    assertEquals(quote.totalAmount, 57.05);
+    const expectedRate = seattle.tier1_rate;
+    const expectedStorage = Number((toteCount * expectedRate).toFixed(2));
+    const expectedValet = Number((seattle.valet_base + toteCount * seattle.valet_tote_adder).toFixed(2));
+    const expectedGross = Number((expectedStorage + expectedValet).toFixed(2));
+    const expectedTotal = Number((expectedGross + Number((expectedGross * (seattle.tax_rate_pct / 100)).toFixed(2))).toFixed(2));
+
+    assertEquals(quote.unitRate, expectedRate);
+    assertEquals(quote.storageAmount, expectedStorage);
+    assertEquals(quote.valetAmount, expectedValet);
+    assertEquals(quote.grossSubtotal, expectedGross);
+    assertEquals(quote.totalAmount, expectedTotal);
   });
 });

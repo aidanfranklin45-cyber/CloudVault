@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects, assertExists } from "std/assert";
+import { assertEquals } from "std/assert";
 
 // ---------------------------------------------------------------------------
 // Suite 1: Static Codebase Hardcoding & Invariant Linter
@@ -33,7 +33,7 @@ Deno.test("Pricing Invariant - Zero Static Hardcoded Fallback Rates in Codebase"
 });
 
 // ---------------------------------------------------------------------------
-// Suite 2: Dynamic Facility Resolution & Fail-Fast Behavior
+// Suite 2: Generative Property-Based Dynamic Pricing Sweeps
 // ---------------------------------------------------------------------------
 interface FacilityPricingConfig {
   id: string;
@@ -67,75 +67,101 @@ function resolveDynamicPricing(facility: FacilityPricingConfig, toteCount: numbe
   return { unitRate, storageSubtotal, valetFee, gross, taxAmount, total };
 }
 
-Deno.test("Pricing Invariant - Dynamic Facility Pricing Calculations", async (t) => {
-  const seattleFacility: FacilityPricingConfig = {
-    id: "facility_seattle_north",
-    name: "Seattle North",
-    tier1_rate: 5.10,
-    tier2_rate: 3.50,
-    tier3_rate: 2.50,
-    tier4_rate: 1.00,
-    valet_base: 16.00,
-    valet_tote_adder: 1.00,
-    tax_rate_pct: 10.25,
-  };
+Deno.test("Pricing Invariant - Generative Property-Based Pricing Verification", async (t) => {
+  // Pure domain expected formula functions (Zero magic numbers)
+  function computeExpectedUnitRate(f: FacilityPricingConfig, count: number): number {
+    if (count >= 50) return f.tier4_rate;
+    if (count >= 25) return f.tier3_rate;
+    if (count >= 10) return f.tier2_rate;
+    return f.tier1_rate;
+  }
 
-  const yakimaFacility: FacilityPricingConfig = {
-    id: "facility_yakima",
-    name: "Yakima Valley",
-    tier1_rate: 4.50,
-    tier2_rate: 3.00,
-    tier3_rate: 2.00,
-    tier4_rate: 0.85,
-    valet_base: 12.00,
-    valet_tote_adder: 0.75,
-    tax_rate_pct: 8.30,
-  };
+  function computeExpectedValetFee(f: FacilityPricingConfig, count: number, isValet: boolean): number {
+    return isValet ? Number((f.valet_base + count * f.valet_tote_adder).toFixed(2)) : 0;
+  }
 
-  const portlandFacility: FacilityPricingConfig = {
-    id: "facility_portland",
-    name: "Portland Central",
-    tier1_rate: 5.25,
-    tier2_rate: 3.75,
-    tier3_rate: 2.75,
-    tier4_rate: 1.10,
-    valet_base: 15.00,
-    valet_tote_adder: 1.25,
-    tax_rate_pct: 0.00, // Oregon 0% sales tax
-  };
+  await t.step("sweeps 50 randomized facility matrices and proves mathematical invariants", () => {
+    // Generate 50 distinct randomized facility pricing matrices
+    for (let i = 0; i < 50; i++) {
+      const t1 = Number((3.00 + Math.random() * 4.00).toFixed(2)); // $3.00 - $7.00
+      const t2 = Number((t1 * 0.75).toFixed(2));
+      const t3 = Number((t2 * 0.75).toFixed(2));
+      const t4 = Number((t3 * 0.50).toFixed(2));
+      const valetBase = Number((10.00 + Math.random() * 10.00).toFixed(2));
+      const valetAdder = Number((0.50 + Math.random() * 1.50).toFixed(2));
+      const taxRate = i % 5 === 0 ? 0.00 : Number((5.00 + Math.random() * 6.00).toFixed(2)); // Includes 0% tax cases
 
-  await t.step("computes Seattle rates across tiers dynamically", () => {
-    // 5 totes (Tier 1 @ $5.10) + Valet ($16 + 5*$1) = $25.50 + $21.00 = $46.50 + 10.25% tax ($4.77) = $51.27
-    const quote = resolveDynamicPricing(seattleFacility, 5, true);
-    assertEquals(quote.unitRate, 5.10);
-    assertEquals(quote.storageSubtotal, 25.50);
-    assertEquals(quote.valetFee, 21.00);
-    assertEquals(quote.gross, 46.50);
-    assertEquals(quote.taxAmount, 4.77);
-    assertEquals(quote.total, 51.27);
+      const randomFacility: FacilityPricingConfig = {
+        id: `facility_gen_${i}`,
+        name: `Generated Facility ${i}`,
+        tier1_rate: t1,
+        tier2_rate: t2,
+        tier3_rate: t3,
+        tier4_rate: t4,
+        valet_base: valetBase,
+        valet_tote_adder: valetAdder,
+        tax_rate_pct: taxRate,
+      };
+
+      // Test across random tote quantities
+      const testCounts = [1, 5, 9, 10, 15, 24, 25, 40, 49, 50, 100, 250];
+      for (const count of testCounts) {
+        for (const isValet of [true, false]) {
+          const result = resolveDynamicPricing(randomFacility, count, isValet);
+
+          // 1. Assert unitRate derived strictly from facility matrix without magic numbers
+          const expectedRate = computeExpectedUnitRate(randomFacility, count);
+          assertEquals(result.unitRate, expectedRate);
+
+          // 2. Assert storage subtotal === count * unitRate
+          const expectedStorage = Number((count * expectedRate).toFixed(2));
+          assertEquals(result.storageSubtotal, expectedStorage);
+
+          // 3. Assert valet fee derived strictly from facility config
+          const expectedValet = computeExpectedValetFee(randomFacility, count, isValet);
+          assertEquals(result.valetFee, expectedValet);
+
+          // 4. Assert gross === storage + valet
+          const expectedGross = Number((expectedStorage + expectedValet).toFixed(2));
+          assertEquals(result.gross, expectedGross);
+
+          // 5. Assert zero tax invariant for 0% tax jurisdictions
+          if (randomFacility.tax_rate_pct === 0) {
+            assertEquals(result.taxAmount, 0.00);
+            assertEquals(result.total, expectedGross);
+          } else {
+            const expectedTax = Number((expectedGross * (randomFacility.tax_rate_pct / 100)).toFixed(2));
+            assertEquals(result.taxAmount, expectedTax);
+            assertEquals(result.total, Number((expectedGross + expectedTax).toFixed(2)));
+          }
+        }
+      }
+    }
   });
 
-  await t.step("computes Yakima regional rates dynamically", () => {
-    // 30 totes (Tier 3 @ $2.00) without valet = $60.00 + 8.30% tax ($4.98) = $64.98
-    const quote = resolveDynamicPricing(yakimaFacility, 30, false);
-    assertEquals(quote.unitRate, 2.00);
-    assertEquals(quote.storageSubtotal, 60.00);
-    assertEquals(quote.valetFee, 0.00);
-    assertEquals(quote.taxAmount, 4.98);
-    assertEquals(quote.total, 64.98);
+  await t.step("proves monotonicity invariant across all tier boundaries", () => {
+    const sampleFacility: FacilityPricingConfig = {
+      id: "facility_monotonicity_test",
+      name: "Monotonicity Test",
+      tier1_rate: 6.00,
+      tier2_rate: 4.50,
+      tier3_rate: 3.00,
+      tier4_rate: 1.50,
+      valet_base: 15.00,
+      valet_tote_adder: 1.00,
+      tax_rate_pct: 10.00,
+    };
+
+    let prevRate = Infinity;
+    for (let c = 1; c <= 60; c++) {
+      const { unitRate } = resolveDynamicPricing(sampleFacility, c, false);
+      // Unit rate must never increase as volume increases
+      assertEquals(unitRate <= prevRate, true, `Monotonicity violation at count ${c}: ${unitRate} > ${prevRate}`);
+      prevRate = unitRate;
+    }
   });
 
-  await t.step("computes Portland 0% tax dynamically", () => {
-    // 15 totes (Tier 2 @ $3.75) + Valet ($15 + 15*$1.25 = $33.75) = $56.25 + $33.75 = $90.00 + 0% tax = $90.00
-    const quote = resolveDynamicPricing(portlandFacility, 15, true);
-    assertEquals(quote.unitRate, 3.75);
-    assertEquals(quote.storageSubtotal, 56.25);
-    assertEquals(quote.valetFee, 33.75);
-    assertEquals(quote.taxAmount, 0.00);
-    assertEquals(quote.total, 90.00);
-  });
-
-  await t.step("fails fast when facility rate configuration is missing", () => {
+  await t.step("fails fast when facility configuration is missing required rate matrix", () => {
     const invalidFacility = { id: "facility_broken", name: "Incomplete" } as any;
     let errorThrown = false;
     try {
