@@ -5425,3 +5425,179 @@ BEGIN
         USING (user_uid IS NULL OR auth.uid() = user_uid OR auth.role() = 'authenticated');
     END IF;
 END $$;
+
+-- =========================================================================
+-- Waitlist Creator Code & Stripe Priority Deposit Integration
+-- =========================================================================
+ALTER TABLE public.waitlist 
+ADD COLUMN IF NOT EXISTS promo_code TEXT,
+ADD COLUMN IF NOT EXISTS promo_code_id UUID REFERENCES public.promo_codes(id) ON DELETE SET NULL,
+ADD COLUMN IF NOT EXISTS creator_id UUID REFERENCES public.creators(id) ON DELETE SET NULL,
+ADD COLUMN IF NOT EXISTS deposit_discount_pct NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS deposit_discount_amount NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS net_deposit_paid NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
+
+-- RPC: Validate Promo Code for Waitlist
+CREATE OR REPLACE FUNCTION public.validate_promo_code_for_waitlist(
+    p_code TEXT,
+    p_deposit_amount NUMERIC DEFAULT 20.00
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+    v_promo RECORD;
+    v_creator RECORD;
+    v_discount_pct NUMERIC(5,2) := 20.00;
+    v_discount_amt NUMERIC(10,2) := 0.00;
+    v_net_amt NUMERIC(10,2) := p_deposit_amount;
+    v_clean_code TEXT;
+BEGIN
+    IF p_code IS NULL OR TRIM(p_code) = '' THEN
+        RETURN jsonb_build_object('valid', false, 'message', 'Please enter a valid promotional or creator code.');
+    END IF;
+
+    v_clean_code := UPPER(TRIM(p_code));
+
+    SELECT * INTO v_promo
+    FROM public.promo_codes
+    WHERE UPPER(code) = v_clean_code
+    LIMIT 1;
+
+    IF v_promo.id IS NULL THEN
+        RETURN jsonb_build_object('valid', false, 'message', 'Creator code not found.');
+    END IF;
+
+    IF NOT v_promo.is_active THEN
+        RETURN jsonb_build_object('valid', false, 'message', 'This creator code is currently inactive.');
+    END IF;
+
+    IF v_promo.expires_at IS NOT NULL AND v_promo.expires_at < NOW() THEN
+        RETURN jsonb_build_object('valid', false, 'message', 'This creator code has expired.');
+    END IF;
+
+    IF v_promo.max_redemptions IS NOT NULL AND v_promo.current_redemptions >= v_promo.max_redemptions THEN
+        RETURN jsonb_build_object('valid', false, 'message', 'This creator code has reached its maximum redemption limit.');
+    END IF;
+
+    v_discount_pct := COALESCE(v_promo.customer_discount_pct, 20.00);
+    v_discount_amt := ROUND(p_deposit_amount * (v_discount_pct / 100.0), 2);
+    v_net_amt := GREATEST(0.00, p_deposit_amount - v_discount_amt);
+
+    SELECT name, handle INTO v_creator FROM public.creators WHERE id = v_promo.creator_id;
+
+    RETURN jsonb_build_object(
+        'valid', true,
+        'promo_id', v_promo.id,
+        'code', v_promo.code,
+        'creator_id', v_promo.creator_id,
+        'creator_name', COALESCE(v_creator.name, 'Creator Partner'),
+        'creator_handle', v_creator.handle,
+        'customer_discount_pct', v_discount_pct,
+        'customer_discount_duration_months', COALESCE(v_promo.customer_discount_duration_months, 2),
+        'gross_deposit', p_deposit_amount,
+        'discount_amount', v_discount_amt,
+        'net_deposit_paid', v_net_amt,
+        'message', '✓ Creator code ' || v_promo.code || ' applied! ' || v_discount_pct::text || '% off deposit ($' || v_net_amt::text || ' net) + ' || COALESCE(v_promo.customer_discount_duration_months, 2)::text || ' months discount at launch!'
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+-- RPC: Record Waitlist Promo Redemption
+CREATE OR REPLACE FUNCTION public.record_waitlist_promo_redemption(
+    p_code TEXT,
+    p_waitlist_id UUID,
+    p_user_uid UUID DEFAULT NULL,
+    p_deposit_amount NUMERIC DEFAULT 20.00,
+    p_discount_amount NUMERIC DEFAULT 0.00,
+    p_net_deposit_paid NUMERIC DEFAULT 20.00
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+    v_promo RECORD;
+    v_creator RECORD;
+    v_clean_code TEXT;
+    v_comm_rate NUMERIC(5,2) := 10.00;
+    v_comm_amt NUMERIC(10,2) := 0.00;
+    v_redemption_id UUID;
+BEGIN
+    IF p_code IS NULL OR TRIM(p_code) = '' THEN
+        RETURN jsonb_build_object('success', false, 'message', 'No creator code provided');
+    END IF;
+
+    v_clean_code := UPPER(TRIM(p_code));
+
+    SELECT * INTO v_promo FROM public.promo_codes WHERE UPPER(code) = v_clean_code LIMIT 1;
+    IF v_promo.id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Promo code not recognized');
+    END IF;
+
+    SELECT * INTO v_creator FROM public.creators WHERE id = v_promo.creator_id LIMIT 1;
+
+    v_comm_rate := COALESCE(v_promo.commission_rate_pct, v_creator.default_commission_pct, 10.00);
+    v_comm_amt := ROUND(p_net_deposit_paid * (v_comm_rate / 100.0), 2);
+
+    -- Update promo code stats
+    UPDATE public.promo_codes 
+    SET current_redemptions = COALESCE(current_redemptions, 0) + 1,
+        total_revenue_generated = COALESCE(total_revenue_generated, 0.00) + p_net_deposit_paid,
+        total_commission_earned = COALESCE(total_commission_earned, 0.00) + v_comm_amt
+    WHERE id = v_promo.id;
+
+    -- Update creator stats
+    IF v_creator.id IS NOT NULL THEN
+        UPDATE public.creators
+        SET total_referrals = COALESCE(total_referrals, 0) + 1,
+            total_earned = COALESCE(total_earned, 0.00) + v_comm_amt,
+            unpaid_balance = COALESCE(unpaid_balance, 0.00) + v_comm_amt
+        WHERE id = v_creator.id;
+    END IF;
+
+    -- Record in promo_redemptions table
+    INSERT INTO public.promo_redemptions (
+        promo_code_id,
+        creator_id,
+        customer_uid,
+        invoice_id,
+        gross_invoice_amount,
+        customer_discount_amount,
+        net_paid_amount,
+        commission_rate_pct,
+        commission_amount,
+        commission_month_index,
+        commission_eligible,
+        payout_status,
+        notes
+    ) VALUES (
+        v_promo.id,
+        v_promo.creator_id,
+        p_user_uid,
+        'WAITLIST-' || COALESCE(p_waitlist_id::text, gen_random_uuid()::text),
+        p_deposit_amount,
+        p_discount_amount,
+        p_net_deposit_paid,
+        v_comm_rate,
+        v_comm_amt,
+        1,
+        true,
+        'pending',
+        'Waitlist Priority Deposit Price Lock: Code ' || v_clean_code
+    ) RETURNING id INTO v_redemption_id;
+
+    -- Update waitlist row if ID provided
+    IF p_waitlist_id IS NOT NULL THEN
+        UPDATE public.waitlist
+        SET promo_code = v_clean_code,
+            promo_code_id = v_promo.id,
+            creator_id = v_promo.creator_id,
+            deposit_discount_pct = COALESCE(v_promo.customer_discount_pct, 20.00),
+            deposit_discount_amount = p_discount_amount,
+            net_deposit_paid = p_net_deposit_paid
+        WHERE id = p_waitlist_id;
+    END IF;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'redemption_id', v_redemption_id,
+        'commission_amount', v_comm_amt,
+        'net_deposit_paid', p_net_deposit_paid
+    );
+END;
+$$ LANGUAGE plpgsql;

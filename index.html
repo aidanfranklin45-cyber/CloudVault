@@ -1740,6 +1740,14 @@
                                 <span class="text-base font-black text-amber-700"
                                     id="waitlist-deposit-display">$20.00</span>
                             </div>
+                            <div id="waitlist-promo-discount-row" class="hidden-section flex items-center justify-between text-emerald-700 font-bold text-xs pt-1 border-t border-amber-200/60">
+                                <span>Creator Referral Discount (Deposit Benefit)</span>
+                                <span id="waitlist-promo-discount-amt">-$4.00</span>
+                            </div>
+                            <div id="waitlist-net-deposit-row" class="hidden-section flex items-center justify-between text-slate-900 font-black text-sm pt-1 border-t border-amber-200/80">
+                                <span>Total Priority Deposit Today</span>
+                                <span id="waitlist-net-deposit-display" class="text-emerald-800 font-mono text-base">$16.00</span>
+                            </div>
                             <p class="text-amber-800 leading-relaxed text-[11px]">
                                 Your deposit secures priority facility capacity and locks in current rates for 3 years
                                 against future regional price increases.
@@ -1759,24 +1767,44 @@
                             </div>
                         </div>
 
-                        <!-- Stripe Secure Payment Notice -->
-                        <div class="p-3 bg-blue-50/70 border border-blue-200 rounded-2xl space-y-1 text-center">
-                            <div class="flex items-center justify-center gap-1.5 text-blue-700 font-extrabold text-xs">
-                                <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z">
-                                    </path>
-                                </svg>
-                                <span>100% PCI-DSS Compliant Payment</span>
+                        <!-- Creator / Promo Code Section -->
+                        <div class="space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                            <label class="block text-xs font-bold text-slate-700" for="waitlist-promo-input">Creator or Referral Code (Optional)</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="waitlist-promo-input" placeholder="e.g. ALEX20"
+                                    class="flex-1 px-3.5 py-2.5 border border-slate-300 rounded-xl font-mono font-bold text-xs uppercase text-slate-900 focus:border-blue-500 focus:outline-none bg-white">
+                                <button type="button" onclick="applyWaitlistPromoCode()" id="btn-apply-waitlist-promo"
+                                    class="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl border border-slate-800 transition flex items-center justify-center cursor-pointer">
+                                    Apply
+                                </button>
                             </div>
-                            <p class="text-[11px] text-slate-600">Your deposit is securely tokenized and protected in
-                                Stripe's Level 1 encrypted vault.</p>
+                            <div id="waitlist-promo-feedback" class="hidden-section text-xs font-medium mt-1"></div>
+                        </div>
+
+                        <!-- Stripe Secure Payment & Elements Card Input -->
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <label class="block text-xs font-bold text-slate-700">Payment Information</label>
+                                <div class="flex items-center gap-1 text-[11px] font-bold text-blue-700">
+                                    <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                    </svg>
+                                    <span>100% PCI-DSS Secure</span>
+                                </div>
+                            </div>
+                            <div class="p-3.5 border border-slate-300 rounded-xl bg-white space-y-2.5 shadow-sm">
+                                <div id="waitlist-card-number-element" class="p-1"></div>
+                                <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                                    <div id="waitlist-card-expiry-element" class="p-1"></div>
+                                    <div id="waitlist-card-cvc-element" class="p-1"></div>
+                                </div>
+                            </div>
+                            <p class="text-[11px] text-slate-500 text-center">Your card is tokenized in Stripe's Level 1 encrypted vault.</p>
                         </div>
 
                         <p id="w-payment-error" class="text-red-500 text-xs hidden-section font-bold"></p>
                         <button id="btn-deposit-submit" onclick="submitWaitlistDeposit()"
-                            class="w-full bg-slate-900 text-white px-4 py-3.5 rounded-xl font-extrabold text-base hover:bg-black transition shadow-lg">
+                            class="w-full bg-slate-900 text-white px-4 py-3.5 rounded-xl font-extrabold text-base hover:bg-black transition shadow-lg cursor-pointer">
                             Secure Priority Price Lock
                         </button>
                     </div>
@@ -3488,6 +3516,176 @@
         let activeWaitlistId = null;
         let activeWaitlistEmail = null;
         let activeWaitlistDeposit = 25.00;
+        let activeWaitlistPromo = null;
+        let waitlistStripe = null;
+        let waitlistElements = null;
+        let waitlistCardNumber = null;
+        let waitlistCardExpiry = null;
+        let waitlistCardCvc = null;
+
+        function initWaitlistStripe() {
+            if (waitlistCardNumber) return; // already initialized
+            const pubKey = 'pk_test_51U5wFeAlEAaqjcFpgDerMMeeuUqacailYJDOBIfx0nq1B0YlCh5nqMIpkOkDmgIJO2q9XpdRTYUcr9JDMOR3ZSQm00ycqCdc2d';
+            if (typeof window.Stripe !== 'function') {
+                console.warn('[Stripe] Stripe.js not loaded yet.');
+                return;
+            }
+
+            try {
+                if (!waitlistStripe) waitlistStripe = window.Stripe(pubKey);
+                if (!waitlistElements) waitlistElements = waitlistStripe.elements();
+
+                const elementStyle = {
+                    base: {
+                        color: '#0f172a',
+                        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+                        fontSmoothing: 'antialiased',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        '::placeholder': {
+                            color: '#94a3b8',
+                            fontWeight: '500'
+                        }
+                    },
+                    invalid: {
+                        color: '#ef4444',
+                        iconColor: '#ef4444'
+                    }
+                };
+
+                const numEl = document.getElementById('waitlist-card-number-element');
+                const expEl = document.getElementById('waitlist-card-expiry-element');
+                const cvcEl = document.getElementById('waitlist-card-cvc-element');
+
+                if (numEl) numEl.innerHTML = '';
+                if (expEl) expEl.innerHTML = '';
+                if (cvcEl) cvcEl.innerHTML = '';
+
+                waitlistCardNumber = waitlistElements.create('cardNumber', { style: elementStyle, showIcon: true });
+                waitlistCardExpiry = waitlistElements.create('cardExpiry', { style: elementStyle });
+                waitlistCardCvc = waitlistElements.create('cardCvc', { style: elementStyle });
+
+                if (numEl) waitlistCardNumber.mount('#waitlist-card-number-element');
+                if (expEl) waitlistCardExpiry.mount('#waitlist-card-expiry-element');
+                if (cvcEl) waitlistCardCvc.mount('#waitlist-card-cvc-element');
+
+                const handleStripeChange = (event) => {
+                    const errEl = document.getElementById('w-payment-error');
+                    if (event.error) {
+                        if (errEl) {
+                            errEl.textContent = event.error.message;
+                            errEl.classList.remove('hidden-section');
+                        }
+                    } else {
+                        if (errEl) errEl.classList.add('hidden-section');
+                    }
+                };
+
+                waitlistCardNumber.on('change', handleStripeChange);
+                waitlistCardExpiry.on('change', handleStripeChange);
+                waitlistCardCvc.on('change', handleStripeChange);
+            } catch (e) {
+                console.warn('[Waitlist Stripe Elements Notice]', e);
+            }
+        }
+
+        async function applyWaitlistPromoCode(overrideCode) {
+            const input = document.getElementById('waitlist-promo-input');
+            const feedback = document.getElementById('waitlist-promo-feedback');
+            const btn = document.getElementById('btn-apply-waitlist-promo');
+            const code = (overrideCode || (input ? input.value : '')).trim().toUpperCase();
+
+            if (!code) {
+                if (feedback) {
+                    feedback.textContent = 'Please enter a promotional or creator code.';
+                    feedback.className = 'text-xs font-semibold text-rose-600 mt-1';
+                    feedback.classList.remove('hidden-section');
+                }
+                return;
+            }
+
+            if (input) input.value = code;
+            if (btn) {
+                btn.textContent = '...';
+                btn.disabled = true;
+            }
+
+            try {
+                const grossDeposit = Number(activeWaitlistDeposit) || 20.00;
+                const { data, error } = await supabase.rpc('validate_promo_code_for_waitlist', {
+                    p_code: code,
+                    p_deposit_amount: grossDeposit
+                });
+
+                if (error || !data || !data.valid) {
+                    activeWaitlistPromo = null;
+                    if (feedback) {
+                        feedback.textContent = data?.message || error?.message || 'Invalid or expired creator code.';
+                        feedback.className = 'text-xs font-semibold text-rose-600 mt-1';
+                        feedback.classList.remove('hidden-section');
+                    }
+                    updateWaitlistDepositDisplay();
+                } else {
+                    activeWaitlistPromo = data;
+                    sessionStorage.setItem('cv_promo_code', code);
+                    if (feedback) {
+                        feedback.textContent = data.message || `✓ Code ${code} applied!`;
+                        feedback.className = 'text-xs font-bold text-emerald-800 bg-emerald-100/70 p-2.5 rounded-xl border border-emerald-300 mt-1';
+                        feedback.classList.remove('hidden-section');
+                    }
+                    updateWaitlistDepositDisplay();
+                }
+            } catch (err) {
+                console.error('Waitlist promo validation error:', err);
+                if (feedback) {
+                    feedback.textContent = 'Unable to validate code at this time.';
+                    feedback.className = 'text-xs font-semibold text-rose-600 mt-1';
+                    feedback.classList.remove('hidden-section');
+                }
+            } finally {
+                if (btn) {
+                    btn.textContent = 'Apply';
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        function updateWaitlistDepositDisplay() {
+            const grossDeposit = Number(activeWaitlistDeposit) || 20.00;
+            const grossDisplay = document.getElementById('waitlist-deposit-display');
+            const discountRow = document.getElementById('waitlist-promo-discount-row');
+            const discountAmtEl = document.getElementById('waitlist-promo-discount-amt');
+            const netRow = document.getElementById('waitlist-net-deposit-row');
+            const netAmtEl = document.getElementById('waitlist-net-deposit-display');
+            const submitBtn = document.getElementById('btn-deposit-submit');
+
+            if (activeWaitlistPromo && activeWaitlistPromo.valid) {
+                const discAmt = Number(activeWaitlistPromo.discount_amount) || 0;
+                const netAmt = Number(activeWaitlistPromo.net_deposit_paid) || Math.max(0, grossDeposit - discAmt);
+                
+                if (discountRow) discountRow.classList.remove('hidden-section');
+                if (discountAmtEl) discountAmtEl.textContent = `-$${discAmt.toFixed(2)}`;
+                if (netRow) netRow.classList.remove('hidden-section');
+                if (netAmtEl) netAmtEl.textContent = `$${netAmt.toFixed(2)}`;
+                if (grossDisplay) {
+                    grossDisplay.classList.add('line-through', 'text-slate-400');
+                    grossDisplay.textContent = `$${grossDeposit.toFixed(2)}`;
+                }
+                if (submitBtn) {
+                    submitBtn.textContent = `Secure Priority Price Lock ($${netAmt.toFixed(2)})`;
+                }
+            } else {
+                if (discountRow) discountRow.classList.add('hidden-section');
+                if (netRow) netRow.classList.add('hidden-section');
+                if (grossDisplay) {
+                    grossDisplay.classList.remove('line-through', 'text-slate-400');
+                    grossDisplay.textContent = `$${grossDeposit.toFixed(2)}`;
+                }
+                if (submitBtn) {
+                    submitBtn.textContent = `Secure Priority Price Lock ($${grossDeposit.toFixed(2)})`;
+                }
+            }
+        }
 
         async function joinWaitlist() {
             const emailInput = document.getElementById('waitlist-email');
@@ -3564,6 +3762,18 @@
 
                 document.getElementById('waitlist-step-email').classList.add('hidden-section');
                 document.getElementById('waitlist-step-payment').classList.remove('hidden-section');
+                
+                // Initialize Stripe Elements & check for auto-applied promo codes
+                setTimeout(() => {
+                    initWaitlistStripe();
+                    const storedPromo = sessionStorage.getItem('cv_promo_code') || (new URLSearchParams(window.location.search)).get('ref') || (new URLSearchParams(window.location.search)).get('promo');
+                    if (storedPromo) {
+                        applyWaitlistPromoCode(storedPromo);
+                    } else {
+                        updateWaitlistDepositDisplay();
+                    }
+                }, 100);
+
                 logMilestone('waitlist_email_captured', { email: email, zip: zip, totes: flowData.totes });
             } catch (err) {
                 console.error("Waitlist error:", err);
@@ -3582,7 +3792,24 @@
             btn.textContent = 'Securing Deposit & Price Lock...';
 
             try {
-                const depositAmt = Number(activeWaitlistDeposit) || 20.00;
+                // Tokenize Card with Stripe Elements if initialized
+                let stripeTokenId = null;
+                if (waitlistStripe && waitlistCardNumber) {
+                    const { token, error: stripeErr } = await waitlistStripe.createToken(waitlistCardNumber);
+                    if (stripeErr) {
+                        errEl.textContent = stripeErr.message;
+                        errEl.classList.remove('hidden-section');
+                        btn.disabled = false;
+                        updateWaitlistDepositDisplay();
+                        return;
+                    }
+                    stripeTokenId = token.id;
+                }
+
+                const grossDeposit = Number(activeWaitlistDeposit) || 20.00;
+                const discountAmt = activeWaitlistPromo ? Number(activeWaitlistPromo.discount_amount) : 0;
+                const netDeposit = activeWaitlistPromo ? Number(activeWaitlistPromo.net_deposit_paid) : grossDeposit;
+
                 const priceLockRates = {
                     tier1_rate: regionalRates.tier1,
                     tier2_rate: regionalRates.tier2,
@@ -3623,7 +3850,9 @@
                             onboarding_status: 'waitlisted',
                             has_price_lock: true,
                             price_lock_rates: priceLockRates,
-                            deposit_paid_amount: depositAmt
+                            deposit_paid_amount: netDeposit,
+                            referred_by_code: activeWaitlistPromo?.code || null,
+                            referred_by_creator_id: activeWaitlistPromo?.creator_id || null
                         }, { onConflict: 'id' });
                     }
                 } catch (uErr) {
@@ -3632,11 +3861,18 @@
 
                 const updatePayload = {
                     user_id: createdUserId,
-                    deposit_amount: depositAmt,
+                    deposit_amount: grossDeposit,
                     deposit_status: 'paid',
                     payment_status: 'deposit_paid',
                     status: 'deposit_paid',
                     price_lock_rates: priceLockRates,
+                    promo_code: activeWaitlistPromo?.code || null,
+                    promo_code_id: activeWaitlistPromo?.promo_id || null,
+                    creator_id: activeWaitlistPromo?.creator_id || null,
+                    deposit_discount_pct: activeWaitlistPromo?.customer_discount_pct || 0,
+                    deposit_discount_amount: discountAmt,
+                    net_deposit_paid: netDeposit,
+                    stripe_payment_intent_id: stripeTokenId || 'tok_waitlist_sim',
                     terms_accepted_at: new Date().toISOString()
                 };
 
@@ -3644,6 +3880,22 @@
                     await supabase.from('waitlist').update(updatePayload).eq('id', activeWaitlistId);
                 } else if (activeWaitlistEmail) {
                     await supabase.from('waitlist').update(updatePayload).eq('email', activeWaitlistEmail);
+                }
+
+                // Record Creator Attribution in promo_redemptions
+                if (activeWaitlistPromo && activeWaitlistPromo.valid && activeWaitlistPromo.code) {
+                    try {
+                        await supabase.rpc('record_waitlist_promo_redemption', {
+                            p_code: activeWaitlistPromo.code,
+                            p_waitlist_id: activeWaitlistId || null,
+                            p_user_uid: createdUserId || null,
+                            p_deposit_amount: grossDeposit,
+                            p_discount_amount: discountAmt,
+                            p_net_deposit_paid: netDeposit
+                        });
+                    } catch (pErr) {
+                        console.warn('[Waitlist Promo Attribution Warning]', pErr);
+                    }
                 }
 
                 if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
@@ -3654,13 +3906,19 @@
                             customer_email: activeWaitlistEmail || null,
                             invoice_type: 'unlaunched_deposit',
                             payment_status: 'deposit_received',
-                            subtotal: depositAmt,
-                            total_amount: depositAmt,
+                            subtotal: grossDeposit,
+                            discount_amount: discountAmt,
+                            total_amount: netDeposit,
                             payment_method: 'card',
                             line_items: [
-                                { description: 'Unlaunched Market Priority Queue Reservation & 3-Year Rate Lock Deposit', qty: 1, unit_price: depositAmt, amount: depositAmt }
+                                { 
+                                    description: `Unlaunched Market Priority Queue Reservation & 3-Year Rate Lock Deposit${activeWaitlistPromo ? ` (Creator Code: ${activeWaitlistPromo.code})` : ''}`, 
+                                    qty: 1, 
+                                    unit_price: grossDeposit, 
+                                    amount: netDeposit 
+                                }
                             ],
-                            notes: `Unlaunched market priority deposit ($${depositAmt.toFixed(2)}) for email ${activeWaitlistEmail}.`
+                            notes: `Unlaunched market priority deposit ($${netDeposit.toFixed(2)} net / $${grossDeposit.toFixed(2)} gross) for email ${activeWaitlistEmail}. Stripe Token: ${stripeTokenId || 'sim'}.`
                         });
                     } catch (invErr) {
                         console.warn('[CloudVault Billing] Waitlist deposit notice:', invErr);
@@ -3669,13 +3927,13 @@
 
                 document.getElementById('waitlist-step-payment').classList.add('hidden-section');
                 document.getElementById('waitlist-success').classList.remove('hidden-section');
-                logMilestone('waitlist_deposit_paid', { email: activeWaitlistEmail, deposit: depositAmt });
+                logMilestone('waitlist_deposit_paid', { email: activeWaitlistEmail, deposit: netDeposit, promo: activeWaitlistPromo?.code || null });
             } catch (err) {
                 console.error('Deposit submission error:', err);
                 errEl.textContent = err.message || 'Payment processing failed. Please try again.';
                 errEl.classList.remove('hidden-section');
                 btn.disabled = false;
-                btn.textContent = 'Secure Priority Price Lock';
+                updateWaitlistDepositDisplay();
             }
         }
 

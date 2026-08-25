@@ -1641,7 +1641,7 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-3 w-full md:w-auto justify-end">
-                    <a href="admin-operations.html" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-emerald-600/30 whitespace-nowrap cursor-pointer">
+                    <a href="admin-operations.html" id="btn-open-ops-terminal" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-emerald-600/30 whitespace-nowrap cursor-pointer">
                         <i data-lucide="external-link" class="w-4 h-4"></i> Open Dedicated Operations Terminal &rarr;
                     </a>
                 </div>
@@ -2355,6 +2355,7 @@
             const navFacilityConfig = document.getElementById('nav-facility-config');
             const navBiAnalytics = document.getElementById('nav-bi-analytics');
             const navOpsTelemetry = document.getElementById('nav-logistics-ops');
+            const btnOpenOpsTerminal = document.getElementById('btn-open-ops-terminal');
             const seedBtn = document.getElementById('seed-btn');
             const billingAuditActions = document.getElementById('admin-billing-audit-actions');
 
@@ -2364,6 +2365,7 @@
                 if (navFacilityConfig) navFacilityConfig.classList.remove('hidden');
                 if (navBiAnalytics) navBiAnalytics.classList.remove('hidden');
                 if (navOpsTelemetry) navOpsTelemetry.classList.remove('hidden');
+                if (btnOpenOpsTerminal) btnOpenOpsTerminal.classList.remove('hidden');
                 if (seedBtn) seedBtn.classList.remove('hidden');
                 if (billingAuditActions) billingAuditActions.classList.remove('hidden');
             } else if (normRole === 'manager') {
@@ -2371,7 +2373,8 @@
                 if (activeIndicator) activeIndicator.classList.add('hidden');
                 if (navFacilityConfig) navFacilityConfig.classList.add('hidden');
                 if (navBiAnalytics) navBiAnalytics.classList.remove('hidden');
-                if (navOpsTelemetry) navOpsTelemetry.classList.remove('hidden');
+                if (navOpsTelemetry) navOpsTelemetry.classList.add('hidden');
+                if (btnOpenOpsTerminal) btnOpenOpsTerminal.classList.add('hidden');
                 if (seedBtn) seedBtn.classList.add('hidden');
                 if (billingAuditActions) billingAuditActions.classList.remove('hidden');
             } else {
@@ -2380,6 +2383,7 @@
                 if (navFacilityConfig) navFacilityConfig.classList.add('hidden');
                 if (navBiAnalytics) navBiAnalytics.classList.remove('hidden');
                 if (navOpsTelemetry) navOpsTelemetry.classList.add('hidden');
+                if (btnOpenOpsTerminal) btnOpenOpsTerminal.classList.add('hidden');
                 if (seedBtn) seedBtn.classList.add('hidden');
                 if (billingAuditActions) billingAuditActions.classList.add('hidden');
             }
@@ -8108,10 +8112,15 @@
                 const code = escapeHtml(r.promo_code || r.promo_codes?.code || 'N/A');
                 const creatorName = escapeHtml(r.creators?.name || r.promo_codes?.creators?.name || 'Creator Partner');
                 const creatorHandle = escapeHtml(r.creators?.handle || r.promo_codes?.creators?.handle || '');
-                const customerEmail = escapeHtml(r.customer_email || 'Customer');
-                const invoiceRef = escapeHtml(r.stripe_invoice_id || r.payout_reference || 'INV-DIRECT');
-                const gross = Number(r.gross_amount ?? r.invoice_gross_amount ?? 0);
-                const discount = Number(r.discount_amount || 0);
+                const customerEmail = escapeHtml(r.customer_email || (r.customer_uid ? r.customer_uid.substring(0, 8) : 'Customer'));
+                
+                const isWaitlist = (r.invoice_id && r.invoice_id.startsWith('WAITLIST-')) || (r.notes && r.notes.includes('Waitlist'));
+                const invoiceRef = isWaitlist 
+                    ? `<span class="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[9px] font-bold">WAITLIST DEPOSIT</span>`
+                    : escapeHtml(r.stripe_invoice_id || r.invoice_id || r.payout_reference || 'INV-DIRECT');
+
+                const gross = Number(r.gross_amount ?? r.invoice_gross_amount ?? r.gross_invoice_amount ?? 0);
+                const discount = Number(r.discount_amount ?? r.customer_discount_amount ?? 0);
                 const creatorCut = Number(r.creator_commission_amount ?? r.commission_amount ?? 0);
                 const status = (r.payout_status || (r.paid_at ? 'PAID' : 'PENDING')).toUpperCase();
 
