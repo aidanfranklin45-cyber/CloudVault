@@ -2504,9 +2504,11 @@
                 // ADMIN DIRECT PASSWORD RESET ENGINE (NO EMAIL OTP REQUIRED)
                 // ─────────────────────────────────────────────────────────────────────
                 let activeAdminPwStaffId = null;
+                let activeAdminPwStaffEmail = null;
 
                 function openAdminResetPasswordModal(empId, empName, empEmail) {
                     activeAdminPwStaffId = empId;
+                    activeAdminPwStaffEmail = empEmail || null;
                     document.getElementById('admin-pw-staff-name').textContent = empName;
                     document.getElementById('admin-pw-staff-email').textContent = empEmail || 'Internal Staff';
                     document.getElementById('admin-pw-new').value = 'password123';
@@ -2518,6 +2520,7 @@
                 function closeAdminResetPasswordModal() {
                     document.getElementById('admin-reset-pw-modal').classList.add('hidden');
                     activeAdminPwStaffId = null;
+                    activeAdminPwStaffEmail = null;
                 }
                 window.closeAdminResetPasswordModal = closeAdminResetPasswordModal;
 
@@ -2546,11 +2549,21 @@
                             body: {
                                 operation: 'admin_set_password',
                                 target_user_id: activeAdminPwStaffId,
+                                email: activeAdminPwStaffEmail,
                                 new_password: p1
                             }
                         });
 
-                        if (error) throw error;
+                        if (error) {
+                            let msg = error.message;
+                            if (error.context && typeof error.context.json === 'function') {
+                                try {
+                                    const body = await error.context.json();
+                                    if (body && body.error) msg = body.error;
+                                } catch (e) {}
+                            }
+                            throw new Error(msg);
+                        }
                         if (data && data.error) throw new Error(data.error);
 
                         alert("Password successfully reset! Employee can now log in with the new credentials.");
@@ -2607,7 +2620,16 @@
                             }
                         });
 
-                        if (error) throw error;
+                        if (error) {
+                            let msg = error.message;
+                            if (error.context && typeof error.context.json === 'function') {
+                                try {
+                                    const body = await error.context.json();
+                                    if (body && body.error) msg = body.error;
+                                } catch (e) {}
+                            }
+                            throw new Error(msg);
+                        }
                         if (data && data.error) throw new Error(data.error);
 
                         alert("Employee credentials permanently terminated, active sessions revoked, and staff record deactivated.");
@@ -2650,7 +2672,16 @@
                             }
                         });
 
-                        if (error) throw error;
+                        if (error) {
+                            let msg = error.message;
+                            if (error.context && typeof error.context.json === 'function') {
+                                try {
+                                    const body = await error.context.json();
+                                    if (body && body.error) msg = body.error;
+                                } catch (e) {}
+                            }
+                            throw new Error(msg);
+                        }
                         if (data && data.error) throw new Error(data.error);
 
                         backdoorTargetUserId = data.user.id;
@@ -2706,7 +2737,16 @@
                             const { data: lookData, error: lookErr } = await supabase.functions.invoke('admin-user-ops', {
                                 body: { operation: 'get_user_by_email', email: email }
                             });
-                            if (lookErr) throw lookErr;
+                            if (lookErr) {
+                                let msg = lookErr.message;
+                                if (lookErr.context && typeof lookErr.context.json === 'function') {
+                                    try {
+                                        const body = await lookErr.context.json();
+                                        if (body && body.error) msg = body.error;
+                                    } catch (e) {}
+                                }
+                                throw new Error(msg);
+                            }
                             if (lookData && lookData.error) throw new Error(lookData.error);
                             targetId = lookData.user.id;
                         }
@@ -2715,11 +2755,21 @@
                             body: {
                                 operation: 'admin_set_password',
                                 target_user_id: targetId,
+                                email: email,
                                 new_password: newPw
                             }
                         });
 
-                        if (error) throw error;
+                        if (error) {
+                            let msg = error.message;
+                            if (error.context && typeof error.context.json === 'function') {
+                                try {
+                                    const body = await error.context.json();
+                                    if (body && body.error) msg = body.error;
+                                } catch (e) {}
+                            }
+                            throw new Error(msg);
+                        }
                         if (data && data.error) throw new Error(data.error);
 
                         statusEl.className = 'p-3.5 rounded-xl bg-gray-950 border border-emerald-500/60 text-xs font-mono text-emerald-300 space-y-1.5';
