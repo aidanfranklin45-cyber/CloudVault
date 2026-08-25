@@ -489,7 +489,7 @@
                 <a href="login.html"
                     class="text-sm font-bold text-slate-700 hover:text-blue-600 transition hidden sm:inline">Customer
                     Portal</a>
-                <button onclick="startFlow('default')"
+                <button onclick="startCheckoutFlow({ source: 'nav_header' })"
                     class="hidden sm:inline-flex text-sm font-bold bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-md shadow-blue-500/20 active:scale-95">Get
                     Started</button>
 
@@ -533,7 +533,7 @@
                     <span>→</span>
                 </a>
             </div>
-            <button onclick="closeMobileMenu(); startFlow('default');"
+            <button onclick="closeMobileMenu(); startCheckoutFlow({ source: 'mobile_drawer' });"
                 class="w-full bg-blue-600 text-white font-extrabold py-3.5 rounded-xl shadow-md text-center hover:bg-blue-700 transition">
                 Get Started
             </button>
@@ -602,7 +602,7 @@
 
                     <!-- Hero CTAs -->
                     <div class="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-                        <button onclick="startFlow('default')"
+                        <button onclick="startCheckoutFlow({ source: 'hero_primary' })"
                             class="bg-blue-600 text-white px-7 py-3.5 rounded-xl font-extrabold text-base shadow-lg shadow-blue-500/25 hover:bg-blue-700 transition transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2">
                             <span>I'm in, let's get started!</span>
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1415,7 +1415,7 @@
 
                                 <div class="text-[11px] text-center text-slate-500 font-medium">Billed monthly. Cancel
                                     or adjust anytime.</div>
-                                <button onclick="startFlow('calculator')"
+                                <button onclick="startCheckoutFlow({ source: 'pricing_calculator' })"
                                     class="w-full bg-blue-600 text-white px-5 py-3.5 rounded-xl font-extrabold text-base hover:bg-blue-700 transition shadow-md shadow-blue-500/20 active:scale-[0.99]">
                                     Reserve My Space
                                 </button>
@@ -1550,11 +1550,11 @@
                         Ready to Reclaim Your Living Space?
                     </h2>
                     <div class="flex flex-col sm:flex-row gap-3.5 justify-center items-center pt-2">
-                        <button onclick="startFlow('default')"
+                        <button onclick="startCheckoutFlow({ source: 'closing_banner_totes' })"
                             class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-8 py-4 rounded-xl text-base shadow-xl shadow-blue-500/25 transition transform hover:-translate-y-0.5 active:translate-y-0">
                             Configure Your Totes
                         </button>
-                        <button onclick="startFlow('calculator')"
+                        <button onclick="startCheckoutFlow({ source: 'closing_banner_zip', step: 2 })"
                             class="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold px-7 py-4 rounded-xl text-base transition">
                             Check ZIP Availability
                         </button>
@@ -1708,6 +1708,9 @@
                         class="w-full bg-blue-600 text-white px-4 py-3.5 rounded-xl font-extrabold text-base hover:bg-blue-700 transition shadow-md shadow-blue-500/20 active:scale-[0.99] mt-4">
                         Check Availability in My ZIP
                     </button>
+                    <div class="text-center pt-2 text-xs text-slate-500 font-medium">
+                        Already have an account? <a href="login.html?redirect=checkout" class="font-extrabold text-blue-600 hover:underline">Sign In</a>
+                    </div>
                 </div>
 
                 <!-- Step 2: ZIP Code Check -->
@@ -1830,6 +1833,9 @@
 
                 <!-- Step 3: Contact Info -->
                 <div id="step-3" class="hidden-section space-y-3.5">
+                    <div id="checkout-auth-badge-step3"
+                        class="hidden bg-blue-50 border border-blue-200 text-blue-900 px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-between font-medium mb-1">
+                    </div>
                     <div id="zip-success-banner"
                         class="hidden-section bg-emerald-50 text-emerald-800 px-3.5 py-2.5 rounded-xl text-xs font-bold border border-emerald-200 mb-1">
                     </div>
@@ -1849,7 +1855,7 @@
                         <input type="tel" id="phone-input" placeholder="(800) 256-8382"
                             class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium text-xs sm:text-sm">
                     </div>
-                    <div>
+                    <div id="password-field-container">
                         <label for="password-input" class="block text-xs font-extrabold text-slate-700 mb-1">Create
                             Password</label>
                         <input type="password" id="password-input" placeholder="••••••••"
@@ -1861,10 +1867,16 @@
                         class="w-full bg-blue-600 text-white px-4 py-3.5 rounded-xl font-extrabold text-base hover:bg-blue-700 transition shadow-md shadow-blue-500/20 active:scale-[0.99] mt-4">
                         Continue to Payment
                     </button>
+                    <div class="text-center pt-1 text-xs text-slate-500 font-medium">
+                        Already have an account? <a href="login.html?redirect=checkout" class="font-extrabold text-blue-600 hover:underline">Sign In</a>
+                    </div>
                 </div>
 
                 <!-- Step 4: Payment -->
                 <div id="step-4" class="hidden-section space-y-4">
+                    <div id="checkout-auth-badge-step4"
+                        class="hidden bg-blue-50 border border-blue-200 text-blue-900 px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-between font-medium mb-1">
+                    </div>
                     <!-- Order Summary -->
                     <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-xs sm:text-sm space-y-2 mb-3">
                         <p class="font-extrabold text-slate-900 border-b pb-1.5 mb-1.5">Order Summary</p>
@@ -2075,7 +2087,7 @@
             <span class="text-xs sm:text-sm font-extrabold text-slate-900" id="mobile-rate-display">From <span
                     class="text-blue-600">$1.00/tote/mo</span></span>
         </div>
-        <button onclick="startFlow('default')"
+        <button onclick="startCheckoutFlow({ source: 'mobile_sticky_bar' })"
             class="bg-blue-600 text-white px-4 py-2 rounded-xl font-extrabold text-xs sm:text-sm hover:bg-blue-700 transition shadow-md">
             Get Started
         </button>
@@ -2522,26 +2534,171 @@
             if (target) target.classList.add('active');
         }
 
-        // Flow Routing
-        function startFlow(source) {
+        // =========================================================================
+        // Unified Authoritative Checkout Orchestrator
+        // =========================================================================
+        async function startCheckoutFlow(options = {}) {
+            const config = (typeof options === 'string') ? { source: options } : (options || {});
+            const source = config.source || 'default';
             flowData.source = source;
-            document.getElementById('view-landing').classList.add('hidden-section');
-            document.getElementById('view-form').classList.remove('hidden-section');
 
-            const calcTotes = parseInt(document.getElementById('calc-totes').value) || 5;
-            if (source === 'calculator') {
-                flowData.totes = Math.max(1, calcTotes);
-            } else if (!flowData.totes || flowData.totes < 1) {
-                flowData.totes = Math.max(1, calcTotes);
+            // Resolve target tote count
+            let targetTotes = config.totes != null ? Number(config.totes) : null;
+            if (targetTotes === null) {
+                const calcInput = document.getElementById('calc-totes');
+                const calcTotes = calcInput ? parseInt(calcInput.value) : 5;
+                if (source === 'pricing_calculator' || source === 'calculator') {
+                    targetTotes = Math.max(1, calcTotes || 5);
+                } else if (!flowData.totes || flowData.totes < 1) {
+                    targetTotes = Math.max(1, calcTotes || 5);
+                } else {
+                    targetTotes = flowData.totes;
+                }
+            }
+            flowData.totes = Math.max(1, targetTotes);
+
+            // Resolve logistics type
+            if (config.logisticsType) {
+                flowData.logisticsType = config.logisticsType;
+            } else if (!flowData.logisticsType) {
                 flowData.logisticsType = 'self_service';
             }
 
-            document.getElementById('flow-totes').value = flowData.totes;
-            selectFlowLogistics(flowData.logisticsType || 'self_service');
+            // Resolve ZIP if provided
+            if (config.zip) {
+                flowData.zip = config.zip;
+                const zipInput = document.getElementById('zip-input');
+                if (zipInput) zipInput.value = config.zip;
+            }
 
+            // Sync input UI
+            const flowTotesInput = document.getElementById('flow-totes');
+            if (flowTotesInput) flowTotesInput.value = flowData.totes;
+
+            // Select logistics & calculate flow pricing
+            selectFlowLogistics(flowData.logisticsType);
+
+            // Show form view & summary ribbon
+            document.getElementById('view-landing').classList.add('hidden-section');
+            document.getElementById('view-form').classList.remove('hidden-section');
             document.getElementById('flow-summary').classList.remove('hidden-section');
-            showStep(1);
+
+            // Route to specified initial step or default to Step 1
+            const initialStep = config.step || 1;
+            showStep(initialStep);
             window.scrollTo(0, 0);
+
+            // Check if returning user session is active to prefill details
+            await checkActiveSessionForCheckout();
+        }
+
+        // Backward compatibility alias
+        function startFlow(source) {
+            startCheckoutFlow({ source: source || 'default' });
+        }
+
+        async function checkActiveSessionForCheckout() {
+            if (typeof supabase === 'undefined' || !supabase) return;
+            try {
+                const { data: sessionData } = await supabase.auth.getSession();
+                const sessionUser = sessionData?.session?.user;
+                if (!sessionUser) return;
+
+                flowData.userId = sessionUser.id;
+                flowData.email = sessionUser.email || '';
+
+                // Fetch public profile if available
+                let userName = sessionUser.user_metadata?.name || '';
+                let userPhone = sessionUser.user_metadata?.phone || '';
+                let userZip = '';
+
+                try {
+                    const { data: profile } = await supabase.from('users').select('name, phone, zip_code').eq('id', sessionUser.id).maybeSingle();
+                    if (profile) {
+                        if (profile.name) userName = profile.name;
+                        if (profile.phone) userPhone = profile.phone;
+                        if (profile.zip_code) userZip = profile.zip_code;
+                    }
+                } catch (pErr) {
+                    console.warn('[Profile Lookup Notice]', pErr);
+                }
+
+                // Populate Step 3 inputs
+                const nameInput = document.getElementById('name-input');
+                if (nameInput && userName) nameInput.value = userName;
+                flowData.name = userName;
+
+                const emailInput = document.getElementById('email-input');
+                if (emailInput) {
+                    emailInput.value = sessionUser.email || '';
+                    emailInput.disabled = true;
+                    emailInput.classList.add('bg-slate-100', 'text-slate-600');
+                }
+
+                const phoneInput = document.getElementById('phone-input');
+                if (phoneInput && userPhone) phoneInput.value = userPhone;
+                flowData.phone = userPhone;
+
+                const passContainer = document.getElementById('password-field-container');
+                if (passContainer) {
+                    passContainer.classList.add('hidden');
+                }
+
+                if (userZip && !flowData.zip) {
+                    flowData.zip = userZip;
+                    const zipInput = document.getElementById('zip-input');
+                    if (zipInput) zipInput.value = userZip;
+                }
+
+                // Show authenticated badges
+                const badgeHtml = `
+                    <span>Signed in as <strong class="text-blue-950">${sessionUser.email}</strong></span>
+                    <button type="button" onclick="logoutFromCheckout(event)" class="text-blue-700 hover:text-blue-900 underline font-bold text-xs cursor-pointer ml-2">Switch Account</button>
+                `;
+
+                const badge3 = document.getElementById('checkout-auth-badge-step3');
+                if (badge3) {
+                    badge3.innerHTML = badgeHtml;
+                    badge3.classList.remove('hidden');
+                }
+
+                const badge4 = document.getElementById('checkout-auth-badge-step4');
+                if (badge4) {
+                    badge4.innerHTML = badgeHtml;
+                    badge4.classList.remove('hidden');
+                }
+
+            } catch (err) {
+                console.warn('[Checkout Auth Session Check]', err);
+            }
+        }
+
+        async function logoutFromCheckout(e) {
+            if (e) e.preventDefault();
+            try {
+                if (typeof supabase !== 'undefined' && supabase) {
+                    await supabase.auth.signOut();
+                }
+                flowData.userId = null;
+
+                const emailInput = document.getElementById('email-input');
+                if (emailInput) {
+                    emailInput.value = '';
+                    emailInput.disabled = false;
+                    emailInput.classList.remove('bg-slate-100', 'text-slate-600');
+                }
+                const passContainer = document.getElementById('password-field-container');
+                if (passContainer) passContainer.classList.remove('hidden');
+
+                const badge3 = document.getElementById('checkout-auth-badge-step3');
+                if (badge3) badge3.classList.add('hidden');
+                const badge4 = document.getElementById('checkout-auth-badge-step4');
+                if (badge4) badge4.classList.add('hidden');
+
+                showStep(3);
+            } catch (err) {
+                console.error("Logout from checkout failed:", err);
+            }
         }
 
         function goBack() {
@@ -2726,8 +2883,10 @@
                 const email = document.getElementById('email-input').value.trim();
                 const phone = document.getElementById('phone-input').value.trim();
                 const password = document.getElementById('password-input').value.trim();
-                if (!name || !email || !phone || !password) {
-                    document.getElementById('contact-error').textContent = 'Please fill in all fields.';
+
+                const isAlreadyAuth = !!flowData.userId;
+                if (!name || !email || !phone || (!isAlreadyAuth && !password)) {
+                    document.getElementById('contact-error').textContent = 'Please fill in all required fields.';
                     document.getElementById('contact-error').classList.remove('hidden-section');
                     return;
                 }
@@ -2736,7 +2895,9 @@
                 flowData.name = name;
                 flowData.email = email;
                 flowData.phone = phone;
-                flowData.password = password;
+                if (!isAlreadyAuth) {
+                    flowData.password = password;
+                }
                 logMilestone('billing_entered', { email: email });
 
                 showStep(4);
@@ -3010,9 +3171,11 @@
 
             const btnText = document.getElementById('btn-text');
             const btnLoader = document.getElementById('btn-loader');
+            const confirmBtn = document.getElementById('btn-confirm');
 
-            btnText.textContent = 'Processing...';
+            btnText.textContent = 'Preparing Secure Stripe Checkout...';
             btnLoader.classList.remove('hidden-section');
+            if (confirmBtn) confirmBtn.disabled = true;
 
             const name = document.getElementById('name-input').value.trim();
             const email = document.getElementById('email-input').value.trim();
@@ -3021,105 +3184,84 @@
             const zip = document.getElementById('zip-input').value.trim();
 
             try {
-                // 1. Create Supabase Auth user
-                const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-                    email: email,
-                    password: password,
-                    options: {
-                        data: {
-                            name: name,
-                            phone: phone
+                let activeUserId = flowData.userId || null;
+
+                // 1. If not already authenticated, create Supabase Auth user
+                if (!activeUserId) {
+                    const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+                        email: email,
+                        password: password,
+                        options: {
+                            data: {
+                                name: name,
+                                phone: phone
+                            }
                         }
+                    });
+                    if (signUpErr && !signUpErr.message?.toLowerCase().includes('already registered')) {
+                        throw signUpErr;
                     }
-                });
-                if (signUpErr) throw signUpErr;
+                    activeUserId = signUpData?.user?.id || null;
+                }
 
                 // 2. Call RPC to securely write profile & subscription docs
-                const { data, error: rpcErr } = await supabase.rpc('create_customer_profile', {
-                    p_name: name,
-                    p_phone: phone,
-                    p_zip: zip,
-                    p_tote_count: flowData.totes || 5,
-                    p_logistics_type: flowData.logisticsType || 'self_service'
-                });
-                if (rpcErr) throw rpcErr;
+                try {
+                    await supabase.rpc('create_customer_profile', {
+                        p_name: name,
+                        p_phone: phone,
+                        p_zip: zip,
+                        p_tote_count: flowData.totes || 5,
+                        p_logistics_type: flowData.logisticsType || 'self_service'
+                    });
+                } catch (rpcErr) {
+                    console.warn('[Profile Provisioning Notice]', rpcErr);
+                }
 
-                // Automatic Invoice Record Creation
-                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
-                    try {
-                        const subtotal = Number(flowData.price || 0);
-                        const valetFee = Number(flowData.upfront || 0);
-                        const grossSubtotal = subtotal + valetFee;
-                        const discountAmt = Number(flowData.discount || (flowData.appliedPromo ? flowData.appliedPromo.discount_amount : 0) || 0);
-                        const taxAmt = Number(flowData.tax || 0);
-                        const totalCharged = Math.max(0, Math.round((grossSubtotal - discountAmt + taxAmt) * 100) / 100);
-                        const promoCode = flowData.appliedPromo?.code || null;
-                        const promoPct = flowData.appliedPromo?.customer_discount_pct || 20;
+                // 3. Dispatch to Stripe Checkout Edge Function
+                const facilityId = flowData.facilityId || regionalRates.facility_id || 'facility_seattle_north';
+                const promoCode = flowData.appliedPromo?.code || null;
 
-                        const lineItems = [
-                            {
-                                description: `CloudVault Storage Subscription (${flowData.totes} totes @ $${Number(flowData.toteRate || regionalRates.tier1).toFixed(2)}/mo)`,
-                                qty: flowData.totes,
-                                unit_price: Number(flowData.toteRate || regionalRates.tier1),
-                                amount: subtotal
-                            }
-                        ];
-                        if (valetFee > 0) {
-                            lineItems.push({
-                                description: 'Doorstep Valet Pickup Logistics Fee',
-                                qty: 1,
-                                unit_price: valetFee,
-                                amount: valetFee
-                            });
-                        }
-                        if (discountAmt > 0) {
-                            lineItems.push({
-                                description: `Creator Promo Discount (${promoCode || 'PROMO'} — ${promoPct}% off 2 mo)`,
-                                qty: 1,
-                                unit_price: -discountAmt,
-                                amount: -discountAmt,
-                                is_discount: true,
-                                promo_code: promoCode
-                            });
-                        }
-                        if (taxAmt > 0) {
-                            lineItems.push({
-                                description: `Estimated Sales Tax (${((flowData.taxRate || 0.085) * 100).toFixed(2)}%)`,
-                                qty: 1,
-                                unit_price: taxAmt,
-                                amount: taxAmt,
-                                is_tax: true
-                            });
-                        }
+                const checkoutPayload = {
+                    facilityId: facilityId,
+                    toteCount: flowData.totes || 5,
+                    logisticsType: flowData.logisticsType || 'self_service',
+                    userId: activeUserId,
+                    promoCode: promoCode,
+                    successUrl: window.location.origin + '/dashboard.html?session_id={CHECKOUT_SESSION_ID}&checkout_success=true',
+                    cancelUrl: window.location.origin + '/index.html?flow=checkout&canceled=true'
+                };
 
-                        await window.CloudVaultBilling.createInvoiceRecord({
-                            uid: signUpData.user.id,
-                            customer_name: name,
-                            customer_email: email,
-                            facility_id: flowData.facilityId || regionalRates.facility_id || 'facility_seattle_north',
-                            invoice_type: 'subscription',
-                            payment_status: 'paid',
-                            subtotal: grossSubtotal,
-                            delivery_fee: valetFee,
-                            tax: taxAmt,
-                            discount: discountAmt,
-                            promo_code: promoCode,
-                            total_amount: totalCharged,
-                            payment_method: 'card',
-                            notes: promoCode ? `Initial subscription order with applied promo coupon ${promoCode} (${promoPct}% off)` : 'Initial subscription order',
-                            line_items: lineItems,
-                            created_at: new Date().toISOString(),
-                            paid_at: new Date().toISOString()
-                        });
-                    } catch (invErr) {
-                        console.warn('[CloudVault Billing] Initial invoice notice:', invErr);
+                let checkoutUrl = null;
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.initiateStripeCheckout === 'function') {
+                    const { data: resData, error: fnErr } = await window.CloudVaultBilling.initiateStripeCheckout(checkoutPayload);
+                    if (!fnErr && resData && resData.url) {
+                        checkoutUrl = resData.url;
                     }
                 }
 
-                const successTextEl = document.getElementById('success-dynamic-text');
-                successTextEl.innerHTML = "Our onboarding team will text you within 24 hours with your staging room PIN code and welcome instructions.";
+                if (!checkoutUrl) {
+                    const { data: resData, error: fnErr } = await supabase.functions.invoke('stripe-checkout', {
+                        body: checkoutPayload
+                    });
+                    if (fnErr) throw fnErr;
+                    if (resData && resData.url) {
+                        checkoutUrl = resData.url;
+                    }
+                }
 
-                await logMilestone('completed', { uid: signUpData.user.id });
+                await logMilestone('completed', { uid: activeUserId, totes: flowData.totes });
+
+                if (checkoutUrl) {
+                    btnText.textContent = 'Redirecting to Stripe...';
+                    window.location.href = checkoutUrl;
+                    return;
+                }
+
+                // Fallback to success view if direct checkout URL not returned
+                const successTextEl = document.getElementById('success-dynamic-text');
+                if (successTextEl) {
+                    successTextEl.innerHTML = "Our onboarding team will text you within 24 hours with your staging room PIN code and welcome instructions.";
+                }
 
                 document.getElementById('view-form').classList.add('hidden-section');
                 document.getElementById('view-success').classList.remove('hidden-section');
@@ -3132,8 +3274,9 @@
                 document.getElementById('payment-error').textContent = msg;
                 document.getElementById('payment-error').classList.remove('hidden-section');
 
-                btnText.textContent = 'Confirm Booking';
+                btnText.textContent = 'Confirm Booking & Pay with Stripe';
                 btnLoader.classList.add('hidden-section');
+                if (confirmBtn) confirmBtn.disabled = false;
             }
         }
 
@@ -3287,6 +3430,19 @@
                     setTimeout(() => {
                         applyCustomerPromoCode(queryPromo);
                     }, 600);
+                }
+
+                // Auto-open unified checkout flow if returning from login or direct link
+                if (urlParams.get('flow') === 'checkout') {
+                    const totesParam = urlParams.get('totes');
+                    const zipParam = urlParams.get('zip');
+                    setTimeout(() => {
+                        startCheckoutFlow({
+                            source: 'url_redirect',
+                            totes: totesParam ? parseInt(totesParam) : undefined,
+                            zip: zipParam || undefined
+                        });
+                    }, 300);
                 }
             } catch (e) { }
         });

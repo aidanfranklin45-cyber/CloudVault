@@ -192,6 +192,9 @@
             if (!session) return;
             try {
                 const profile = await getCachedUserProfile(session.user.id);
+                const urlParams = new URLSearchParams(window.location.search);
+                const redirectParam = urlParams.get('redirect');
+
                 if (profile && profile.assigned_facility_id) {
                     localStorage.setItem('cloudvault_selected_facility', profile.assigned_facility_id);
                 }
@@ -199,14 +202,21 @@
                     localStorage.setItem('cloudvault_employee_role', profile.role);
                     localStorage.setItem('cloudvault_is_staff', 'true');
                     window.location.href = 'admin.html';
+                } else if (redirectParam === 'checkout') {
+                    window.location.href = 'index.html?flow=checkout';
                 } else {
                     localStorage.removeItem('cloudvault_employee_role');
                     localStorage.removeItem('cloudvault_is_staff');
                     window.location.href = 'dashboard.html';
                 }
             } catch (e) {
-                // If profile fetch fails, default to customer dashboard
-                window.location.href = 'dashboard.html';
+                // If profile fetch fails, check for redirect parameter
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('redirect') === 'checkout') {
+                    window.location.href = 'index.html?flow=checkout';
+                } else {
+                    window.location.href = 'dashboard.html';
+                }
             }
         });
 
