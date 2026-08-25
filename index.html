@@ -3561,6 +3561,30 @@
                     console.warn('[Provisioning Warning]', provErr);
                 }
 
+                // 3b. Record Creator Promo Attribution Ledger
+                if (flowData.appliedPromo && (flowData.appliedPromo.code || flowData.appliedPromo.promo_id)) {
+                    try {
+                        const promoCode = flowData.appliedPromo.code || 'ROSS20%';
+                        const { rate } = getTierRate(flowData.totes || 5);
+                        const monthly = Math.round((flowData.totes || 5) * rate * 100) / 100;
+                        const isValet = flowData.logisticsType === 'valet_pickup';
+                        const upfront = isValet ? (regionalRates.valet_base + ((flowData.totes || 5) * regionalRates.valet_tote_adder)) : 0;
+                        const surgeFee = Number(flowData.surgeFee || 0);
+                        const grossAmt = monthly + upfront + surgeFee;
+                        const netAmt = Number(flowData.firstMonth || 0);
+
+                        await supabase.rpc('record_invoice_promo_attribution', {
+                            p_code: promoCode,
+                            p_customer_uid: activeUserId,
+                            p_invoice_id: paymentMethod.id,
+                            p_gross_amount: grossAmt,
+                            p_net_amount: netAmt
+                        });
+                    } catch (promoAttrErr) {
+                        console.warn('[Promo Attribution Warning]', promoAttrErr);
+                    }
+                }
+
                 await logMilestone('completed', { uid: activeUserId, totes: flowData.totes, stripe_pm: paymentMethod.id });
 
                 // 4. Render Verified Success Screen
