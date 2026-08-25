@@ -2216,7 +2216,10 @@
             logisticsType: 'self_service',
             toteRate: 5.00,
             upfront: 0,
+            surgeFee: 0,
             firstMonth: 0,
+            scheduledDate: '',
+            timeSlot: '09:00 AM - 12:00 PM',
             zip: '',
             facilityId: null,
             taxRate: 0.085
@@ -2931,6 +2934,12 @@
             if (!flowData.scheduledDate) {
                 flowData.scheduledDate = tomorrowStr;
             }
+            const s4Slot = document.getElementById('step4-time-slot');
+            if (s4Slot && s4Slot.value) {
+                flowData.timeSlot = s4Slot.value;
+            } else if (!flowData.timeSlot) {
+                flowData.timeSlot = 'Morning (9 AM - 12 PM)';
+            }
         }
 
         function handleFlowScheduleChange() {
@@ -3528,6 +3537,13 @@
                 }
 
                 // 3. Post-Payment Provisioning: Record verified Stripe payment method and activate inventory
+                const s4Date = document.getElementById('step4-schedule-date');
+                const s4Slot = document.getElementById('step4-time-slot');
+                const resolvedDate = (s4Date && s4Date.value) || flowData.scheduledDate || 'scheduled date';
+                const resolvedSlot = (s4Slot && s4Slot.value) || flowData.timeSlot || 'Morning (9 AM - 12 PM)';
+                flowData.scheduledDate = resolvedDate;
+                flowData.timeSlot = resolvedSlot;
+
                 const { data: provData, error: provErr } = await supabase.rpc('provision_paid_customer', {
                     p_uid: activeUserId,
                     p_name: name,
@@ -3535,8 +3551,8 @@
                     p_zip: zip,
                     p_tote_count: flowData.totes || 5,
                     p_logistics_type: flowData.logisticsType || 'self_service',
-                    p_scheduled_date: flowData.scheduledDate || null,
-                    p_time_slot: flowData.timeSlot || '09:00 AM - 12:00 PM',
+                    p_scheduled_date: (resolvedDate && resolvedDate !== 'scheduled date') ? resolvedDate : null,
+                    p_time_slot: resolvedSlot,
                     p_stripe_session_id: paymentMethod.id,
                     p_amount_paid: flowData.firstMonth || 0.00
                 });
@@ -3551,10 +3567,12 @@
                 const successTextEl = document.getElementById('success-dynamic-text');
                 if (successTextEl) {
                     const isValet = flowData.logisticsType === 'valet_pickup';
+                    const cardBrand = paymentMethod.card?.brand ? paymentMethod.card.brand.toUpperCase() : 'CARD';
+                    const last4 = paymentMethod.card?.last4 ? `•••• ${paymentMethod.card.last4}` : '';
                     if (isValet) {
-                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> with <strong>Doorstep Valet Pickup</strong> on <strong>${flowData.scheduledDate || 'scheduled date'}</strong> (${flowData.timeSlot}) is confirmed.<br><span class="text-xs text-slate-500 font-mono mt-1 block">Stripe Card Token: ${paymentMethod.id} (${paymentMethod.card?.brand?.toUpperCase()} •••• ${paymentMethod.card?.last4})</span>`;
+                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> with <strong>Doorstep Valet Pickup</strong> on <strong>${resolvedDate}</strong> (${resolvedSlot}) is confirmed.<br><span class="text-xs text-slate-500 font-mono mt-1 block">Stripe Card Token: ${paymentMethod.id} (${cardBrand} ${last4})</span>`;
                     } else {
-                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> with <strong>Staging Room Access</strong> on <strong>${flowData.scheduledDate || 'scheduled date'}</strong> (${flowData.timeSlot}) is confirmed.<br><span class="text-xs text-slate-500 font-mono mt-1 block">Stripe Card Token: ${paymentMethod.id} (${paymentMethod.card?.brand?.toUpperCase()} •••• ${paymentMethod.card?.last4})</span>`;
+                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> with <strong>Staging Room Access</strong> on <strong>${resolvedDate}</strong> (${resolvedSlot}) is confirmed.<br><span class="text-xs text-slate-500 font-mono mt-1 block">Stripe Card Token: ${paymentMethod.id} (${cardBrand} ${last4})</span>`;
                     }
                 }
 
