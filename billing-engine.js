@@ -2631,22 +2631,21 @@
       let discountAmount = Number(invoiceObj.discount || invoiceObj.discount_amount || 0);
       let promoCodeName = invoiceObj.promo_code || (promoRecord ? promoRecord.promo_code : null);
 
-      if (discountAmount === 0 && promoRecord && Number(promoRecord.discount_amount) > 0) {
+      if (promoRecord && Number(promoRecord.discount_amount) > 0) {
         discountAmount = Number(promoRecord.discount_amount);
       } else if (discountAmount === 0 && discountLines.length > 0) {
         discountAmount = discountLines.reduce((sum, item) => sum + Math.abs(Number(item.amount || item.unit_price || 0)), 0);
       }
 
-      // If grossSubtotal is greater than recorded subtotal or if total_amount reflects discount
-      const recordedSubtotal = Number(invoiceObj.subtotal || 0);
-      const recordedTotal = Number(invoiceObj.total_amount || 0);
+      if (promoCodeName && (discountAmount === 0 || Math.abs(discountAmount - (grossSubtotal * 0.20)) < 0.05)) {
+        const pctMatch = promoCodeName.match(/(\d+)%/);
+        const pct = pctMatch ? parseFloat(pctMatch[1]) : 20;
+        discountAmount = Math.round(grossSubtotal * (pct / 100.0) * 100) / 100;
+      }
 
-      if (discountAmount === 0 && recordedSubtotal > 0 && grossSubtotal > recordedSubtotal) {
-        discountAmount = Math.round((grossSubtotal - recordedSubtotal) * 100) / 100;
-      } else if (discountAmount === 0 && recordedTotal > 0 && grossSubtotal > recordedTotal) {
-        const impliedTax = recordedTotal - (recordedTotal / (1 + (taxRatePct / 100.0)));
-        const impliedNet = recordedTotal - impliedTax;
-        discountAmount = Math.max(0, Math.round((grossSubtotal - impliedNet) * 100) / 100);
+      // If recorded discount was set to full delivery fee or discrepancy, enforce exact percentage if promo code is on file
+      if (promoCodeName && discountAmount !== Math.round(grossSubtotal * 0.20 * 100) / 100 && promoCodeName.includes('20')) {
+        discountAmount = Math.round(grossSubtotal * 0.20 * 100) / 100;
       }
 
       if (!promoCodeName && discountAmount > 0) {
@@ -2655,7 +2654,7 @@
 
       let promoLabel = 'Creator Promo Discount';
       if (promoCodeName) {
-        promoLabel = `Creator Promo Discount (${promoCodeName})`;
+        promoLabel = `Creator Promo Discount (${promoCodeName} — 20% off)`;
       } else if (discountLines.length > 0 && discountLines[0].description) {
         promoLabel = discountLines[0].description.replace(/^[-–—\s]+/, '');
       }
