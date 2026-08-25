@@ -1,10 +1,21 @@
 name: Deno CI & Edge Function Tests
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main, master ]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase-config.js'
+      - 'deno.json'
+      - '.github/workflows/deno.yml'
   pull_request:
     branches: [ main, master ]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase-config.js'
+      - 'deno.json'
+      - '.github/workflows/deno.yml'
 
 jobs:
   lint-and-test:
