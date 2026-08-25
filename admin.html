@@ -10219,7 +10219,7 @@
         });
 
         // ── Feature 2: Valet Delivery Dispatch & Route Manifest ──
-        async function loadValetManifestData(facilityId) {
+        async function loadValetManifestData(facilityId, preloadedRequests = null) {
             const tbody = document.getElementById('valet-manifest-table-body');
             const badge = document.getElementById('valet-dispatch-count');
             if (!tbody) return;
@@ -10227,11 +10227,17 @@
             try {
                 const facId = facilityId || window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
                 if (!facId) return;
-                const { data: valetReqs } = await supabase.from('access_requests')
-                    .select('*, users!uid(name, active_zone)')
-                    .eq('facility_id', facId)
-                    .eq('fulfillment_type', 'valet_delivery')
-                    .eq('status', 'pending');
+                let valetReqs = null;
+                if (preloadedRequests) {
+                    valetReqs = preloadedRequests.filter(r => r.fulfillment_type === 'valet_delivery' && r.status === 'pending');
+                } else {
+                    const { data } = await supabase.from('access_requests')
+                        .select('*, users!uid(name, active_zone, phone)')
+                        .eq('facility_id', facId)
+                        .eq('fulfillment_type', 'valet_delivery')
+                        .eq('status', 'pending');
+                    valetReqs = data;
+                }
 
                 if (!valetReqs || valetReqs.length === 0) {
                     tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-xs text-gray-500 font-mono">No valet door delivery routes pending dispatch for this market.</td></tr>`;
@@ -10242,20 +10248,26 @@
                 if (badge) badge.textContent = `${valetReqs.length} Pending Valet Route${valetReqs.length !== 1 ? 's' : ''}`;
 
                 tbody.innerHTML = valetReqs.map((req, idx) => {
-                    const zip = req.users?.active_zone || 'Local Area';
-                    const toteCount = (req.requested_items || []).length;
+                    const zip = req.delivery_zip || req.users?.active_zone || 'Local Area';
+                    const addrLine1 = req.delivery_address_line1 || '';
+                    const addrLine2 = req.delivery_address_line2 ? ` ${req.delivery_address_line2}` : '';
+                    const city = req.delivery_city || '';
+                    const state = req.delivery_state || '';
+                    const formattedAddr = addrLine1 ? `${addrLine1}${addrLine2}, ${city}, ${state} ${zip}` : `ZIP ${zip}`;
+                    const toteCount = (req.requested_tote_codes || req.requested_items || []).length || req.additional_totes || 1;
                     const feeStr = req.valet_fee ? `$${Number(req.valet_fee).toFixed(2)}` : '$16.00';
-                    const itemIdsJson = JSON.stringify(req.requested_items || []).replace(/"/g, '&quot;');
+                    const itemIdsJson = JSON.stringify(req.requested_tote_codes || req.requested_items || []).replace(/"/g, '&quot;');
 
                     return `
                         <tr class="border-b border-gray-850 hover:bg-gray-900/40 transition">
                             <td class="py-3.5 font-bold font-mono text-cyan-400">#STOP-0${idx + 1}</td>
                             <td class="py-3.5 font-semibold text-white">
-                                ${req.users?.name || req.uid.substring(0, 8)}
-                                <span class="block text-[9px] text-gray-500 font-mono font-normal">UID: ${req.uid.substring(0, 8)}</span>
+                                ${escapeHtml(req.users?.name || req.uid?.substring(0, 8) || 'Valet Customer')}
+                                <span class="block text-[9px] text-gray-500 font-mono font-normal">UID: ${req.uid?.substring(0, 8) || 'N/A'}${req.users?.phone ? ` • Tel: ${escapeHtml(req.users.phone)}` : ''}</span>
                             </td>
-                            <td class="py-3.5 font-mono text-gray-300">
-                                <span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-2 py-0.5 rounded font-bold text-[10px]">ZIP ${zip}</span>
+                            <td class="py-3.5 text-gray-300">
+                                <div class="font-bold text-xs text-white">${escapeHtml(formattedAddr)}</div>
+                                ${req.delivery_notes ? `<div class="text-[10px] text-amber-300 font-mono mt-0.5">📝 ${escapeHtml(req.delivery_notes)}</div>` : ''}
                             </td>
                             <td class="py-3.5 text-gray-300 font-mono font-bold">${toteCount} Tote${toteCount !== 1 ? 's' : ''}</td>
                             <td class="py-3.5 text-emerald-400 font-mono font-bold">${feeStr}</td>
@@ -10267,7 +10279,7 @@
                         </tr>
                     `;
                 }).join('');
-                lucide.createIcons();
+                if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
             } catch (err) {
                 console.error("Failed to load valet manifest:", err);
             }

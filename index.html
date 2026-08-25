@@ -1797,7 +1797,7 @@
                     </div>
                 </div>
 
-                <!-- Step 3: Contact Info -->
+                <!-- Step 3: Contact & Address Info -->
                 <div id="step-3" class="hidden-section space-y-3.5">
                     <div id="checkout-auth-badge-step3"
                         class="hidden bg-blue-50 border border-blue-200 text-blue-900 px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-between font-medium mb-1">
@@ -1811,16 +1811,52 @@
                         <input type="text" id="name-input" placeholder="Jane Doe"
                             class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium text-xs sm:text-sm">
                     </div>
-                    <div>
-                        <label for="email-input" class="block text-xs font-extrabold text-slate-700 mb-1">Email</label>
-                        <input type="email" id="email-input" placeholder="jane@example.com"
-                            class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium text-xs sm:text-sm">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                            <label for="email-input" class="block text-xs font-extrabold text-slate-700 mb-1">Email</label>
+                            <input type="email" id="email-input" placeholder="jane@example.com"
+                                class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium text-xs sm:text-sm">
+                        </div>
+                        <div>
+                            <label for="phone-input" class="block text-xs font-extrabold text-slate-700 mb-1">Phone</label>
+                            <input type="tel" id="phone-input" placeholder="(800) 256-8382"
+                                class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium text-xs sm:text-sm">
+                        </div>
                     </div>
-                    <div>
-                        <label for="phone-input" class="block text-xs font-extrabold text-slate-700 mb-1">Phone</label>
-                        <input type="tel" id="phone-input" placeholder="(800) 256-8382"
-                            class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium text-xs sm:text-sm">
+
+                    <!-- Service / Delivery Physical Address -->
+                    <div class="pt-2 border-t border-slate-200 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-xs font-extrabold text-slate-800">Physical Service / Delivery Address</label>
+                            <span class="text-[10px] font-bold text-slate-500">For valet delivery &amp; account</span>
+                        </div>
+                        <div>
+                            <input type="text" id="address-line1-input" placeholder="Street Address (e.g. 1200 4th Ave)"
+                                class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium text-xs sm:text-sm">
+                        </div>
+                        <div>
+                            <input type="text" id="address-line2-input" placeholder="Apt, Suite, Unit, Floor (optional)"
+                                class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-medium text-xs sm:text-sm">
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label for="address-city-input" class="block text-[10px] font-bold text-slate-600 mb-1">City</label>
+                                <input type="text" id="address-city-input" placeholder="City"
+                                    class="w-full px-2.5 py-2 border border-slate-300 rounded-xl font-medium text-xs">
+                            </div>
+                            <div>
+                                <label for="address-state-input" class="block text-[10px] font-bold text-slate-600 mb-1">State</label>
+                                <input type="text" id="address-state-input" placeholder="WA" maxlength="2"
+                                    class="w-full px-2.5 py-2 border border-slate-300 rounded-xl font-medium text-xs uppercase">
+                            </div>
+                            <div>
+                                <label for="address-zip-input" class="block text-[10px] font-bold text-slate-600 mb-1">ZIP Code</label>
+                                <input type="text" id="address-zip-input" placeholder="98101" maxlength="5"
+                                    class="w-full px-2.5 py-2 border border-slate-300 rounded-xl font-medium text-xs">
+                            </div>
+                        </div>
                     </div>
+
                     <div id="password-field-container">
                         <label for="password-input" class="block text-xs font-extrabold text-slate-700 mb-1">Create
                             Password</label>
@@ -1883,6 +1919,26 @@
                                 </select>
                             </div>
                         </div>
+
+                        <!-- Valet Pickup Address & Driver Notes (Displayed when Valet is selected) -->
+                        <div id="step4-valet-address-container" class="hidden p-3.5 bg-blue-50/70 border border-blue-200 rounded-2xl space-y-2 mt-2">
+                            <div class="flex items-center justify-between text-xs font-extrabold text-blue-900">
+                                <span class="flex items-center gap-1.5">
+                                    <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    </svg>
+                                    Doorstep Valet Pickup Location
+                                </span>
+                                <button type="button" onclick="showStep(3)" class="text-blue-600 hover:underline text-[11px] font-extrabold cursor-pointer">Edit Address</button>
+                            </div>
+                            <div id="step4-display-address" class="text-xs font-bold text-slate-800 bg-white px-3 py-2 rounded-xl border border-blue-100"></div>
+                            <div>
+                                <label for="valet-instructions-input" class="block text-[11px] font-bold text-slate-700 mb-1">Delivery &amp; Driver Notes (Optional)</label>
+                                <input type="text" id="valet-instructions-input" placeholder="e.g. Gate code #402, buzz apt 5B, call on arrival"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white">
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Order Summary -->
@@ -1930,10 +1986,10 @@
                         </div>
                     </div>
 
-                    <!-- Stripe Secure Card Entry Elements -->
+                    <!-- Stripe Secure Card Entry & Billing Section -->
                     <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5 my-2 text-left">
                         <div class="flex items-center justify-between">
-                            <label class="font-extrabold text-slate-900 text-xs sm:text-sm">Payment Card Information</label>
+                            <label class="font-extrabold text-slate-900 text-xs sm:text-sm">Payment Card &amp; Billing</label>
                             <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                                 256-Bit SSL Encrypted
@@ -1958,6 +2014,32 @@
                                 <label class="block text-[11px] font-bold text-slate-600 mb-1">CVC / Security Code</label>
                                 <div id="checkout-card-cvc-element"
                                     class="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl transition focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 min-h-[42px]">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Single-Box Checkbox: Billing Address Same As Delivery/Service Address -->
+                        <div class="pt-2 border-t border-slate-200">
+                            <label class="flex items-center space-x-2 cursor-pointer select-none">
+                                <input type="checkbox" id="billing-same-checkbox" checked onchange="toggleBillingAddressFields()"
+                                    class="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer">
+                                <span class="text-xs font-bold text-slate-800">Billing address is the same as delivery / service address</span>
+                            </label>
+
+                            <!-- Separate Billing Address Container (Revealed if unchecked) -->
+                            <div id="separate-billing-container" class="hidden space-y-2 mt-2.5 pt-2 border-t border-slate-200/80">
+                                <div class="text-[11px] font-extrabold text-slate-700">Separate Billing Address</div>
+                                <input type="text" id="billing-line1-input" placeholder="Billing Street Address"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white">
+                                <input type="text" id="billing-line2-input" placeholder="Apt, Suite, Unit (optional)"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white">
+                                <div class="grid grid-cols-3 gap-2">
+                                    <input type="text" id="billing-city-input" placeholder="City"
+                                        class="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white">
+                                    <input type="text" id="billing-state-input" placeholder="State (e.g. WA)" maxlength="2"
+                                        class="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white uppercase">
+                                    <input type="text" id="billing-zip-input" placeholder="ZIP" maxlength="5"
+                                        class="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white">
                                 </div>
                             </div>
                         </div>
@@ -2712,11 +2794,23 @@
                 let userZip = '';
 
                 try {
-                    const { data: profile } = await supabase.from('users').select('name, phone, zip_code').eq('id', sessionUser.id).maybeSingle();
+                    const { data: profile } = await supabase.from('users').select('name, phone, zip_code, address_line1, city, state').eq('id', sessionUser.id).maybeSingle();
                     if (profile) {
                         if (profile.name) userName = profile.name;
                         if (profile.phone) userPhone = profile.phone;
                         if (profile.zip_code) userZip = profile.zip_code;
+                        if (profile.address_line1 && document.getElementById('address-line1-input')) document.getElementById('address-line1-input').value = profile.address_line1;
+                        if (profile.city && document.getElementById('address-city-input')) document.getElementById('address-city-input').value = profile.city;
+                        if (profile.state && document.getElementById('address-state-input')) document.getElementById('address-state-input').value = profile.state;
+                    }
+                    const { data: savedAddr } = await supabase.from('customer_addresses').select('*').eq('uid', sessionUser.id).maybeSingle();
+                    if (savedAddr) {
+                        if (savedAddr.address_line1 && document.getElementById('address-line1-input')) document.getElementById('address-line1-input').value = savedAddr.address_line1;
+                        if (savedAddr.address_line2 && document.getElementById('address-line2-input')) document.getElementById('address-line2-input').value = savedAddr.address_line2;
+                        if (savedAddr.city && document.getElementById('address-city-input')) document.getElementById('address-city-input').value = savedAddr.city;
+                        if (savedAddr.state && document.getElementById('address-state-input')) document.getElementById('address-state-input').value = savedAddr.state;
+                        if (savedAddr.zip && document.getElementById('address-zip-input')) document.getElementById('address-zip-input').value = savedAddr.zip;
+                        if (savedAddr.delivery_instructions && document.getElementById('valet-instructions-input')) document.getElementById('valet-instructions-input').value = savedAddr.delivery_instructions;
                     }
                 } catch (pErr) {
                     console.warn('[Profile Lookup Notice]', pErr);
@@ -2747,6 +2841,8 @@
                     flowData.zip = userZip;
                     const zipInput = document.getElementById('zip-input');
                     if (zipInput) zipInput.value = userZip;
+                    const zipAddr = document.getElementById('address-zip-input');
+                    if (zipAddr) zipAddr.value = userZip;
                 }
 
                 // Show authenticated badges
@@ -2880,6 +2976,35 @@
             calculateFlowTotal();
         }
 
+        function toggleBillingAddressFields() {
+            const checkbox = document.getElementById('billing-same-checkbox');
+            const container = document.getElementById('separate-billing-container');
+            if (!checkbox || !container) return;
+            if (checkbox.checked) {
+                container.classList.add('hidden');
+            } else {
+                container.classList.remove('hidden');
+                // Pre-fill with Step 3 address if empty as a convenient starting point
+                const bLine1 = document.getElementById('billing-line1-input');
+                const bLine2 = document.getElementById('billing-line2-input');
+                const bCity = document.getElementById('billing-city-input');
+                const bState = document.getElementById('billing-state-input');
+                const bZip = document.getElementById('billing-zip-input');
+
+                const sLine1 = document.getElementById('address-line1-input')?.value || flowData.address_line1 || '';
+                const sLine2 = document.getElementById('address-line2-input')?.value || flowData.address_line2 || '';
+                const sCity = document.getElementById('address-city-input')?.value || flowData.city || '';
+                const sState = document.getElementById('address-state-input')?.value || flowData.state || '';
+                const sZip = document.getElementById('address-zip-input')?.value || flowData.zip || '';
+
+                if (bLine1 && !bLine1.value) bLine1.value = sLine1;
+                if (bLine2 && !bLine2.value) bLine2.value = sLine2;
+                if (bCity && !bCity.value) bCity.value = sCity;
+                if (bState && !bState.value) bState.value = sState;
+                if (bZip && !bZip.value) bZip.value = sZip;
+            }
+        }
+
         function selectFlowLogistics(type) {
             flowData.logisticsType = type;
             const selfEl = document.getElementById('flow-opt-self');
@@ -2889,6 +3014,7 @@
 
             const step4Self = document.getElementById('step4-opt-self');
             const step4Valet = document.getElementById('step4-opt-valet');
+            const valetAddrContainer = document.getElementById('step4-valet-address-container');
 
             if (type === 'self_service') {
                 if (selfEl) selfEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
@@ -2898,6 +3024,7 @@
 
                 if (step4Self) step4Self.className = 'p-3 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer text-left transition';
                 if (step4Valet) step4Valet.className = 'p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-400';
+                if (valetAddrContainer) valetAddrContainer.classList.add('hidden');
             } else {
                 if (valetEl) valetEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
                 if (selfEl) selfEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-slate-200 bg-white cursor-pointer';
@@ -2906,6 +3033,7 @@
 
                 if (step4Valet) step4Valet.className = 'p-3 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer text-left transition';
                 if (step4Self) step4Self.className = 'p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-400';
+                if (valetAddrContainer) valetAddrContainer.classList.remove('hidden');
             }
             calculateFlowTotal();
         }
@@ -3105,9 +3233,15 @@
                 const phone = document.getElementById('phone-input').value.trim();
                 const password = document.getElementById('password-input').value.trim();
 
+                const line1 = document.getElementById('address-line1-input')?.value.trim() || '';
+                const line2 = document.getElementById('address-line2-input')?.value.trim() || '';
+                const city = document.getElementById('address-city-input')?.value.trim() || '';
+                const state = document.getElementById('address-state-input')?.value.trim() || '';
+                const zip = document.getElementById('address-zip-input')?.value.trim() || flowData.zip || '';
+
                 const isAlreadyAuth = !!flowData.userId;
-                if (!name || !email || !phone || (!isAlreadyAuth && !password)) {
-                    document.getElementById('contact-error').textContent = 'Please fill in all required fields.';
+                if (!name || !email || !phone || !line1 || !city || !state || !zip || (!isAlreadyAuth && !password)) {
+                    document.getElementById('contact-error').textContent = 'Please fill in all required contact and address fields.';
                     document.getElementById('contact-error').classList.remove('hidden-section');
                     return;
                 }
@@ -3116,11 +3250,32 @@
                 flowData.name = name;
                 flowData.email = email;
                 flowData.phone = phone;
+                flowData.address_line1 = line1;
+                flowData.address_line2 = line2;
+                flowData.city = city;
+                flowData.state = state.toUpperCase();
+                flowData.zip = zip;
                 if (!isAlreadyAuth) {
                     flowData.password = password;
                 }
-                logMilestone('billing_entered', { email: email });
 
+                // Update Step 4 display address
+                const dispAddr = document.getElementById('step4-display-address');
+                if (dispAddr) {
+                    dispAddr.textContent = `${line1}${line2 ? ', ' + line2 : ''}, ${city}, ${state.toUpperCase()} ${zip}`;
+                }
+
+                // Sync valet container visibility
+                const valetContainer = document.getElementById('step4-valet-address-container');
+                if (valetContainer) {
+                    if (flowData.logisticsType === 'valet_pickup') {
+                        valetContainer.classList.remove('hidden');
+                    } else {
+                        valetContainer.classList.add('hidden');
+                    }
+                }
+
+                logMilestone('billing_entered', { email: email, zip: zip, city: city });
                 showStep(4);
                 return;
             }
@@ -3171,8 +3326,19 @@
                 banner.classList.remove('hidden-section');
 
                 flowData.zip = zip;
+                flowData.city = area.city || '';
+                flowData.state = area.state || '';
                 flowData.facilityId = area.facility_id;
                 flowData.taxRate = (area.tax_rate != null) ? Number(area.tax_rate) : 0.085;
+
+                // Auto-fill Step 3 address inputs
+                const cityInput = document.getElementById('address-city-input');
+                const stateInput = document.getElementById('address-state-input');
+                const zipAddrInput = document.getElementById('address-zip-input');
+                if (cityInput && !cityInput.value && area.city) cityInput.value = area.city;
+                if (stateInput && !stateInput.value && area.state) stateInput.value = area.state;
+                if (zipAddrInput) zipAddrInput.value = zip;
+
                 calculateFlowTotal();
                 logMilestone('zip_code_check', { zip: zip, city: area.city, facility_id: area.facility_id, tax_rate: flowData.taxRate });
 
@@ -3475,10 +3641,40 @@
             const password = document.getElementById('password-input').value.trim();
             const zip = document.getElementById('zip-input').value.trim();
 
-            if (!name || !email || !phone || (!flowData.userId && !password)) {
-                document.getElementById('payment-error').textContent = 'Please fill in all required fields.';
+            const line1 = document.getElementById('address-line1-input')?.value.trim() || flowData.address_line1 || '';
+            const line2 = document.getElementById('address-line2-input')?.value.trim() || flowData.address_line2 || '';
+            const city = document.getElementById('address-city-input')?.value.trim() || flowData.city || '';
+            const state = (document.getElementById('address-state-input')?.value.trim() || flowData.state || '').toUpperCase();
+            const serviceZip = document.getElementById('address-zip-input')?.value.trim() || flowData.zip || zip;
+
+            const valetNotes = document.getElementById('valet-instructions-input')?.value.trim() || '';
+
+            if (!name || !email || !phone || !line1 || !city || !state || !serviceZip || (!flowData.userId && !password)) {
+                document.getElementById('payment-error').textContent = 'Please fill in all required contact and service address fields.';
                 document.getElementById('payment-error').classList.remove('hidden-section');
                 return;
+            }
+
+            // Resolve Billing Address
+            const sameAsShipping = document.getElementById('billing-same-checkbox')?.checked ?? true;
+            let billingLine1 = line1;
+            let billingLine2 = line2;
+            let billingCity = city;
+            let billingState = state;
+            let billingZip = serviceZip;
+
+            if (!sameAsShipping) {
+                billingLine1 = document.getElementById('billing-line1-input')?.value.trim() || line1;
+                billingLine2 = document.getElementById('billing-line2-input')?.value.trim() || line2;
+                billingCity = document.getElementById('billing-city-input')?.value.trim() || city;
+                billingState = (document.getElementById('billing-state-input')?.value.trim() || state).toUpperCase();
+                billingZip = document.getElementById('billing-zip-input')?.value.trim() || serviceZip;
+
+                if (!billingLine1 || !billingCity || !billingState || !billingZip) {
+                    document.getElementById('payment-error').textContent = 'Please complete all separate billing address fields.';
+                    document.getElementById('payment-error').classList.remove('hidden-section');
+                    return;
+                }
             }
 
             btnText.textContent = 'Verifying Card with Stripe...';
@@ -3502,7 +3698,14 @@
                         name: name,
                         email: email,
                         phone: phone,
-                        address: { postal_code: zip }
+                        address: {
+                            line1: billingLine1,
+                            line2: billingLine2 || undefined,
+                            city: billingCity,
+                            state: billingState,
+                            postal_code: billingZip,
+                            country: 'US'
+                        }
                     }
                 });
 
@@ -3536,6 +3739,27 @@
                     activeUserId = signUpData?.user?.id || null;
                 }
 
+                // 2b. Save Address into customer_addresses & user profile
+                try {
+                    await supabase.rpc('save_customer_addresses', {
+                        p_billing_line1: billingLine1,
+                        p_billing_line2: billingLine2 || null,
+                        p_billing_city: billingCity,
+                        p_billing_state: billingState,
+                        p_billing_zip: billingZip,
+                        p_shipping_same_as_billing: sameAsShipping,
+                        p_shipping_line1: line1,
+                        p_shipping_line2: line2 || null,
+                        p_shipping_city: city,
+                        p_shipping_state: state,
+                        p_shipping_zip: serviceZip,
+                        p_instructions: valetNotes || null,
+                        p_uid: activeUserId
+                    });
+                } catch (addrErr) {
+                    console.warn('[Address Save Notice]', addrErr);
+                }
+
                 // 3. Post-Payment Provisioning: Record verified Stripe payment method and activate inventory
                 const s4Date = document.getElementById('step4-schedule-date');
                 const s4Slot = document.getElementById('step4-time-slot');
@@ -3548,13 +3772,19 @@
                     p_uid: activeUserId,
                     p_name: name,
                     p_phone: phone,
-                    p_zip: zip,
+                    p_zip: serviceZip,
                     p_tote_count: flowData.totes || 5,
                     p_logistics_type: flowData.logisticsType || 'self_service',
                     p_scheduled_date: (resolvedDate && resolvedDate !== 'scheduled date') ? resolvedDate : null,
                     p_time_slot: resolvedSlot,
                     p_stripe_session_id: paymentMethod.id,
-                    p_amount_paid: flowData.firstMonth || 0.00
+                    p_amount_paid: flowData.firstMonth || 0.00,
+                    p_delivery_address_line1: line1,
+                    p_delivery_address_line2: line2 || null,
+                    p_delivery_city: city,
+                    p_delivery_state: state,
+                    p_delivery_zip: serviceZip,
+                    p_delivery_notes: valetNotes || null
                 });
 
                 if (provErr) {
