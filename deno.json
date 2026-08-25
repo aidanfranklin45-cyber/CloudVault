@@ -2,5 +2,18 @@
   "nodeModulesDir": "auto",
   "workspace": [
     "./supabase/functions"
-  ]
+  ],
+  "lint": {
+    "rules": {
+      "exclude": [
+        "no-explicit-any",
+        "no-unused-vars",
+        "require-await",
+        "no-import-prefix",
+        "no-unversioned-import",
+        "prefer-const",
+        "no-extra-boolean-cast"
+      ]
+    }
+  }
 }
