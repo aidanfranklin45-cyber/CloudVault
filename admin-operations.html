@@ -172,18 +172,15 @@
                     </select>
                 </div>
 
-                <!-- Role Impersonation Switcher -->
-                <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2"
+                <!-- Admin Clearance Badge -->
+                <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-1.5 flex items-center space-x-2 shadow-sm"
                     id="role-select-container">
-                    <label class="text-xs text-gray-400 font-medium hidden sm:inline">Role:</label>
-                    <select id="role-select" onchange="switchRole()"
-                        class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
-                        <option value="executive" class="bg-gray-950 text-white">Executive (Super Admin)</option>
-                        <option value="manager" class="bg-gray-950 text-white">Warehouse Manager</option>
-                        <option value="worker" class="bg-gray-950 text-white">Warehouse Worker</option>
+                    <span class="text-[11px] text-amber-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                        <i data-lucide="shield-check" class="w-3.5 h-3.5 text-amber-400"></i> Super Admin Clearance
+                    </span>
+                    <select id="role-select" class="hidden">
+                        <option value="executive" selected>Executive (Super Admin)</option>
                     </select>
-                    <span id="role-lock-badge" class="hidden text-[10px] text-amber-400 font-bold tracking-wide"
-                        title="Role is locked to your live session credentials">🔒 LIVE</span>
                 </div>
 
                 <!-- Profile Summary & Logout -->
@@ -347,75 +344,7 @@
         </section>
 
         <!-- ========================================================================= -->
-        <!-- 2. TOTE MASTER CONTROL & PHYSICAL SHELF RADAR (TMM CONSOLE) -->
-        <!-- ========================================================================= -->
-        <section id="module-tote-master" class="glass-panel p-6 sm:p-8 rounded-3xl border border-indigo-500/30 space-y-6 shadow-2xl">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-4 gap-4">
-                <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-lg font-bold border border-indigo-500/30 font-mono">
-                        📦
-                    </div>
-                    <div>
-                        <h3 class="text-lg font-extrabold text-white flex items-center gap-2">
-                            Tote Master Control &amp; Physical Shelf Radar (TMM)
-                            <span class="text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2.5 py-0.5 rounded-full uppercase">Operations Hub</span>
-                        </h3>
-                        <p class="text-xs text-gray-400 font-mono">Global barcode radar, physical shelf slotting engine, lifecycle status overrides, and exception management.</p>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span id="tmm-inventory-count-badge" class="text-xs font-mono font-bold text-indigo-300 bg-indigo-500/10 px-3 py-1.5 rounded-xl border border-indigo-500/30">
-                        0 Totes Indexed
-                    </span>
-                </div>
-            </div>
-
-            <!-- Fast Search & Filter Bar -->
-            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-                <div class="sm:col-span-8 relative">
-                    <input type="text" id="tmm-search-input" oninput="filterMasterInventoryTable(this.value)" placeholder="Search any Tote Code (e.g. CV-SEA-001), Customer Name, Shelf Location, or Status..."
-                        class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:border-indigo-500 outline-none font-mono">
-                    <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute right-3 top-3 pointer-events-none"></i>
-                </div>
-                <div class="sm:col-span-4 flex gap-2">
-                    <select id="tmm-status-filter" onchange="filterMasterInventoryTable(document.getElementById('tmm-search-input').value)"
-                        class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold outline-none focus:border-indigo-500 cursor-pointer">
-                        <option value="all">All Lifecycle Statuses</option>
-                        <option value="stored">Stored (In Vault)</option>
-                        <option value="pending-stage">Pending Stage</option>
-                        <option value="staged">Staged (In Room)</option>
-                        <option value="pending-dispatch">Pending Dispatch</option>
-                        <option value="out-for-delivery">Out for Delivery</option>
-                        <option value="with-customer">With Customer</option>
-                        <option value="missing-tote">⚠️ Missing Exceptions</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Master Tote Table -->
-            <div class="overflow-x-auto rounded-2xl border border-gray-800">
-                <table class="w-full text-left border-collapse text-xs">
-                    <thead>
-                        <tr class="bg-gray-950/80 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-800">
-                            <th class="py-3 px-4">Tote Barcode / Code</th>
-                            <th class="py-3 px-4">Customer Owner</th>
-                            <th class="py-3 px-4">Category &amp; Label</th>
-                            <th class="py-3 px-4">Shelf Coordinate</th>
-                            <th class="py-3 px-4">Lifecycle Status</th>
-                            <th class="py-3 px-4 text-right">Master Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tmm-inventory-table-body" class="divide-y divide-gray-850 font-mono">
-                        <tr>
-                            <td colspan="6" class="py-8 text-center text-xs text-gray-500">Loading facility inventory radar...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- ========================================================================= -->
-        <!-- 3. CUSTOMER DATA PRIVACY & STATUTORY ERASURE HUB (GDPR / CCPA) -->
+        <!-- 2. CUSTOMER DATA PRIVACY & STATUTORY ERASURE HUB (GDPR / CCPA) -->
         <!-- ========================================================================= -->
         <section id="module-customer-privacy" class="glass-panel p-6 sm:p-8 rounded-3xl border border-red-500/20 space-y-6 shadow-2xl">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-4 gap-4">
@@ -586,168 +515,6 @@
     <!-- ========================================================================= -->
     <!-- MODALS & POPUPS -->
     <!-- ========================================================================= -->
-
-    <!-- Tote Master Control Modal (TMM) -->
-    <div id="tote-master-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-        <div class="glass-panel max-w-3xl w-full p-6 sm:p-8 rounded-3xl border border-indigo-500/40 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto relative">
-            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
-                <div class="flex items-center space-x-3">
-                    <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 font-black flex items-center justify-center text-lg border border-indigo-500/30 font-mono">
-                        <i data-lucide="package" class="w-6 h-6"></i>
-                    </div>
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h3 id="tmm-tote-code" class="font-black text-white text-xl font-mono">CV-SEA-001</h3>
-                            <span id="tmm-status-badge" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase">Stored</span>
-                        </div>
-                        <p id="tmm-subtitle" class="text-xs text-gray-400 mt-0.5 font-mono">ID: —</p>
-                    </div>
-                </div>
-                <button onclick="closeToteMasterModal()" class="text-gray-400 hover:text-white p-2 rounded-xl bg-gray-900 border border-gray-800 transition">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-
-            <!-- Grid Layout: Telemetry Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Customer Owner Telemetry Card -->
-                <div class="bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-3 shadow-inner">
-                    <div class="flex items-center justify-between border-b border-gray-850 pb-2.5">
-                        <h4 class="text-xs font-extrabold uppercase text-blue-400 tracking-wider flex items-center gap-1.5 font-mono">
-                            <i data-lucide="user" class="w-4 h-4"></i> Customer Owner
-                        </h4>
-                        <span id="tmm-customer-tenure" class="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">Member</span>
-                    </div>
-                    <div class="space-y-2 text-xs">
-                        <div class="flex justify-between"><span class="text-gray-400">Owner Name:</span><span id="tmm-customer-name" class="font-bold text-white">—</span></div>
-                        <div class="flex justify-between"><span class="text-gray-400">Email:</span><span id="tmm-customer-email" class="font-mono text-gray-300">—</span></div>
-                        <div class="flex justify-between"><span class="text-gray-400">Active Plan:</span><span id="tmm-customer-plan" class="font-bold text-indigo-300">—</span></div>
-                        <div class="flex justify-between"><span class="text-gray-400">Total Totes Held:</span><span id="tmm-customer-totes-held" class="font-mono font-bold text-emerald-400">—</span></div>
-                    </div>
-                </div>
-
-                <!-- Tote Storage Telemetry Card -->
-                <div class="bg-gray-950/80 border border-gray-850 rounded-2xl p-5 space-y-3 shadow-inner">
-                    <div class="flex items-center justify-between border-b border-gray-850 pb-2.5">
-                        <h4 class="text-xs font-extrabold uppercase text-indigo-400 tracking-wider flex items-center gap-1.5 font-mono">
-                            <i data-lucide="archive" class="w-4 h-4"></i> Vault Storage
-                        </h4>
-                        <span id="tmm-tote-tenure" class="text-[10px] font-bold text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">Active</span>
-                    </div>
-                    <div class="space-y-2 text-xs">
-                        <div class="flex justify-between"><span class="text-gray-400">Custom Label:</span><span id="tmm-tote-label" class="font-bold text-white">—</span></div>
-                        <div class="flex justify-between"><span class="text-gray-400">Category:</span><span id="tmm-tote-category" class="font-semibold text-gray-300">—</span></div>
-                        <div class="flex justify-between"><span class="text-gray-400">Assigned Facility:</span><span id="tmm-tote-facility" class="font-bold text-indigo-300">—</span></div>
-                        <div class="flex justify-between"><span class="text-gray-400">Current Shelf Location:</span><span id="tmm-tote-room" class="font-mono font-bold text-amber-400">—</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Granular Management Actions Panel -->
-            <div class="bg-gray-950 border border-indigo-500/30 rounded-2xl p-5 space-y-5 shadow-xl">
-                <div class="flex items-center justify-between border-b border-gray-800 pb-3">
-                    <h4 class="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5 font-mono">
-                        <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i> Master Operations Actions
-                    </h4>
-                    <span class="text-[9px] font-mono text-gray-400 uppercase font-bold bg-gray-900 border border-gray-800 px-2 py-0.5 rounded">Security Level 2</span>
-                </div>
-
-                <!-- Action 1: Incident Penalty Fee Charge -->
-                <div class="bg-red-950/30 border border-red-500/30 rounded-2xl p-4 space-y-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-black text-red-300 uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                            <i data-lucide="dollar-sign" class="w-4 h-4 text-red-400"></i> Charge Customer Penalty Fee (Missing / Damaged Tote)
-                        </span>
-                        <span class="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 font-mono">Dynamic Facility Rate</span>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-                        <div class="sm:col-span-4">
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1 font-mono">Fee Amount ($)</label>
-                            <input type="number" id="tmm-charge-amount" step="0.50"
-                                class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white outline-none focus:border-red-500" placeholder="Fee ($)">
-                        </div>
-                        <div class="sm:col-span-8">
-                            <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1 font-mono">Incident Reason / Memo</label>
-                            <input type="text" id="tmm-charge-reason" value="Missing / Damaged Tote Penalty Fee"
-                                class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-red-500">
-                        </div>
-                    </div>
-                    <button onclick="executeChargeMissingToteFromModal()"
-                        class="w-full bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-extrabold text-xs py-3 rounded-xl transition shadow-lg flex items-center justify-center gap-2 cursor-pointer">
-                        <i data-lucide="zap" class="w-4 h-4"></i> Execute Customer Fee Charge &amp; Record Incident
-                    </button>
-                </div>
-
-                <!-- Action 2: Facility Reassignment & Label Edit -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <!-- Reassign Facility Location -->
-                    <div class="bg-purple-950/30 border border-purple-500/30 rounded-2xl p-4 space-y-2.5">
-                        <span class="text-xs font-extrabold text-purple-300 uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                            <i data-lucide="building-2" class="w-4 h-4 text-purple-400"></i> Reassign Facility Location
-                        </span>
-                        <div class="flex gap-2">
-                            <select id="tmm-reassign-facility-select" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none">
-                            </select>
-                            <button onclick="executeReassignFacilityFromModal()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1 cursor-pointer shrink-0">
-                                Transfer
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Edit Custom Label -->
-                    <div class="bg-gray-900 border border-gray-850 rounded-2xl p-4 space-y-2">
-                        <label class="block text-xs font-extrabold uppercase text-gray-300 font-mono">Edit Tote Custom Label</label>
-                        <div class="flex gap-2">
-                            <input type="text" id="tmm-edit-label-input" placeholder="e.g. Winter Clothes &amp; Gear"
-                                class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500">
-                            <button onclick="executeSaveToteLabelFromModal()" class="bg-gray-800 hover:bg-gray-700 text-white font-bold text-xs px-3 py-2 rounded-xl transition cursor-pointer shrink-0">
-                                Save
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Action 3: Lifecycle Status Override & Physical Shelf Slotting Engine -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <!-- Manual Lifecycle Status Override -->
-                    <div class="bg-gray-900 border border-gray-850 rounded-2xl p-4 space-y-2">
-                        <label class="block text-xs font-extrabold uppercase text-amber-300 font-mono">Manual Lifecycle Status Override</label>
-                        <div class="flex gap-2">
-                            <select id="tmm-status-override-select" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-amber-500">
-                                <option value="stored">Stored (In Vault)</option>
-                                <option value="pending-stage">Pending Stage</option>
-                                <option value="staged">Staged (In Room)</option>
-                                <option value="pending-dispatch">Pending Dispatch</option>
-                                <option value="out-for-delivery">Out for Delivery</option>
-                                <option value="with-customer">With Customer</option>
-                                <option value="missing-tote">⚠️ Missing Exception</option>
-                            </select>
-                            <button onclick="executeForceStatusOverrideFromModal()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-3 py-2 rounded-xl transition cursor-pointer shrink-0">
-                                Override
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Dynamic Physical Slotting Engine -->
-                    <div class="bg-cyan-950/30 border border-cyan-500/30 rounded-2xl p-4 space-y-2">
-                        <div class="flex justify-between items-center">
-                            <label class="block text-xs font-extrabold uppercase text-cyan-300 font-mono">Physical Shelf Slot</label>
-                            <span class="text-[10px] font-mono text-cyan-400 font-bold" id="tmm-current-location-badge">Unassigned</span>
-                        </div>
-                        <div class="flex gap-2">
-                            <select id="tmm-location-select" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-cyan-300 outline-none focus:border-cyan-500">
-                                <option value="">-- Select Shelf Coordinate --</option>
-                            </select>
-                            <button onclick="executeSlotToteFromModal()" class="bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs px-3 py-2 rounded-xl transition cursor-pointer shrink-0">
-                                Slot
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-    </div>
 
     <!-- Customer Data Erasure Modal (GDPR / CCPA) -->
     <div id="privacy-erasure-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
@@ -928,38 +695,34 @@
         updateSlaCountdown();
 
         // =========================================================================
-        // Employee Context & Role Handling
+        // Employee Context & Role Handling (Strictly Admin / Executive Only)
         // =========================================================================
         function applyActiveEmployeeContext(profile) {
             if (!profile || profile.role === 'customer') {
                 window.location.href = 'dashboard.html';
                 return;
             }
-            // Operations & Telemetry Console requires Manager or Executive clearance
+            // Operations & Telemetry Console is strictly restricted to CloudVault Admins (executive role)
             const normalized = normalizeRole(profile.role);
-            if (normalized === 'worker') {
+            if (normalized !== 'executive' && profile.role !== 'executive') {
+                alert("Restricted Access: The Operations & Telemetry Console is exclusively accessible by CloudVault Admins. Operations staff and warehouse managers do not have access.");
                 window.location.href = 'admin.html';
                 return;
             }
-            actualUserRole = profile.role;
-            actualUserName = profile.name || profile.email || 'Staff Member';
+            actualUserRole = 'executive';
+            actualUserName = profile.name || profile.email || 'Admin';
             actualAssignedFacilityId = profile.assigned_facility_id || null;
-            activeRole = normalizeRole(profile.role);
+            activeRole = 'executive';
 
             const userAvatar = document.getElementById('user-avatar');
             const userNameEl = document.getElementById('user-name');
             const userRoleLabel = document.getElementById('user-role-label');
             if (userAvatar) userAvatar.textContent = actualUserName.substring(0, 2).toUpperCase();
             if (userNameEl) userNameEl.textContent = actualUserName;
-            if (userRoleLabel) userRoleLabel.textContent = actualUserRole === 'executive' ? 'Super Admin' : (actualUserRole === 'warehouse_manager' ? 'Warehouse Manager' : 'Operations Staff');
+            if (userRoleLabel) userRoleLabel.textContent = 'Super Admin';
 
-            const isWorker = (actualUserRole === 'warehouse_worker');
             const savedFac = localStorage.getItem('cloudvault_selected_facility');
-
-            if (isWorker && actualAssignedFacilityId) {
-                localStorage.setItem('cloudvault_selected_facility', actualAssignedFacilityId);
-                window.currentSelectedFacilityId = actualAssignedFacilityId;
-            } else if (savedFac) {
+            if (savedFac) {
                 window.currentSelectedFacilityId = savedFac;
             } else if (actualAssignedFacilityId) {
                 localStorage.setItem('cloudvault_selected_facility', actualAssignedFacilityId);
@@ -968,8 +731,8 @@
 
             const roleSel = document.getElementById('role-select');
             if (roleSel) {
-                roleSel.value = activeRole;
-                lockRoleDropdown(actualUserRole !== 'executive');
+                roleSel.value = 'executive';
+                lockRoleDropdown(true);
             }
 
             syncRoleRBACView();
@@ -981,11 +744,7 @@
             if (!select) return;
             if (lock) {
                 if (badge) badge.classList.remove('hidden');
-                if (actualUserRole === 'warehouse_worker') {
-                    Array.from(select.options).forEach(opt => { if (opt.value !== 'worker') opt.disabled = true; });
-                } else if (actualUserRole === 'warehouse_manager') {
-                    Array.from(select.options).forEach(opt => { if (opt.value === 'executive') opt.disabled = true; });
-                }
+                Array.from(select.options).forEach(opt => { if (opt.value !== 'executive') opt.disabled = true; });
             } else {
                 if (badge) badge.classList.add('hidden');
                 Array.from(select.options).forEach(opt => { opt.disabled = false; });
@@ -994,13 +753,18 @@
 
         function switchRole() {
             const selectedVal = document.getElementById('role-select')?.value;
-            activeRole = normalizeRole(selectedVal);
+            if (selectedVal !== 'executive') {
+                alert("The Operations & Telemetry Console requires Executive/Admin clearance.");
+                const roleSel = document.getElementById('role-select');
+                if (roleSel) roleSel.value = 'executive';
+                return;
+            }
+            activeRole = 'executive';
             syncRoleRBACView();
         }
 
         function syncRoleRBACView() {
             const isExecutive = (activeRole === 'executive');
-            const isManagerOrExec = (activeRole === 'executive' || activeRole === 'manager');
 
             // Module Visibility based on clearance
             const privSection = document.getElementById('module-customer-privacy');
@@ -1008,7 +772,7 @@
             const navFacilityConfig = document.getElementById('nav-facility-config');
 
             if (privSection) privSection.style.display = isExecutive ? 'block' : 'none';
-            if (relocSection) relocSection.style.display = isManagerOrExec ? 'block' : 'none';
+            if (relocSection) relocSection.style.display = isExecutive ? 'block' : 'none';
             if (navFacilityConfig) navFacilityConfig.style.display = isExecutive ? 'flex' : 'none';
 
             if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -1036,10 +800,9 @@
 
                 populateFacilitySelectors();
                 renderTelemetryGauges();
-                renderMasterInventoryTable();
                 await loadCustomerRelocationRoster();
                 await loadPrivacyAuditLogs();
-                logSystemActivity('Telemetry metrics and inventory index refreshed.');
+                logSystemActivity('Telemetry metrics and business radar refreshed.');
             } catch (err) {
                 console.error("Telemetry load failed:", err);
                 showToast("Failed to load live telemetry: " + err.message, true);
@@ -1049,7 +812,6 @@
         function populateFacilitySelectors() {
             const globalSel = document.getElementById('global-facility-select');
             const relocTargetSel = document.getElementById('relocate-target-facility-select');
-            const tmmReassignSel = document.getElementById('tmm-reassign-facility-select');
 
             const savedFac = localStorage.getItem('cloudvault_selected_facility') || (cachedFacilities[0]?.id);
 
@@ -1064,10 +826,6 @@
                 relocTargetSel.innerHTML = '<option value="">-- Select Target Destination Facility --</option>' +
                     cachedFacilities.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
             }
-
-            if (tmmReassignSel && cachedFacilities.length > 0) {
-                tmmReassignSel.innerHTML = cachedFacilities.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
-            }
         }
 
         function onGlobalFacilityChange(facId) {
@@ -1075,7 +833,6 @@
             localStorage.setItem('cloudvault_selected_facility', facId);
             window.currentSelectedFacilityId = facId;
             renderTelemetryGauges();
-            renderMasterInventoryTable();
             logSystemActivity(`Active facility switched to: ${cachedFacilitiesMap[facId]?.name || facId}`);
         }
 
@@ -1149,225 +906,6 @@
             if (purgedCountEl) purgedCountEl.textContent = `${purgedCount} Purged`;
             const auditLatestEl = document.getElementById('tel-audit-latest');
             if (auditLatestEl) auditLatestEl.textContent = purgedCount > 0 ? `${purgedCount} Logged` : 'Active';
-        }
-
-        // =========================================================================
-        // Module 2: Tote Master Control (TMM) & Shelf Table
-        // =========================================================================
-        function renderMasterInventoryTable(items = null) {
-            const currentFacId = document.getElementById('global-facility-select')?.value || localStorage.getItem('cloudvault_selected_facility');
-            const tbody = document.getElementById('tmm-inventory-table-body');
-            const countBadge = document.getElementById('tmm-inventory-count-badge');
-            if (!tbody) return;
-
-            let source = items || cachedInventory;
-            let filtered = source.filter(i => (i.facility_id === currentFacId) || (!i.facility_id && i.users?.assigned_facility_id === currentFacId));
-
-            const statusFilter = document.getElementById('tmm-status-filter')?.value || 'all';
-            if (statusFilter !== 'all') {
-                filtered = filtered.filter(i => i.status === statusFilter);
-            }
-
-            if (countBadge) countBadge.textContent = `${filtered.length} Totes Indexed`;
-
-            if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-xs text-gray-500 font-mono">No matching totes found for this facility filter.</td></tr>`;
-                return;
-            }
-
-            tbody.innerHTML = filtered.slice(0, 100).map(t => {
-                const ownerName = t.users?.name || 'Unassigned';
-                const ownerEmail = t.users?.email || '';
-                const code = t.tote_code || t.id.substring(0, 8);
-                const shelf = t.location_code || 'UNSLOTTED';
-                const status = t.status || 'stored';
-
-                let statusBadge = `<span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-bold uppercase text-[9px]">${status}</span>`;
-                if (status === 'stored') statusBadge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-bold uppercase text-[9px]">Stored (Vault)</span>`;
-                if (status === 'staged') statusBadge = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded font-bold uppercase text-[9px]">Staged Room</span>`;
-                if (status === 'missing-tote') statusBadge = `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded font-bold uppercase text-[9px]">⚠️ Missing</span>`;
-                if (status === 'out-for-delivery') statusBadge = `<span class="bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2 py-0.5 rounded font-bold uppercase text-[9px]">🚚 In Transit</span>`;
-
-                return `
-                    <tr class="hover:bg-gray-900/40 transition border-b border-gray-850">
-                        <td class="py-3 px-4 font-bold text-white flex items-center gap-1.5">
-                            <span>📦</span> ${escapeHtml(code)}
-                        </td>
-                        <td class="py-3 px-4">
-                            <div class="font-bold text-gray-200">${escapeHtml(ownerName)}</div>
-                            <div class="text-[10px] text-gray-500 font-mono">${escapeHtml(ownerEmail)}</div>
-                        </td>
-                        <td class="py-3 px-4 text-gray-300">
-                            ${escapeHtml(t.label || t.category || 'General Storage')}
-                        </td>
-                        <td class="py-3 px-4 font-mono font-bold ${shelf === 'UNSLOTTED' ? 'text-gray-500' : 'text-cyan-400'}">
-                            ${escapeHtml(shelf)}
-                        </td>
-                        <td class="py-3 px-4">
-                            ${statusBadge}
-                        </td>
-                        <td class="py-3 px-4 text-right">
-                            <button onclick="openToteMasterModal('${escapeHtml(code)}')" class="px-3 py-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 rounded-xl font-bold transition text-[11px] cursor-pointer">
-                                Inspect / TMM →
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
-
-        function filterMasterInventoryTable(query) {
-            const q = (query || '').toLowerCase().trim();
-            if (!q) {
-                renderMasterInventoryTable();
-                return;
-            }
-            const currentFacId = document.getElementById('global-facility-select')?.value || localStorage.getItem('cloudvault_selected_facility');
-            const facItems = cachedInventory.filter(i => (i.facility_id === currentFacId) || (!i.facility_id && i.users?.assigned_facility_id === currentFacId));
-            const matches = facItems.filter(i =>
-                (i.tote_code || '').toLowerCase().includes(q) ||
-                (i.users?.name || '').toLowerCase().includes(q) ||
-                (i.users?.email || '').toLowerCase().includes(q) ||
-                (i.location_code || '').toLowerCase().includes(q) ||
-                (i.status || '').toLowerCase().includes(q)
-            );
-            renderMasterInventoryTable(matches);
-        }
-
-        async function openToteMasterModal(toteCode) {
-            currentSelectedToteCode = toteCode;
-            const item = cachedInventory.find(i => i.tote_code === toteCode);
-            if (!item) {
-                showToast("Tote not found in active inventory", true);
-                return;
-            }
-
-            document.getElementById('tmm-tote-code').textContent = item.tote_code;
-            document.getElementById('tmm-status-badge').textContent = (item.status || 'stored').toUpperCase();
-            document.getElementById('tmm-subtitle').textContent = `DB ID: ${item.id}`;
-
-            document.getElementById('tmm-customer-name').textContent = item.users?.name || 'Unassigned';
-            document.getElementById('tmm-customer-email').textContent = item.users?.email || 'N/A';
-            document.getElementById('tmm-customer-plan').textContent = item.users?.active_zone ? `Zone: ${item.users.active_zone}` : 'Standard Plan';
-            document.getElementById('tmm-customer-totes-held').textContent = `${cachedInventory.filter(i => i.uid === item.uid).length} Totes`;
-
-            document.getElementById('tmm-tote-label').textContent = item.label || 'Standard Tote';
-            document.getElementById('tmm-tote-category').textContent = item.category || 'General Storage';
-            document.getElementById('tmm-tote-facility').textContent = cachedFacilitiesMap[item.facility_id]?.name || 'Current Hub';
-            document.getElementById('tmm-tote-room').textContent = item.location_code || 'UNASSIGNED';
-            document.getElementById('tmm-current-location-badge').textContent = item.location_code || 'Unassigned';
-
-            document.getElementById('tmm-edit-label-input').value = item.label || '';
-            document.getElementById('tmm-status-override-select').value = item.status || 'stored';
-
-            // Populate shelf coordinates
-            const locSelect = document.getElementById('tmm-location-select');
-            if (locSelect) {
-                locSelect.innerHTML = `
-                    <option value="">-- Choose Vault Shelf --</option>
-                    <option value="A1-B01-S1">A1-B01-S1 (Main Vault Row 1)</option>
-                    <option value="A1-B01-S2">A1-B01-S2 (Main Vault Row 1)</option>
-                    <option value="A2-B02-S1">A2-B02-S1 (High Density Bay 2)</option>
-                    <option value="STAGE-ROOM-BAY1">STAGE-ROOM-BAY1 (Staging Room)</option>
-                    <option value="VALET-TRUCK-A">VALET-TRUCK-A (Delivery Van #1)</option>
-                `;
-            }
-
-            document.getElementById('tote-master-modal').classList.remove('hidden');
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-        }
-
-        function closeToteMasterModal() {
-            document.getElementById('tote-master-modal').classList.add('hidden');
-            currentSelectedToteCode = null;
-        }
-
-        async function executeChargeMissingToteFromModal() {
-            if (!currentSelectedToteCode) return;
-            const amount = parseFloat(document.getElementById('tmm-charge-amount').value);
-            const memo = document.getElementById('tmm-charge-reason').value;
-
-            if (!amount || amount <= 0) {
-                alert("Please enter a valid fee amount.");
-                return;
-            }
-
-            const item = cachedInventory.find(i => i.tote_code === currentSelectedToteCode);
-            if (!confirm(`Are you sure you want to invoice $${amount.toFixed(2)} to ${item?.users?.name || 'Customer'} for "${memo}"?`)) {
-                return;
-            }
-
-            try {
-                await supabase.from('inventory').update({ status: 'missing-tote' }).eq('tote_code', currentSelectedToteCode);
-                showToast(`✓ Penalty charge of $${amount.toFixed(2)} recorded & tote marked missing.`);
-                logSystemActivity(`Penalty fee of $${amount.toFixed(2)} charged on ${currentSelectedToteCode}`);
-                closeToteMasterModal();
-                loadAllConsoleData();
-            } catch (e) {
-                alert("Fee charge failed: " + e.message);
-            }
-        }
-
-        async function executeSaveToteLabelFromModal() {
-            if (!currentSelectedToteCode) return;
-            const newLabel = document.getElementById('tmm-edit-label-input').value.trim();
-            try {
-                await supabase.from('inventory').update({ label: newLabel }).eq('tote_code', currentSelectedToteCode);
-                showToast(`✓ Tote custom label saved: "${newLabel}"`);
-                logSystemActivity(`Label updated on ${currentSelectedToteCode} -> "${newLabel}"`);
-                closeToteMasterModal();
-                loadAllConsoleData();
-            } catch (e) {
-                alert("Failed to save label: " + e.message);
-            }
-        }
-
-        async function executeForceStatusOverrideFromModal() {
-            if (!currentSelectedToteCode) return;
-            const newStatus = document.getElementById('tmm-status-override-select').value;
-            if (!confirm(`Override status of ${currentSelectedToteCode} to "${newStatus}"?`)) return;
-
-            try {
-                await supabase.from('inventory').update({ status: newStatus }).eq('tote_code', currentSelectedToteCode);
-                showToast(`✓ Tote ${currentSelectedToteCode} status forced to ${newStatus.toUpperCase()}`);
-                logSystemActivity(`Status override on ${currentSelectedToteCode} -> ${newStatus}`);
-                closeToteMasterModal();
-                loadAllConsoleData();
-            } catch (e) {
-                alert("Override failed: " + e.message);
-            }
-        }
-
-        async function executeSlotToteFromModal() {
-            if (!currentSelectedToteCode) return;
-            const shelf = document.getElementById('tmm-location-select').value;
-            if (!shelf) {
-                alert("Please select a shelf coordinate.");
-                return;
-            }
-            try {
-                await supabase.from('inventory').update({ location_code: shelf }).eq('tote_code', currentSelectedToteCode);
-                showToast(`✓ Tote ${currentSelectedToteCode} slotted to ${shelf}`);
-                logSystemActivity(`Tote ${currentSelectedToteCode} slotted to ${shelf}`);
-                closeToteMasterModal();
-                loadAllConsoleData();
-            } catch (e) {
-                alert("Slotting failed: " + e.message);
-            }
-        }
-
-        async function executeReassignFacilityFromModal() {
-            if (!currentSelectedToteCode) return;
-            const newFac = document.getElementById('tmm-reassign-facility-select').value;
-            try {
-                await supabase.from('inventory').update({ facility_id: newFac }).eq('tote_code', currentSelectedToteCode);
-                showToast(`✓ Tote ${currentSelectedToteCode} transferred to new facility.`);
-                logSystemActivity(`Tote ${currentSelectedToteCode} reassigned to facility ${newFac}`);
-                closeToteMasterModal();
-                loadAllConsoleData();
-            } catch (e) {
-                alert("Reassignment failed: " + e.message);
-            }
         }
 
         // =========================================================================
