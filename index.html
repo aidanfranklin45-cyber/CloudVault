@@ -2164,6 +2164,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
     <script src="billing-engine.js"></script>
+    <script src="stripe-billing-integration.js"></script>
 
     <!-- Scripts Section -->
     <script>
@@ -3002,7 +3003,7 @@
             const discountAmtEl = document.getElementById('invoice-promo-discount-amt');
 
             if (flowData.appliedPromo && flowData.appliedPromo.customer_discount_pct) {
-                const discountPct = Number(flowData.appliedPromo.customer_discount_pct) || 20;
+                const discountPct = Number(flowData.appliedPromo.customer_discount_pct) || 0;
                 discountAmt = Math.round(subtotal * (discountPct / 100.0) * 100) / 100;
                 flowData.appliedPromo.discount_amount = discountAmt;
                 if (discountRow) discountRow.classList.remove('hidden');
@@ -3552,22 +3553,27 @@
                 const subtotal = Number(flowData.price || 0) + Number(flowData.upfront || 0);
                 let res = null;
 
-                if (typeof StripeBillingIntegration !== 'undefined') {
+                if (typeof StripeBillingIntegration !== 'undefined' && typeof StripeBillingIntegration.validatePromoCode === 'function') {
                     res = await StripeBillingIntegration.validatePromoCode(code, null, subtotal);
+                } else if (typeof supabase !== 'undefined' && supabase) {
+                    const { data, error } = await supabase.rpc('validate_promo_code_for_checkout', {
+                        p_code: code,
+                        p_user_uid: null,
+                        p_gross_amount: Number(subtotal) || 0.00
+                    });
+                    if (error) {
+                        console.error('[Promo Validation Error]', error.message);
+                        res = { valid: false, message: 'Invalid or expired promotional code.' };
+                    } else {
+                        res = data;
+                    }
                 } else {
-                    res = {
-                        valid: true,
-                        code: code,
-                        creator_name: 'Creator Partner',
-                        customer_discount_pct: 20,
-                        customer_discount_duration_months: 2,
-                        discount_amount: Math.round(subtotal * 0.20 * 100) / 100
-                    };
+                    res = { valid: false, message: 'Unable to validate promotional code at this time.' };
                 }
 
-                if (res && res.valid) {
+                if (res && res.valid === true) {
                     flowData.appliedPromo = res;
-                    const discountPct = Number(res.customer_discount_pct || 20);
+                    const discountPct = Number(res.customer_discount_pct || 0);
                     const discountAmt = Number(res.discount_amount != null ? res.discount_amount : (subtotal * (discountPct / 100.0)));
                     flowData.appliedPromo.discount_amount = discountAmt;
 
@@ -3590,6 +3596,14 @@
                 }
             } catch (err) {
                 console.error("Promo validation notice:", err);
+                flowData.appliedPromo = null;
+                if (discountRow) discountRow.classList.add('hidden');
+                if (feedback) {
+                    feedback.textContent = 'Invalid or expired promotional code.';
+                    feedback.className = 'text-xs text-red-500 font-medium';
+                    feedback.classList.remove('hidden');
+                }
+                calculateFlowTotal();
             }
         }
 
