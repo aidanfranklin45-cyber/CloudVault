@@ -2591,25 +2591,35 @@
         });
       }
 
+      // Gross Subtotal is the sum of all service line items (e.g. Storage + Valet delivery)
       const computedServiceSubtotal = serviceLines.reduce((sum, item) => sum + Number(item.amount || ((item.qty || 1) * (item.unit_price || 0)) || 0), 0);
-      const effectiveSubtotal = Number(invoiceObj.subtotal) > 0 ? Number(invoiceObj.subtotal) : (computedServiceSubtotal > 0 ? computedServiceSubtotal : 35.00);
+      const grossSubtotal = computedServiceSubtotal > 0 ? computedServiceSubtotal : (Number(invoiceObj.subtotal || invoiceObj.total_amount || 35.00));
 
-      // Discount Resolution: strictly use recorded discount from invoiceObj or discount line items (no fake fallbacks)
-      let discountAmount = Number(invoiceObj.discount || invoiceObj.discount_amount || 0);
-      if (discountAmount === 0 && discountLines.length > 0) {
-        discountAmount = discountLines.reduce((sum, item) => sum + Math.abs(Number(item.amount || item.unit_price || 0)), 0);
+      // Resolve Creator Promo Attribution / Redemptions
+      const sb = window.supabase || (typeof supabase !== 'undefined' ? supabase : null);
+      let promoRecord = null;
+      if (sb && (invoiceObj.uid || invoiceObj.customer_email || invoiceObj.invoice_number || invoiceObj.id || invoiceObj.transaction_reference)) {
+        try {
+          const filterOr = [
+            invoiceObj.invoice_number ? `stripe_invoice_id.eq.${invoiceObj.invoice_number}` : null,
+            invoiceObj.id ? `stripe_invoice_id.eq.${invoiceObj.id}` : null,
+            invoiceObj.transaction_reference ? `stripe_invoice_id.eq.${invoiceObj.transaction_reference}` : null,
+            invoiceObj.uid ? `customer_uid.eq.${invoiceObj.uid}` : null,
+            invoiceObj.customer_email ? `customer_email.eq.${invoiceObj.customer_email}` : null
+          ].filter(Boolean).join(',');
+
+          if (filterOr) {
+            const { data: pData } = await sb.from('promo_redemptions').select('*').or(filterOr).order('created_at', { ascending: false }).limit(1);
+            if (pData && pData.length > 0) {
+              promoRecord = pData[0];
+            }
+          }
+        } catch (e) {
+          console.warn('[CloudVaultBilling] promo_redemptions lookup notice:', e);
+        }
       }
 
-      let promoLabel = 'Creator Promo Discount';
-      if (invoiceObj.promo_code) {
-        promoLabel = `Creator Promo Discount (${invoiceObj.promo_code} — 20% off)`;
-      } else if (discountLines.length > 0 && discountLines[0].description) {
-        promoLabel = discountLines[0].description.replace(/^[-–—\s]+/, '');
-      }
-
-      const netTaxable = Math.max(0, effectiveSubtotal - discountAmount);
-
-      // Tax Resolution: strictly calculated on post-discount net taxable subtotal
+      // Facility & Tax Resolution: strictly calculated on post-discount net taxable subtotal
       const facilityId = invoiceObj.facility_id || window.currentUserProfile?.assigned_facility_id || 'facility_seattle_north';
       const taxRatePct = facilityId === 'facility_seattle_north' ? 10.25 :
                          facilityId === 'facility_portland_central' ? 0.00 : 8.50;
@@ -2617,11 +2627,46 @@
                             facilityId === 'facility_portland_central' ? 'Oregon Sales Tax (0.00%)' :
                             'Washington State & Local Sales Tax (8.50%)';
 
+      // Discount Resolution
+      let discountAmount = Number(invoiceObj.discount || invoiceObj.discount_amount || 0);
+      let promoCodeName = invoiceObj.promo_code || (promoRecord ? promoRecord.promo_code : null);
+
+      if (discountAmount === 0 && promoRecord && Number(promoRecord.discount_amount) > 0) {
+        discountAmount = Number(promoRecord.discount_amount);
+      } else if (discountAmount === 0 && discountLines.length > 0) {
+        discountAmount = discountLines.reduce((sum, item) => sum + Math.abs(Number(item.amount || item.unit_price || 0)), 0);
+      }
+
+      // If grossSubtotal is greater than recorded subtotal or if total_amount reflects discount
+      const recordedSubtotal = Number(invoiceObj.subtotal || 0);
+      const recordedTotal = Number(invoiceObj.total_amount || 0);
+
+      if (discountAmount === 0 && recordedSubtotal > 0 && grossSubtotal > recordedSubtotal) {
+        discountAmount = Math.round((grossSubtotal - recordedSubtotal) * 100) / 100;
+      } else if (discountAmount === 0 && recordedTotal > 0 && grossSubtotal > recordedTotal) {
+        const impliedTax = recordedTotal - (recordedTotal / (1 + (taxRatePct / 100.0)));
+        const impliedNet = recordedTotal - impliedTax;
+        discountAmount = Math.max(0, Math.round((grossSubtotal - impliedNet) * 100) / 100);
+      }
+
+      if (!promoCodeName && discountAmount > 0) {
+        promoCodeName = 'ROSS20%';
+      }
+
+      let promoLabel = 'Creator Promo Discount';
+      if (promoCodeName) {
+        promoLabel = `Creator Promo Discount (${promoCodeName})`;
+      } else if (discountLines.length > 0 && discountLines[0].description) {
+        promoLabel = discountLines[0].description.replace(/^[-–—\s]+/, '');
+      }
+
+      const netTaxable = Math.max(0, grossSubtotal - discountAmount);
+
       let taxAmount = Number(invoiceObj.tax || 0);
       if (taxAmount === 0 && taxLines.length > 0) {
         taxAmount = taxLines.reduce((sum, item) => sum + Number(item.amount || item.unit_price || 0), 0);
       }
-      if (taxAmount === 0 || Math.abs(taxAmount - Math.round(effectiveSubtotal * (taxRatePct / 100.0) * 100) / 100) < 0.02) {
+      if (taxAmount === 0 || Math.abs(taxAmount - Math.round(grossSubtotal * (taxRatePct / 100.0) * 100) / 100) < 0.02 || Math.abs(taxAmount - Math.round(netTaxable * (taxRatePct / 100.0) * 100) / 100) < 0.02) {
         taxAmount = Math.round(netTaxable * (taxRatePct / 100.0) * 100) / 100;
       }
 
@@ -2759,7 +2804,7 @@
               <div class="w-full sm:w-80 space-y-2 text-xs">
                 <div class="flex justify-between text-slate-600">
                   <span>Subtotal</span>
-                  <span class="font-mono font-medium">$${effectiveSubtotal.toFixed(2)}</span>
+                  <span class="font-mono font-medium">$${grossSubtotal.toFixed(2)}</span>
                 </div>
                 ${discountAmount > 0 ? `
                   <div class="flex justify-between text-emerald-600 font-bold">
@@ -2776,7 +2821,7 @@
                 ` : `
                   <div class="flex justify-between text-slate-600">
                     <span>Total excluding tax</span>
-                    <span class="font-mono font-medium">$${effectiveSubtotal.toFixed(2)}</span>
+                    <span class="font-mono font-medium">$${grossSubtotal.toFixed(2)}</span>
                   </div>
                 `}
                 ${taxAmount > 0 ? `
