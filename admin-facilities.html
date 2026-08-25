@@ -1555,6 +1555,7 @@
                         const { data: facs, error } = await supabase.from('facilities').select('*');
                         if (error) throw error;
                         const globalSel = document.getElementById('global-facility-select');
+                        const empFacSel = document.getElementById('emp-facility');
                         if (globalSel && facs && facs.length > 0) {
                             globalSel.innerHTML = facs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
                             if (facs.some(f => f.id === activeFacilityId)) {
@@ -1565,14 +1566,25 @@
                                 localStorage.setItem('cloudvault_selected_facility', activeFacilityId);
                             }
                         }
+                        if (empFacSel && facs && facs.length > 0) {
+                            empFacSel.innerHTML = facs.map(f => `<option value="${f.id}" class="bg-gray-950 text-white">${f.name}</option>`).join('');
+                            // Default to currently active facility
+                            if (activeFacilityId && facs.some(f => f.id === activeFacilityId)) {
+                                empFacSel.value = activeFacilityId;
+                            }
+                        }
                     } catch (e) {
                         console.error("Dropdown load failed:", e);
                     }
                 }
 
+
                 async function onGlobalFacilityChange(facId) {
                     activeFacilityId = facId;
                     localStorage.setItem('cloudvault_selected_facility', facId);
+                    // Keep emp-facility assignment dropdown in sync with the active facility context
+                    const empFacSel = document.getElementById('emp-facility');
+                    if (empFacSel && facId) empFacSel.value = facId;
                     await loadSelectedFacilityConfig(facId);
                 }
 
