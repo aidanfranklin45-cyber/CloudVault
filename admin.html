@@ -2354,6 +2354,7 @@
             const activeIndicator = document.getElementById('active-facility-indicator');
             const navFacilityConfig = document.getElementById('nav-facility-config');
             const navBiAnalytics = document.getElementById('nav-bi-analytics');
+            const navOpsTelemetry = document.getElementById('nav-logistics-ops');
             const seedBtn = document.getElementById('seed-btn');
             const billingAuditActions = document.getElementById('admin-billing-audit-actions');
 
@@ -2362,6 +2363,7 @@
                 if (activeIndicator) activeIndicator.classList.remove('hidden');
                 if (navFacilityConfig) navFacilityConfig.classList.remove('hidden');
                 if (navBiAnalytics) navBiAnalytics.classList.remove('hidden');
+                if (navOpsTelemetry) navOpsTelemetry.classList.remove('hidden');
                 if (seedBtn) seedBtn.classList.remove('hidden');
                 if (billingAuditActions) billingAuditActions.classList.remove('hidden');
             } else if (normRole === 'manager') {
@@ -2369,6 +2371,7 @@
                 if (activeIndicator) activeIndicator.classList.add('hidden');
                 if (navFacilityConfig) navFacilityConfig.classList.add('hidden');
                 if (navBiAnalytics) navBiAnalytics.classList.remove('hidden');
+                if (navOpsTelemetry) navOpsTelemetry.classList.remove('hidden');
                 if (seedBtn) seedBtn.classList.add('hidden');
                 if (billingAuditActions) billingAuditActions.classList.remove('hidden');
             } else {
@@ -2376,6 +2379,7 @@
                 if (activeIndicator) activeIndicator.classList.add('hidden');
                 if (navFacilityConfig) navFacilityConfig.classList.add('hidden');
                 if (navBiAnalytics) navBiAnalytics.classList.remove('hidden');
+                if (navOpsTelemetry) navOpsTelemetry.classList.add('hidden');
                 if (seedBtn) seedBtn.classList.add('hidden');
                 if (billingAuditActions) billingAuditActions.classList.add('hidden');
             }

@@ -934,6 +934,12 @@
                 window.location.href = 'dashboard.html';
                 return;
             }
+            // Operations & Telemetry Console requires Manager or Executive clearance
+            const normalized = normalizeRole(profile.role);
+            if (normalized === 'worker') {
+                window.location.href = 'admin.html';
+                return;
+            }
             actualUserRole = profile.role;
             actualUserName = profile.name || profile.email || 'Staff Member';
             actualAssignedFacilityId = profile.assigned_facility_id || null;
