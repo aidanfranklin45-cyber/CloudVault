@@ -2140,10 +2140,12 @@
             const valetItems = (currentInventory || []).filter(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery');
             
             const activationReqs = (currentRequests || []).filter(r => 
-                r.request_type === 'intake' || r.request_type === 'activation' || r.request_type === 'new_tote_delivery' || r.request_type === 'new_totes'
+                (r.request_type === 'intake' || r.request_type === 'activation' || r.request_type === 'new_tote_delivery' || r.request_type === 'new_totes') &&
+                r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
             );
             const retrievalReqs = (currentRequests || []).filter(r => 
-                !activationReqs.includes(r)
+                !activationReqs.includes(r) &&
+                r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
             );
 
             const cards = [];
@@ -2180,7 +2182,6 @@
             if (activationReqs.length > 0) {
                 activationReqs.forEach(req => {
                     const isValetActivation = req.fulfillment_type === 'valet_delivery';
-                    const { room: roomNum, pin } = resolveRoomAndPin(req);
 
                     // Resolve exact totes for this activation request
                     const rawItems = req.requested_items || req.requested_tote_codes || [];
@@ -2205,9 +2206,12 @@
                         if (additionalCandidates.length > 0) {
                             reqTotes = additionalCandidates.slice(-expectedCount);
                         } else {
-                            reqTotes = (currentInventory || []);
+                            // All customer inventory is already activated & stored in vault — never synthesize a fake intake flow
+                            return;
                         }
                     }
+
+                    const { room: roomNum, pin } = resolveRoomAndPin(req, reqTotes);
 
                     // Register all totes in this activation request into handledToteIds
                     reqTotes.forEach(t => handledToteIds.add(t.id));
