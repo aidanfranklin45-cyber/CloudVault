@@ -12,7 +12,7 @@ To prevent token waste and API credit depletion, always operate under a **Just-I
 - **Ignore Filter**: Whenever generating or consuming repository bundles, ensure `.repomixignore` is respected so heavy lockfiles (`package-lock.json`), build folders, images, and temporary test scripts are stripped out.
 
 ## 3. Practical Workflow: Trunk-Based Integration
-- **Iterate Locally First**: Edit files, inspect logs/stack traces, and run local test suites (`npx playwright test` and `deno test`) until all assertions turn green before staging git changes.
+- **Iterate Locally First**: Edit files, inspect logs/stack traces, and verify changes directly. Do NOT run the full end-to-end test suite (`npx playwright test`) for localized UI tweaks, copy updates, or isolated CSS/HTML changes. Only run specific, targeted test specs or deno functions when modifying critical business logic or financial calculations.
 - **Commit When the "Contract" Passes**: Once a discrete task passes local verification, bundle the changes into a single atomic commit.
 - **Push on Verified Task Completion**: Push directly to `main` as soon as the specific task is verified to maintain continuous flow without turning CI into a bottleneck.
 - **Circuit Breaker**: If a command or tool call fails twice consecutively with the same error, stop and analyze the root cause before attempting again.

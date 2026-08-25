@@ -1289,32 +1289,15 @@
                 </div>
             </div>
 
-            <!-- Account Erasure & Privacy (Danger Zone) -->
-            <div class="space-y-3 pt-3 border-t border-gray-150">
-                <div class="flex items-center justify-between">
-                    <label class="block text-xs font-extrabold uppercase text-gray-800 tracking-wider flex items-center gap-1.5">
-                        <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-rose-600"></i>
-                        <span>Account Deletion &amp; Privacy</span>
-                    </label>
-                    <span class="text-[10px] font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-bold uppercase">Right to Erasure</span>
+            <!-- Account Erasure & Privacy (Compact) -->
+            <div class="pt-2.5 border-t border-gray-150 flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-semibold text-gray-600 block">Privacy &amp; Data Erasure</span>
+                    <span class="text-[10px] text-gray-400 block">GDPR &amp; CCPA right to erasure</span>
                 </div>
-                
-                <div id="erasure-status-card" class="p-3 rounded-2xl bg-gray-50 border border-gray-200 space-y-2.5 text-xs">
-                    <div id="erasure-checklist" class="space-y-1.5">
-                        <div class="flex items-center justify-between text-[11px]">
-                            <span class="text-gray-600">Subscription Status:</span>
-                            <span id="erasure-sub-badge" class="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">Checking...</span>
-                        </div>
-                        <div class="flex items-center justify-between text-[11px]">
-                            <span class="text-gray-600">Active Totes in Custody:</span>
-                            <span id="erasure-totes-badge" class="font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">0 Totes</span>
-                        </div>
-                    </div>
-
-                    <div id="erasure-action-container" class="pt-1">
-                        <!-- Populated dynamically by refreshAccountErasureStatus() -->
-                    </div>
-                </div>
+                <button type="button" onclick="openAccountErasureModal()" class="text-[11px] text-gray-500 hover:text-rose-600 font-medium px-2.5 py-1 rounded-lg border border-gray-200 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer">
+                    Delete Account
+                </button>
             </div>
 
             <div class="flex space-x-4 pt-4 border-t border-gray-100">
@@ -1332,34 +1315,16 @@
         <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-rose-100 space-y-5 animate-in fade-in zoom-in-95">
             <div class="flex items-center space-x-3 text-rose-600">
                 <div class="w-10 h-10 rounded-2xl bg-rose-50 flex items-center justify-center flex-shrink-0 text-xl border border-rose-100">
-                    ⚠️
+                    🛡️
                 </div>
                 <div>
-                    <h3 class="text-lg font-black text-slate-900">Permanent Account Erasure</h3>
+                    <h3 class="text-lg font-black text-slate-900">Account Privacy &amp; Erasure</h3>
                     <p class="text-xs text-slate-500">GDPR / CCPA Right to Erasure</p>
                 </div>
             </div>
 
-            <div class="bg-rose-50/70 border border-rose-200/80 rounded-2xl p-4 text-xs text-rose-900 space-y-2 leading-relaxed">
-                <p class="font-extrabold text-rose-950">This action is permanent and cannot be undone.</p>
-                <ul class="list-disc pl-4 space-y-1 text-[11px] text-rose-800">
-                    <li>All personal identity, addresses, and contact details will be permanently purged.</li>
-                    <li>Vault containers and storage allocations will be released.</li>
-                    <li>Authentication credentials will be irreversibly deleted.</li>
-                    <li>Past billing records will be anonymized for statutory record-keeping.</li>
-                </ul>
-            </div>
-
-            <div>
-                <label class="block text-xs font-extrabold text-slate-700 mb-1">Type <span class="font-mono text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">DELETE</span> to confirm:</label>
-                <input type="text" id="erasure-confirm-input" placeholder="DELETE" oninput="validateErasureInput()" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none uppercase font-mono text-center">
-            </div>
-
-            <div class="flex space-x-3 pt-2">
-                <button type="button" onclick="closeAccountErasureModal()" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold transition cursor-pointer">Cancel</button>
-                <button type="button" id="btn-confirm-erasure" disabled onclick="executeAccountErasure()" class="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:hover:bg-rose-600 text-white text-xs font-extrabold shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
-                    <span id="erasure-btn-text">Permanently Delete</span>
-                </button>
+            <div id="erasure-modal-body" class="space-y-4">
+                <!-- Dynamically populated by openAccountErasureModal() -->
             </div>
         </div>
     </div>
@@ -7053,103 +7018,94 @@
             // Customer Account Deletion & Right to Erasure Controller
             // ============================================================
             async function refreshAccountErasureStatus() {
-                try {
-                    const subBadge = document.getElementById('erasure-sub-badge');
-                    const totesBadge = document.getElementById('erasure-totes-badge');
-                    const actionContainer = document.getElementById('erasure-action-container');
-
-                    if (!currentUser) return;
-
-                    // 1. Check user profile and subscription status
-                    const subStatus = (currentProfile?.subscription_status || currentUserProfile?.subscription_status || currentSubscription?.status || 'active').toLowerCase();
-                    const isSubCanceled = ['canceled', 'cancelled', 'inactive', 'terminated'].includes(subStatus);
-
-                    // 2. Count active totes held
-                    const activeTotes = (currentInventory || []).filter(i => !['returned', 'discarded', 'released'].includes(i.status)).length || (currentProfile?.active_totes_held || 0);
-
-                    // 3. Count open requests
-                    const openRequests = (currentRequests || []).filter(r => ['pending', 'accepted', 'in_transit', 'dispatched', 'retrieval_ready'].includes(r.status)).length;
-
-                    // Update Badges
-                    if (subBadge) {
-                        if (isSubCanceled) {
-                            subBadge.className = 'font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200';
-                            subBadge.textContent = '✓ Deactivated / Canceled';
-                        } else {
-                            subBadge.className = 'font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200';
-                            subBadge.textContent = `❌ Active (${subStatus})`;
-                        }
-                    }
-
-                    if (totesBadge) {
-                        if (activeTotes === 0 && openRequests === 0) {
-                            totesBadge.className = 'font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200';
-                            totesBadge.textContent = '✓ 0 Totes in Custody';
-                        } else {
-                            totesBadge.className = 'font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200';
-                            totesBadge.textContent = `❌ ${activeTotes} Totes Active${openRequests > 0 ? ` (${openRequests} delivery in progress)` : ''}`;
-                        }
-                    }
-
-                    // Render Action UI
-                    if (!actionContainer) return;
-
-                    const isEligible = isSubCanceled && activeTotes === 0 && openRequests === 0;
-
-                    if (isEligible) {
-                        actionContainer.innerHTML = `
-                            <div class="space-y-2 pt-1">
-                                <p class="text-[11px] text-gray-600 leading-normal">
-                                    Your account is fully deactivated and has zero active containers in custody. You are eligible to permanently erase your profile and records.
-                                </p>
-                                <button type="button" onclick="openAccountErasureModal()" class="w-full py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
-                                    <span>🗑️ Request Permanent Account Deletion</span>
-                                </button>
-                            </div>
-                        `;
-                    } else {
-                        let blockingReason = '';
-                        if (!isSubCanceled && activeTotes > 0) {
-                            blockingReason = 'Account erasure requires canceling your subscription and retrieving/returning all physical containers first.';
-                        } else if (!isSubCanceled) {
-                            blockingReason = 'Account erasure is only permitted for deactivated accounts. Please cancel your active subscription first.';
-                        } else {
-                            blockingReason = 'You still have physical containers stored or in delivery. All totes must be returned to CloudVault custody before permanent data erasure.';
-                        }
-
-                        actionContainer.innerHTML = `
-                            <div class="space-y-2 pt-1">
-                                <div class="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-900 leading-normal">
-                                    <strong>🔒 Deletion Locked:</strong> ${blockingReason}
-                                </div>
-                                <div class="flex gap-2">
-                                    ${!isSubCanceled ? `
-                                        <button type="button" onclick="closeSettingsModal(); triggerCancelFlowUser();" class="flex-1 py-2 px-3 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold text-xs transition cursor-pointer">
-                                            Cancel Subscription
-                                        </button>
-                                    ` : ''}
-                                    ${activeTotes > 0 ? `
-                                        <button type="button" onclick="closeSettingsModal(); openExcessTotesModal();" class="flex-1 py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs transition cursor-pointer">
-                                            Schedule Return
-                                        </button>
-                                    ` : ''}
-                                </div>
-                            </div>
-                        `;
-                    }
-                } catch (err) {
-                    console.error('Error refreshing account erasure status:', err);
-                }
+                // Kept for backward compatibility when settings open
+                return;
             }
 
             function openAccountErasureModal() {
                 closeSettingsModal();
-                const input = document.getElementById('erasure-confirm-input');
-                if (input) input.value = '';
-                const btn = document.getElementById('btn-confirm-erasure');
-                if (btn) btn.disabled = true;
                 const modal = document.getElementById('account-erasure-modal');
-                if (modal) modal.classList.remove('hidden');
+                const body = document.getElementById('erasure-modal-body');
+                if (!modal || !body) return;
+
+                const subStatus = (currentProfile?.subscription_status || currentUserProfile?.subscription_status || currentSubscription?.status || 'active').toLowerCase();
+                const isSubCanceled = ['canceled', 'cancelled', 'inactive', 'terminated'].includes(subStatus);
+                const activeTotes = (currentInventory || []).filter(i => !['returned', 'discarded', 'released'].includes(i.status)).length || (currentProfile?.active_totes_held || 0);
+                const openRequests = (currentRequests || []).filter(r => ['pending', 'accepted', 'in_transit', 'dispatched', 'retrieval_ready'].includes(r.status)).length;
+                const isEligible = isSubCanceled && activeTotes === 0 && openRequests === 0;
+
+                if (isEligible) {
+                    body.innerHTML = `
+                        <div class="bg-rose-50/70 border border-rose-200/80 rounded-2xl p-4 text-xs text-rose-900 space-y-2 leading-relaxed">
+                            <p class="font-extrabold text-rose-950">This action is permanent and cannot be undone.</p>
+                            <ul class="list-disc pl-4 space-y-1 text-[11px] text-rose-800">
+                                <li>All personal identity, addresses, and contact details will be permanently purged.</li>
+                                <li>Vault containers and storage allocations will be released.</li>
+                                <li>Authentication credentials will be irreversibly deleted.</li>
+                                <li>Past billing records will be anonymized for statutory record-keeping.</li>
+                            </ul>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-1">Type <span class="font-mono text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">DELETE</span> to confirm:</label>
+                            <input type="text" id="erasure-confirm-input" placeholder="DELETE" oninput="validateErasureInput()" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none uppercase font-mono text-center">
+                        </div>
+
+                        <div class="flex space-x-3 pt-2">
+                            <button type="button" onclick="closeAccountErasureModal()" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold transition cursor-pointer">Cancel</button>
+                            <button type="button" id="btn-confirm-erasure" disabled onclick="executeAccountErasure()" class="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:hover:bg-rose-600 text-white text-xs font-extrabold shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
+                                <span id="erasure-btn-text">Permanently Delete</span>
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    let blockingReason = '';
+                    if (!isSubCanceled && activeTotes > 0) {
+                        blockingReason = 'Account erasure requires canceling your active subscription and retrieving/returning all physical containers first.';
+                    } else if (!isSubCanceled) {
+                        blockingReason = 'Account erasure is only permitted for deactivated accounts. Please cancel your active subscription first.';
+                    } else {
+                        blockingReason = 'You still have physical containers stored or in delivery. All totes must be returned to CloudVault custody before permanent data erasure.';
+                    }
+
+                    body.innerHTML = `
+                        <div class="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-2 leading-relaxed">
+                            <div class="font-bold text-amber-950 flex items-center gap-1.5">
+                                <span>🔒</span> Deletion Prerequisites Required
+                            </div>
+                            <p class="text-[11px] text-amber-800 leading-normal">${blockingReason}</p>
+                        </div>
+
+                        <div class="space-y-1.5 text-xs bg-gray-50 p-3 rounded-2xl border border-gray-200">
+                            <div class="flex items-center justify-between text-[11px]">
+                                <span class="text-gray-600">Subscription Status:</span>
+                                <span class="font-bold ${isSubCanceled ? 'text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200' : 'text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200'}">${isSubCanceled ? '✓ Canceled' : `Active (${subStatus})`}</span>
+                            </div>
+                            <div class="flex items-center justify-between text-[11px]">
+                                <span class="text-gray-600">Active Totes in Custody:</span>
+                                <span class="font-bold ${activeTotes === 0 && openRequests === 0 ? 'text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200' : 'text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200'}">${activeTotes} Totes${openRequests > 0 ? ` (${openRequests} in transit)` : ''}</span>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-2 pt-2">
+                            ${!isSubCanceled ? `
+                                <button type="button" onclick="closeAccountErasureModal(); triggerCancelFlowUser();" class="flex-1 py-2.5 px-3 rounded-xl bg-gray-900 hover:bg-black text-white font-bold text-xs transition cursor-pointer">
+                                    Cancel Subscription
+                                </button>
+                            ` : ''}
+                            ${activeTotes > 0 ? `
+                                <button type="button" onclick="closeAccountErasureModal(); openExcessTotesModal();" class="flex-1 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition cursor-pointer">
+                                    Schedule Return
+                                </button>
+                            ` : ''}
+                            <button type="button" onclick="closeAccountErasureModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold transition cursor-pointer">
+                                Close
+                            </button>
+                        </div>
+                    `;
+                }
+
+                modal.classList.remove('hidden');
             }
 
             function closeAccountErasureModal() {
