@@ -1650,9 +1650,9 @@
                         </div>
                     </div>
 
-                    <!-- Pickup Option -->
-                    <div class="mt-3">
-                        <label class="font-extrabold text-slate-900 block mb-2 text-xs sm:text-sm">Pickup Option</label>
+                    <!-- Pickup Option & Scheduling -->
+                    <div class="mt-3 space-y-2.5">
+                        <label class="font-extrabold text-slate-900 block text-xs sm:text-sm">Pickup Option &amp; Target Schedule</label>
                         <div class="space-y-2">
                             <div id="flow-opt-self"
                                 class="flex items-center p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer"
@@ -1662,8 +1662,7 @@
                                 <div>
                                     <div class="font-extrabold text-xs sm:text-sm text-slate-900">Staging Room
                                         Drop-off <span class="text-emerald-600 font-black">Free</span></div>
-                                    <div class="text-[11px] text-slate-500">Drop off at your local PIN-secured staging
-                                        room</div>
+                                    <div class="text-[11px] text-slate-500">Designated slot &amp; secure PIN access</div>
                                 </div>
                             </div>
                             <div id="flow-opt-valet"
@@ -1673,10 +1672,28 @@
                                     id="flow-dot-valet"></div>
                                 <div>
                                     <div class="font-extrabold text-xs sm:text-sm text-slate-900">Doorstep Valet Pickup
-                                        <span class="text-slate-600 font-bold" id="flow-valet-fee-label">$16+</span>
+                                        <span class="text-slate-600 font-bold" id="flow-valet-fee-label">$8+</span>
                                     </div>
                                     <div class="text-[11px] text-slate-500">We pick up from your doorstep</div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Schedule Date & Time Slot Grid -->
+                        <div class="grid grid-cols-2 gap-2 pt-1">
+                            <div>
+                                <label for="flow-schedule-date" class="block text-[11px] font-bold text-slate-700 mb-1">Target Date</label>
+                                <input type="date" id="flow-schedule-date" onchange="handleFlowScheduleChange()"
+                                    class="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs font-semibold">
+                            </div>
+                            <div>
+                                <label for="flow-time-slot" class="block text-[11px] font-bold text-slate-700 mb-1">Time Window</label>
+                                <select id="flow-time-slot" onchange="handleFlowScheduleChange()"
+                                    class="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs font-semibold bg-white">
+                                    <option value="09:00 AM - 12:00 PM">Morning (9 AM - 12 PM)</option>
+                                    <option value="12:00 PM - 03:00 PM">Afternoon (12 PM - 3 PM)</option>
+                                    <option value="03:00 PM - 06:00 PM">Evening (3 PM - 6 PM)</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -1695,6 +1712,10 @@
                         <div class="flex justify-between text-slate-600 font-medium">
                             <span>Setup / Valet Fee</span>
                             <span class="font-bold text-slate-900">$<span id="flow-upfront">0.00</span></span>
+                        </div>
+                        <div class="flex justify-between text-slate-600 font-medium hidden" id="flow-surge-row">
+                            <span id="flow-surge-label">Peak Time Window Fee</span>
+                            <span class="font-bold text-amber-700">+$<span id="flow-surge-fee">0.00</span></span>
                         </div>
                         <div class="h-px bg-slate-200 my-1"></div>
                         <div class="flex justify-between items-center py-0.5">
@@ -1879,8 +1900,8 @@
                     </div>
 
                     <!-- Pickup & Logistics Choice in Step 4 -->
-                    <div>
-                        <label class="font-extrabold text-slate-900 block mb-1.5 text-xs sm:text-sm">Access &amp; Pickup Option</label>
+                    <div class="space-y-2">
+                        <label class="font-extrabold text-slate-900 block text-xs sm:text-sm">Access &amp; Pickup Option</label>
                         <div class="grid grid-cols-2 gap-2">
                             <div id="step4-opt-self" onclick="selectFlowLogistics('self_service')"
                                 class="p-3 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer text-left transition hover:border-blue-500">
@@ -1899,6 +1920,24 @@
                                 <div class="text-[11px] text-slate-500 mt-0.5">We pick up at your doorstep</div>
                             </div>
                         </div>
+
+                        <!-- Schedule Date & Time Slot Grid in Step 4 -->
+                        <div class="grid grid-cols-2 gap-2 pt-1">
+                            <div>
+                                <label for="step4-schedule-date" class="block text-[11px] font-bold text-slate-700 mb-1">Target Date</label>
+                                <input type="date" id="step4-schedule-date" onchange="handleStep4ScheduleChange()"
+                                    class="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs font-semibold">
+                            </div>
+                            <div>
+                                <label for="step4-time-slot" class="block text-[11px] font-bold text-slate-700 mb-1">Time Window</label>
+                                <select id="step4-time-slot" onchange="handleStep4ScheduleChange()"
+                                    class="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs font-semibold bg-white">
+                                    <option value="09:00 AM - 12:00 PM">Morning (9 AM - 12 PM)</option>
+                                    <option value="12:00 PM - 03:00 PM">Afternoon (12 PM - 3 PM)</option>
+                                    <option value="03:00 PM - 06:00 PM">Evening (3 PM - 6 PM)</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Order Summary -->
@@ -1909,8 +1948,12 @@
                             <span class="font-bold text-slate-900">$<span id="invoice-monthly">25.00</span>/mo</span>
                         </div>
                         <div class="flex justify-between text-slate-600 font-medium">
-                            <span>Logistics Option (<span id="invoice-logistics">Self-Serve</span>)</span>
+                            <span>Logistics Option (<span id="invoice-logistics">Staging Room Access</span>)</span>
                             <span class="font-bold text-slate-900">$<span id="invoice-upfront">0.00</span></span>
+                        </div>
+                        <div class="flex justify-between text-slate-600 font-medium hidden" id="invoice-surge-row">
+                            <span id="invoice-surge-label">Peak Time Window Fee</span>
+                            <span class="font-bold text-amber-700">+$<span id="invoice-surge-fee">0.00</span></span>
                         </div>
                         <div class="flex justify-between text-slate-600 font-medium">
                             <span>Estimated Sales Tax (<span id="invoice-tax-rate">8.50%</span>)</span>
@@ -2826,6 +2869,7 @@
             }
 
             if (step !== 'waitlist') {
+                setupFlowSchedulingControls();
                 calculateFlowTotal();
             }
         }
@@ -2880,12 +2924,75 @@
             calculateFlowTotal();
         }
 
+        function setupFlowSchedulingControls() {
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            const maxDate = new Date(today);
+            maxDate.setDate(maxDate.getDate() + 30);
+
+            const toDateStr = (d) => d.toISOString().split('T')[0];
+            const tomorrowStr = toDateStr(tomorrow);
+            const maxDateStr = toDateStr(maxDate);
+
+            ['flow-schedule-date', 'step4-schedule-date'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.min = tomorrowStr;
+                    el.max = maxDateStr;
+                    if (!el.value) el.value = tomorrowStr;
+                }
+            });
+
+            if (!flowData.scheduledDate) {
+                flowData.scheduledDate = tomorrowStr;
+            }
+        }
+
+        function handleFlowScheduleChange() {
+            const dateEl = document.getElementById('flow-schedule-date');
+            const slotEl = document.getElementById('flow-time-slot');
+            if (dateEl) flowData.scheduledDate = dateEl.value;
+            if (slotEl) flowData.timeSlot = slotEl.value;
+
+            const s4Date = document.getElementById('step4-schedule-date');
+            const s4Slot = document.getElementById('step4-time-slot');
+            if (s4Date && dateEl) s4Date.value = dateEl.value;
+            if (s4Slot && slotEl) s4Slot.value = slotEl.value;
+
+            calculateFlowTotal();
+        }
+
+        function handleStep4ScheduleChange() {
+            const dateEl = document.getElementById('step4-schedule-date');
+            const slotEl = document.getElementById('step4-time-slot');
+            if (dateEl) flowData.scheduledDate = dateEl.value;
+            if (slotEl) flowData.timeSlot = slotEl.value;
+
+            const s1Date = document.getElementById('flow-schedule-date');
+            const s1Slot = document.getElementById('flow-time-slot');
+            if (s1Date && dateEl) s1Date.value = dateEl.value;
+            if (s1Slot && slotEl) s1Slot.value = slotEl.value;
+
+            calculateFlowTotal();
+        }
+
         function calculateFlowTotal() {
             const { rate, label, tier } = getTierRate(flowData.totes);
             const monthly = Math.round(flowData.totes * rate * 100) / 100;
             const isValet = flowData.logisticsType === 'valet_pickup';
             const upfront = isValet ? regionalRates.valet_base + (flowData.totes * regionalRates.valet_tote_adder) : 0;
-            const subtotal = monthly + upfront;
+
+            // Calculate dynamic slot surge fee (e.g. evening peak window)
+            let surgeFee = 0.00;
+            const isEvening = (flowData.timeSlot && flowData.timeSlot.includes('03:00 PM'));
+            if (isEvening) {
+                surgeFee = Number(regionalRates.evening_peak_slot_fee != null ? regionalRates.evening_peak_slot_fee : 4.99);
+            }
+            flowData.surgeFee = surgeFee;
+
+            const subtotal = monthly + upfront + surgeFee;
             const taxRate = flowData.taxRate != null ? flowData.taxRate : 0.085;
             const taxAmt = Math.round(subtotal * taxRate * 100) / 100;
 
@@ -2917,6 +3024,29 @@
             document.getElementById('flow-monthly').textContent = monthly.toFixed(2);
             document.getElementById('flow-upfront').textContent = upfront.toFixed(2);
             document.getElementById('flow-first-month').textContent = firstMonth.toFixed(2);
+
+            // Update Surge Rows
+            const flowSurgeRow = document.getElementById('flow-surge-row');
+            const flowSurgeFee = document.getElementById('flow-surge-fee');
+            if (flowSurgeRow && flowSurgeFee) {
+                if (surgeFee > 0) {
+                    flowSurgeFee.textContent = surgeFee.toFixed(2);
+                    flowSurgeRow.classList.remove('hidden');
+                } else {
+                    flowSurgeRow.classList.add('hidden');
+                }
+            }
+
+            const invSurgeRow = document.getElementById('invoice-surge-row');
+            const invSurgeFee = document.getElementById('invoice-surge-fee');
+            if (invSurgeRow && invSurgeFee) {
+                if (surgeFee > 0) {
+                    invSurgeFee.textContent = surgeFee.toFixed(2);
+                    invSurgeRow.classList.remove('hidden');
+                } else {
+                    invSurgeRow.classList.add('hidden');
+                }
+            }
 
             // Highlight active flow tier card
             for (let i = 1; i <= 4; i++) {
@@ -3296,17 +3426,19 @@
                     activeUserId = signUpData?.user?.id || null;
                 }
 
-                // 2. Call RPC to securely write profile & subscription docs
+                // 2. Save onboarding draft profile (Zero inventory or active subscriptions created)
                 try {
-                    await supabase.rpc('create_customer_profile', {
+                    await supabase.rpc('save_onboarding_draft', {
                         p_name: name,
                         p_phone: phone,
                         p_zip: zip,
                         p_tote_count: flowData.totes || 5,
-                        p_logistics_type: flowData.logisticsType || 'self_service'
+                        p_logistics_type: flowData.logisticsType || 'self_service',
+                        p_scheduled_date: flowData.scheduledDate || null,
+                        p_time_slot: flowData.timeSlot || '09:00 AM - 12:00 PM'
                     });
                 } catch (rpcErr) {
-                    console.warn('[Profile Provisioning Notice]', rpcErr);
+                    console.warn('[Profile Draft Notice]', rpcErr);
                 }
 
                 // 3. Dispatch to Stripe Checkout Edge Function
@@ -3317,6 +3449,9 @@
                     facilityId: facilityId,
                     toteCount: flowData.totes || 5,
                     logisticsType: flowData.logisticsType || 'self_service',
+                    scheduledDate: flowData.scheduledDate || null,
+                    timeSlot: flowData.timeSlot || '09:00 AM - 12:00 PM',
+                    surgeFee: flowData.surgeFee || 0,
                     userId: activeUserId,
                     promoCode: promoCode,
                     successUrl: window.location.origin + '/dashboard.html?session_id={CHECKOUT_SESSION_ID}&checkout_success=true',
@@ -3349,14 +3484,32 @@
                     return;
                 }
 
+                // 4. In sandbox / verified payment flow: officially provision paid inventory & intake job
+                try {
+                    await supabase.rpc('provision_paid_customer', {
+                        p_uid: activeUserId,
+                        p_name: name,
+                        p_phone: phone,
+                        p_zip: zip,
+                        p_tote_count: flowData.totes || 5,
+                        p_logistics_type: flowData.logisticsType || 'self_service',
+                        p_scheduled_date: flowData.scheduledDate || null,
+                        p_time_slot: flowData.timeSlot || '09:00 AM - 12:00 PM',
+                        p_stripe_session_id: 'mock_sandbox_settled',
+                        p_amount_paid: flowData.firstMonth || 0.00
+                    });
+                } catch (provErr) {
+                    console.warn('[Provisioning Notice]', provErr);
+                }
+
                 // Fallback to success view if direct checkout URL not returned (or in sandbox mode)
                 const successTextEl = document.getElementById('success-dynamic-text');
                 if (successTextEl) {
                     const isValet = flowData.logisticsType === 'valet_pickup';
                     if (isValet) {
-                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> with <strong>Doorstep Valet Pickup</strong> is confirmed. Our delivery team will contact you to schedule your initial empty tote drop-off.`;
+                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> with <strong>Doorstep Valet Pickup</strong> on <strong>${flowData.scheduledDate || 'scheduled date'}</strong> (${flowData.timeSlot}) is confirmed. Our delivery team will contact you to schedule your initial empty tote drop-off.`;
                     } else {
-                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> is confirmed. Our team will text your secure staging room PIN code and welcome instructions for your designated access slot.`;
+                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> with <strong>Staging Room Access</strong> on <strong>${flowData.scheduledDate || 'scheduled date'}</strong> (${flowData.timeSlot}) is confirmed. Our team will text your secure staging room PIN code and welcome instructions.`;
                     }
                 }
 
