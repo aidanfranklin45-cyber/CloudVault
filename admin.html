@@ -10767,7 +10767,12 @@
             document.getElementById('cbd-customer-email').textContent = user.email || 'N/A';
             
             const { data: userTotes } = await supabase.from('inventory').select('*').eq('uid', user.id);
-            const toteCount = (userTotes || []).length;
+            const activeTotes = (userTotes || []).filter(t => {
+                const s = (t.status || '').toLowerCase();
+                const locType = (t.location_type || '').toLowerCase();
+                return s !== 'missing-tote' && s !== 'missing' && s !== 'decommissioned' && s !== 'discharged' && locType !== 'discharged' && locType !== 'written_off';
+            });
+            const toteCount = activeTotes.length;
             document.getElementById('cbd-customer-totes-count').textContent = `${toteCount} Tote${toteCount !== 1 ? 's' : ''}`;
 
             // Fetch user's subscription record & resolve dynamic volume rates and price lock immunity
@@ -10946,28 +10951,42 @@
                 const locCode = t.location_code || t.location_identifier || 'Unassigned';
                 const labelName = t.label || t.label_name || 'Standard Tote';
                 const status = t.status || 'stored';
-                const statusClass = status === 'stored' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                    : status === 'staged' ? 'bg-green-500/10 text-green-400 border-green-500/30'
-                    : status === 'out-for-delivery' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
-                    : 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+                const isDischarged = (status === 'missing-tote' || status === 'missing' || status === 'decommissioned' || status === 'discharged' || (t.location_type || '').toLowerCase() === 'discharged');
+
+                let statusClass = 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+                let statusLabel = status;
+
+                if (isDischarged) {
+                    statusClass = 'bg-rose-500/15 text-rose-400 border-rose-500/30';
+                    statusLabel = '⚠️ Discharged (Fee Assessed)';
+                } else if (status === 'stored') {
+                    statusClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+                    statusLabel = 'Stored (Vault)';
+                } else if (status === 'staged') {
+                    statusClass = 'bg-green-500/10 text-green-400 border-green-500/30';
+                    statusLabel = 'Staged Room';
+                } else if (status === 'out-for-delivery') {
+                    statusClass = 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30';
+                    statusLabel = 'Out for Delivery';
+                }
 
                 return `
                     <div onclick="closeCustomerBillingDrawer();openToteMasterModal('${t.id}')"
-                        class="min-h-[44px] cursor-pointer hover:border-indigo-500/50 hover:bg-gray-900 transition bg-gray-900/80 rounded-2xl p-4 border border-gray-800 flex items-center justify-between shadow-md group">
+                        class="min-h-[44px] cursor-pointer hover:border-indigo-500/50 hover:bg-gray-900 transition bg-gray-900/80 rounded-2xl p-4 border ${isDischarged ? 'border-rose-500/30 opacity-75' : 'border-gray-800'} flex items-center justify-between shadow-md group">
                         <div class="flex items-center space-x-3">
-                            <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 font-mono font-bold flex items-center justify-center text-sm border border-indigo-500/20 group-hover:scale-105 transition">
-                                📦
+                            <div class="w-10 h-10 rounded-xl ${isDischarged ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'} font-mono font-bold flex items-center justify-center text-sm border group-hover:scale-105 transition">
+                                ${isDischarged ? '⚠️' : '📦'}
                             </div>
                             <div>
                                 <div class="flex items-center gap-2">
                                     <span class="text-sm font-bold text-white font-mono">${t.tote_code}</span>
                                     <span class="text-xs text-gray-400 font-medium font-sans">&bull; ${escapeHtml(labelName)}</span>
                                 </div>
-                                <p class="text-[11px] text-gray-400 font-mono mt-0.5">Location: <strong class="text-cyan-300 font-bold">${locCode}</strong></p>
+                                <p class="text-[11px] text-gray-400 font-mono mt-0.5">Location: <strong class="${isDischarged ? 'text-rose-300' : 'text-cyan-300'} font-bold">${locCode}</strong></p>
                             </div>
                         </div>
                         <div class="flex items-center gap-3">
-                            <span class="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border font-mono ${statusClass}">${status}</span>
+                            <span class="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border font-mono ${statusClass}">${statusLabel}</span>
                             <i data-lucide="chevron-right" class="w-4 h-4 text-gray-500 group-hover:text-white transition"></i>
                         </div>
                     </div>
@@ -11369,8 +11388,13 @@
 
             if (chargeAmount <= 0) {
                 // Dynamically resolve rate from customer's facility and active inventory
-                const { data: userTotes } = await supabase.from('inventory').select('id').eq('uid', targetId);
-                const count = (userTotes || []).length;
+                const { data: userTotes } = await supabase.from('inventory').select('id, status, location_type').eq('uid', targetId);
+                const activeTotes = (userTotes || []).filter(t => {
+                    const s = (t.status || '').toLowerCase();
+                    const locType = (t.location_type || '').toLowerCase();
+                    return s !== 'missing-tote' && s !== 'missing' && s !== 'decommissioned' && s !== 'discharged' && locType !== 'discharged' && locType !== 'written_off';
+                });
+                const count = activeTotes.length;
                 if (count <= 0) {
                     alert(`⚠️ Customer ${user.name || userEmail} has 0 stored totes and no unpaid invoices to charge.`);
                     return;

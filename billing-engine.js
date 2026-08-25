@@ -1401,7 +1401,9 @@
                 toteCount = Number(userSub.total_totes || userSub.tote_count || 0);
               }
               if (!toteCount) {
-                const { count: invToteCount } = await sb.from('inventory').select('*', { count: 'exact', head: true }).eq('uid', inv.uid);
+                const { count: invToteCount } = await sb.from('inventory').select('*', { count: 'exact', head: true })
+                  .eq('uid', inv.uid)
+                  .not('status', 'in', '("missing-tote","missing","decommissioned","discharged")');
                 if (invToteCount) toteCount = invToteCount;
               }
             }

@@ -743,7 +743,7 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
 
 
 -- Auto-sync trigger for active totes count on public.users
-CREATE OR REPLACE FUNCTION public.sync_user_active_totes()
+CREATE OR REPLACE FUNCTION public.sync_user_active_totes_held()
 RETURNS trigger AS $$
 DECLARE
   v_uid UUID;
@@ -754,7 +754,9 @@ BEGIN
     SET active_totes_held = (
       SELECT COUNT(*)::INT 
       FROM public.inventory 
-      WHERE uid = v_uid AND status IN ('stored', 'staged', 'with-customer', 'pending-stage')
+      WHERE uid = v_uid 
+        AND status::text NOT IN ('missing-tote', 'missing', 'decommissioned', 'discharged')
+        AND (location_type IS NULL OR location_type::text NOT IN ('discharged', 'written_off', 'missing'))
     )
     WHERE id = v_uid;
   END IF;
@@ -762,9 +764,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE TRIGGER on_inventory_tote_count_change
-  AFTER INSERT OR UPDATE OF status, uid OR DELETE ON public.inventory
-  FOR EACH ROW EXECUTE PROCEDURE public.sync_user_active_totes();
+CREATE OR REPLACE TRIGGER trg_sync_user_active_totes_held
+  AFTER INSERT OR UPDATE OF status, uid, location_type OR DELETE ON public.inventory
+  FOR EACH ROW EXECUTE PROCEDURE public.sync_user_active_totes_held();
 
 
 -- ============================================================
@@ -5438,6 +5440,10 @@ ADD COLUMN IF NOT EXISTS deposit_discount_amount NUMERIC DEFAULT 0,
 ADD COLUMN IF NOT EXISTS net_deposit_paid NUMERIC DEFAULT 0,
 ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
 
+ALTER TABLE public.promo_codes
+ADD COLUMN IF NOT EXISTS allow_waitlist_deposits BOOLEAN DEFAULT true,
+ADD COLUMN IF NOT EXISTS waitlist_deposit_discount_pct NUMERIC DEFAULT 20.00;
+
 -- RPC: Validate Promo Code for Waitlist
 CREATE OR REPLACE FUNCTION public.validate_promo_code_for_waitlist(
     p_code TEXT,
@@ -5467,7 +5473,11 @@ BEGIN
     END IF;
 
     IF NOT v_promo.is_active THEN
-        RETURN jsonb_build_object('valid', false, 'message', 'This creator code is currently inactive.');
+        RETURN jsonb_build_object('valid', false, 'message', 'This creator code is currently inactive or deactivated.');
+    END IF;
+
+    IF v_promo.allow_waitlist_deposits IS FALSE THEN
+        RETURN jsonb_build_object('valid', false, 'message', 'This creator code is valid for active market checkouts only, not waitlist deposits.');
     END IF;
 
     IF v_promo.expires_at IS NOT NULL AND v_promo.expires_at < NOW() THEN
@@ -5478,7 +5488,7 @@ BEGIN
         RETURN jsonb_build_object('valid', false, 'message', 'This creator code has reached its maximum redemption limit.');
     END IF;
 
-    v_discount_pct := COALESCE(v_promo.customer_discount_pct, 20.00);
+    v_discount_pct := COALESCE(v_promo.waitlist_deposit_discount_pct, v_promo.customer_discount_pct, 20.00);
     v_discount_amt := ROUND(p_deposit_amount * (v_discount_pct / 100.0), 2);
     v_net_amt := GREATEST(0.00, p_deposit_amount - v_discount_amt);
 
