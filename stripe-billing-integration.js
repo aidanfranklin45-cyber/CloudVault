@@ -1490,7 +1490,7 @@
 
       try {
         const [eventsRes, invoicesRes, chargesRes] = await Promise.all([
-          sb.from('stripe_webhook_events').select('*').order('created_at', { ascending: false }).limit(25),
+          sb.from('stripe_webhook_events').select('*').order('created_at', { ascending: false }).limit(50),
           sb.from('invoices').select('*').order('created_at', { ascending: false }),
           sb.from('charges').select('*').order('charged_at', { ascending: false })
         ]);
