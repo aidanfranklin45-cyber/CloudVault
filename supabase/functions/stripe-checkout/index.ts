@@ -324,13 +324,14 @@ Deno.serve(async (req: Request) => {
     } else {
       // Sandbox fallback mode when STRIPE_SECRET_KEY is omitted in test environments
       sessionId = generateRandomId("cs_test_");
-      sessionUrl = `https://checkout.stripe.com/pay/${sessionId}`;
+      sessionUrl = null;
     }
 
     return new Response(
       JSON.stringify({
         url: sessionUrl,
         sessionId: sessionId,
+        isMock: !stripeSecretKey,
         facility: {
           id: facility.id,
           name: facility.name,

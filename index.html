@@ -1554,7 +1554,7 @@
                             class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-8 py-4 rounded-xl text-base shadow-xl shadow-blue-500/25 transition transform hover:-translate-y-0.5 active:translate-y-0">
                             Configure Your Totes
                         </button>
-                        <button onclick="startCheckoutFlow({ source: 'closing_banner_zip', step: 2 })"
+                        <button onclick="startCheckoutFlow({ source: 'closing_banner_zip', step: 1 })"
                             class="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold px-7 py-4 rounded-xl text-base transition">
                             Check ZIP Availability
                         </button>
@@ -1888,7 +1888,7 @@
                                     <span>Staging Room</span>
                                     <span class="text-emerald-600 font-black">Free</span>
                                 </div>
-                                <div class="text-[11px] text-slate-500 mt-0.5">24/7 self drop-off &amp; pickup</div>
+                                <div class="text-[11px] text-slate-500 mt-0.5">Designated slot &amp; secure PIN access</div>
                             </div>
                             <div id="step4-opt-valet" onclick="selectFlowLogistics('valet_pickup')"
                                 class="p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-400">
@@ -2856,16 +2856,26 @@
             const valetEl = document.getElementById('flow-opt-valet');
             const dotSelf = document.getElementById('flow-dot-self');
             const dotValet = document.getElementById('flow-dot-valet');
+
+            const step4Self = document.getElementById('step4-opt-self');
+            const step4Valet = document.getElementById('step4-opt-valet');
+
             if (type === 'self_service') {
-                selfEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
-                valetEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-slate-200 bg-white cursor-pointer';
-                dotSelf.className = 'w-3.5 h-3.5 rounded-full border-4 border-blue-600 bg-white mr-2.5 flex-shrink-0';
-                dotValet.className = 'w-3.5 h-3.5 rounded-full border-2 border-slate-300 bg-white mr-2.5 flex-shrink-0';
+                if (selfEl) selfEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
+                if (valetEl) valetEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-slate-200 bg-white cursor-pointer';
+                if (dotSelf) dotSelf.className = 'w-3.5 h-3.5 rounded-full border-4 border-blue-600 bg-white mr-2.5 flex-shrink-0';
+                if (dotValet) dotValet.className = 'w-3.5 h-3.5 rounded-full border-2 border-slate-300 bg-white mr-2.5 flex-shrink-0';
+
+                if (step4Self) step4Self.className = 'p-3 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer text-left transition';
+                if (step4Valet) step4Valet.className = 'p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-400';
             } else {
-                valetEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
-                selfEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-slate-200 bg-white cursor-pointer';
-                dotValet.className = 'w-3.5 h-3.5 rounded-full border-4 border-blue-600 bg-white mr-2.5 flex-shrink-0';
-                dotSelf.className = 'w-3.5 h-3.5 rounded-full border-2 border-slate-300 bg-white mr-2.5 flex-shrink-0';
+                if (valetEl) valetEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
+                if (selfEl) selfEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-slate-200 bg-white cursor-pointer';
+                if (dotValet) dotValet.className = 'w-3.5 h-3.5 rounded-full border-4 border-blue-600 bg-white mr-2.5 flex-shrink-0';
+                if (dotSelf) dotSelf.className = 'w-3.5 h-3.5 rounded-full border-2 border-slate-300 bg-white mr-2.5 flex-shrink-0';
+
+                if (step4Valet) step4Valet.className = 'p-3 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer text-left transition';
+                if (step4Self) step4Self.className = 'p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-400';
             }
             calculateFlowTotal();
         }
@@ -2898,11 +2908,15 @@
             const firstMonth = Math.max(0, Math.round((subtotal - discountAmt + taxAmt) * 100) / 100);
 
             // Update Step 1 UI elements
+            const flowValetLabel = document.getElementById('flow-valet-fee-label');
+            if (flowValetLabel) flowValetLabel.textContent = `$${(regionalRates.valet_base + (flowData.totes * regionalRates.valet_tote_adder)).toFixed(0)}`;
+            const step4ValetLabel = document.getElementById('step4-valet-fee-label');
+            if (step4ValetLabel) step4ValetLabel.textContent = `+$${(regionalRates.valet_base + (flowData.totes * regionalRates.valet_tote_adder)).toFixed(2)}`;
+
             document.getElementById('flow-tier-badge').textContent = label;
             document.getElementById('flow-monthly').textContent = monthly.toFixed(2);
             document.getElementById('flow-upfront').textContent = upfront.toFixed(2);
             document.getElementById('flow-first-month').textContent = firstMonth.toFixed(2);
-            document.getElementById('flow-valet-fee-label').textContent = `$${(regionalRates.valet_base + (flowData.totes * regionalRates.valet_tote_adder)).toFixed(0)}`;
 
             // Highlight active flow tier card
             for (let i = 1; i <= 4; i++) {
@@ -2934,7 +2948,7 @@
             const invoiceMonthly = document.getElementById('invoice-monthly');
             if (invoiceMonthly) invoiceMonthly.textContent = monthly.toFixed(2);
             const invoiceLogistics = document.getElementById('invoice-logistics');
-            if (invoiceLogistics) invoiceLogistics.textContent = isValet ? 'Valet Pickup' : '24/7 Staging Room';
+            if (invoiceLogistics) invoiceLogistics.textContent = isValet ? 'Doorstep Valet Pickup' : 'Staging Room Access';
             const invoiceUpfront = document.getElementById('invoice-upfront');
             if (invoiceUpfront) invoiceUpfront.textContent = upfront.toFixed(2);
             const invoiceTaxRate = document.getElementById('invoice-tax-rate');
@@ -3329,16 +3343,21 @@
 
                 await logMilestone('completed', { uid: activeUserId, totes: flowData.totes });
 
-                if (checkoutUrl) {
+                if (checkoutUrl && !checkoutUrl.includes('cs_test_')) {
                     btnText.textContent = 'Redirecting to Stripe...';
                     window.location.href = checkoutUrl;
                     return;
                 }
 
-                // Fallback to success view if direct checkout URL not returned
+                // Fallback to success view if direct checkout URL not returned (or in sandbox mode)
                 const successTextEl = document.getElementById('success-dynamic-text');
                 if (successTextEl) {
-                    successTextEl.innerHTML = "Our onboarding team will text you within 24 hours with your staging room PIN code and welcome instructions.";
+                    const isValet = flowData.logisticsType === 'valet_pickup';
+                    if (isValet) {
+                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> with <strong>Doorstep Valet Pickup</strong> is confirmed. Our delivery team will contact you to schedule your initial empty tote drop-off.`;
+                    } else {
+                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> is confirmed. Our team will text your secure staging room PIN code and welcome instructions for your designated access slot.`;
+                    }
                 }
 
                 document.getElementById('view-form').classList.add('hidden-section');
