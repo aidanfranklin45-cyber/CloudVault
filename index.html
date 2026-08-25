@@ -2800,6 +2800,10 @@
                 title.textContent = 'Secure Your Spot';
                 desc.textContent = 'Add payment method. Your card will be charged immediately upon booking.';
             }
+
+            if (step !== 'waitlist') {
+                calculateFlowTotal();
+            }
         }
 
         function handleFlowTotesInput() {
