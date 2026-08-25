@@ -2188,9 +2188,9 @@
 
     <!-- Supabase JS SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="supabase-config.js"></script>
-    <script src="billing-engine.js"></script>
-    <script src="stripe-billing-integration.js?v=2.2"></script>
+    <script src="supabase-config.js?v=2.3"></script>
+    <script src="billing-engine.js?v=2.3"></script>
+    <script src="stripe-billing-integration.js?v=2.3"></script>
 
     <!-- Main Logic Script -->
     <script>
@@ -12711,10 +12711,14 @@
                 // Populate Customer Telemetry (Active Totes only)
                 // Populate Customer Telemetry (Active Totes only)
                 const user = item.users || {};
-                const { count: actualTotesCount } = await supabase.from('inventory')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('uid', item.uid)
-                    .not('status', 'in', '(missing-tote,missing)');
+                const { data: invRows } = await supabase.from('inventory')
+                    .select('id, status, location_type')
+                    .eq('uid', item.uid);
+                const actualTotesCount = (invRows || []).filter(t => {
+                    const s = (t.status || '').toLowerCase();
+                    const locType = (t.location_type || '').toLowerCase();
+                    return s !== 'missing-tote' && s !== 'missing' && s !== 'decommissioned' && s !== 'discharged' && locType !== 'discharged' && locType !== 'written_off';
+                }).length;
 
                 const finalTotesHeld = actualTotesCount !== null ? actualTotesCount : (user.active_totes_held || 0);
 

@@ -4473,6 +4473,129 @@ BEGIN
 END;
 $$;
 
+-- Customer Self-Service Account Erasure RPC (Restricted to Deactivated / Zero-Tote Accounts)
+CREATE OR REPLACE FUNCTION public.customer_request_account_erasure()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_uid UUID;
+    v_user RECORD;
+    v_active_sub_count INT := 0;
+    v_active_totes_count INT := 0;
+    v_open_requests_count INT := 0;
+    v_invoices_count INT := 0;
+    v_facility_id TEXT;
+    v_audit_id UUID;
+    v_email TEXT;
+BEGIN
+    v_uid := auth.uid();
+    IF v_uid IS NULL THEN
+        RAISE EXCEPTION 'Unauthenticated: You must be signed in to request account erasure.';
+    END IF;
+
+    -- Fetch user profile
+    SELECT * INTO v_user FROM public.users WHERE id = v_uid;
+    IF v_user.id IS NULL THEN
+        RAISE EXCEPTION 'Account not found or already deleted.';
+    END IF;
+
+    v_email := v_user.email;
+    v_facility_id := COALESCE(v_user.assigned_facility_id, 'facility_seattle_north');
+
+    -- 1. Check Subscription Deactivation Status
+    SELECT COUNT(*) INTO v_active_sub_count
+    FROM public.subscriptions
+    WHERE uid = v_uid AND status IN ('active', 'past_due', 'trialing', 'incomplete');
+
+    IF v_active_sub_count > 0 OR (v_user.subscription_status IS NOT NULL AND v_user.subscription_status NOT IN ('canceled', 'cancelled', 'inactive', 'terminated', '')) THEN
+        RAISE EXCEPTION 'Active Subscription: Account erasure is only allowed for deactivated accounts. Please cancel your subscription first.';
+    END IF;
+
+    -- 2. Check Physical Totes Custody
+    SELECT COUNT(*) INTO v_active_totes_count
+    FROM public.inventory
+    WHERE uid = v_uid AND status NOT IN ('returned', 'discarded', 'released');
+
+    IF v_active_totes_count > 0 OR COALESCE(v_user.active_totes_held, 0) > 0 THEN
+        RAISE EXCEPTION 'Physical Custody Ongoing: You have active containers in custody. All physical totes must be retrieved and returned before permanent account erasure.';
+    END IF;
+
+    -- 3. Check Open Retrieval / Fulfillment Requests
+    SELECT COUNT(*) INTO v_open_requests_count
+    FROM public.access_requests
+    WHERE uid = v_uid AND status IN ('pending', 'accepted', 'in_transit', 'dispatched', 'retrieval_ready');
+
+    IF v_open_requests_count > 0 THEN
+        RAISE EXCEPTION 'Pending Logistics: You have active retrieval requests in progress. Please allow deliveries to complete before account erasure.';
+    END IF;
+
+    -- 4. Anonymize Invoices & Charges for Statutory Record-Keeping
+    UPDATE public.invoices
+    SET customer_name = 'Anonymized Customer (Self-Erased)',
+        customer_email = 'deleted@anonymized.cloudvault.internal',
+        notes = COALESCE(notes, '') || ' [Account self-erased under GDPR/CCPA on ' || now()::date || ']',
+        uid = NULL
+    WHERE uid = v_uid;
+    GET DIAGNOSTICS v_invoices_count = ROW_COUNT;
+
+    UPDATE public.charges
+    SET uid = NULL
+    WHERE uid = v_uid;
+
+    -- 5. Delete Customer Vault Data & Records
+    DELETE FROM public.inventory WHERE uid = v_uid;
+    DELETE FROM public.staging_reservations WHERE uid = v_uid;
+    DELETE FROM public.access_requests WHERE uid = v_uid;
+    DELETE FROM public.cancellations WHERE uid = v_uid;
+    DELETE FROM public.subscriptions WHERE uid = v_uid;
+    DELETE FROM public.feedback_reports WHERE user_uid = v_uid;
+
+    -- Update metadata
+    UPDATE public.metadata
+    SET total_users = GREATEST(0, total_users - 1)
+    WHERE id = 'financials';
+
+    -- Delete from public.users
+    DELETE FROM public.users WHERE id = v_uid;
+
+    -- Purge from auth.users
+    DELETE FROM auth.users WHERE id = v_uid;
+
+    -- 6. Log to Privacy Audit Logs
+    INSERT INTO public.privacy_audit_logs (
+        executed_by,
+        executed_by_email,
+        target_uid,
+        compliance_reason,
+        action_type,
+        totes_returned_to_pool,
+        invoices_anonymized,
+        executed_at
+    ) VALUES (
+        v_uid,
+        v_email,
+        v_uid,
+        'Customer Self-Service Account Erasure (Right to Erasure)',
+        'customer_self_service_erasure',
+        0,
+        v_invoices_count,
+        now()
+    ) RETURNING id INTO v_audit_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'audit_id', v_audit_id,
+        'deleted_uid', v_uid,
+        'invoices_anonymized', v_invoices_count,
+        'message', 'Your CloudVault account and personal data have been permanently erased.'
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.customer_request_account_erasure() TO authenticated;
+
 -- =========================================================================
 -- CREATE EXIT RETRIEVAL REQUEST RPC (Customer Tote Reduction Pull)
 -- =========================================================================
