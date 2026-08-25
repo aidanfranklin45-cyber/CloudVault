@@ -1651,78 +1651,22 @@
                         </div>
                     </div>
 
-                    <!-- Pickup Option & Scheduling -->
-                    <div class="mt-3 space-y-2.5">
-                        <label class="font-extrabold text-slate-900 block text-xs sm:text-sm">Pickup Option &amp; Target Schedule</label>
-                        <div class="space-y-2">
-                            <div id="flow-opt-self"
-                                class="flex items-center p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer"
-                                onclick="selectFlowLogistics('self_service')">
-                                <div class="w-3.5 h-3.5 rounded-full border-4 border-blue-600 bg-white mr-2.5 flex-shrink-0"
-                                    id="flow-dot-self"></div>
-                                <div>
-                                    <div class="font-extrabold text-xs sm:text-sm text-slate-900">Staging Room
-                                        Drop-off <span class="text-emerald-600 font-black">Free</span></div>
-                                    <div class="text-[11px] text-slate-500">Designated slot &amp; secure PIN access</div>
-                                </div>
-                            </div>
-                            <div id="flow-opt-valet"
-                                class="flex items-center p-2.5 rounded-xl border-2 border-slate-200 bg-white cursor-pointer"
-                                onclick="selectFlowLogistics('valet_pickup')">
-                                <div class="w-3.5 h-3.5 rounded-full border-2 border-slate-300 bg-white mr-2.5 flex-shrink-0"
-                                    id="flow-dot-valet"></div>
-                                <div>
-                                    <div class="font-extrabold text-xs sm:text-sm text-slate-900">Doorstep Valet Pickup
-                                        <span class="text-slate-600 font-bold" id="flow-valet-fee-label">$8+</span>
-                                    </div>
-                                    <div class="text-[11px] text-slate-500">We pick up from your doorstep</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Schedule Date & Time Slot Grid -->
-                        <div class="grid grid-cols-2 gap-2 pt-1">
-                            <div>
-                                <label for="flow-schedule-date" class="block text-[11px] font-bold text-slate-700 mb-1">Target Date</label>
-                                <input type="date" id="flow-schedule-date" onchange="handleFlowScheduleChange()"
-                                    class="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs font-semibold">
-                            </div>
-                            <div>
-                                <label for="flow-time-slot" class="block text-[11px] font-bold text-slate-700 mb-1">Time Window</label>
-                                <select id="flow-time-slot" onchange="handleFlowScheduleChange()"
-                                    class="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs font-semibold bg-white">
-                                    <option value="09:00 AM - 12:00 PM">Morning (9 AM - 12 PM)</option>
-                                    <option value="12:00 PM - 03:00 PM">Afternoon (12 PM - 3 PM)</option>
-                                    <option value="03:00 PM - 06:00 PM">Evening (3 PM - 6 PM)</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Pricing Readout -->
-                    <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs sm:text-sm">
+                    <!-- Pricing Readout (Step 1 Focused) -->
+                    <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs sm:text-sm mt-3">
                         <div class="text-center pb-1.5 border-b border-slate-200">
                             <span id="flow-tier-badge"
                                 class="inline-block bg-blue-100 text-blue-800 text-[11px] font-black px-2.5 py-0.5 rounded-full">Tier
                                 1 — Standard</span>
                         </div>
                         <div class="flex justify-between text-slate-600 font-medium">
-                            <span>Monthly Storage</span>
-                            <span class="font-bold text-slate-900">$<span id="flow-monthly">25.00</span>/mo</span>
-                        </div>
-                        <div class="flex justify-between text-slate-600 font-medium">
-                            <span>Setup / Valet Fee</span>
-                            <span class="font-bold text-slate-900">$<span id="flow-upfront">0.00</span></span>
-                        </div>
-                        <div class="flex justify-between text-slate-600 font-medium hidden" id="flow-surge-row">
-                            <span id="flow-surge-label">Peak Time Window Fee</span>
-                            <span class="font-bold text-amber-700">+$<span id="flow-surge-fee">0.00</span></span>
+                            <span>Volume Rate</span>
+                            <span class="font-bold text-slate-900">$<span id="flow-unit-rate">5.00</span>/tote/mo</span>
                         </div>
                         <div class="h-px bg-slate-200 my-1"></div>
                         <div class="flex justify-between items-center py-0.5">
-                            <span class="font-extrabold text-slate-900 text-sm">First Month Total</span>
+                            <span class="font-extrabold text-slate-900 text-sm">Estimated Storage</span>
                             <span class="font-black text-blue-600 text-xl tracking-tight">$<span
-                                    id="flow-first-month">25.00</span></span>
+                                    id="flow-monthly">25.00</span><span class="text-xs font-bold text-slate-500">/mo</span></span>
                         </div>
                     </div>
 
@@ -3054,15 +2998,22 @@
             const firstMonth = Math.max(0, Math.round((subtotal - discountAmt + taxAmt) * 100) / 100);
 
             // Update Step 1 UI elements
+            const unitRateEl = document.getElementById('flow-unit-rate');
+            if (unitRateEl) unitRateEl.textContent = rate.toFixed(2);
+            const flowTierBadge = document.getElementById('flow-tier-badge');
+            if (flowTierBadge) flowTierBadge.textContent = label;
+            const flowMonthlyEl = document.getElementById('flow-monthly');
+            if (flowMonthlyEl) flowMonthlyEl.textContent = monthly.toFixed(2);
+
             const flowValetLabel = document.getElementById('flow-valet-fee-label');
             if (flowValetLabel) flowValetLabel.textContent = `$${(regionalRates.valet_base + (flowData.totes * regionalRates.valet_tote_adder)).toFixed(0)}`;
             const step4ValetLabel = document.getElementById('step4-valet-fee-label');
             if (step4ValetLabel) step4ValetLabel.textContent = `+$${(regionalRates.valet_base + (flowData.totes * regionalRates.valet_tote_adder)).toFixed(2)}`;
 
-            document.getElementById('flow-tier-badge').textContent = label;
-            document.getElementById('flow-monthly').textContent = monthly.toFixed(2);
-            document.getElementById('flow-upfront').textContent = upfront.toFixed(2);
-            document.getElementById('flow-first-month').textContent = firstMonth.toFixed(2);
+            const flowUpfrontEl = document.getElementById('flow-upfront');
+            if (flowUpfrontEl) flowUpfrontEl.textContent = upfront.toFixed(2);
+            const flowFirstMonthEl = document.getElementById('flow-first-month');
+            if (flowFirstMonthEl) flowFirstMonthEl.textContent = firstMonth.toFixed(2);
 
             // Update Surge Rows
             const flowSurgeRow = document.getElementById('flow-surge-row');
