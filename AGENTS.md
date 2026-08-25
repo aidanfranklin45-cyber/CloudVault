@@ -11,6 +11,8 @@ To prevent token waste and API credit depletion, always operate under a **Just-I
 - **Strict Limitation**: Full codebase dumps (e.g., Repomix bundles) are strictly reserved for **large multi-file architectural refactoring** or platform migration tasks.
 - **Ignore Filter**: Whenever generating or consuming repository bundles, ensure `.repomixignore` is respected so heavy lockfiles (`package-lock.json`), build folders, images, and temporary test scripts are stripped out.
 
-## 3. Impasse & Execution Rules
-- **Loop Circuit Breaker**: If a command or tool call fails twice consecutively with the same error, stop and analyze the root cause before attempting again.
-- **Verification First**: Validate code changes using concrete runtime checks or commands after making edits.
+## 3. Practical Workflow: Trunk-Based Integration
+- **Iterate Locally First**: Edit files, inspect logs/stack traces, and run local test suites (`npx playwright test` and `deno test`) until all assertions turn green before staging git changes.
+- **Commit When the "Contract" Passes**: Once a discrete task passes local verification, bundle the changes into a single atomic commit.
+- **Push on Verified Task Completion**: Push directly to `main` as soon as the specific task is verified to maintain continuous flow without turning CI into a bottleneck.
+- **Circuit Breaker**: If a command or tool call fails twice consecutively with the same error, stop and analyze the root cause before attempting again.

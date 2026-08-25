@@ -46,9 +46,12 @@ Optimize context efficiency by gathering only the information necessary to resol
 
 ---
 
-## 4. DEPLOYMENT PROTOCOL (Firebase Hosting)
-- Auto-Deploy: After modifying frontend files (`.html`, `.css`, `.js`, `supabase-config.js`), run `npx firebase-tools deploy --only hosting` from `C:\Users\Aidan\OneDrive\Desktop\Antigravity_Workspace\CloudVault`.
-- Version Control: After verifying changes, execute standard git commands (git add ., git commit -m "descriptive message", git push) to push modifications to GitHub.
+## 4. PRACTICAL WORKFLOW: ANTIGRAVITY & TRUNK-BASED INTEGRATION
+
+- **Iterate Locally First:** Edit files, inspect PostHog stack traces / server logs, and run local test suites (`npx playwright test` and `deno test --allow-env --allow-net --allow-read supabase/functions/`) until all test assertions turn green.
+- **Commit When the "Contract" Passes:** Once a discrete task (such as the HID barcode listener in `login.html`, the `check_staging_capacity` check in `dashboard.html`, or dynamic facility rate resolution) passes local tests, bundle that logical change into a single atomic commit with a descriptive message.
+- **Push on Verified Task Completion (High Velocity, No CI Bottlenecks):** Push working commits directly to `main` (or merge short-lived branches) as soon as the specific task is verified. This maintains high velocity and continuous integration without turning the GitHub repository and CI pipeline into a bottleneck.
+- **Deployment Protocol (Firebase Hosting):** After modifying frontend files (`.html`, `.css`, `.js`, `supabase-config.js`) and verifying local tests pass, run `npx firebase-tools deploy --only hosting` from `C:\Users\Aidan\OneDrive\Desktop\Antigravity_Workspace\CloudVault`.
 
 ---
 
