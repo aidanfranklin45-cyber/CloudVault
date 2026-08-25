@@ -310,7 +310,10 @@ async function processPromoRedemption(
   return insertedRedemption || redemptionInsert;
 }
 
-Deno.serve(async (req: Request) => {
+export async function handleWebhookRequest(
+  req: Request,
+  customSupabaseClient?: any
+): Promise<Response> {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", {
@@ -341,21 +344,24 @@ Deno.serve(async (req: Request) => {
   const rawBody = await req.text();
   let event: Stripe.Event;
 
+  const currentWebhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET") || webhookSecret;
+  const currentConnectSecret = Deno.env.get("STRIPE_CONNECT_WEBHOOK_SECRET") || connectWebhookSecret;
+
   try {
     event = await stripe.webhooks.constructEventAsync(
       rawBody,
       signature,
-      webhookSecret,
+      currentWebhookSecret,
       undefined,
       cryptoProvider
     );
   } catch (err: any) {
-    if (connectWebhookSecret) {
+    if (currentConnectSecret) {
       try {
         event = await stripe.webhooks.constructEventAsync(
           rawBody,
           signature,
-          connectWebhookSecret,
+          currentConnectSecret,
           undefined,
           cryptoProvider
         );
@@ -384,9 +390,13 @@ Deno.serve(async (req: Request) => {
   console.log(`[StripeWebhook] Processing Event ${event.id} [${event.type}]...`);
 
   // Initialize Supabase Client with service role for full admin access
-  const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
-    auth: { persistSession: false },
-  });
+  const supabase = customSupabaseClient || createClient(
+    Deno.env.get("SUPABASE_URL") || supabaseUrl,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || supabaseServiceRoleKey,
+    {
+      auth: { persistSession: false },
+    }
+  );
 
   // 2. Strict Idempotency Check
   const { data: existingEvent } = await supabase
@@ -408,7 +418,7 @@ Deno.serve(async (req: Request) => {
   try {
     const dataObject = event.data.object as any;
 
-    switch (event.type) {
+    switch (event.type as string) {
       // -------------------------------------------------------------
       // Event: payment_intent.succeeded
       // -------------------------------------------------------------
@@ -1380,4 +1390,11 @@ Deno.serve(async (req: Request) => {
       }
     );
   }
-});
+}
+
+export default handleWebhookRequest;
+
+if (import.meta.main) {
+  Deno.serve(handleWebhookRequest);
+}
+

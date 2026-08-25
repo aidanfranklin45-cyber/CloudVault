@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "lib": ["deno.window", "deno.ns"]
+  },
+  "imports": {
+    "std/assert": "https://deno.land/std@0.224.0/assert/mod.ts",
+    "stripe": "npm:stripe@^14.0.0"
+  },
+  "tasks": {
+    "test": "deno test --allow-env --allow-net --allow-read"
+  }
+}
