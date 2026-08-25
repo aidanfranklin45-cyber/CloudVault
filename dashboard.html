@@ -2150,10 +2150,17 @@
             const handledToteIds = new Set();
 
             // Helper to get exact Room Number and PIN from request data or fallback
-            const resolveRoomAndPin = (req) => {
+            const resolveRoomAndPin = (req, specificTotes) => {
                 let room = (req && req.assigned_room) ? Number(req.assigned_room) : null;
                 if (!room && req && (req.room_number || req.staging_room_number)) {
                     room = Number(req.room_number || req.staging_room_number);
+                }
+                if (!room && specificTotes && specificTotes.length > 0) {
+                    const stagedItem = specificTotes.find(t => t.location_code && t.location_code.match(/ROOM-?(\d+)/i));
+                    if (stagedItem) {
+                        const m = stagedItem.location_code.match(/ROOM-?(\d+)/i);
+                        if (m) room = parseInt(m[1], 10);
+                    }
                 }
                 if (!room && typeof currentInventory !== 'undefined' && currentInventory) {
                     const stagedItem = currentInventory.find(t => t.location_code && t.location_code.match(/ROOM-?(\d+)/i));
@@ -2308,8 +2315,6 @@
             if (retrievalReqs.length > 0) {
                 retrievalReqs.forEach(primaryReq => {
                     const fulfillmentType = primaryReq.fulfillment_type || primaryReq.request_type || 'staging';
-                    const { room: roomNum, pin } = resolveRoomAndPin(primaryReq);
-
                     const rawItems = primaryReq.requested_items || primaryReq.requested_tote_codes || primaryReq.totes || [];
                     const groupRequestedIdentifiers = new Set(rawItems);
 
@@ -2338,6 +2343,7 @@
                         }));
                     }
                     const groupTotesToDisplay = groupTotes.length > 0 ? groupTotes : currentInventory;
+                    const { room: roomNum, pin } = resolveRoomAndPin(primaryReq, groupTotesToDisplay);
 
                     // Preserve immutable scheduled target date and time slot as source of truth
                     const rawDate = primaryReq.target_date || new Date().toISOString().split('T')[0];
