@@ -1501,6 +1501,35 @@
                     </div>
                 </div>
 
+                <!-- Active Creator / Promotional Discount Banner & Expiry Date -->
+                <div id="billing-promo-banner-container" class="hidden bg-emerald-950/40 p-3.5 rounded-xl border border-emerald-400/30 space-y-2 text-xs text-emerald-100">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">🎉</span>
+                            <div>
+                                <span class="font-extrabold text-white block text-xs">
+                                    Promo Code <span id="billing-promo-code-name" class="font-mono bg-emerald-400/20 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-400/40 font-bold">ROSS20%</span> Active
+                                </span>
+                                <span id="billing-promo-discount-desc" class="text-[10px] text-emerald-200 block">20% discount applied to your monthly plan (Month 1 of 2).</span>
+                            </div>
+                        </div>
+                        <span id="billing-promo-badge" class="text-[10px] font-extrabold uppercase bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span id="billing-promo-badge-text">20% Off Active</span>
+                        </span>
+                    </div>
+                    
+                    <div class="pt-2 border-t border-emerald-400/20 flex items-center justify-between text-[11px]">
+                        <div class="flex items-center gap-1.5 text-emerald-200">
+                            <span>📅</span>
+                            <span>Discount Ends On: <strong id="billing-promo-expiry-date" class="text-white font-bold">Oct 24, 2026</strong></span>
+                        </div>
+                        <span id="billing-promo-revert-desc" class="text-[10px] text-emerald-300 font-semibold">
+                            Reverts to $27.13/mo on Month 3
+                        </span>
+                    </div>
+                </div>
+
                 <!-- Grandfathered Price Lock Protection Badge & Live Countdown Timer -->
                 <div id="price-lock-banner-container" class="bg-white/10 p-3.5 rounded-xl border border-white/15 space-y-2 text-xs text-blue-100">
                     <div class="flex items-center justify-between">
@@ -6125,9 +6154,78 @@
                 const monthlyTax = Math.round(baseMonthly * userTaxRate * 100) / 100;
                 const afterTaxMonthly = Math.round((baseMonthly + monthlyTax) * 100) / 100;
 
+                // 1. Resolve Active Customer Promo Code & Expiry Timeline
+                const profile = (currentUserProfile || currentProfile || (currentUser ? await getCachedUserProfile(currentUser.id) : null));
+                const rawPromoCode = profile?.referred_by_promo_code || profile?.referred_by_code;
+                const promoBanner = document.getElementById('billing-promo-banner-container');
+                let isPromoActive = false;
+                let discountedAftertax = afterTaxMonthly;
+
+                if (rawPromoCode && typeof supabase !== 'undefined' && supabase) {
+                    try {
+                        const cleanCode = rawPromoCode.replace(/[% ]/g, '').toUpperCase();
+                        const { data: promoData } = await supabase.from('promo_codes')
+                            .select('*')
+                            .or(`code.eq.${cleanCode},code.eq.${cleanCode}%,code.ilike.${cleanCode}%`)
+                            .maybeSingle();
+
+                        if (promoData && promoData.customer_discount_pct && promoData.customer_discount_duration_months) {
+                            const discountPct = Number(promoData.customer_discount_pct);
+                            const durationMonths = Number(promoData.customer_discount_duration_months);
+
+                            // Calculate referral / subscription start date
+                            const refDate = profile?.referred_at ? new Date(profile.referred_at) : (currentSubscription.created_at ? new Date(currentSubscription.created_at) : new Date());
+                            const now = new Date();
+                            const monthDiff = Math.max(1, (now.getFullYear() - refDate.getFullYear()) * 12 + (now.getMonth() - refDate.getMonth()) + 1);
+
+                            if (monthDiff <= durationMonths) {
+                                isPromoActive = true;
+                                const discountSubtotal = Math.round(baseMonthly * (1 - (discountPct / 100)) * 100) / 100;
+                                const discountTax = Math.round(discountSubtotal * userTaxRate * 100) / 100;
+                                discountedAftertax = Math.round((discountSubtotal + discountTax) * 100) / 100;
+
+                                // Calculate exact expiration date (renewal date after durationMonths)
+                                const promoExpiryDate = new Date(refDate.getTime());
+                                promoExpiryDate.setMonth(promoExpiryDate.getMonth() + durationMonths);
+
+                                const promoNameEl = document.getElementById('billing-promo-code-name');
+                                const promoDescEl = document.getElementById('billing-promo-discount-desc');
+                                const promoBadgeEl = document.getElementById('billing-promo-badge-text');
+                                const promoExpiryEl = document.getElementById('billing-promo-expiry-date');
+                                const promoRevertEl = document.getElementById('billing-promo-revert-desc');
+
+                                if (promoNameEl) promoNameEl.textContent = promoData.code;
+                                if (promoDescEl) promoDescEl.textContent = `${discountPct}% discount applied to monthly storage (Month ${monthDiff} of ${durationMonths}).`;
+                                if (promoBadgeEl) promoBadgeEl.textContent = `${discountPct}% Off Active`;
+                                if (promoExpiryEl) promoExpiryEl.textContent = promoExpiryDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+                                if (promoRevertEl) promoRevertEl.textContent = `Reverts to $${afterTaxMonthly.toFixed(2)}/mo on Month ${durationMonths + 1}`;
+
+                                if (promoBanner) promoBanner.classList.remove('hidden');
+                            } else {
+                                if (promoBanner) promoBanner.classList.add('hidden');
+                            }
+                        } else {
+                            if (promoBanner) promoBanner.classList.add('hidden');
+                        }
+                    } catch (promoErr) {
+                        console.warn('[Billing Promo Resolution Notice]', promoErr);
+                        if (promoBanner) promoBanner.classList.add('hidden');
+                    }
+                } else {
+                    if (promoBanner) promoBanner.classList.add('hidden');
+                }
+
                 if (planNameEl) planNameEl.textContent = `${totalTotes} Tote${totalTotes !== 1 ? 's' : ''} Storage Plan`;
-                if (monthlyAmountEl) monthlyAmountEl.innerHTML = `$${afterTaxMonthly.toFixed(2)}<span class="text-xs font-normal text-blue-200">/mo</span>`;
-                if (tierLabelEl) tierLabelEl.textContent = `Tier @ $${toteRate.toFixed(2)}/tote${monthlyTax > 0 ? ` ($${baseMonthly.toFixed(2)} + $${monthlyTax.toFixed(2)} tax)` : ''}`;
+                
+                if (isPromoActive) {
+                    if (monthlyAmountEl) {
+                        monthlyAmountEl.innerHTML = `$${discountedAftertax.toFixed(2)}<span class="text-xs font-normal text-blue-200">/mo</span> <div class="text-[11px] font-semibold text-emerald-200 mt-0.5"><span class="line-through opacity-75 text-blue-300 font-normal">$${afterTaxMonthly.toFixed(2)}</span> (${profile?.referred_by_promo_code || 'Promo'} applied)</div>`;
+                    }
+                    if (tierLabelEl) tierLabelEl.textContent = `Tier @ $${toteRate.toFixed(2)}/tote • Discounted Rate ($${discountedAftertax.toFixed(2)} with tax)`;
+                } else {
+                    if (monthlyAmountEl) monthlyAmountEl.innerHTML = `$${afterTaxMonthly.toFixed(2)}<span class="text-xs font-normal text-blue-200">/mo</span>`;
+                    if (tierLabelEl) tierLabelEl.textContent = `Tier @ $${toteRate.toFixed(2)}/tote${monthlyTax > 0 ? ` ($${baseMonthly.toFixed(2)} + $${monthlyTax.toFixed(2)} tax)` : ''}`;
+                }
 
                 if (lastDateEl) {
                     const sub = currentSubscription;
@@ -6160,6 +6258,8 @@
                 if (tierLabelEl) tierLabelEl.textContent = 'Inactive';
                 if (lastDateEl) lastDateEl.textContent = 'N/A';
                 if (nextDateEl) nextDateEl.textContent = 'N/A';
+                const promoBanner = document.getElementById('billing-promo-banner-container');
+                if (promoBanner) promoBanner.classList.add('hidden');
             }
 
             // Grandfathered Price-Lock Countdown Timer (Shown only for eligible prelaunch accounts)
