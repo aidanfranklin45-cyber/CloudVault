@@ -2458,8 +2458,16 @@
                         }
                     }
                 } else if (!targetZip) {
-                    // Pre-ZIP state: Default ranges across all operating facilities
+                    // Pre-ZIP state: Always assume the highest ceiling rate across all operating facilities
                     isPriceLocked = false;
+                    if (facilityPricingRanges) {
+                        regionalRates.tier1 = facilityPricingRanges.tier1.max;
+                        regionalRates.tier2 = facilityPricingRanges.tier2.max;
+                        regionalRates.tier3 = facilityPricingRanges.tier3.max;
+                        regionalRates.tier4 = facilityPricingRanges.tier4.max;
+                        regionalRates.valet_base = facilityPricingRanges.valet_base.max;
+                        regionalRates.valet_tote_adder = facilityPricingRanges.valet_tote_adder.max;
+                    }
                 }
 
                 // Check for authentic customer reviews in Supabase (STRICT RULE: only show if authentic)
@@ -2502,16 +2510,17 @@
             const ft4 = document.getElementById('flow-tier-4-price');
 
             if (!isPriceLocked && ranges) {
-                // Display High-Low dynamic range
+                // Display High-Low dynamic range on landing page
                 if (t1) t1.innerHTML = `${ranges.tier1.label}<span class="text-xs font-normal text-slate-500">/mo</span>`;
                 if (t2) t2.innerHTML = `${ranges.tier2.label}<span class="text-xs font-normal text-slate-500">/mo</span>`;
                 if (t3) t3.innerHTML = `${ranges.tier3.label}<span class="text-xs font-normal text-slate-500">/mo</span>`;
                 if (t4) t4.innerHTML = `${ranges.tier4.label}<span class="text-xs font-normal text-slate-500">/mo</span>`;
 
-                if (ft1) ft1.innerHTML = `${ranges.tier1.label}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
-                if (ft2) ft2.innerHTML = `${ranges.tier2.label}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
-                if (ft3) ft3.innerHTML = `${ranges.tier3.label}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
-                if (ft4) ft4.innerHTML = `${ranges.tier4.label}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
+                // In checkout flow Step 1: Display highest ceiling rates before ZIP entry
+                if (ft1) ft1.innerHTML = `$${ranges.tier1.max.toFixed(2)}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
+                if (ft2) ft2.innerHTML = `$${ranges.tier2.max.toFixed(2)}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
+                if (ft3) ft3.innerHTML = `$${ranges.tier3.max.toFixed(2)}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
+                if (ft4) ft4.innerHTML = `$${ranges.tier4.max.toFixed(2)}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
             } else {
                 // Display exact locked facility rate
                 if (t1) t1.innerHTML = `$${regionalRates.tier1.toFixed(2)}<span class="text-xs font-normal text-slate-500">/mo</span>`;
@@ -2820,6 +2829,12 @@
             // Sync input UI
             const flowTotesInput = document.getElementById('flow-totes');
             if (flowTotesInput) flowTotesInput.value = flowData.totes;
+
+            // If starting checkout without a validated ZIP, ensure ceiling rates are active
+            if (!flowData.zip) {
+                isPriceLocked = false;
+                await loadRegionalRates(null);
+            }
 
             // Select logistics & calculate flow pricing
             selectFlowLogistics(flowData.logisticsType);
@@ -3383,12 +3398,11 @@
                     return;
                 }
 
+                // Capture pre-ZIP baseline monthly price
+                const prevEstimatedMonthly = flowData.price;
+
                 // Load dynamic facility rates for this validated ZIP
                 await loadRegionalRates(zip);
-
-                const banner = document.getElementById('zip-success-banner');
-                banner.innerHTML = `✓ We service your area (${area.city || zip}).`;
-                banner.classList.remove('hidden-section');
 
                 flowData.zip = zip;
                 flowData.city = area.city || '';
@@ -3405,7 +3419,19 @@
                 if (zipAddrInput) zipAddrInput.value = zip;
 
                 calculateFlowTotal();
-                logMilestone('zip_code_check', { zip: zip, city: area.city, facility_id: area.facility_id, tax_rate: flowData.taxRate });
+
+                const newMonthly = flowData.price;
+                const monthlySavings = Math.max(0, Math.round((prevEstimatedMonthly - newMonthly) * 100) / 100);
+
+                const banner = document.getElementById('zip-success-banner');
+                if (monthlySavings > 0) {
+                    banner.innerHTML = `✓ We service your area (${area.city || zip})! <span class="bg-emerald-100 text-emerald-800 font-extrabold px-2.5 py-1 rounded-lg ml-1 text-xs inline-block">🎉 Regional Savings: Your local rate is $${monthlySavings.toFixed(2)}/mo lower!</span>`;
+                } else {
+                    banner.innerHTML = `✓ We service your area (${area.city || zip}).`;
+                }
+                banner.classList.remove('hidden-section');
+
+                logMilestone('zip_code_check', { zip: zip, city: area.city, facility_id: area.facility_id, tax_rate: flowData.taxRate, savings: monthlySavings });
 
                 setTimeout(() => {
                     showStep(3);
