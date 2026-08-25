@@ -2670,10 +2670,7 @@
       }
 
       const computedGrandTotal = Math.max(0, Math.round((netTaxable + taxAmount) * 100) / 100);
-      const rawTotalAmount = Number(invoiceObj.total_amount || invoiceObj.totalAmount || 0);
-      const totalAmount = (rawTotalAmount > 0 && Math.abs(rawTotalAmount - computedGrandTotal) < 0.05)
-                          ? rawTotalAmount.toFixed(2)
-                          : computedGrandTotal.toFixed(2);
+      const totalAmount = computedGrandTotal.toFixed(2);
 
       const linesHtml = serviceLines.map(item => `
         <tr class="border-b border-slate-100 text-xs">

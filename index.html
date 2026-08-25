@@ -3815,6 +3815,26 @@
                     }
                 }
 
+                // 3c. Generate Official Authoritative Stripe Invoice & PDF Statement
+                let officialInvoice = null;
+                try {
+                    if (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.createAuthoritativeStripeInvoice === 'function') {
+                        officialInvoice = await window.StripeBillingIntegration.createAuthoritativeStripeInvoice({
+                            userId: activeUserId,
+                            customerEmail: email,
+                            customerName: name,
+                            facilityId: regionalRates?.facility_id || 'facility_yakima',
+                            toteCount: flowData.totes || 5,
+                            logisticsType: flowData.logisticsType || 'self_service',
+                            promoCode: flowData.appliedPromo?.code || '',
+                            paymentMethodId: paymentMethod.id,
+                            invoiceType: 'initial_reservation'
+                        });
+                    }
+                } catch (invGenErr) {
+                    console.warn('[Stripe Invoicing Notice]', invGenErr);
+                }
+
                 await logMilestone('completed', { uid: activeUserId, totes: flowData.totes, stripe_pm: paymentMethod.id });
 
                 // 4. Render Verified Success Screen
@@ -3823,10 +3843,11 @@
                     const isValet = flowData.logisticsType === 'valet_pickup';
                     const cardBrand = paymentMethod.card?.brand ? paymentMethod.card.brand.toUpperCase() : 'CARD';
                     const last4 = paymentMethod.card?.last4 ? `•••• ${paymentMethod.card.last4}` : '';
+                    const invNumberDisplay = officialInvoice?.invoice_number ? `<br><span class="text-xs text-blue-600 font-mono font-bold mt-1 block">Official Stripe Statement: ${officialInvoice.invoice_number}</span>` : '';
                     if (isValet) {
-                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> with <strong>Doorstep Valet Pickup</strong> on <strong>${resolvedDate}</strong> (${resolvedSlot}) is confirmed.<br><span class="text-xs text-slate-500 font-mono mt-1 block">Stripe Card Token: ${paymentMethod.id} (${cardBrand} ${last4})</span>`;
+                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> with <strong>Doorstep Valet Pickup</strong> on <strong>${resolvedDate}</strong> (${resolvedSlot}) is confirmed.<br><span class="text-xs text-slate-500 font-mono mt-1 block">Stripe Card Token: ${paymentMethod.id} (${cardBrand} ${last4})</span>${invNumberDisplay}`;
                     } else {
-                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> with <strong>Staging Room Access</strong> on <strong>${resolvedDate}</strong> (${resolvedSlot}) is confirmed.<br><span class="text-xs text-slate-500 font-mono mt-1 block">Stripe Card Token: ${paymentMethod.id} (${cardBrand} ${last4})</span>`;
+                        successTextEl.innerHTML = `Your order for <strong>${flowData.totes} totes</strong> with <strong>Staging Room Access</strong> on <strong>${resolvedDate}</strong> (${resolvedSlot}) is confirmed.<br><span class="text-xs text-slate-500 font-mono mt-1 block">Stripe Card Token: ${paymentMethod.id} (${cardBrand} ${last4})</span>${invNumberDisplay}`;
                     }
                 }
 

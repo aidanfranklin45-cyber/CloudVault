@@ -1618,6 +1618,32 @@
       }
 
       return resData;
+    },
+
+    /**
+     * Creates an authoritative Stripe invoice and synchronizes official Stripe statement metrics.
+     * @param {Object} params - Invoice creation parameters (toteCount, facilityId, promoCode, paymentMethodId, customerEmail, etc.)
+     */
+    createAuthoritativeStripeInvoice: async function (params = {}) {
+      const baseUrl = global.SUPABASE_URL || (global.supabase && global.supabase.supabaseUrl) || 'https://xbxvebnrjryvksvtufqj.supabase.co';
+      const anonKey = global.SUPABASE_ANON_KEY || (global.supabase && global.supabase.supabaseKey) || '';
+
+      const response = await fetch(`${baseUrl}/functions/v1/stripe-invoice-ops`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': anonKey,
+          'Authorization': `Bearer ${anonKey}`
+        },
+        body: JSON.stringify(params)
+      });
+
+      const resData = await response.json();
+      if (!response.ok || !resData.success) {
+        throw new Error(resData.error || 'Failed to create authoritative Stripe invoice');
+      }
+
+      return resData.invoice;
     }
   };
 
