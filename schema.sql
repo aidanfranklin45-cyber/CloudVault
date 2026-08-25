@@ -683,8 +683,8 @@ DECLARE
   v_facility_id TEXT;
   v_role public.user_role;
 BEGIN
-  v_zip := COALESCE(new.raw_user_meta_data->>'zip', '98101');
-  v_facility_id := new.raw_user_meta_data->>'assigned_facility_id';
+  v_zip := NULLIF(TRIM(new.raw_user_meta_data->>'zip'), '');
+  v_facility_id := NULLIF(TRIM(new.raw_user_meta_data->>'assigned_facility_id'), '');
   
   IF (new.raw_user_meta_data->>'role') IS NOT NULL AND (new.raw_user_meta_data->>'role') != '' THEN
     BEGIN
@@ -713,9 +713,9 @@ BEGIN
       END IF;
     END IF;
 
-    -- Fail-safe default
+    -- Fail-safe dynamic default
     IF v_facility_id IS NULL THEN
-      v_facility_id := 'facility_seattle_north';
+      SELECT id INTO v_facility_id FROM public.facilities LIMIT 1;
     END IF;
   END IF;
 
@@ -730,9 +730,12 @@ BEGIN
       v_zip
   )
   ON CONFLICT (id) DO UPDATE SET
-      name = EXCLUDED.name,
+      name = COALESCE(NULLIF(EXCLUDED.name, 'Unknown'), public.users.name),
+      phone = COALESCE(NULLIF(EXCLUDED.phone, ''), public.users.phone),
       role = EXCLUDED.role,
-      assigned_facility_id = EXCLUDED.assigned_facility_id;
+      assigned_facility_id = COALESCE(EXCLUDED.assigned_facility_id, public.users.assigned_facility_id),
+      active_zone = COALESCE(EXCLUDED.active_zone, public.users.active_zone);
+
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -5829,7 +5832,6 @@ RETURNS TRIGGER AS $$
 DECLARE
     v_user RECORD;
     v_sa RECORD;
-    v_fac RECORD;
     v_inv_exists BOOLEAN;
     v_inv_num TEXT;
     v_facility_id TEXT;
@@ -5865,16 +5867,6 @@ BEGIN
 
         IF v_facility_id IS NULL THEN
             v_facility_id := COALESCE(v_user.assigned_facility_id, 'facility_yakima');
-        END IF;
-
-        IF v_tax_rate = 0.00 AND v_facility_id IS NOT NULL THEN
-            SELECT * INTO v_fac FROM public.facilities WHERE id = v_facility_id;
-            IF FOUND THEN
-                IF v_fac.tax_rate_pct IS NOT NULL AND v_fac.tax_rate_pct > 0 THEN
-                    v_tax_rate := v_fac.tax_rate_pct / 100.0;
-                    v_tax_label := COALESCE(v_fac.tax_label, (v_fac.state || ' State & Local Sales Tax (' || v_fac.tax_rate_pct::text || '%)'));
-                END IF;
-            END IF;
         END IF;
 
         v_subtotal := COALESCE(NEW.total_totes * NEW.tote_rate, NEW.recurring_storage, 0.00);
@@ -5958,19 +5950,19 @@ BEGIN
             0.00,
             v_total,
             v_total,
-            'card',
-            'SUB-INIT-' || SUBSTRING(MD5(RANDOM()::TEXT) FROM 1 FOR 8),
-            'Initial storage reservation invoice with dynamic facility and sales tax.',
+            'Stripe Card on File',
+            COALESCE(NEW.stripe_subscription_id, 'stripe_initial_checkout'),
+            'Initial reservation & monthly tote storage allocation',
             v_line_items,
-            COALESCE(NEW.created_at, NOW()) + INTERVAL '3 days',
-            COALESCE(NEW.created_at, NOW()),
-            COALESCE(NEW.created_at, NOW())
+            CURRENT_DATE + interval '30 days',
+            NOW(),
+            NOW()
         );
     END IF;
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP TRIGGER IF EXISTS trg_auto_generate_subscription_invoice ON public.subscriptions;
 CREATE TRIGGER trg_auto_generate_subscription_invoice

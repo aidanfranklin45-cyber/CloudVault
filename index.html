@@ -4408,7 +4408,12 @@
                         options: {
                             data: {
                                 name: name,
-                                phone: phone
+                                phone: phone,
+                                zip: serviceZip,
+                                city: city,
+                                state: state,
+                                assigned_facility_id: regionalRates?.facility_id || null,
+                                role: 'customer'
                             }
                         }
                     });
@@ -4484,7 +4489,8 @@
                 });
 
                 if (provErr) {
-                    console.warn('[Provisioning Warning]', provErr);
+                    console.error('[Provisioning Error]', provErr);
+                    throw new Error(provErr.message || 'Provisioning storage reservation failed.');
                 }
 
                 // 3b. Record Creator Promo Attribution Ledger
