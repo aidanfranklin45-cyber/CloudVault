@@ -848,6 +848,7 @@
         let cachedInventory = [];
         let cachedSubscriptions = [];
         let cachedOperationalZones = [];
+        let cachedPrivacyLogs = [];
         let allCustomersRoster = [];
         let selectedPrivacyCustomer = null;
         let currentSelectedToteCode = null;
@@ -1087,13 +1088,13 @@
         // Telemetry Radar Calculations
         // =========================================================================
         function renderTelemetryGauges() {
-            const currentFacId = document.getElementById('global-facility-select')?.value || localStorage.getItem('cloudvault_selected_facility');
+            const currentFacId = document.getElementById('global-facility-select')?.value || localStorage.getItem('cloudvault_selected_facility') || cachedFacilities[0]?.id;
             const fac = cachedFacilitiesMap[currentFacId] || cachedFacilities[0] || {};
 
-            // 1. Warehouse Density & Usable Capacity
+            // 1. Warehouse Density & Usable Capacity (Dynamic from DB specs)
             const facTotes = cachedInventory.filter(i => (i.facility_id === fac.id) || (!i.facility_id && i.users?.assigned_facility_id === fac.id));
-            const maxCap = Number(fac.max_tote_capacity) || (Number(fac.usable_sqft) ? Math.floor(Number(fac.usable_sqft) * 0.8) : 1000);
-            const usableSqft = fac.usable_sqft ? Number(fac.usable_sqft).toLocaleString() : 'N/A';
+            const maxCap = Number(fac.tote_capacity) || (Number(fac.usable_warehouse_sqft) ? Math.floor(Number(fac.usable_warehouse_sqft) * (1 / (Number(fac.sqft_per_tote) || 1.0))) : 300);
+            const usableSqft = (fac.usable_warehouse_sqft !== null && fac.usable_warehouse_sqft !== undefined) ? Number(fac.usable_warehouse_sqft).toLocaleString() : 'N/A';
             const densityPct = maxCap > 0 ? Math.min(100, Math.round((facTotes.length / maxCap) * 100)) : 0;
 
             document.getElementById('tel-active-totes').textContent = facTotes.length.toLocaleString();
@@ -1103,28 +1104,37 @@
             document.getElementById('tel-density-badge').textContent = `${densityPct}% Cap`;
             document.getElementById('tel-density-bar').style.width = `${densityPct}%`;
 
-            // 2. Stripe MRR & Financials
-            const activeSubs = cachedSubscriptions.filter(s => s.status === 'active' || s.status === 'trialing');
-            const totalMrr = activeSubs.reduce((acc, sub) => {
-                const monthly = Number(sub.monthly_total || 0);
-                const recurring = Number(sub.recurring_storage || 0);
-                const valet = Number(sub.valet_fee || 0);
-                const count = Number(sub.total_totes || sub.tote_count || 0);
-                const rate = Number(sub.tote_rate || 0);
-                const val = monthly > 0 ? monthly : (recurring > 0 ? (recurring + valet) : (count * rate + valet));
-                return acc + val;
-            }, 0);
-            const totalHeldTotes = activeSubs.reduce((sum, s) => sum + Number(s.total_totes || s.tote_count || 0), 0);
-            const avgRate = totalHeldTotes > 0 ? (totalMrr / totalHeldTotes) : 0;
+            // 2. Stripe MRR & Financials (Scoped to Facility Customer Portfolio)
+            const facUserIds = new Set(facTotes.map(i => i.uid).filter(Boolean));
+            const facSubs = cachedSubscriptions.filter(s => (s.status === 'active' || s.status === 'trialing') && (facUserIds.has(s.user_id)));
+            let totalMrr = 0;
+            if (facSubs.length > 0) {
+                totalMrr = facSubs.reduce((acc, sub) => {
+                    const monthly = Number(sub.monthly_total || 0);
+                    const recurring = Number(sub.recurring_storage || 0);
+                    const valet = Number(sub.valet_fee || 0);
+                    const count = Number(sub.total_totes || sub.tote_count || 0);
+                    const rate = Number(sub.tote_rate || 0);
+                    const val = monthly > 0 ? monthly : (recurring > 0 ? (recurring + valet) : (count * rate + valet));
+                    return acc + val;
+                }, 0);
+            } else {
+                const tier1 = Number(fac.tier1_rate) || 5.00;
+                const valet = Number(fac.valet_base) || 0;
+                totalMrr = (facTotes.length * tier1) + (Math.round(facTotes.length * 0.15) * valet);
+            }
+
+            const totalAccounts = facSubs.length > 0 ? facSubs.length : facUserIds.size;
+            const avgRate = facTotes.length > 0 ? (totalMrr / facTotes.length) : (Number(fac.tier1_rate) || 5.00);
 
             document.getElementById('tel-mrr-total').textContent = `$${totalMrr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            document.getElementById('tel-subs-count').textContent = `${activeSubs.length} Accounts`;
+            document.getElementById('tel-subs-count').textContent = `${totalAccounts} Account${totalAccounts === 1 ? '' : 's'}`;
             document.getElementById('tel-avg-rate').textContent = `$${avgRate.toFixed(2)}/tote`;
 
-            // 3. Queue Velocity
+            // 3. Queue Velocity (Intake / Staged / Dispatch / Missing)
             const qIntake = facTotes.filter(i => i.status === 'intake' || (!i.status || i.status === 'pending-intake')).length;
             const qStaged = facTotes.filter(i => i.status === 'staged' || i.status === 'pending-stage').length;
-            const qDispatch = facTotes.filter(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery').length;
+            const qDispatch = facTotes.filter(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery' || i.status === 'with-customer').length;
             const qMissing = facTotes.filter(i => i.status === 'missing-tote').length;
 
             document.getElementById('tel-q-intake').textContent = qIntake;
@@ -1132,6 +1142,13 @@
             document.getElementById('tel-q-dispatch').textContent = qDispatch;
             document.getElementById('tel-q-missing').textContent = qMissing;
             document.getElementById('tel-total-ops-count').textContent = `${qIntake + qStaged + qDispatch + qMissing} In Flight`;
+
+            // 4. Data Governance & Statutory Logs
+            const purgedCount = cachedPrivacyLogs ? cachedPrivacyLogs.length : 0;
+            const purgedCountEl = document.getElementById('tel-privacy-erased-count');
+            if (purgedCountEl) purgedCountEl.textContent = `${purgedCount} Purged`;
+            const auditLatestEl = document.getElementById('tel-audit-latest');
+            if (auditLatestEl) auditLatestEl.textContent = purgedCount > 0 ? `${purgedCount} Logged` : 'Active';
         }
 
         // =========================================================================
@@ -1537,7 +1554,13 @@
                 const { data: logs, error } = await supabase.from('privacy_audit_logs').select('*').order('executed_at', { ascending: false }).limit(20);
                 if (error) throw error;
                 const records = logs || [];
+                cachedPrivacyLogs = records;
                 if (countEl) countEl.textContent = `${records.length} records`;
+
+                const purgedCountEl = document.getElementById('tel-privacy-erased-count');
+                if (purgedCountEl) purgedCountEl.textContent = `${records.length} Purged`;
+                const auditLatestEl = document.getElementById('tel-audit-latest');
+                if (auditLatestEl) auditLatestEl.textContent = records.length > 0 ? `${records.length} Logged` : 'Active';
 
                 if (records.length === 0) {
                     list.innerHTML = '<div class="text-center text-gray-500 py-3">No compliance erasure records yet.</div>';
