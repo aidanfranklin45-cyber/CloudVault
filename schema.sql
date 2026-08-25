@@ -5015,7 +5015,7 @@ CREATE POLICY admin_promo_redemptions_policy ON public.promo_redemptions
         OR EXISTS (SELECT 1 FROM public.users u WHERE u.id = (SELECT auth.uid()) AND u.role IN ('executive', 'warehouse_manager'))
     );
 
--- 6. RPC: Validate Promo Code For Checkout
+-- 6. RPC: Validate Promo Code For Checkout (Strict Zero-Default Freeze)
 CREATE OR REPLACE FUNCTION public.validate_promo_code_for_checkout(
     p_code TEXT,
     p_user_uid UUID DEFAULT NULL,
@@ -5024,7 +5024,7 @@ CREATE OR REPLACE FUNCTION public.validate_promo_code_for_checkout(
 DECLARE
     v_promo RECORD;
     v_creator RECORD;
-    v_discount_pct NUMERIC(5,2) := 0.00;
+    v_discount_pct NUMERIC(5,2);
     v_discount_amt NUMERIC(10,2) := 0.00;
     v_net_amt NUMERIC(10,2) := p_gross_amount;
     v_clean_code TEXT;
@@ -5065,8 +5065,17 @@ BEGIN
         RETURN jsonb_build_object('valid', false, 'message', 'This promo code has reached its maximum redemption limit');
     END IF;
 
-    -- Calculate Discount Amount Dynamically
-    v_discount_pct := COALESCE(v_promo.customer_discount_pct, 20.00);
+    -- Strict Invariant: No hardcoded discount defaults. Must be explicitly configured.
+    IF v_promo.customer_discount_pct IS NULL OR v_promo.customer_discount_duration_months IS NULL THEN
+        RETURN jsonb_build_object(
+            'valid', false,
+            'frozen', true,
+            'message', 'Promotion configuration is incomplete (missing discount rate or duration). Operation frozen pending operator setup.'
+        );
+    END IF;
+
+    v_discount_pct := v_promo.customer_discount_pct;
+
     IF p_gross_amount > 0 THEN
         v_discount_amt := ROUND(p_gross_amount * (v_discount_pct / 100.0), 2);
         v_net_amt := GREATEST(0.00, p_gross_amount - v_discount_amt);
@@ -5085,7 +5094,7 @@ BEGIN
         'creator_name', COALESCE(v_creator.name, 'Partner Creator'),
         'creator_handle', COALESCE(v_creator.handle, ''),
         'customer_discount_pct', v_discount_pct,
-        'customer_discount_duration_months', COALESCE(v_promo.customer_discount_duration_months, 2),
+        'customer_discount_duration_months', v_promo.customer_discount_duration_months,
         'discount_amount', v_discount_amt,
         'net_amount', v_net_amt,
         'stripe_coupon_id', v_promo.stripe_coupon_id,
@@ -5113,11 +5122,11 @@ DECLARE
     v_first_ref_date TIMESTAMPTZ;
     v_month_diff INT := 1;
     v_commission_eligible BOOLEAN := true;
-    v_comm_rate NUMERIC(5,2) := 10.00;
+    v_comm_rate NUMERIC(5,2);
     v_comm_amount NUMERIC(10,2) := 0.00;
-    v_comm_duration INT := 6;
-    v_cust_discount_duration INT := 2;
-    v_cust_discount_pct NUMERIC(5,2) := 20.00;
+    v_comm_duration INT;
+    v_cust_discount_duration INT;
+    v_cust_discount_pct NUMERIC(5,2);
     v_redemption_id UUID;
 BEGIN
     IF p_code IS NULL OR TRIM(p_code) = '' THEN
@@ -5140,11 +5149,24 @@ BEGIN
     SELECT * INTO v_creator FROM public.creators WHERE id = v_promo.creator_id LIMIT 1;
     SELECT * INTO v_user FROM public.users WHERE id = p_customer_uid LIMIT 1;
 
-    -- Dynamic Parameters from promo record
-    v_comm_duration := COALESCE(v_promo.commission_duration_months, v_creator.commission_duration_months, 6);
-    v_cust_discount_duration := COALESCE(v_promo.customer_discount_duration_months, 2);
-    v_cust_discount_pct := COALESCE(v_promo.customer_discount_pct, 20.00);
-    v_comm_rate := COALESCE(v_promo.commission_rate_pct, v_creator.default_commission_pct, 10.00);
+    -- Dynamic Parameters from promo & creator records (Strict: Freeze if missing)
+    IF v_promo.customer_discount_pct IS NULL OR v_promo.customer_discount_duration_months IS NULL THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'frozen', true,
+            'message', 'Attribution frozen: Promo code configuration is missing discount rate or duration.'
+        );
+    END IF;
+
+    v_cust_discount_pct := v_promo.customer_discount_pct;
+    v_cust_discount_duration := v_promo.customer_discount_duration_months;
+    v_comm_rate := COALESCE(v_promo.commission_rate_pct, v_creator.default_commission_pct);
+    v_comm_duration := COALESCE(v_promo.commission_duration_months, v_creator.commission_duration_months);
+
+    IF v_comm_rate IS NULL OR v_comm_duration IS NULL THEN
+        v_commission_eligible := false;
+        v_comm_amount := 0.00;
+    END IF;
 
     -- Determine month index from referral date
     v_first_ref_date := COALESCE(v_user.referred_at, v_user.created_at, NOW());
