@@ -6001,6 +6001,8 @@
                         toggleSettingsSameAsBilling();
                     }
                 }
+                // Refresh Account Erasure Eligibility Status
+                await refreshAccountErasureStatus();
             } catch (e) {
                 console.error("Failed to load settings data:", e);
             }
@@ -7047,6 +7049,148 @@
                 }
             }
 
+            // ============================================================
+            // Customer Account Deletion & Right to Erasure Controller
+            // ============================================================
+            async function refreshAccountErasureStatus() {
+                try {
+                    const subBadge = document.getElementById('erasure-sub-badge');
+                    const totesBadge = document.getElementById('erasure-totes-badge');
+                    const actionContainer = document.getElementById('erasure-action-container');
+
+                    if (!currentUser) return;
+
+                    // 1. Check user profile and subscription status
+                    const subStatus = (currentProfile?.subscription_status || currentUserProfile?.subscription_status || currentSubscription?.status || 'active').toLowerCase();
+                    const isSubCanceled = ['canceled', 'cancelled', 'inactive', 'terminated'].includes(subStatus);
+
+                    // 2. Count active totes held
+                    const activeTotes = (currentInventory || []).filter(i => !['returned', 'discarded', 'released'].includes(i.status)).length || (currentProfile?.active_totes_held || 0);
+
+                    // 3. Count open requests
+                    const openRequests = (currentRequests || []).filter(r => ['pending', 'accepted', 'in_transit', 'dispatched', 'retrieval_ready'].includes(r.status)).length;
+
+                    // Update Badges
+                    if (subBadge) {
+                        if (isSubCanceled) {
+                            subBadge.className = 'font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200';
+                            subBadge.textContent = '✓ Deactivated / Canceled';
+                        } else {
+                            subBadge.className = 'font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200';
+                            subBadge.textContent = `❌ Active (${subStatus})`;
+                        }
+                    }
+
+                    if (totesBadge) {
+                        if (activeTotes === 0 && openRequests === 0) {
+                            totesBadge.className = 'font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200';
+                            totesBadge.textContent = '✓ 0 Totes in Custody';
+                        } else {
+                            totesBadge.className = 'font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200';
+                            totesBadge.textContent = `❌ ${activeTotes} Totes Active${openRequests > 0 ? ` (${openRequests} delivery in progress)` : ''}`;
+                        }
+                    }
+
+                    // Render Action UI
+                    if (!actionContainer) return;
+
+                    const isEligible = isSubCanceled && activeTotes === 0 && openRequests === 0;
+
+                    if (isEligible) {
+                        actionContainer.innerHTML = `
+                            <div class="space-y-2 pt-1">
+                                <p class="text-[11px] text-gray-600 leading-normal">
+                                    Your account is fully deactivated and has zero active containers in custody. You are eligible to permanently erase your profile and records.
+                                </p>
+                                <button type="button" onclick="openAccountErasureModal()" class="w-full py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+                                    <span>🗑️ Request Permanent Account Deletion</span>
+                                </button>
+                            </div>
+                        `;
+                    } else {
+                        let blockingReason = '';
+                        if (!isSubCanceled && activeTotes > 0) {
+                            blockingReason = 'Account erasure requires canceling your subscription and retrieving/returning all physical containers first.';
+                        } else if (!isSubCanceled) {
+                            blockingReason = 'Account erasure is only permitted for deactivated accounts. Please cancel your active subscription first.';
+                        } else {
+                            blockingReason = 'You still have physical containers stored or in delivery. All totes must be returned to CloudVault custody before permanent data erasure.';
+                        }
+
+                        actionContainer.innerHTML = `
+                            <div class="space-y-2 pt-1">
+                                <div class="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-900 leading-normal">
+                                    <strong>🔒 Deletion Locked:</strong> ${blockingReason}
+                                </div>
+                                <div class="flex gap-2">
+                                    ${!isSubCanceled ? `
+                                        <button type="button" onclick="closeSettingsModal(); triggerCancelFlowUser();" class="flex-1 py-2 px-3 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold text-xs transition cursor-pointer">
+                                            Cancel Subscription
+                                        </button>
+                                    ` : ''}
+                                    ${activeTotes > 0 ? `
+                                        <button type="button" onclick="closeSettingsModal(); openExcessTotesModal();" class="flex-1 py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs transition cursor-pointer">
+                                            Schedule Return
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }
+                } catch (err) {
+                    console.error('Error refreshing account erasure status:', err);
+                }
+            }
+
+            function openAccountErasureModal() {
+                closeSettingsModal();
+                const input = document.getElementById('erasure-confirm-input');
+                if (input) input.value = '';
+                const btn = document.getElementById('btn-confirm-erasure');
+                if (btn) btn.disabled = true;
+                const modal = document.getElementById('account-erasure-modal');
+                if (modal) modal.classList.remove('hidden');
+            }
+
+            function closeAccountErasureModal() {
+                const modal = document.getElementById('account-erasure-modal');
+                if (modal) modal.classList.add('hidden');
+            }
+
+            function validateErasureInput() {
+                const val = document.getElementById('erasure-confirm-input')?.value?.trim().toUpperCase();
+                const btn = document.getElementById('btn-confirm-erasure');
+                if (btn) {
+                    btn.disabled = (val !== 'DELETE');
+                }
+            }
+
+            async function executeAccountErasure() {
+                const btn = document.getElementById('btn-confirm-erasure');
+                const btnText = document.getElementById('erasure-btn-text');
+
+                if (btn) btn.disabled = true;
+                if (btnText) btnText.innerHTML = '<span class="inline-block animate-spin mr-1.5">🌀</span> Erasing Data...';
+
+                try {
+                    const { data, error } = await supabase.rpc('customer_request_account_erasure');
+                    if (error) throw error;
+
+                    // Clear client session and local caches
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    await supabase.auth.signOut();
+
+                    // Redirect to login with confirmation
+                    window.location.href = 'login.html?erased=1';
+                } catch (err) {
+                    console.error('Account erasure failed:', err);
+                    alert('Account erasure could not be completed: ' + (err.message || 'Please contact support.'));
+                    if (btn) btn.disabled = false;
+                    if (btnText) btnText.textContent = 'Permanently Delete';
+                }
+            }
+
             window.openExcessTotesModal = openExcessTotesModal;
             window.closeExcessTotesModal = closeExcessTotesModal;
             window.toggleExcessToteSelection = toggleExcessToteSelection;
@@ -7059,6 +7203,11 @@
             window.setFeedbackType = setFeedbackType;
             window.toggleDiagnosticsPreview = toggleDiagnosticsPreview;
             window.handleFeedbackSubmit = handleFeedbackSubmit;
+            window.refreshAccountErasureStatus = refreshAccountErasureStatus;
+            window.openAccountErasureModal = openAccountErasureModal;
+            window.closeAccountErasureModal = closeAccountErasureModal;
+            window.validateErasureInput = validateErasureInput;
+            window.executeAccountErasure = executeAccountErasure;
     </script>
 </body>
 </html>

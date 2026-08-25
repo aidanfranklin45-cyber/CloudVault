@@ -583,23 +583,36 @@
         });
 
         // Initialize Passive Hardware 2D Barcode Scanner Listener for Employee Badges
-        initGlobalBadgeScanner({
-            onBadgeScanStart: (code) => {
-                showBadgeScanToast('Scanning badge...', 'info');
-            },
-            onBadgeSuccess: (user) => {
-                showBadgeScanToast(`✓ Welcome, ${user.name || 'Staff'}! Authenticating shift...`, 'success');
-                if (user.assigned_facility_id) {
-                    localStorage.setItem('cloudvault_selected_facility', user.assigned_facility_id);
+        if (typeof initGlobalBadgeScanner === 'function') {
+            initGlobalBadgeScanner({
+                onBadgeScanStart: (code) => {
+                    showBadgeScanToast('Scanning badge...', 'info');
+                },
+                onBadgeSuccess: (user) => {
+                    showBadgeScanToast(`✓ Welcome, ${user.name || 'Staff'}! Authenticating shift...`, 'success');
+                    if (user.assigned_facility_id) {
+                        localStorage.setItem('cloudvault_selected_facility', user.assigned_facility_id);
+                    }
+                    setTimeout(() => {
+                        window.location.href = 'admin.html';
+                    }, 400);
+                },
+                onBadgeError: (err) => {
+                    showBadgeScanToast(err || 'Badge verification rejected.', 'error');
                 }
-                setTimeout(() => {
-                    window.location.href = 'admin.html';
-                }, 400);
-            },
-            onBadgeError: (err) => {
-                showBadgeScanToast(err || 'Badge verification rejected.', 'error');
+            });
+        }
+
+        // Handle Account Erasure / Privacy Notification
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('erased')) {
+            const notice = document.getElementById('auth-notice');
+            if (notice) {
+                notice.className = 'mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-400 text-emerald-900 text-xs font-bold text-center leading-relaxed';
+                notice.innerHTML = '✓ Your CloudVault account and personal data have been permanently erased.';
+                notice.classList.remove('hidden');
             }
-        });
+        }
     </script>
 </body>
 </html>
