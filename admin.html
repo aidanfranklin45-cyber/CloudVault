@@ -7111,7 +7111,24 @@
                 if (nextStatus === 'pending-stage') transitionDesc = `Activated — Moved to Intake Zone [📍 ${locCode}]`;
                 if (nextStatus === 'staged') transitionDesc = `Moved to Staging Room [📍 ${locCode}]`;
                 if (nextStatus === 'pending-dispatch') transitionDesc = `Queued for Driver Dispatch [📍 ${locCode}]`;
-                if (nextStatus === 'out-for-delivery') transitionDesc = `Loaded on Driver Van [📍 ${locCode}]`;
+                if (nextStatus === 'out-for-delivery') {
+                    transitionDesc = `Loaded on Driver Van [📍 ${locCode}]`;
+                    try {
+                        const targetUid = data?.uid || (typeof currentInventoryItem !== 'undefined' && currentInventoryItem ? currentInventoryItem.uid : null);
+                        if (targetUid) {
+                            supabase.from('access_requests')
+                                .update({
+                                    status: 'out-for-delivery',
+                                    driver_name: 'Active Fleet Driver',
+                                    vehicle_info: 'Valet Delivery Van (VALET-TRUCK-A)'
+                                })
+                                .eq('uid', targetUid)
+                                .eq('status', 'pending');
+                        }
+                    } catch (reqSyncErr) {
+                        console.warn('[AdminScan] Request sync notice:', reqSyncErr);
+                    }
+                }
                 if (nextStatus === 'with-customer') transitionDesc = `Delivered / With Customer [📍 ${locCode}]`;
                 if (nextStatus === 'stored') transitionDesc = `Returned & Shelved in Vault Bay [📍 ${locCode}]`;
 

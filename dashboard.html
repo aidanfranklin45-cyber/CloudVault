@@ -2211,10 +2211,17 @@
                     if (isValetActivation) {
                         const loadedCount = reqTotes.filter(i => i.status === 'out-for-delivery').length;
                         const totalCount = reqTotes.length;
-                        const allOnTruck = totalCount > 0 && loadedCount === totalCount;
+                        const allOnTruck = (totalCount > 0 && loadedCount === totalCount) || req.status === 'out-for-delivery';
                         const anyOnTruck = loadedCount > 0;
 
-                        if (allOnTruck || req.status === 'out-for-delivery') {
+                        const effectiveReq = Object.assign({}, req, {
+                            status: allOnTruck ? 'out-for-delivery' : (anyOnTruck ? 'loading-on-van' : (req.status || 'pending')),
+                            isOutForDelivery: allOnTruck,
+                            driver_name: req.driver_name || 'Active Fleet Driver',
+                            vehicle_info: req.vehicle_info || 'Valet Delivery Van (VALET-TRUCK-A)'
+                        });
+
+                        if (allOnTruck) {
                             cards.push(buildFlowCard({
                                 flowType: 'activation-valet',
                                 icon: '🚚',
@@ -2229,7 +2236,7 @@
                                     { label: '4. With Customer', sub: 'Arriving soon', done: false, active: false },
                                 ],
                                 totes: reqTotes,
-                                pinBlock: buildValetBlock(timeStr, dateStr, req),
+                                pinBlock: buildValetBlock(timeStr, dateStr, effectiveReq),
                             }));
                         } else if (anyOnTruck) {
                             cards.push(buildFlowCard({
@@ -2246,7 +2253,7 @@
                                     { label: '4. With Customer', sub: `Scheduled: ${dateStr}`, done: false, active: false },
                                 ],
                                 totes: reqTotes,
-                                pinBlock: buildValetBlock(timeStr, dateStr, req),
+                                pinBlock: buildValetBlock(timeStr, dateStr, effectiveReq),
                             }));
                         } else {
                             cards.push(buildFlowCard({
@@ -2263,7 +2270,7 @@
                                     { label: '4. With Customer', sub: `Scheduled: ${dateStr}`, done: false, active: false },
                                 ],
                                 totes: reqTotes,
-                                pinBlock: buildValetBlock(timeStr, dateStr, req),
+                                pinBlock: buildValetBlock(timeStr, dateStr, effectiveReq),
                             }));
                         }
                     } else {
@@ -2449,9 +2456,9 @@
 
         function buildLiveDriverTrackingBlock(req) {
             if (!req) return '';
-            const driverName = req.driver_name || 'CloudVault Driver';
-            const vehicle = req.vehicle_info || 'Valet Delivery Van';
-            const trkStatus = req.status || 'out-for-delivery';
+            const driverName = req.driver_name || 'Active Fleet Driver';
+            const vehicle = req.vehicle_info || 'Valet Delivery Van (VALET-TRUCK-A)';
+            const trkStatus = (req.status === 'out-for-delivery' || req.isOutForDelivery) ? 'out-for-delivery' : (req.status || 'out-for-delivery');
             const driverPhone = req.driver_phone || '';
 
             let etaText = "Arriving Soon";
@@ -2461,17 +2468,21 @@
                 etaText = `ETA: ~${diffMin} min`;
             }
 
+            const isEnRoute = trkStatus === 'out-for-delivery' || req.isOutForDelivery;
+            const badgeBg = isEnRoute ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+            const badgeLabel = isEnRoute ? 'OUT FOR DELIVERY' : trkStatus.replace(/[-_]/g, ' ').toUpperCase();
+
             return `
                 <div class="mt-2.5 bg-gray-900/90 border border-amber-500/30 rounded-xl p-3 space-y-2 shadow-md">
                     <div class="flex items-center justify-between border-b border-gray-800 pb-1.5">
                         <div class="flex items-center space-x-1.5">
                             <span class="relative flex h-2 w-2">
-                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full ${isEnRoute ? 'bg-emerald-400' : 'bg-amber-400'} opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 ${isEnRoute ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
                             </span>
                             <span class="text-[10px] font-bold text-white uppercase tracking-wider">Live Valet Driver Tracking</span>
                         </div>
-                        <span class="text-[9px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full uppercase">${trkStatus.replace(/[-_]/g, ' ')}</span>
+                        <span class="text-[9px] font-mono font-bold ${badgeBg} px-2 py-0.5 rounded-full uppercase">${badgeLabel}</span>
                     </div>
 
                     <div class="flex items-center justify-between gap-2 text-xs">
