@@ -7323,10 +7323,31 @@
                     barcodeInput.value = "";
                     barcodeInput.focus();
                 }
+
+                // 1. Optimistically mutate in-memory cache for instant 0ms UI update
+                if (window._masterAdminData && Array.isArray(window._masterAdminData.inventory)) {
+                    const invItem = window._masterAdminData.inventory.find(i => i.tote_code === barcode || i.id === barcode);
+                    if (invItem) {
+                        invItem.status = nextStatus;
+                        invItem.location_code = locCode;
+                        invItem.activated = true;
+                        invItem.last_scanned_at = new Date().toISOString();
+                    }
+                }
+
+                // 2. Instant Local Re-render
                 loadWorkerQueues();
                 if (typeof loadFacilityMapData === 'function') {
                     loadFacilityMapData(getSafeSavedFacilityId());
                 }
+
+                // 3. Authoritative Background Refresh
+                loadMasterAdminData(true).then(() => {
+                    loadWorkerQueues();
+                    if (typeof renderMasterAdminView === 'function' && window._masterAdminData) {
+                        renderMasterAdminView(window._masterAdminData);
+                    }
+                }).catch(e => console.warn("Background data sync notice:", e));
             } catch (e) {
                 console.error("Live scan failed:", e);
                 const errMsg = e.message || (typeof e === 'object' && e.error_description ? e.error_description : "Failed to transition tote state.");
@@ -7359,19 +7380,34 @@
                 });
                 if (error) throw error;
 
-                showToast(`↩ Tote ${toteCode} moved back to ${data?.revertedStatus || 'previous stage'}`);
+                const revertedStatus = data?.revertedStatus || targetStatus || 'intake';
+                const locCode = data?.locationCode || effectiveLocation || 'INTAKE-PROCESSING';
+
+                showToast(`↩ Tote ${toteCode} moved back to ${revertedStatus}`);
                 playBeep(440, 0.15, 'sine');
 
                 const terminalOutput = document.getElementById('terminal-output');
                 if (terminalOutput) {
                     terminalOutput.innerHTML = `
                         <span class="text-amber-400 font-bold flex items-center justify-center gap-1.5"><i data-lucide="rotate-ccw" class="w-4 h-4 text-amber-400"></i> Stage Reverted</span>
-                        <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">${toteCode} moved back to [${data?.revertedStatus}] (${data?.locationCode})</span>
+                        <span class="text-[10px] font-mono text-gray-300 mt-1 font-semibold">${toteCode} moved back to [${revertedStatus}] (${locCode})</span>
                     `;
                     if (typeof lucide !== 'undefined') lucide.createIcons();
                 }
 
+                // Optimistically mutate in-memory cache
+                if (window._masterAdminData && Array.isArray(window._masterAdminData.inventory)) {
+                    const invItem = window._masterAdminData.inventory.find(i => i.tote_code === toteCode || i.id === toteCode);
+                    if (invItem) {
+                        invItem.status = revertedStatus;
+                        invItem.location_code = locCode;
+                        invItem.activated = (revertedStatus !== 'intake');
+                        invItem.last_scanned_at = new Date().toISOString();
+                    }
+                }
+
                 loadWorkerQueues();
+                loadMasterAdminData(true).then(() => loadWorkerQueues());
             } catch (err) {
                 console.error("Failed to revert tote stage:", err);
                 showToast(`Revert Error: ${err.message || 'Unknown error'}`, true);
@@ -7392,12 +7428,22 @@
                         p_staff_uid: getActiveStaffUid(),
                         p_target_location_code: effectiveLocation
                     });
-                    if (!error) successCount++;
+                    if (!error) {
+                        successCount++;
+                        if (window._masterAdminData && Array.isArray(window._masterAdminData.inventory)) {
+                            const invItem = window._masterAdminData.inventory.find(i => i.tote_code === code || i.id === code);
+                            if (invItem) {
+                                invItem.status = targetStatus || 'intake';
+                                invItem.activated = (targetStatus !== 'intake');
+                            }
+                        }
+                    }
                 }
 
                 showToast(`↩ ${successCount}/${toteCodes.length} totes moved back to previous stage`);
                 playBeep(440, 0.2, 'sine');
                 loadWorkerQueues();
+                loadMasterAdminData(true).then(() => loadWorkerQueues());
             } catch (err) {
                 console.error("Batch revert failed:", err);
                 showToast(`Batch Revert Error: ${err.message}`, true);
