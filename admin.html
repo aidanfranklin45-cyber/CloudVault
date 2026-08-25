@@ -8075,15 +8075,50 @@
                 const code = escapeHtml(p.code);
                 const discountText = `${p.customer_discount_pct != null ? Number(p.customer_discount_pct).toFixed(0) : '20'}% off (${p.customer_discount_duration_months || 2} mo)`;
                 const commText = `${p.commission_rate_pct != null ? Number(p.commission_rate_pct).toFixed(1) + '%' : 'Negotiated'} rev share (${p.commission_duration_months || 6} mo)`;
+                const waitlistText = p.allow_waitlist_deposits 
+                    ? `<span class="text-blue-300 text-[10px] block">✓ Waitlist: ${Number(p.waitlist_deposit_discount_pct || p.customer_discount_pct || 20).toFixed(0)}% off</span>` 
+                    : `<span class="text-gray-500 text-[10px] block">✕ No waitlist</span>`;
                 const redemptions = p.current_redemptions || 0;
                 
                 // Calculate attributed gross & commission for this specific code
                 const matchingRedemptions = (currentPromoData.redemptions || []).filter(r => r.promo_code_id === p.id || r.promo_code === p.code);
-                const attributedGross = matchingRedemptions.reduce((sum, r) => sum + Number(r.gross_amount ?? r.invoice_gross_amount ?? 0), 0);
+                const attributedGross = matchingRedemptions.reduce((sum, r) => sum + Number(r.gross_amount ?? r.invoice_gross_amount ?? r.gross_invoice_amount ?? 0), 0);
                 const commissionEarned = matchingRedemptions.reduce((sum, r) => sum + Number(r.creator_commission_amount ?? r.commission_amount ?? 0), 0);
-                const pendingPayout = matchingRedemptions.filter(r => r.payout_status === 'PENDING').reduce((sum, r) => sum + Number(r.creator_commission_amount ?? r.commission_amount ?? 0), 0);
+                const pendingPayout = matchingRedemptions.filter(r => r.payout_status === 'PENDING' || r.payout_status === 'pending').reduce((sum, r) => sum + Number(r.creator_commission_amount ?? r.commission_amount ?? 0), 0);
 
-                const isActive = Boolean(p.is_active);
+                const lifecycle = p.lifecycle_status || (p.is_active ? 'ACTIVE' : 'DEACTIVATED');
+
+                let statusBadge = '';
+                let lifecycleButtons = '';
+
+                if (lifecycle === 'ACTIVE') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">🟢 ACTIVE</span>`;
+                    lifecycleButtons = `
+                        <button onclick="setPromoLifecycleAction('${p.id}', 'WINDING_DOWN')" class="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer" title="Wind Down: Blocks new signups while preserving ongoing 6-month revenue share for existing subscribers">
+                            ⏳ Wind Down
+                        </button>
+                        <button onclick="setPromoLifecycleAction('${p.id}', 'DEACTIVATED')" class="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer" title="Deactivate code">
+                            🛑 Pause
+                        </button>
+                    `;
+                } else if (lifecycle === 'WINDING_DOWN') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold" title="Grandfathered mode: New checkouts blocked, existing user revenue share continues">🟡 WINDING DOWN</span>`;
+                    lifecycleButtons = `
+                        <button onclick="setPromoLifecycleAction('${p.id}', 'ACTIVE')" class="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer" title="Reactivate for new signups">
+                            ▶ Reactivate
+                        </button>
+                        <button onclick="setPromoLifecycleAction('${p.id}', 'DEACTIVATED')" class="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer" title="Deactivate completely">
+                            🛑 Pause
+                        </button>
+                    `;
+                } else {
+                    statusBadge = `<span class="px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[10px] font-bold">🔴 INACTIVE</span>`;
+                    lifecycleButtons = `
+                        <button onclick="setPromoLifecycleAction('${p.id}', 'ACTIVE')" class="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer" title="Reactivate code">
+                            ▶ Reactivate
+                        </button>
+                    `;
+                }
 
                 return `
                     <tr class="hover:bg-gray-900/50 transition">
@@ -8091,6 +8126,7 @@
                             <span class="px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-bold font-mono text-[11px] tracking-wider uppercase">
                                 ${code}
                             </span>
+                            ${waitlistText}
                         </td>
                         <td class="py-3 px-3">
                             <p class="font-bold text-white">${creatorName}</p>
@@ -8102,14 +8138,12 @@
                         <td class="py-3 px-3 text-right font-bold text-white font-mono">$${attributedGross.toFixed(2)}</td>
                         <td class="py-3 px-3 text-right font-bold text-purple-300 font-mono">$${commissionEarned.toFixed(2)}</td>
                         <td class="py-3 px-3 text-center">
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" class="sr-only peer" ${isActive ? 'checked' : ''} onchange="togglePromoCodeStatusAction('${p.id}', this.checked)">
-                                <div class="w-8 h-4 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600"></div>
-                            </label>
+                            ${statusBadge}
                         </td>
                         <td class="py-3 px-3 text-right space-x-1.5 whitespace-nowrap">
+                            ${lifecycleButtons}
                             <button onclick="copyPromoCodeLink('${code}')" class="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-[10px] transition cursor-pointer" title="Copy Promo Link">
-                                🔗 Link
+                                🔗
                             </button>
                             ${pendingPayout > 0 ? `
                                 <button onclick="openSettlePayoutModal('${p.creator_id}', '${creatorName}', ${pendingPayout})" class="px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[10px] font-bold transition cursor-pointer shadow-sm">
@@ -8145,9 +8179,16 @@
                 const customerEmail = escapeHtml(r.customer_email || (r.customer_uid ? r.customer_uid.substring(0, 8) : 'Customer'));
                 
                 const isWaitlist = (r.invoice_id && r.invoice_id.startsWith('WAITLIST-')) || (r.notes && r.notes.includes('Waitlist'));
-                const invoiceRef = isWaitlist 
-                    ? `<span class="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[9px] font-bold">WAITLIST DEPOSIT</span>`
-                    : escapeHtml(r.stripe_invoice_id || r.invoice_id || r.payout_reference || 'INV-DIRECT');
+                const isGrandfathered = r.notes && r.notes.includes('Grandfathered');
+
+                let typeTag = '';
+                if (isWaitlist) {
+                    typeTag = `<span class="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[9px] font-bold">WAITLIST DEPOSIT</span>`;
+                } else if (isGrandfathered) {
+                    typeTag = `<span class="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[9px] font-bold">🟡 GRANDFATHERED (Mo ${r.commission_month_index || r.month_index || 1})</span>`;
+                } else {
+                    typeTag = escapeHtml(r.stripe_invoice_id || r.invoice_id || r.payout_reference || 'INV-DIRECT');
+                }
 
                 const gross = Number(r.gross_amount ?? r.invoice_gross_amount ?? r.gross_invoice_amount ?? 0);
                 const discount = Number(r.discount_amount ?? r.customer_discount_amount ?? 0);
@@ -8169,7 +8210,7 @@
                             ${creatorHandle ? `<span class="text-gray-500 text-[10px] block font-mono">${creatorHandle}</span>` : ''}
                         </td>
                         <td class="py-2.5 px-3 text-gray-300 text-xs">${customerEmail}</td>
-                        <td class="py-2.5 px-3 font-mono text-gray-400 text-[10px]">${invoiceRef}</td>
+                        <td class="py-2.5 px-3 font-mono text-gray-400 text-[10px]">${typeTag}</td>
                         <td class="py-2.5 px-3 text-right font-bold text-white font-mono">$${gross.toFixed(2)}</td>
                         <td class="py-2.5 px-3 text-right text-emerald-400 font-mono">-$${discount.toFixed(2)}</td>
                         <td class="py-2.5 px-3 text-right font-bold text-purple-300 font-mono">$${creatorCut.toFixed(2)}</td>
@@ -8267,6 +8308,29 @@
             }
         }
 
+        async function setPromoLifecycleAction(promoId, newStatus) {
+            if (!isExecutiveAuthorized()) return;
+            try {
+                let confirmMsg = '';
+                if (newStatus === 'WINDING_DOWN') {
+                    confirmMsg = '⏳ Wind Down Campaign?\n\nThis will stop new customers from redeeming this code, but all existing subscribers will remain grandfathered and continue earning multi-month revenue share.';
+                } else if (newStatus === 'DEACTIVATED') {
+                    confirmMsg = '🛑 Deactivate Promotional Code?\n\nThis will completely pause this promo code.';
+                } else {
+                    confirmMsg = '▶ Reactivate Promotional Code?\n\nThis will reopen this code for new signups and waitlist deposits.';
+                }
+
+                if (!confirm(confirmMsg)) return;
+
+                await StripeBillingIntegration.updatePromoCodeLifecycle(promoId, newStatus);
+                loadCreatorGovernanceHub();
+            } catch (err) {
+                alert("Failed to update campaign lifecycle status: " + err.message);
+                loadCreatorGovernanceHub();
+            }
+        }
+        window.setPromoLifecycleAction = setPromoLifecycleAction;
+
         async function togglePromoCodeStatusAction(promoId, isChecked) {
             if (!isExecutiveAuthorized()) return;
             try {
@@ -8277,6 +8341,7 @@
                 loadCreatorGovernanceHub();
             }
         }
+        window.togglePromoCodeStatusAction = togglePromoCodeStatusAction;
 
         function openSettlePayoutModal(creatorId, creatorName, pendingAmount) {
             if (!isExecutiveAuthorized()) return;

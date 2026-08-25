@@ -5040,7 +5040,11 @@ BEGIN
         RETURN jsonb_build_object('valid', false, 'message', 'Promo code not found');
     END IF;
 
-    IF NOT v_promo.is_active THEN
+    IF v_promo.lifecycle_status = 'WINDING_DOWN' THEN
+        RETURN jsonb_build_object('valid', false, 'message', 'This creator promotion is concluding and is no longer accepting new customers.');
+    END IF;
+
+    IF v_promo.lifecycle_status = 'DEACTIVATED' OR NOT v_promo.is_active THEN
         RETURN jsonb_build_object('valid', false, 'message', 'This promo code is currently paused or inactive');
     END IF;
 
@@ -5052,8 +5056,10 @@ BEGIN
         RETURN jsonb_build_object('valid', false, 'message', 'This promo code has reached its maximum redemption limit');
     END IF;
 
-    -- Calculate Discount Amount
-    v_discount_amt := ROUND(p_gross_amount * (COALESCE(v_promo.customer_discount_pct, 20.00) / 100.0), 2);
+    -- Calculate Discount Amount Dynamically
+    v_discount_pct := COALESCE(v_promo.customer_discount_pct, 20.00);
+    v_discount_duration := COALESCE(v_promo.customer_discount_duration_months, 2);
+    v_discount_amt := ROUND(p_gross_amount * (v_discount_pct / 100.0), 2);
     v_net_amt := GREATEST(0.00, p_gross_amount - v_discount_amt);
 
     SELECT name, handle INTO v_creator FROM public.creators WHERE id = v_promo.creator_id;
@@ -5063,17 +5069,18 @@ BEGIN
         'promo_id', v_promo.id,
         'code', v_promo.code,
         'creator_name', COALESCE(v_creator.name, 'Creator Partner'),
-        'customer_discount_pct', v_promo.customer_discount_pct,
-        'customer_discount_duration_months', v_promo.customer_discount_duration_months,
+        'customer_discount_pct', v_discount_pct,
+        'customer_discount_duration_months', v_discount_duration,
         'gross_amount', p_gross_amount,
         'discount_amount', v_discount_amt,
         'net_amount', v_net_amt,
-        'message', 'Success! ' || v_promo.customer_discount_pct::text || '% off applied for your first ' || v_promo.customer_discount_duration_months::text || ' months!'
+        'lifecycle_status', v_promo.lifecycle_status,
+        'message', 'Success! ' || v_discount_pct::text || '% off applied for your first ' || v_discount_duration::text || ' months!'
     );
 END;
 $$ LANGUAGE plpgsql;
 
--- 7. RPC: Record Invoice Attribution & Calculate 6-Month Window Commission
+-- 7. RPC: Record Invoice Attribution & Calculate Dynamic Window Commission (Grandfathered Supported)
 CREATE OR REPLACE FUNCTION public.record_invoice_promo_attribution(
     p_code TEXT,
     p_customer_uid UUID,
@@ -5093,6 +5100,9 @@ DECLARE
     v_commission_eligible BOOLEAN := true;
     v_comm_rate NUMERIC(5,2) := 10.00;
     v_comm_amount NUMERIC(10,2) := 0.00;
+    v_comm_duration INT := 6;
+    v_cust_discount_duration INT := 2;
+    v_cust_discount_pct NUMERIC(5,2) := 20.00;
     v_redemption_id UUID;
 BEGIN
     IF p_code IS NULL OR TRIM(p_code) = '' THEN
@@ -5109,21 +5119,28 @@ BEGIN
     SELECT * INTO v_creator FROM public.creators WHERE id = v_promo.creator_id LIMIT 1;
     SELECT * INTO v_user FROM public.users WHERE id = p_customer_uid LIMIT 1;
 
-    -- Calculate Discount applied
-    v_discount_amt := ROUND(p_gross_amount * (COALESCE(v_promo.customer_discount_pct, 20.00) / 100.0), 2);
-    v_net_paid := COALESCE(p_net_amount, GREATEST(0.00, p_gross_amount - v_discount_amt));
+    -- Dynamic Parameters from promo record
+    v_comm_duration := COALESCE(v_promo.commission_duration_months, v_creator.commission_duration_months, 6);
+    v_cust_discount_duration := COALESCE(v_promo.customer_discount_duration_months, 2);
+    v_cust_discount_pct := COALESCE(v_promo.customer_discount_pct, 20.00);
+    v_comm_rate := COALESCE(v_promo.commission_rate_pct, v_creator.default_commission_pct, 10.00);
 
-    -- Determine month index & commission attribution window (Default: 6 months)
-    v_first_ref_date := COALESCE(v_user.referred_at, NOW());
-
-    -- Month difference calculation
+    -- Determine month index from referral date
+    v_first_ref_date := COALESCE(v_user.referred_at, v_user.created_at, NOW());
     v_month_diff := GREATEST(1, (EXTRACT(YEAR FROM NOW()) - EXTRACT(YEAR FROM v_first_ref_date)) * 12 + 
                                 (EXTRACT(MONTH FROM NOW()) - EXTRACT(MONTH FROM v_first_ref_date)) + 1);
 
-    v_comm_rate := COALESCE(v_promo.commission_rate_pct, v_creator.default_commission_pct, 10.00);
+    -- Customer discount is applied if within customer discount duration
+    IF v_month_diff <= v_cust_discount_duration THEN
+        v_discount_amt := ROUND(p_gross_amount * (v_cust_discount_pct / 100.0), 2);
+    ELSE
+        v_discount_amt := 0.00;
+    END IF;
+    v_net_paid := COALESCE(p_net_amount, GREATEST(0.00, p_gross_amount - v_discount_amt));
 
-    -- Only grant commission if within the creator's commission duration (default 6 months)
-    IF v_month_diff <= COALESCE(v_promo.commission_duration_months, 6) THEN
+    -- Commission Eligibility:
+    -- Allowed if within dynamic commission duration AND (promo is ACTIVE or promo is WINDING_DOWN for pre-existing users)
+    IF v_month_diff <= v_comm_duration AND (v_promo.lifecycle_status IN ('ACTIVE', 'WINDING_DOWN') OR v_promo.is_active) THEN
         v_commission_eligible := true;
         v_comm_amount := ROUND(p_gross_amount * (v_comm_rate / 100.0), 2);
     ELSE
@@ -5134,26 +5151,23 @@ BEGIN
     -- Insert Redemption Ledger Record
     INSERT INTO public.promo_redemptions (
         promo_code_id,
-        promo_code,
         creator_id,
         customer_uid,
-        customer_email,
-        stripe_invoice_id,
-        invoice_gross_amount,
-        discount_amount,
+        invoice_id,
+        gross_invoice_amount,
+        customer_discount_amount,
         net_paid_amount,
-        commission_rate_applied,
+        commission_rate_pct,
         commission_amount,
-        month_index,
-        is_commission_eligible,
-        payout_status
+        commission_month_index,
+        commission_eligible,
+        payout_status,
+        notes
     ) VALUES (
         v_promo.id,
-        v_promo.code,
-        v_creator.id,
+        v_promo.creator_id,
         p_customer_uid,
-        v_user.email,
-        p_invoice_id,
+        COALESCE(p_invoice_id, 'INV-' || gen_random_uuid()::text),
         p_gross_amount,
         v_discount_amt,
         v_net_paid,
@@ -5161,22 +5175,30 @@ BEGIN
         v_comm_amount,
         v_month_diff,
         v_commission_eligible,
-        'PENDING'
+        CASE WHEN v_commission_eligible THEN 'pending' ELSE 'not_eligible' END,
+        CASE 
+            WHEN v_promo.lifecycle_status = 'WINDING_DOWN' THEN 'Grandfathered Recurring Attribution: Month ' || v_month_diff::text || ' of ' || v_comm_duration::text
+            ELSE 'Recurring Attribution: Month ' || v_month_diff::text || ' of ' || v_comm_duration::text
+        END
     ) RETURNING id INTO v_redemption_id;
 
     -- Update Promo Code Stats
-    UPDATE public.promo_codes
-    SET current_redemptions = current_redemptions + 1,
-        updated_at = NOW()
-    WHERE id = v_promo.id;
-
-    -- Update Creator Lifetime Stats
-    IF v_creator.id IS NOT NULL THEN
-        UPDATE public.creators
-        SET total_attributed_revenue = total_attributed_revenue + p_gross_amount,
-            total_commission_earned = total_commission_earned + v_comm_amount,
+    IF v_commission_eligible THEN
+        UPDATE public.promo_codes
+        SET total_revenue_generated = COALESCE(total_revenue_generated, 0.00) + v_net_paid,
+            total_commission_earned = COALESCE(total_commission_earned, 0.00) + v_comm_amount,
             updated_at = NOW()
-        WHERE id = v_creator.id;
+        WHERE id = v_promo.id;
+
+        -- Update Creator Lifetime Stats
+        IF v_creator.id IS NOT NULL THEN
+            UPDATE public.creators
+            SET total_attributed_revenue = COALESCE(total_attributed_revenue, 0.00) + p_gross_amount,
+                total_earned = COALESCE(total_earned, 0.00) + v_comm_amount,
+                unpaid_balance = COALESCE(unpaid_balance, 0.00) + v_comm_amount,
+                updated_at = NOW()
+            WHERE id = v_creator.id;
+        END IF;
     END IF;
 
     -- Update User Record with Referral Association
@@ -5198,8 +5220,44 @@ BEGIN
         'commission_rate', v_comm_rate,
         'commission_amount', v_comm_amount,
         'month_index', v_month_diff,
-        'is_commission_eligible', v_commission_eligible
+        'commission_eligible', v_commission_eligible
     );
+END;
+$$ LANGUAGE plpgsql;
+
+-- RPC: Set Promo Code Lifecycle Status
+CREATE OR REPLACE FUNCTION public.set_promo_code_lifecycle_status(
+    p_promo_id UUID,
+    p_status TEXT
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+    v_is_active BOOLEAN;
+    v_wound_down TIMESTAMPTZ := NULL;
+    v_deactivated TIMESTAMPTZ := NULL;
+BEGIN
+    IF p_status NOT IN ('ACTIVE', 'WINDING_DOWN', 'DEACTIVATED') THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Invalid status. Must be ACTIVE, WINDING_DOWN, or DEACTIVATED.');
+    END IF;
+
+    IF p_status = 'ACTIVE' THEN
+        v_is_active := true;
+    ELSIF p_status = 'WINDING_DOWN' THEN
+        v_is_active := true;
+        v_wound_down := NOW();
+    ELSE
+        v_is_active := false;
+        v_deactivated := NOW();
+    END IF;
+
+    UPDATE public.promo_codes
+    SET lifecycle_status = p_status,
+        is_active = v_is_active,
+        wound_down_at = COALESCE(v_wound_down, wound_down_at),
+        deactivated_at = COALESCE(v_deactivated, deactivated_at),
+        updated_at = NOW()
+    WHERE id = p_promo_id;
+
+    RETURN jsonb_build_object('success', true, 'promo_id', p_promo_id, 'lifecycle_status', p_status, 'is_active', v_is_active);
 END;
 $$ LANGUAGE plpgsql;
 

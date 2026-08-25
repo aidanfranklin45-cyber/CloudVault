@@ -1220,47 +1220,70 @@
     },
 
     /**
-     * Toggles a promotional code's active status (Active vs. Paused).
+     * Updates a promotional code's 3-way lifecycle status (ACTIVE, WINDING_DOWN, DEACTIVATED).
+     * Authoritatively synchronizes status to Stripe promotion codes.
+     * @param {string} promoId - Promo Code UUID
+     * @param {string} newStatus - 'ACTIVE' | 'WINDING_DOWN' | 'DEACTIVATED'
+     * @returns {Promise<Object>}
+     */
+    updatePromoCodeLifecycle: async function (promoId, newStatus) {
+      const sb = global.supabase;
+      const validStatuses = ['ACTIVE', 'WINDING_DOWN', 'DEACTIVATED'];
+      if (!validStatuses.includes(newStatus)) {
+        throw new Error(`Invalid lifecycle status: ${newStatus}. Must be one of: ${validStatuses.join(', ')}`);
+      }
+
+      if (sb && promoId) {
+        // Call authoritative RPC
+        const { data: rpcRes, error: rpcErr } = await sb.rpc('set_promo_code_lifecycle_status', {
+          p_promo_id: promoId,
+          p_status: newStatus
+        });
+
+        if (rpcErr) {
+          console.error('[StripeBillingIntegration] Error setting promo lifecycle in Supabase:', rpcErr.message);
+          throw rpcErr;
+        }
+
+        // Synchronize with Stripe API:
+        // 'ACTIVE' -> Stripe promo code active: true (new checkouts allowed)
+        // 'WINDING_DOWN' -> Stripe promo code active: false (blocks new checkouts; existing subscriptions grandfathered)
+        // 'DEACTIVATED' -> Stripe promo code active: false
+        const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
+        if (apiKey) {
+          try {
+            const { data: promoRec } = await sb.from('promo_codes').select('stripe_promo_code_id').eq('id', promoId).single();
+            if (promoRec && promoRec.stripe_promo_code_id && !promoRec.stripe_promo_code_id.startsWith('promo_CV_')) {
+              const shouldBeActiveInStripe = (newStatus === 'ACTIVE');
+              await fetch(`https://api.stripe.com/v1/promotion_codes/${promoRec.stripe_promo_code_id}`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${apiKey}`,
+                  'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({ active: shouldBeActiveInStripe.toString() })
+              });
+              console.log(`[StripeBillingIntegration] Stripe Promo Code ${promoRec.stripe_promo_code_id} active set to:`, shouldBeActiveInStripe);
+            }
+          } catch (stripeErr) {
+            console.warn('[StripeBillingIntegration] Stripe promo lifecycle sync notice:', stripeErr.message);
+          }
+        }
+
+        return { success: true, promoId, lifecycleStatus: newStatus, rpcRes };
+      }
+
+      return { success: true, promoId, lifecycleStatus: newStatus, simulated: true };
+    },
+
+    /**
+     * Toggles a promotional code's active status (Active vs. Paused/Deactivated).
      * @param {string} promoId - Promo Code UUID
      * @param {boolean} isActive - Desired status
      * @returns {Promise<Object>}
      */
     togglePromoCodeStatus: async function (promoId, isActive) {
-      const sb = global.supabase;
-      const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
-      if (!apiKey) throw new Error('[Security] Stripe API key not configured. Set window.STRIPE_RESTRICTED_KEY before calling this method.');
-
-      if (sb && promoId) {
-        const { data, error } = await sb
-          .from('promo_codes')
-          .update({ is_active: Boolean(isActive), updated_at: new Date().toISOString() })
-          .eq('id', promoId)
-          .select();
-
-        if (error) {
-          console.error('[StripeBillingIntegration] Error toggling promo code:', error.message);
-          throw error;
-        }
-
-        const promoRec = data?.[0];
-        if (apiKey && promoRec && promoRec.stripe_promo_code_id && !promoRec.stripe_promo_code_id.startsWith('promo_CV_')) {
-          try {
-            await fetch(`https://api.stripe.com/v1/promotion_codes/${promoRec.stripe_promo_code_id}`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/x-www-form-urlencoded'
-              },
-              body: new URLSearchParams({ active: Boolean(isActive).toString() })
-            });
-          } catch (stripeErr) {
-            console.warn('[StripeBillingIntegration] Stripe promo code status toggle notice:', stripeErr.message);
-          }
-        }
-
-        return { success: true, promoId, isActive: Boolean(isActive), data };
-      }
-      return { success: true, promoId, isActive: Boolean(isActive), simulated: true };
+      return this.updatePromoCodeLifecycle(promoId, isActive ? 'ACTIVE' : 'DEACTIVATED');
     },
 
     /**
