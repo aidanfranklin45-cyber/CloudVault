@@ -3520,6 +3520,7 @@
 
         let activeWaitlistId = null;
         let activeWaitlistEmail = null;
+        let activeWaitlistUserId = null;
         let activeWaitlistDeposit = 25.00;
         let activeWaitlistPromo = null;
         let waitlistStripe = null;
@@ -3738,36 +3739,51 @@
                 const depositDisplay = document.getElementById('waitlist-deposit-display');
                 if (depositDisplay) depositDisplay.textContent = `$${reqDeposit.toFixed(2)}`;
 
-                const { data, error } = await supabase.from('waitlist').insert({
-                    email: email,
+                // 1. Create auth account immediately at step 1 so account exists even if payment is abandoned
+                activeWaitlistUserId = null;
+                const { data: authData, error: authErr } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: { data: { name: email.split('@')[0], role: 'customer' } }
+                });
+                if (authData && authData.user) activeWaitlistUserId = authData.user.id;
+                if (authErr && authErr.message && !authErr.message.includes('already registered')) {
+                    console.warn('[Waitlist Auth Step 1]', authErr.message);
+                }
+
+                // 2. Upsert provisional users row
+                if (activeWaitlistUserId) {
+                    await supabase.from('users').upsert({
+                        id: activeWaitlistUserId,
+                        email,
+                        name: email.split('@')[0],
+                        role: 'customer',
+                        onboarding_status: 'waitlisted',
+                        has_price_lock: false,
+                        is_active: false
+                    }, { onConflict: 'id' });
+                }
+
+                // 3. Insert waitlist row (type=deposit, payment still pending)
+                const { data, error: wlErr } = await supabase.from('waitlist').insert({
+                    email,
                     zip_code: zip,
                     requested_totes: flowData.totes || 5,
                     deposit_amount: reqDeposit,
                     price_lock_years: priceLockYears,
                     refund_guarantee_days: refundGuaranteeDays,
+                    type: 'deposit',
                     payment_status: 'pending_deposit',
-                    status: 'pending_deposit'
+                    status: 'pending_deposit',
+                    user_id: activeWaitlistUserId
                 }).select();
 
-                if (error) {
-                    await supabase.from('waitlist').insert({
-                        email: email,
-                        zip_code: zip,
-                        requested_totes: flowData.totes || 5,
-                        deposit_amount: reqDeposit,
-                        price_lock_years: 3,
-                        refund_guarantee_days: 365,
-                        payment_status: 'pending_deposit',
-                        status: 'pending_deposit'
-                    });
-                } else if (data && data.length > 0) {
-                    activeWaitlistId = data[0].id;
-                }
+                if (!wlErr && data && data.length > 0) activeWaitlistId = data[0].id;
                 activeWaitlistEmail = email;
 
                 document.getElementById('waitlist-step-email').classList.add('hidden-section');
                 document.getElementById('waitlist-step-payment').classList.remove('hidden-section');
-                
+
                 // Initialize Stripe Elements & check for auto-applied promo codes
                 setTimeout(() => {
                     initWaitlistStripe();
@@ -3779,7 +3795,7 @@
                     }
                 }, 100);
 
-                logMilestone('waitlist_email_captured', { email: email, zip: zip, totes: flowData.totes });
+                logMilestone('waitlist_email_captured', { email, zip, totes: flowData.totes });
             } catch (err) {
                 console.error("Waitlist error:", err);
                 alert("Something went wrong joining the waitlist: " + (err.message || 'Please try again.'));
@@ -3790,13 +3806,17 @@
 
         async function joinFreeWaitlist() {
             const emailInput = document.getElementById('waitlist-email');
+            const passwordInput = document.getElementById('waitlist-password');
             const email = emailInput ? emailInput.value.trim() : '';
+            const password = passwordInput ? passwordInput.value.trim() : '';
             const zip = flowData.zip || document.getElementById('zip-input').value.trim();
 
-            if (!email || !email.includes('@')) {
+            if (!email || !email.includes('@') || !password || password.length < 6) {
                 const errEl = document.getElementById('waitlist-error');
                 if (errEl) {
-                    errEl.textContent = 'Please enter a valid email address to join the waitlist.';
+                    errEl.textContent = (!email || !email.includes('@'))
+                        ? 'Please enter a valid email address.'
+                        : 'Password must be at least 6 characters long.';
                     errEl.classList.remove('hidden-section');
                 }
                 return;
@@ -3809,13 +3829,41 @@
             btn.disabled = true;
 
             try {
+                // 1. Create auth account
+                let createdUserId = null;
+                const { data: authData, error: authErr } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: { data: { name: email.split('@')[0], role: 'customer' } }
+                });
+                if (authData && authData.user) createdUserId = authData.user.id;
+                if (authErr && authErr.message && !authErr.message.includes('already registered')) {
+                    console.warn('[Free Waitlist Auth]', authErr.message);
+                }
+
+                // 2. Upsert users row
+                if (createdUserId) {
+                    await supabase.from('users').upsert({
+                        id: createdUserId,
+                        email,
+                        name: email.split('@')[0],
+                        role: 'customer',
+                        onboarding_status: 'free_waitlist',
+                        has_price_lock: false,
+                        is_active: false
+                    }, { onConflict: 'id' });
+                }
+
+                // 3. Insert waitlist row
                 await supabase.from('waitlist').insert({
-                    email: email,
+                    email,
                     zip_code: zip,
                     requested_totes: flowData.totes || 5,
                     deposit_amount: 0,
+                    type: 'free',
                     payment_status: 'free_waitlist',
-                    status: 'free_waitlist'
+                    status: 'free_waitlist',
+                    user_id: createdUserId
                 });
 
                 document.getElementById('waitlist-step-email').classList.add('hidden-section');
@@ -3867,25 +3915,8 @@
                     locked_at: new Date().toISOString()
                 };
 
-                const passVal = (document.getElementById('waitlist-password') && document.getElementById('waitlist-password').value.trim()) || 'CloudVault2026!';
-                let createdUserId = null;
-                try {
-                    const { data: authData } = await supabase.auth.signUp({
-                        email: activeWaitlistEmail,
-                        password: passVal,
-                        options: {
-                            data: {
-                                name: activeWaitlistEmail.split('@')[0],
-                                role: 'customer'
-                            }
-                        }
-                    });
-                    if (authData && authData.user) {
-                        createdUserId = authData.user.id;
-                    }
-                } catch (aErr) {
-                    console.warn('[Waitlist Supabase Auth Notice]', aErr);
-                }
+                // Use the account already created in step 1 (joinWaitlist)
+                const createdUserId = activeWaitlistUserId;
 
                 try {
                     if (createdUserId) {
@@ -3898,6 +3929,7 @@
                             has_price_lock: true,
                             price_lock_rates: priceLockRates,
                             deposit_paid_amount: netDeposit,
+                            price_lock_note: `3-year rate lock from market activation date. Deposit paid: $${netDeposit.toFixed(2)} on ${new Date().toLocaleDateString()}. Lock activates when CloudVault launches in your city.`,
                             referred_by_code: activeWaitlistPromo?.code || null,
                             referred_by_creator_id: activeWaitlistPromo?.creator_id || null
                         }, { onConflict: 'id' });
