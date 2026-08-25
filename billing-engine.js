@@ -100,6 +100,70 @@
     },
 
     /**
+     * Dynamically queries all active facilities and calculates High-Low pricing ranges for each tier.
+     * @returns {Promise<{
+     *   tier1: { min: number, max: number, label: string },
+     *   tier2: { min: number, max: number, label: string },
+     *   tier3: { min: number, max: number, label: string },
+     *   tier4: { min: number, max: number, label: string },
+     *   valet_base: { min: number, max: number },
+     *   valet_tote_adder: { min: number, max: number },
+     *   facilitiesCount: number
+     * }>}
+     */
+    getFacilityPricingRanges: async function () {
+      const sb = global.supabase || (typeof window !== 'undefined' ? window.supabase : null);
+      const defaults = {
+        tier1: { min: 5.00, max: 5.10, label: '$5.00 – $5.10/tote' },
+        tier2: { min: 3.50, max: 3.50, label: '$3.50/tote' },
+        tier3: { min: 2.00, max: 2.50, label: '$2.00 – $2.50/tote' },
+        tier4: { min: 1.00, max: 1.00, label: '$1.00/tote' },
+        valet_base: { min: 8.00, max: 16.00 },
+        valet_tote_adder: { min: 1.00, max: 1.00 },
+        facilitiesCount: 0
+      };
+
+      if (!sb) return defaults;
+
+      try {
+        const { data: facs, error } = await sb.from('facilities').select('tier1_rate, tier2_rate, tier3_rate, tier4_rate, valet_base, valet_tote_adder');
+        if (error || !facs || facs.length === 0) return defaults;
+
+        const t1Rates = facs.map(f => Number(f.tier1_rate)).filter(r => !isNaN(r));
+        const t2Rates = facs.map(f => Number(f.tier2_rate)).filter(r => !isNaN(r));
+        const t3Rates = facs.map(f => Number(f.tier3_rate)).filter(r => !isNaN(r));
+        const t4Rates = facs.map(f => Number(f.tier4_rate)).filter(r => !isNaN(r));
+        const vbRates = facs.map(f => Number(f.valet_base)).filter(r => !isNaN(r));
+        const vaRates = facs.map(f => Number(f.valet_tote_adder)).filter(r => !isNaN(r));
+
+        const formatRange = (min, max) => {
+          if (min === max) return `$${min.toFixed(2)}/tote`;
+          return `$${min.toFixed(2)} – $${max.toFixed(2)}/tote`;
+        };
+
+        const minT1 = Math.min(...t1Rates), maxT1 = Math.max(...t1Rates);
+        const minT2 = Math.min(...t2Rates), maxT2 = Math.max(...t2Rates);
+        const minT3 = Math.min(...t3Rates), maxT3 = Math.max(...t3Rates);
+        const minT4 = Math.min(...t4Rates), maxT4 = Math.max(...t4Rates);
+        const minVb = Math.min(...vbRates), maxVb = Math.max(...vbRates);
+        const minVa = Math.min(...vaRates), maxVa = Math.max(...vaRates);
+
+        return {
+          tier1: { min: minT1, max: maxT1, label: formatRange(minT1, maxT1) },
+          tier2: { min: minT2, max: maxT2, label: formatRange(minT2, maxT2) },
+          tier3: { min: minT3, max: maxT3, label: formatRange(minT3, maxT3) },
+          tier4: { min: minT4, max: maxT4, label: formatRange(minT4, maxT4) },
+          valet_base: { min: minVb, max: maxVb },
+          valet_tote_adder: { min: minVa, max: maxVa },
+          facilitiesCount: facs.length
+        };
+      } catch (err) {
+        console.warn('[CloudVaultBilling] getFacilityPricingRanges error:', err);
+        return defaults;
+      }
+    },
+
+    /**
      * Dispatches checkout initialization to the stripe-checkout Edge Function.
      * @param {Object} payload - Checkout parameters
      * @returns {Promise<{data?: Object, error?: Object}>}

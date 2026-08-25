@@ -2213,10 +2213,18 @@
             if (btn) btn.setAttribute('aria-expanded', 'false');
         }
 
+        let isPriceLocked = false;
+        let facilityPricingRanges = null;
+
         // Load Dynamic Rates from Supabase (facilities & service_areas)
         async function loadRegionalRates(targetZip = null) {
             if (typeof supabase === 'undefined' || !supabase) return;
             try {
+                // Fetch dynamic High-Low ranges across all facilities if not yet fetched
+                if (!facilityPricingRanges && window.CloudVaultBilling && typeof window.CloudVaultBilling.getFacilityPricingRanges === 'function') {
+                    facilityPricingRanges = await window.CloudVaultBilling.getFacilityPricingRanges();
+                }
+
                 let facId = null;
                 let areaInfo = null;
 
@@ -2232,17 +2240,10 @@
                     }
                 }
 
-                if (!facId) {
-                    const { data: facs } = await supabase.from('facilities').select('*').limit(1);
-                    if (facs && facs.length > 0) {
-                        facId = facs[0].id;
-                        areaInfo = { city: facs[0].city, state: facs[0].state };
-                    }
-                }
-
                 if (facId) {
                     const { data: fac } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
                     if (fac) {
+                        isPriceLocked = true;
                         regionalRates.tier1 = Number(fac.tier1_rate) || regionalRates.tier1;
                         regionalRates.tier2 = Number(fac.tier2_rate) || regionalRates.tier2;
                         regionalRates.tier3 = Number(fac.tier3_rate) || regionalRates.tier3;
@@ -2260,6 +2261,9 @@
                             flowData.taxRate = Number(areaInfo.tax_rate);
                         }
                     }
+                } else if (!targetZip) {
+                    // Pre-ZIP state: Default ranges across all operating facilities
+                    isPriceLocked = false;
                 }
 
                 // Check for authentic customer reviews in Supabase (STRICT RULE: only show if authentic)
@@ -2290,42 +2294,62 @@
         }
 
         function updatePricingUIWithRates() {
-            // Update Tier card prices on landing page (replaces loading skeletons)
+            const ranges = facilityPricingRanges;
             const t1 = document.getElementById('tier-card-1-price');
             const t2 = document.getElementById('tier-card-2-price');
             const t3 = document.getElementById('tier-card-3-price');
             const t4 = document.getElementById('tier-card-4-price');
-            if (t1) t1.innerHTML = `$${regionalRates.tier1.toFixed(2)}<span class="text-xs font-normal text-slate-500">/mo</span>`;
-            if (t2) t2.innerHTML = `$${regionalRates.tier2.toFixed(2)}<span class="text-xs font-normal text-slate-500">/mo</span>`;
-            if (t3) t3.innerHTML = `$${regionalRates.tier3.toFixed(2)}<span class="text-xs font-normal text-slate-500">/mo</span>`;
-            if (t4) t4.innerHTML = `$${regionalRates.tier4.toFixed(2)}<span class="text-xs font-normal text-slate-500">/mo</span>`;
 
-            // Update Flow Tier card prices
             const ft1 = document.getElementById('flow-tier-1-price');
             const ft2 = document.getElementById('flow-tier-2-price');
             const ft3 = document.getElementById('flow-tier-3-price');
             const ft4 = document.getElementById('flow-tier-4-price');
-            if (ft1) ft1.innerHTML = `$${regionalRates.tier1.toFixed(2)}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
-            if (ft2) ft2.innerHTML = `$${regionalRates.tier2.toFixed(2)}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
-            if (ft3) ft3.innerHTML = `$${regionalRates.tier3.toFixed(2)}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
-            if (ft4) ft4.innerHTML = `$${regionalRates.tier4.toFixed(2)}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
+
+            if (!isPriceLocked && ranges) {
+                // Display High-Low dynamic range
+                if (t1) t1.innerHTML = `${ranges.tier1.label}<span class="text-xs font-normal text-slate-500">/mo</span>`;
+                if (t2) t2.innerHTML = `${ranges.tier2.label}<span class="text-xs font-normal text-slate-500">/mo</span>`;
+                if (t3) t3.innerHTML = `${ranges.tier3.label}<span class="text-xs font-normal text-slate-500">/mo</span>`;
+                if (t4) t4.innerHTML = `${ranges.tier4.label}<span class="text-xs font-normal text-slate-500">/mo</span>`;
+
+                if (ft1) ft1.innerHTML = `${ranges.tier1.label}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
+                if (ft2) ft2.innerHTML = `${ranges.tier2.label}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
+                if (ft3) ft3.innerHTML = `${ranges.tier3.label}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
+                if (ft4) ft4.innerHTML = `${ranges.tier4.label}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
+            } else {
+                // Display exact locked facility rate
+                if (t1) t1.innerHTML = `$${regionalRates.tier1.toFixed(2)}<span class="text-xs font-normal text-slate-500">/mo</span>`;
+                if (t2) t2.innerHTML = `$${regionalRates.tier2.toFixed(2)}<span class="text-xs font-normal text-slate-500">/mo</span>`;
+                if (t3) t3.innerHTML = `$${regionalRates.tier3.toFixed(2)}<span class="text-xs font-normal text-slate-500">/mo</span>`;
+                if (t4) t4.innerHTML = `$${regionalRates.tier4.toFixed(2)}<span class="text-xs font-normal text-slate-500">/mo</span>`;
+
+                if (ft1) ft1.innerHTML = `$${regionalRates.tier1.toFixed(2)}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
+                if (ft2) ft2.innerHTML = `$${regionalRates.tier2.toFixed(2)}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
+                if (ft3) ft3.innerHTML = `$${regionalRates.tier3.toFixed(2)}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
+                if (ft4) ft4.innerHTML = `$${regionalRates.tier4.toFixed(2)}<span class="text-[10px] font-normal text-slate-500">/mo</span>`;
+            }
 
             // Update hero baseline and minimum rate
             const heroBaseline = document.getElementById('hero-baseline-price');
             if (heroBaseline) heroBaseline.textContent = `$${regionalRates.traditional_unit_baseline.toFixed(0)}/mo`;
             const heroMin = document.getElementById('hero-min-rate');
-            if (heroMin) heroMin.textContent = `$${regionalRates.tier4.toFixed(0)}/tote/mo`;
+            if (heroMin) heroMin.textContent = `$${(ranges ? ranges.tier4.min : regionalRates.tier4).toFixed(0)}/tote/mo`;
 
             // Update regional indicator
             const regionInd = document.getElementById('calc-region-indicator');
             if (regionInd) {
-                regionInd.textContent = `📍 Showing live rates for ${regionalRates.city}${regionalRates.state ? ', ' + regionalRates.state : ''}`;
+                if (isPriceLocked) {
+                    regionInd.innerHTML = `📍 <strong>Price Locked:</strong> Showing rates for ${regionalRates.city}, ${regionalRates.state} (${regionalRates.facility_name})`;
+                } else {
+                    regionInd.innerHTML = `📍 <strong>Regional Facility Pricing:</strong> Enter your ZIP code to lock in exact rates for your area.`;
+                }
             }
 
             // Update mobile rate badge
             const mobileRate = document.getElementById('mobile-rate-display');
             if (mobileRate) {
-                mobileRate.innerHTML = `From <span class="text-blue-600">$${regionalRates.tier4.toFixed(2)}/tote/mo</span>`;
+                const minRate = (ranges ? ranges.tier4.min : regionalRates.tier4).toFixed(2);
+                mobileRate.innerHTML = `From <span class="text-blue-600">$${minRate}/tote/mo</span>`;
             }
 
             // Update TOS missing fee
@@ -2409,19 +2433,50 @@
             const totes = Math.max(1, parseInt(document.getElementById('calc-totes').value) || 1);
             const { rate, label, tier } = getTierRate(totes);
             const monthly = Math.round(totes * rate * 100) / 100;
-            const isValet = flowData.logisticsType === 'valet_pickup';
+            const isValet = (typeof flowData !== 'undefined' && flowData.logisticsType === 'valet_pickup');
             const upfront = isValet ? regionalRates.valet_base + (totes * regionalRates.valet_tote_adder) : 0;
             const firstMonth = monthly + upfront;
 
             // Update readout
             const tierBadge = document.getElementById('tier-badge');
-            if (tierBadge) tierBadge.textContent = label;
+            if (tierBadge) {
+                if (!isPriceLocked && facilityPricingRanges) {
+                    const rangeObj = facilityPricingRanges[`tier${tier}`];
+                    tierBadge.textContent = rangeObj ? `Tier ${tier} — ${rangeObj.label}` : label;
+                } else {
+                    tierBadge.textContent = label;
+                }
+            }
+
             const monthlyEl = document.getElementById('calc-monthly');
-            if (monthlyEl) monthlyEl.textContent = monthly.toFixed(2);
+            if (monthlyEl) {
+                if (!isPriceLocked && facilityPricingRanges) {
+                    const rangeObj = facilityPricingRanges[`tier${tier}`];
+                    if (rangeObj && rangeObj.min !== rangeObj.max) {
+                        monthlyEl.textContent = `${(totes * rangeObj.min).toFixed(2)} – ${(totes * rangeObj.max).toFixed(2)}`;
+                    } else {
+                        monthlyEl.textContent = monthly.toFixed(2);
+                    }
+                } else {
+                    monthlyEl.textContent = monthly.toFixed(2);
+                }
+            }
+
             const upfrontEl = document.getElementById('calc-upfront');
             if (upfrontEl) upfrontEl.textContent = upfront.toFixed(2);
             const firstMonthEl = document.getElementById('calc-first-month');
-            if (firstMonthEl) firstMonthEl.textContent = firstMonth.toFixed(2);
+            if (firstMonthEl) {
+                if (!isPriceLocked && facilityPricingRanges) {
+                    const rangeObj = facilityPricingRanges[`tier${tier}`];
+                    if (rangeObj && rangeObj.min !== rangeObj.max) {
+                        firstMonthEl.textContent = `${(totes * rangeObj.min + upfront).toFixed(2)} – ${(totes * rangeObj.max + upfront).toFixed(2)}`;
+                    } else {
+                        firstMonthEl.textContent = firstMonth.toFixed(2);
+                    }
+                } else {
+                    firstMonthEl.textContent = firstMonth.toFixed(2);
+                }
+            }
 
             // Dynamic Valet fee label
             const valetLabel = document.getElementById('valet-fee-label');
@@ -2453,12 +2508,7 @@
             updateTierProgressBar(totes, tier);
             updateSavingsDisplay(totes, rate, tier, monthly);
 
-            // Sync state
-            flowData.totes = totes;
-            flowData.price = monthly;
-            flowData.toteRate = rate;
-            flowData.upfront = upfront;
-            flowData.firstMonth = firstMonth;
+            // NOTE: Strictly do not mutate flowData.totes here!
         }
 
         function updateTierProgressBar(totes, tier) {
