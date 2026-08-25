@@ -1020,7 +1020,7 @@
             try {
                 const [facRes, invRes, subRes, zoneRes] = await Promise.all([
                     supabase.from('facilities').select('*').order('name'),
-                    supabase.from('inventory').select('*, users!uid(id, name, email, active_zone, assigned_facility_id), facilities!facility_id(name, usable_sqft, max_tote_capacity)'),
+                    supabase.from('inventory').select('*, users!uid(id, name, email, active_zone, assigned_facility_id), facilities!facility_id(name, usable_warehouse_sqft, tote_capacity)'),
                     supabase.from('subscriptions').select('*'),
                     supabase.from('operational_zones').select('*')
                 ]);
@@ -1534,7 +1534,8 @@
             if (!list) return;
 
             try {
-                const { data: logs } = await supabase.from('privacy_audit_logs').select('*').order('created_at', { ascending: false }).limit(20);
+                const { data: logs, error } = await supabase.from('privacy_audit_logs').select('*').order('executed_at', { ascending: false }).limit(20);
+                if (error) throw error;
                 const records = logs || [];
                 if (countEl) countEl.textContent = `${records.length} records`;
 
@@ -1544,15 +1545,16 @@
                 }
 
                 list.innerHTML = records.map(l => `
-                    <div class="p-2.5 bg-gray-900/60 rounded-xl border border-gray-800 flex items-center justify-between">
+                    <div class="p-2.5 bg-gray-900/60 rounded-xl border border-gray-800 flex items-center justify-between text-xs">
                         <div>
-                            <span class="text-emerald-400 font-bold">✓ Wiped UID: ${l.target_uid ? l.target_uid.substring(0, 8) + '...' : 'Unknown'}</span>
-                            <span class="text-gray-400 ml-2">Reason: ${escapeHtml(l.reason || 'GDPR Erasure')}</span>
+                            <span class="text-emerald-400 font-bold">✓ Wiped UID: ${l.target_uid ? String(l.target_uid).substring(0, 8) + '...' : 'Unknown'}</span>
+                            <span class="text-gray-400 ml-2">Reason: ${escapeHtml(l.compliance_reason || l.action_type || 'GDPR Erasure')}</span>
                         </div>
-                        <span class="text-[10px] text-gray-500">${new Date(l.created_at).toLocaleString()}</span>
+                        <span class="text-[10px] text-gray-500">${new Date(l.executed_at || Date.now()).toLocaleString()}</span>
                     </div>
                 `).join('');
             } catch (e) {
+                console.warn("Audit logs notice:", e);
                 list.innerHTML = '<div class="text-center text-gray-500 py-3">Audit logging online.</div>';
             }
         }
