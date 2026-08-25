@@ -5978,3 +5978,227 @@ AFTER INSERT ON public.subscriptions
 FOR EACH ROW
 EXECUTE FUNCTION public.auto_generate_subscription_invoice();
 
+-- RPC: Retroactive Promo Code Attribution & Creator Commission Credit
+CREATE OR REPLACE FUNCTION public.retroactive_apply_customer_promo(
+    p_customer_identifier TEXT,
+    p_promo_code TEXT,
+    p_apply_invoice_discount BOOLEAN DEFAULT TRUE,
+    p_admin_notes TEXT DEFAULT 'Retroactive creator promo applied via Operations Console'
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+    v_user RECORD;
+    v_promo RECORD;
+    v_creator RECORD;
+    v_inv RECORD;
+    v_clean_code TEXT;
+    v_normalized_code TEXT;
+    v_discount_pct NUMERIC(5,2) := 20.00;
+    v_discount_amt NUMERIC(10,2) := 0.00;
+    v_comm_rate NUMERIC(5,2) := 10.00;
+    v_comm_amt NUMERIC(10,2) := 0.00;
+    v_subtotal NUMERIC(10,2) := 0.00;
+    v_net_taxable NUMERIC(10,2) := 0.00;
+    v_tax_rate NUMERIC(5,4) := 0.0850;
+    v_tax NUMERIC(10,2) := 0.00;
+    v_new_total NUMERIC(10,2) := 0.00;
+    v_redemption_id UUID;
+    v_sa RECORD;
+    v_fac RECORD;
+    v_already_credited BOOLEAN := false;
+    v_line_items JSONB;
+BEGIN
+    IF p_customer_identifier IS NULL OR TRIM(p_customer_identifier) = '' THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Please provide a valid customer email, user ID, or name.');
+    END IF;
+
+    SELECT * INTO v_user
+    FROM public.users
+    WHERE id::text = TRIM(p_customer_identifier)
+       OR LOWER(email) = LOWER(TRIM(p_customer_identifier))
+       OR LOWER(name) = LOWER(TRIM(p_customer_identifier))
+    LIMIT 1;
+
+    IF v_user.id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Customer not found matching identifier: ' || p_customer_identifier);
+    END IF;
+
+    IF p_promo_code IS NULL OR TRIM(p_promo_code) = '' THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Please provide a promotional code.');
+    END IF;
+
+    v_clean_code := UPPER(TRIM(p_promo_code));
+    v_normalized_code := UPPER(REGEXP_REPLACE(TRIM(p_promo_code), '[% ]', '', 'g'));
+
+    SELECT * INTO v_promo
+    FROM public.promo_codes
+    WHERE UPPER(code) = v_clean_code
+       OR UPPER(code) = v_normalized_code
+       OR REGEXP_REPLACE(UPPER(code), '[% ]', '', 'g') = v_normalized_code
+       OR UPPER(code) = v_normalized_code || '%'
+    LIMIT 1;
+
+    IF v_promo.id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Promotional code not found: ' || p_promo_code);
+    END IF;
+
+    SELECT * INTO v_creator FROM public.creators WHERE id = v_promo.creator_id LIMIT 1;
+
+    v_discount_pct := COALESCE(v_promo.customer_discount_pct, 20.00);
+    v_comm_rate := COALESCE(v_promo.commission_rate_pct, v_creator.default_commission_pct, 10.00);
+
+    UPDATE public.users
+    SET referred_by_code = v_promo.code,
+        referred_by_promo_code = v_promo.code,
+        referred_by_creator_id = v_promo.creator_id,
+        referred_at = COALESCE(referred_at, created_at, NOW())
+    WHERE id = v_user.id;
+
+    UPDATE public.waitlist
+    SET promo_code = v_promo.code,
+        promo_code_id = v_promo.id,
+        creator_id = v_promo.creator_id,
+        deposit_discount_pct = v_discount_pct
+    WHERE user_id = v_user.id OR LOWER(email) = LOWER(v_user.email);
+
+    SELECT * INTO v_inv
+    FROM public.invoices
+    WHERE uid = v_user.id
+    ORDER BY created_at ASC
+    LIMIT 1;
+
+    IF v_inv.id IS NOT NULL THEN
+        v_subtotal := COALESCE(v_inv.subtotal, 25.00);
+        v_discount_amt := ROUND(v_subtotal * (v_discount_pct / 100.0), 2);
+        v_net_taxable := GREATEST(0.00, v_subtotal - v_discount_amt);
+
+        IF v_user.active_zone IS NOT NULL THEN
+            SELECT tax_rate INTO v_sa FROM public.service_areas WHERE zip_code = v_user.active_zone AND active = true LIMIT 1;
+            IF FOUND AND v_sa.tax_rate IS NOT NULL THEN
+                v_tax_rate := v_sa.tax_rate;
+            END IF;
+        ELSIF v_inv.facility_id IS NOT NULL THEN
+            SELECT tax_rate_pct INTO v_fac FROM public.facilities WHERE id = v_inv.facility_id LIMIT 1;
+            IF FOUND AND v_fac.tax_rate_pct IS NOT NULL THEN
+                v_tax_rate := v_fac.tax_rate_pct / 100.0;
+            END IF;
+        END IF;
+
+        v_tax := ROUND(v_net_taxable * v_tax_rate, 2);
+        v_new_total := v_net_taxable + v_tax + COALESCE(v_inv.delivery_fee, 0.00);
+        v_comm_amt := ROUND(v_subtotal * (v_comm_rate / 100.0), 2);
+
+        IF p_apply_invoice_discount THEN
+            v_line_items := jsonb_build_array(
+                jsonb_build_object(
+                    'description', 'CloudVault Storage Subscription (5 totes @ $5.00/mo)',
+                    'qty', 5,
+                    'unit_price', 5.00,
+                    'amount', v_subtotal
+                ),
+                jsonb_build_object(
+                    'description', 'Creator Partner Discount (' || v_promo.code || ' - ' || v_discount_pct::text || '%)',
+                    'qty', 1,
+                    'unit_price', -v_discount_amt,
+                    'amount', -v_discount_amt,
+                    'is_discount', true
+                ),
+                jsonb_build_object(
+                    'description', 'Sales Tax (' || (v_tax_rate * 100)::text || '%)',
+                    'qty', 1,
+                    'unit_price', v_tax,
+                    'amount', v_tax,
+                    'tax_rate', v_tax_rate,
+                    'is_tax', true
+                )
+            );
+
+            UPDATE public.invoices
+            SET discount = v_discount_amt,
+                tax = v_tax,
+                total_amount = v_new_total,
+                amount_paid = v_new_total,
+                notes = COALESCE(notes, '') || ' | ' || p_admin_notes || ' (' || v_promo.code || ')',
+                line_items = v_line_items
+            WHERE id = v_inv.id;
+        END IF;
+    ELSE
+        v_subtotal := 25.00;
+        v_discount_amt := ROUND(v_subtotal * (v_discount_pct / 100.0), 2);
+        v_net_taxable := GREATEST(0.00, v_subtotal - v_discount_amt);
+        v_comm_amt := ROUND(v_subtotal * (v_comm_rate / 100.0), 2);
+    END IF;
+
+    SELECT EXISTS(
+        SELECT 1 FROM public.promo_redemptions
+        WHERE customer_uid = v_user.id
+          AND (promo_code_id = v_promo.id OR promo_code = v_promo.code)
+    ) INTO v_already_credited;
+
+    IF NOT v_already_credited THEN
+        INSERT INTO public.promo_redemptions (
+            promo_code_id,
+            promo_code,
+            creator_id,
+            customer_uid,
+            customer_email,
+            stripe_invoice_id,
+            invoice_gross_amount,
+            discount_amount,
+            net_paid_amount,
+            commission_rate_applied,
+            commission_amount,
+            month_index,
+            is_commission_eligible,
+            payout_status
+        ) VALUES (
+            v_promo.id,
+            v_promo.code,
+            v_promo.creator_id,
+            v_user.id,
+            v_user.email,
+            COALESCE(v_inv.invoice_number, 'RETRO-' || SUBSTRING(MD5(RANDOM()::TEXT) FROM 1 FOR 8)),
+            v_subtotal,
+            v_discount_amt,
+            v_net_taxable,
+            v_comm_rate,
+            v_comm_amt,
+            1,
+            true,
+            'PENDING'
+        ) RETURNING id INTO v_redemption_id;
+
+        UPDATE public.promo_codes
+        SET current_redemptions = COALESCE(current_redemptions, 0) + 1,
+            total_revenue_generated = COALESCE(total_revenue_generated, 0.00) + v_net_taxable,
+            updated_at = NOW()
+        WHERE id = v_promo.id;
+
+        IF v_creator.id IS NOT NULL THEN
+            UPDATE public.creators
+            SET total_attributed_revenue = COALESCE(total_attributed_revenue, 0.00) + v_net_taxable,
+                total_commission_earned = COALESCE(total_commission_earned, 0.00) + v_comm_amt,
+                updated_at = NOW()
+            WHERE id = v_creator.id;
+        END IF;
+    END IF;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'customer_id', v_user.id,
+        'customer_email', v_user.email,
+        'customer_name', v_user.name,
+        'promo_code', v_promo.code,
+        'creator_name', COALESCE(v_creator.name, 'Partner Creator'),
+        'creator_handle', COALESCE(v_creator.handle, ''),
+        'discount_pct', v_discount_pct,
+        'discount_amount', v_discount_amt,
+        'new_invoice_total', v_new_total,
+        'commission_rate', v_comm_rate,
+        'commission_earned', v_comm_amt,
+        'already_credited', v_already_credited,
+        'redemption_id', v_redemption_id,
+        'message', 'Successfully applied ' || v_promo.code || ' to ' || v_user.email || '. Creator credited with $' || TO_CHAR(v_comm_amt, 'FM990.00') || ' commission.'
+    );
+END;
+$$ LANGUAGE plpgsql;
+

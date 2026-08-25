@@ -627,7 +627,99 @@
         </section>
 
         <!-- ========================================================================= -->
-        <!-- 5. REAL-TIME SYSTEM ACTIVITY & AUDIT LOG STREAM -->
+        <!-- 5. RETROACTIVE PROMO CODE ATTRIBUTION & CREATOR COMMISSIONS HUB -->
+        <!-- ========================================================================= -->
+        <section id="module-retroactive-promo" class="glass-panel p-6 sm:p-8 rounded-3xl border border-purple-500/30 space-y-6 shadow-2xl">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-5 gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 text-lg font-bold">
+                        🎁
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-extrabold text-white flex items-center gap-2">
+                            Retroactive Promo Code Attribution &amp; Creator Credit Hub
+                            <span class="text-[10px] font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                Operations Override
+                            </span>
+                        </h3>
+                        <p class="text-xs text-gray-400 font-mono">Retroactively attach creator promotional codes to accounts, re-balance invoices, and instantly credit promoter commissions.</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="loadRetroactivePromoRedemptions()" class="px-3.5 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-850 text-gray-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-purple-400"></i> Refresh Ledger
+                    </button>
+                </div>
+            </div>
+
+            <!-- Operational Control Form -->
+            <div class="bg-gray-950/70 border border-gray-800 rounded-2xl p-5 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-mono uppercase text-gray-400 mb-1">Customer Identifier (Email, UID, or Name)</label>
+                        <input id="retro-customer-input" type="text" placeholder="e.g. wew@test.com" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500 transition font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-mono uppercase text-gray-400 mb-1">Promotional Code</label>
+                        <input id="retro-promo-input" type="text" placeholder="e.g. ROSS20% or ROSS20" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white uppercase font-bold outline-none focus:border-purple-500 transition font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-mono uppercase text-gray-400 mb-1">Admin Audit Reason</label>
+                        <input id="retro-notes-input" type="text" placeholder="e.g. Customer forgot creator code at checkout" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-purple-500 transition font-mono">
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-gray-900">
+                    <label class="flex items-center space-x-2 text-xs text-gray-300 cursor-pointer">
+                        <input id="retro-apply-discount-chk" type="checkbox" checked class="w-4 h-4 rounded text-purple-600 bg-gray-900 border-gray-700 focus:ring-0 cursor-pointer">
+                        <span>Recalculate &amp; apply discount to initial invoice</span>
+                    </label>
+                    <button id="btn-execute-retro-promo" onclick="executeRetroactivePromoAttribution()" class="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-600/20 transition flex items-center gap-2 cursor-pointer">
+                        <i data-lucide="check-circle-2" class="w-4 h-4"></i> Apply Retroactive Code &amp; Credit Promoter
+                    </button>
+                </div>
+
+                <!-- Result Card -->
+                <div id="retro-result-card" class="hidden p-4 rounded-xl border border-purple-500/40 bg-purple-950/30 text-xs font-mono space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span id="retro-result-title" class="font-bold text-purple-300">✓ Attribution Success</span>
+                        <span id="retro-result-time" class="text-gray-500 text-[10px]">Just now</span>
+                    </div>
+                    <p id="retro-result-message" class="text-gray-200"></p>
+                </div>
+            </div>
+
+            <!-- Recent Attribution Ledger Table -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-bold font-mono text-gray-300 uppercase tracking-wider">Recent Attribution &amp; Creator Commissions Ledger</h4>
+                    <span id="retro-redemption-count" class="text-[11px] font-mono text-purple-400">Loading records...</span>
+                </div>
+                <div class="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-950/80">
+                    <table class="w-full text-left text-xs text-gray-300">
+                        <thead class="bg-gray-900/90 text-gray-400 uppercase text-[10px] font-mono border-b border-gray-800">
+                            <tr>
+                                <th class="py-3 px-3">Date</th>
+                                <th class="py-3 px-3">Customer</th>
+                                <th class="py-3 px-3">Promo Code</th>
+                                <th class="py-3 px-3">Promoter</th>
+                                <th class="py-3 px-3 text-right">Customer Discount</th>
+                                <th class="py-3 px-3 text-right">Promoter Earned</th>
+                                <th class="py-3 px-3 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="retro-redemptions-table-body" class="divide-y divide-gray-800/60 font-mono">
+                            <tr>
+                                <td colspan="7" class="py-8 text-center text-gray-500">Loading attribution ledger...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- 6. REAL-TIME SYSTEM ACTIVITY & AUDIT LOG STREAM -->
         <!-- ========================================================================= -->
         <section class="glass-panel p-6 sm:p-8 rounded-3xl border border-gray-800 space-y-4 shadow-xl">
             <div class="flex items-center justify-between border-b border-gray-800 pb-3">
@@ -964,6 +1056,7 @@
                 await loadCustomerRelocationRoster();
                 await loadPrivacyAuditLogs();
                 await loadStripeTelemetryHub();
+                await loadRetroactivePromoRedemptions();
                 logSystemActivity('Telemetry metrics and business radar refreshed.');
             } catch (err) {
                 console.error("Telemetry load failed:", err);
@@ -1797,6 +1890,125 @@
             } catch (err) {
                 console.error("Payment retry failed:", err);
                 showToast("Payment retry failed: " + err.message, true);
+            }
+        }
+
+        // =========================================================================
+        // Retroactive Promo Attribution & Creator Credit Operations
+        // =========================================================================
+        async function executeRetroactivePromoAttribution() {
+            const customerInput = document.getElementById('retro-customer-input');
+            const promoInput = document.getElementById('retro-promo-input');
+            const notesInput = document.getElementById('retro-notes-input');
+            const applyDiscountChk = document.getElementById('retro-apply-discount-chk');
+            const btn = document.getElementById('btn-execute-retro-promo');
+            const resultCard = document.getElementById('retro-result-card');
+            const resultMsg = document.getElementById('retro-result-message');
+
+            const customer = customerInput?.value.trim();
+            const promo = promoInput?.value.trim();
+            const notes = notesInput?.value.trim() || 'Retroactive creator promo applied via Operations Console';
+            const applyDiscount = applyDiscountChk ? applyDiscountChk.checked : true;
+
+            if (!customer) {
+                showToast('Please enter a customer email, user ID, or name.', true);
+                return;
+            }
+            if (!promo) {
+                showToast('Please enter a promotional code.', true);
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Processing...';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            try {
+                const { data, error } = await supabase.rpc('retroactive_apply_customer_promo', {
+                    p_customer_identifier: customer,
+                    p_promo_code: promo,
+                    p_apply_invoice_discount: applyDiscount,
+                    p_admin_notes: notes
+                });
+
+                if (error) throw error;
+                if (!data || !data.success) {
+                    throw new Error(data?.message || 'Failed to apply retroactive promotion');
+                }
+
+                showToast(`✓ Success: Applied ${data.promo_code} to ${data.customer_email}!`);
+                if (resultCard && resultMsg) {
+                    resultCard.classList.remove('hidden');
+                    resultMsg.innerHTML = `<strong>${data.message}</strong><br>` +
+                        `• Promoter: <span class="text-purple-300 font-bold">${data.creator_name}</span> (${data.creator_handle || 'N/A'}) credited <strong>$${Number(data.commission_earned).toFixed(2)}</strong> (${data.commission_rate}% commission)<br>` +
+                        `• Customer: <span class="text-purple-300 font-bold">${data.customer_name || data.customer_email}</span> received <strong>${data.discount_pct}% discount</strong> (-$${Number(data.discount_amount).toFixed(2)})<br>` +
+                        `• Adjusted Invoice Total: <strong>$${Number(data.new_invoice_total).toFixed(2)}</strong>`;
+                }
+
+                logSystemActivity(`Retroactive promo [${data.promo_code}] applied to ${data.customer_email} — credited promoter ${data.creator_name} ($${Number(data.commission_earned).toFixed(2)})`);
+
+                loadRetroactivePromoRedemptions();
+            } catch (err) {
+                console.error('Retroactive promo attribution failed:', err);
+                showToast(err.message || 'Retroactive attribution failed', true);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="check-circle-2" class="w-4 h-4"></i> Apply Retroactive Code &amp; Credit Promoter';
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        }
+
+        async function loadRetroactivePromoRedemptions() {
+            const tableBody = document.getElementById('retro-redemptions-table-body');
+            const countEl = document.getElementById('retro-redemption-count');
+            if (!tableBody) return;
+
+            try {
+                const { data, error } = await supabase
+                    .from('promo_redemptions')
+                    .select('*, promo_codes(code, customer_discount_pct, commission_rate_pct), creators(name, handle, email)')
+                    .order('created_at', { ascending: false })
+                    .limit(20);
+
+                if (error) throw error;
+
+                if (!data || data.length === 0) {
+                    tableBody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-gray-500 font-mono">No promo redemptions recorded yet</td></tr>`;
+                    if (countEl) countEl.textContent = '0 Records';
+                    return;
+                }
+
+                if (countEl) countEl.textContent = `${data.length} Recent Record${data.length !== 1 ? 's' : ''}`;
+
+                tableBody.innerHTML = data.map(r => {
+                    const d = new Date(r.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const code = r.promo_code || r.promo_codes?.code || 'N/A';
+                    const creatorName = r.creators?.name || 'Creator Partner';
+                    const creatorHandle = r.creators?.handle || '';
+                    const discountAmt = Number(r.discount_amount || 0).toFixed(2);
+                    const commAmt = Number(r.commission_amount || 0).toFixed(2);
+                    const commPct = r.commission_rate_applied || r.promo_codes?.commission_rate_pct || 10;
+                    const custEmail = r.customer_email || 'Customer';
+
+                    return `
+                        <tr class="hover:bg-gray-900/50 transition">
+                            <td class="py-3 px-3 text-gray-400 whitespace-nowrap">${d}</td>
+                            <td class="py-3 px-3 font-bold text-white">${custEmail}</td>
+                            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30">${code}</span></td>
+                            <td class="py-3 px-3 text-gray-300">${creatorName} <span class="text-xs text-purple-400 font-mono">${creatorHandle}</span></td>
+                            <td class="py-3 px-3 text-right font-bold text-emerald-400">-$${discountAmt}</td>
+                            <td class="py-3 px-3 text-right font-bold text-purple-400">+$${commAmt} <span class="text-[10px] text-gray-500 font-normal">(${commPct}%)</span></td>
+                            <td class="py-3 px-3 text-center">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.payout_status === 'PAID' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'} uppercase">
+                                    ${r.payout_status || 'PENDING'}
+                                </span>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error('Failed to load promo redemptions:', err);
+                tableBody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-red-400 font-mono">Failed to load redemptions: ${err.message}</td></tr>`;
             }
         }
 
