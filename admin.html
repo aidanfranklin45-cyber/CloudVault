@@ -1442,6 +1442,27 @@
                             </div>
                         </div>
 
+                        <!-- Waitlist Priority Deposit Configuration -->
+                        <div class="p-3 bg-gray-950/80 border border-blue-500/30 rounded-2xl space-y-3">
+                            <div class="flex justify-between items-center">
+                                <p class="text-[10px] font-bold uppercase text-blue-400">💳 Unlaunched Deposit Waitlist Flow &amp; Perks</p>
+                                <label class="flex items-center gap-1.5 cursor-pointer text-[10px] text-blue-300 font-bold">
+                                    <input type="checkbox" id="cc-allow-waitlist" checked onchange="document.getElementById('cc-waitlist-fields').classList.toggle('opacity-50', !this.checked)" class="w-3.5 h-3.5 accent-blue-500 rounded cursor-pointer">
+                                    <span>Enable for Waitlists</span>
+                                </label>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3 transition" id="cc-waitlist-fields">
+                                <div>
+                                    <label class="block text-[10px] uppercase text-gray-400 mb-1">Deposit Discount %</label>
+                                    <input type="number" id="cc-waitlist-discount-pct" value="20" min="0" max="100" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 text-white outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase text-gray-400 mb-1">Deposit Benefit Note</label>
+                                    <input type="text" id="cc-waitlist-note" value="3-Yr Price Lock + Launch Discount" disabled class="w-full bg-gray-900/50 border border-gray-850 rounded-xl px-3 py-1.5 text-gray-400 outline-none text-[10px]">
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="flex justify-end items-center space-x-2 pt-2 border-t border-gray-800">
                             <button type="button" onclick="closeCreateCreatorPromoModal()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl font-bold transition cursor-pointer">Cancel</button>
                             <button type="submit" id="cc-submit-btn" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition cursor-pointer flex items-center gap-1.5 shadow-lg shadow-emerald-600/20">
@@ -1478,6 +1499,15 @@
                         <div>
                             <label class="block text-[11px] uppercase text-gray-400 mb-1">Payout Method / Reference Note *</label>
                             <input type="text" id="payout-ref" value="STRIPE_CONNECT_ACH_PAYOUT" required class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-white outline-none">
+                        </div>
+
+                        <!-- Post-Payout Deactivation Checkbox -->
+                        <div class="p-3 bg-purple-950/30 border border-purple-500/30 rounded-2xl space-y-1.5">
+                            <label class="flex items-center gap-2 cursor-pointer text-xs font-bold text-purple-200">
+                                <input type="checkbox" id="payout-deactivate-promo" class="w-4 h-4 accent-purple-500 rounded cursor-pointer">
+                                <span>Deactivate Promo Code (Final Settlement)</span>
+                            </label>
+                            <p class="text-[10px] text-gray-400 font-sans pl-6">Automatically pauses this creator's active promotional code in CloudVault and Stripe once payout is settled.</p>
                         </div>
 
                         <div class="flex justify-end items-center space-x-2 pt-2 border-t border-gray-800">
@@ -8204,6 +8234,8 @@
             const custDiscountMonths = document.getElementById('cc-cust-discount-months').value;
             const commPct = document.getElementById('cc-comm-pct').value;
             const commMonths = document.getElementById('cc-comm-months').value;
+            const allowWaitlist = document.getElementById('cc-allow-waitlist')?.checked ?? true;
+            const waitlistDiscountPct = document.getElementById('cc-waitlist-discount-pct')?.value ?? custDiscountPct;
 
             btn.disabled = true;
             btn.innerHTML = '<span>Creating &amp; Syncing Stripe...</span>';
@@ -8211,10 +8243,18 @@
             try {
                 const res = await StripeBillingIntegration.createCreatorWithPromoCode(
                     { name, handle, email, defaultCommissionPct: commPct, commissionMonths: commMonths },
-                    { code, customerDiscountPct: custDiscountPct, customerDiscountMonths: custDiscountMonths, commissionRatePct: commPct, commissionMonths: commMonths }
+                    { 
+                        code, 
+                        customerDiscountPct: custDiscountPct, 
+                        customerDiscountMonths: custDiscountMonths, 
+                        commissionRatePct: commPct, 
+                        commissionMonths: commMonths,
+                        allowWaitlistDeposits: allowWaitlist,
+                        waitlistDepositDiscountPct: waitlistDiscountPct
+                    }
                 );
 
-                alert(`Creator Promo Code "${code}" successfully created and synchronized with Stripe!`);
+                alert(`Creator Promo Code "${code}" successfully created and synchronized with Stripe (Coupon ID: ${res.stripeCouponId})!`);
                 closeCreateCreatorPromoModal();
                 document.getElementById('create-creator-form').reset();
                 loadCreatorGovernanceHub();
@@ -8244,6 +8284,9 @@
             document.getElementById('payout-creator-id').value = creatorId;
             document.getElementById('payout-creator-name').textContent = creatorName;
             document.getElementById('payout-amount').value = (Number(pendingAmount) || 0).toFixed(2);
+            if (document.getElementById('payout-deactivate-promo')) {
+                document.getElementById('payout-deactivate-promo').checked = false;
+            }
             if (modal) modal.classList.remove('hidden');
         }
 
@@ -8259,14 +8302,16 @@
             const creatorId = document.getElementById('payout-creator-id').value;
             const amount = document.getElementById('payout-amount').value;
             const ref = document.getElementById('payout-ref').value;
+            const deactivatePromo = document.getElementById('payout-deactivate-promo')?.checked ?? false;
 
             btn.disabled = true;
             btn.innerHTML = '<span>Processing Settlement...</span>';
 
             try {
-                const res = await StripeBillingIntegration.settleCreatorPayout(creatorId, amount, ref);
+                const res = await StripeBillingIntegration.settleCreatorPayout(creatorId, amount, ref, deactivatePromo);
                 const transferMsg = res?.transfer_id ? ` (Stripe Transfer ID: ${res.transfer_id})` : '';
-                alert(`✓ Successfully disbursed and settled payout of $${Number(amount).toFixed(2)}${transferMsg}!`);
+                const deactMsg = res?.promoCodesDeactivated ? '\n✓ Associated promotional code has been paused/deactivated in CloudVault and Stripe.' : '';
+                alert(`✓ Successfully disbursed and settled payout of $${Number(amount).toFixed(2)}${transferMsg}!${deactMsg}`);
                 closeSettlePayoutModal();
                 loadCreatorGovernanceHub();
             } catch (err) {

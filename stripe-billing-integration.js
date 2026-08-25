@@ -1183,6 +1183,8 @@
               commission_rate_pct: commRatePct,
               commission_duration_months: commMonths,
               max_redemptions: promoData.maxRedemptions ? Number(promoData.maxRedemptions) : null,
+              allow_waitlist_deposits: promoData.allowWaitlistDeposits !== false,
+              waitlist_deposit_discount_pct: Number(promoData.waitlistDepositDiscountPct) || custDiscountPct,
               is_active: true
             })
             .select()
@@ -1586,12 +1588,14 @@
 
     /**
      * Settles creator commission payout via real Stripe Transfer Edge Function.
+     * Optionally deactivates associated promo codes upon final settlement.
      * @param {string} creatorId - Creator UUID
      * @param {number} amount - Amount in USD
      * @param {string} reference - Payout reference note (ACH / Wire / Stripe Transfer)
+     * @param {boolean} deactivatePromoCodes - Whether to deactivate the creator's promo codes upon payout
      * @returns {Promise<Object>}
      */
-    settleCreatorPayout: async function (creatorId, amount, reference = 'STRIPE_CONNECT_ACH_PAYOUT') {
+    settleCreatorPayout: async function (creatorId, amount, reference = 'STRIPE_CONNECT_ACH_PAYOUT', deactivatePromoCodes = false) {
       if (!creatorId || !amount) throw new Error('Creator ID and settlement amount required');
 
       const baseUrl = (global.SUPABASE_URL || 'https://xbxvebnrjryvksvtufqj.supabase.co').replace(/\/$/, '');
@@ -1615,6 +1619,42 @@
       const resData = await response.json();
       if (!response.ok || !resData.success) {
         throw new Error(resData.error || 'Failed to disburse Stripe transfer');
+      }
+
+      // If requested, deactivate promotional codes for this creator
+      if (deactivatePromoCodes) {
+        const sb = global.supabase;
+        if (sb) {
+          try {
+            const { data: promoList } = await sb.from('promo_codes').select('id, stripe_promo_code_id').eq('creator_id', creatorId);
+            if (promoList && promoList.length > 0) {
+              await sb.from('promo_codes').update({ is_active: false, updated_at: new Date().toISOString() }).eq('creator_id', creatorId);
+              
+              const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
+              if (apiKey) {
+                for (const p of promoList) {
+                  if (p.stripe_promo_code_id && !p.stripe_promo_code_id.startsWith('promo_CV_')) {
+                    try {
+                      await fetch(`https://api.stripe.com/v1/promotion_codes/${p.stripe_promo_code_id}`, {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${apiKey}`,
+                          'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        body: new URLSearchParams({ active: 'false' })
+                      });
+                    } catch (sErr) {
+                      console.warn('[Stripe] Promotion code deactivation notice:', sErr.message);
+                    }
+                  }
+                }
+              }
+            }
+            resData.promoCodesDeactivated = true;
+          } catch (deactErr) {
+            console.warn('[StripeBillingIntegration] Post-payout promo deactivation notice:', deactErr.message);
+          }
+        }
       }
 
       return resData;
