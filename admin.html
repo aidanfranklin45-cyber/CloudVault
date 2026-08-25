@@ -5015,19 +5015,48 @@
                     }
 
                     // Enforce Non-Overlapping Staging Room Numbers across active self-serve jobs
-                    const usedRooms = new Set();
+                    const numRooms = Number(window.currentLoadedFac?.num_staging_rooms || window.currentLoadedFac?.staging_rooms || 3);
+                    const slotOccupancy = {}; // key: `${targetDate}_${timeSlot}` -> Map<roomNum, uid>
+
+                    const normalizeSlotKey = (date, slot) => {
+                        const d = date ? date.split('T')[0] : 'today';
+                        const s = (slot || 'morning').toLowerCase().replace(/[^a-z0-9]/g, '');
+                        return `${d}_${s}`;
+                    };
+
+                    // Pass 1: Deduplicate room conflicts. If two different customers claim the same room in the same slot, only the first keeps it.
                     jobs.forEach(j => {
-                        if (j.assignedRoom) usedRooms.add(j.assignedRoom);
+                        if (j.fulfillmentType === 'valet_delivery') return;
+                        const slotKey = normalizeSlotKey(j.targetDate, j.timeSlot);
+                        if (!slotOccupancy[slotKey]) slotOccupancy[slotKey] = new Map();
+
+                        if (j.assignedRoom) {
+                            const existingUid = slotOccupancy[slotKey].get(j.assignedRoom);
+                            if (!existingUid || existingUid === j.uid) {
+                                slotOccupancy[slotKey].set(j.assignedRoom, j.uid);
+                            } else {
+                                j.assignedRoom = null;
+                            }
+                        }
                     });
-                    let nextRoomNum = 1;
+
+                    // Pass 2: Assign lowest available free room (1..numRooms) to unassigned or conflicting jobs
                     jobs.forEach(j => {
-                        if (j.fulfillmentType !== 'valet_delivery') {
-                            if (!j.assignedRoom) {
-                                while (usedRooms.has(nextRoomNum)) {
-                                    nextRoomNum++;
+                        if (j.fulfillmentType === 'valet_delivery') return;
+                        const slotKey = normalizeSlotKey(j.targetDate, j.timeSlot);
+                        if (!slotOccupancy[slotKey]) slotOccupancy[slotKey] = new Map();
+
+                        if (!j.assignedRoom) {
+                            for (let r = 1; r <= numRooms; r++) {
+                                const currentUid = slotOccupancy[slotKey].get(r);
+                                if (!currentUid || currentUid === j.uid) {
+                                    j.assignedRoom = r;
+                                    slotOccupancy[slotKey].set(r, j.uid);
+                                    break;
                                 }
-                                j.assignedRoom = nextRoomNum;
-                                usedRooms.add(nextRoomNum);
+                            }
+                            if (!j.assignedRoom) {
+                                j.assignedRoom = 1;
                             }
                         }
                     });

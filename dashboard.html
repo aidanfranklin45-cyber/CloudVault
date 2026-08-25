@@ -2155,6 +2155,13 @@
                 if (!room && req && (req.room_number || req.staging_room_number)) {
                     room = Number(req.room_number || req.staging_room_number);
                 }
+                if (!room && typeof currentInventory !== 'undefined' && currentInventory) {
+                    const stagedItem = currentInventory.find(t => t.location_code && t.location_code.match(/ROOM-?(\d+)/i));
+                    if (stagedItem) {
+                        const m = stagedItem.location_code.match(/ROOM-?(\d+)/i);
+                        if (m) room = parseInt(m[1], 10);
+                    }
+                }
                 if (!room) {
                     room = 1;
                 }
