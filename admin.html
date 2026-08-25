@@ -945,78 +945,14 @@
                                     <p id="fp-rev-sqft" class="text-sm font-extrabold text-emerald-400 mt-0.5">
                                         $0.00/sqft
                                     </p>
-                                </div>
-                            </div>
-                        </div>
+                                </di                        </div>
                     </div>
 
                 </div>
             </div>
-
-            <!-- Executive Customer Data Privacy & Statutory Erasure Hub (GDPR / CCPA) -->
-            <div class="glass-panel p-6 sm:p-8 rounded-3xl border border-red-500/20 space-y-6">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-5 gap-4">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-10 h-10 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 text-lg font-bold">
-                            🛡️
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-extrabold text-white flex items-center gap-2">
-                                Customer Data Privacy &amp; Erasure Hub
-                                <span class="text-[10px] font-mono font-bold bg-red-500/20 text-red-300 border border-red-500/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Super Admin Clearance</span>
-                            </h3>
-                            <p class="text-xs text-gray-400 font-mono">GDPR Article 17 (Right to Erasure) &amp; CCPA compliance with 7-year statutory financial ledger preservation</p>
-                        </div>
-                    </div>
-                    <button onclick="loadPrivacyAuditLogs()" class="px-3.5 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
-                        <i data-lucide="history" class="w-3.5 h-3.5 text-blue-400"></i> View Privacy Audit Logs
-                    </button>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    <!-- Left: Customer Search & Selection -->
-                    <div class="lg:col-span-5 space-y-4">
-                        <div>
-                            <label class="block text-xs font-bold uppercase text-gray-400 mb-1.5 font-mono">1. Search Customer to Manage / Erase</label>
-                            <div class="relative">
-                                <input type="text" id="privacy-user-search" oninput="searchPrivacyCustomers(this.value)" placeholder="Search by email, name, or customer ID..."
-                                    class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:border-red-500 outline-none">
-                            </div>
-                        </div>
-
-                        <div id="privacy-search-results" class="bg-gray-950/80 border border-gray-850 rounded-2xl p-2 max-h-56 overflow-y-auto space-y-1">
-                            <div class="p-3 text-center text-xs text-gray-500 font-mono">Type customer email or name above...</div>
-                        </div>
-                    </div>
-
-                    <!-- Right: Customer Privacy Dossier & Deletion Trigger -->
-                    <div class="lg:col-span-7">
-                        <div id="privacy-customer-dossier" class="bg-gray-950/90 border border-gray-850 rounded-2xl p-5 space-y-4">
-                            <div class="text-center py-6 text-gray-500 space-y-1">
-                                <div class="text-2xl">👤</div>
-                                <p class="text-xs font-bold text-gray-400">No Customer Selected</p>
-                                <p class="text-[11px] text-gray-600 font-mono">Select a customer from the search list to inspect data footprint and process compliance requests.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recent Privacy Audit Logs Drawer -->
-                <div id="privacy-audit-drawer" class="hidden pt-4 border-t border-gray-850 space-y-3">
-                    <div class="flex justify-between items-center">
-                        <span class="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">Compliance Audit Trail (Immutable Log)</span>
-                        <span id="privacy-audit-count" class="text-xs text-blue-400 font-mono">0 records</span>
-                    </div>
-                    <div id="privacy-audit-list" class="bg-gray-950 rounded-2xl border border-gray-850 p-3 max-h-48 overflow-y-auto space-y-2 text-xs font-mono">
-                        <div class="text-center text-gray-500 py-3">Loading compliance logs...</div>
-                    </div>
-                </div>
-            </div>
-
-        
 
             <!-- ========================================================================= -->
-            <div id="executive-creator-promo-hub" class="glass-panel p-6 sm:p-8 rounded-3xl border border-emerald-500/30 space-y-6">
+            <div id="executive-creator-promo-hub" class="glass-panel p-6 sm:p-8 rounded-3xl border border-emerald-500/30 space-y-6">ded-3xl border border-emerald-500/30 space-y-6">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-5 gap-4">
                     <div class="flex items-center space-x-3">
                         <div class="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-lg font-bold">
@@ -1132,143 +1068,6 @@
                                 <tbody id="promo-ledger-table-body" class="divide-y divide-gray-800/60 font-mono">
                                     <tr>
                                         <td colspan="9" class="py-8 text-center text-gray-500">Loading attribution ledger...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ========================================================================= -->
-            <!-- NEW: Stripe Operational Telemetry & Payment Health Panel (Executive Hub) -->
-            <!-- ========================================================================= -->
-            <div id="executive-stripe-telemetry-panel" class="glass-panel p-6 sm:p-8 rounded-3xl border border-indigo-500/30 space-y-6">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-5 gap-4">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 text-lg font-bold">
-                            ⚡
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-extrabold text-white flex items-center gap-2">
-                                Stripe Operational Telemetry &amp; Payment Health
-                                <span class="text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Live Bridge
-                                </span>
-                            </h3>
-                            <p class="text-xs text-gray-400 font-mono">Live webhook ingestion stream, dunning alerts, failed invoice recovery, and automated charge reconciliation</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        <span id="stripe-telemetry-last-sync" class="text-[11px] font-mono text-gray-400 px-2.5 py-1 bg-gray-950 rounded-xl border border-gray-850">
-                            Synced Just Now
-                        </span>
-                        <button onclick="loadStripeTelemetryHub()" class="px-3.5 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-850 text-gray-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
-                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-indigo-400"></i> Refresh Telemetry
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Telemetry KPI Summary Cards -->
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div class="bg-gray-950/70 border border-gray-800 rounded-2xl p-4 space-y-1">
-                        <p class="text-[11px] font-mono uppercase text-gray-400">Failed Invoices &amp; Dunning</p>
-                        <p id="stripe-kpi-failed-count" class="text-2xl font-black text-amber-400 font-mono">0</p>
-                        <p id="stripe-kpi-failed-amt" class="text-[10px] text-amber-400/80 flex items-center gap-1 font-mono">$0.00 at risk</p>
-                    </div>
-                    <div class="bg-gray-950/70 border border-gray-800 rounded-2xl p-4 space-y-1">
-                        <p class="text-[11px] font-mono uppercase text-gray-400">Webhook Events Stream</p>
-                        <p id="stripe-kpi-webhook-count" class="text-2xl font-black text-indigo-400 font-mono">0</p>
-                        <p id="stripe-kpi-webhook-status" class="text-[10px] text-emerald-400 flex items-center gap-1 font-mono"><span>🟢</span> Ingested Live</p>
-                    </div>
-                    <div class="bg-gray-950/70 border border-gray-800 rounded-2xl p-4 space-y-1">
-                        <p class="text-[11px] font-mono uppercase text-gray-400">Refunds &amp; Adjustments</p>
-                        <p id="stripe-kpi-refunds-count" class="text-2xl font-black text-purple-400 font-mono">0</p>
-                        <p id="stripe-kpi-refunds-amt" class="text-[10px] text-purple-400/80 flex items-center gap-1 font-mono">$0.00 refunded</p>
-                    </div>
-                    <div class="bg-gray-950/70 border border-gray-800 rounded-2xl p-4 space-y-1">
-                        <p class="text-[11px] font-mono uppercase text-gray-400">Payment Gateway Health</p>
-                        <p id="stripe-kpi-health" class="text-2xl font-black text-emerald-400 font-mono">100%</p>
-                        <p class="text-[10px] text-emerald-400 flex items-center gap-1"><span>🛡️</span> All systems operational</p>
-                    </div>
-                </div>
-
-                <!-- Navigation Tabs: Failed Payments vs. Webhook Stream vs. Refunds Summary -->
-                <div class="space-y-4">
-                    <div class="flex items-center space-x-2 border-b border-gray-800 pb-2 overflow-x-auto">
-                        <button id="stripe-tab-failed-btn" onclick="switchStripeTelemetryTab('failed')" class="px-4 py-2 text-xs font-bold rounded-xl border border-indigo-500/40 bg-indigo-600/20 text-indigo-300 flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap">
-                            <span>🚨</span> Failed Payments &amp; Dunning Alerts
-                        </button>
-                        <button id="stripe-tab-webhooks-btn" onclick="switchStripeTelemetryTab('webhooks')" class="px-4 py-2 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap">
-                            <span>📡</span> Live Stripe Webhook Ingestion Stream
-                        </button>
-                        <button id="stripe-tab-refunds-btn" onclick="switchStripeTelemetryTab('refunds')" class="px-4 py-2 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap">
-                            <span>🔄</span> Refunds &amp; Adjustments Summary
-                        </button>
-                    </div>
-
-                    <!-- Panel 1: Failed Payments & Dunning Alerts Table -->
-                    <div id="stripe-tab-failed-panel" class="space-y-3">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-xs border-collapse">
-                                <thead>
-                                    <tr class="border-b border-gray-800 text-gray-400 font-mono text-[10px] uppercase bg-gray-950/50">
-                                        <th class="py-3 px-3">Customer Email</th>
-                                        <th class="py-3 px-3">Invoice / Ref</th>
-                                        <th class="py-3 px-3 text-right">Amount Due</th>
-                                        <th class="py-3 px-3">Decline Reason</th>
-                                        <th class="py-3 px-3">Failure Timestamp</th>
-                                        <th class="py-3 px-3 text-right">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="stripe-failed-table-body" class="divide-y divide-gray-800/60 font-mono">
-                                    <tr>
-                                        <td colspan="6" class="py-8 text-center text-gray-500">Loading payment health alerts...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Panel 2: Live Stripe Webhook Ingestion Stream -->
-                    <div id="stripe-tab-webhooks-panel" class="hidden space-y-3">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-xs border-collapse">
-                                <thead>
-                                    <tr class="border-b border-gray-800 text-gray-400 font-mono text-[10px] uppercase bg-gray-950/50">
-                                        <th class="py-3 px-3">Event ID</th>
-                                        <th class="py-3 px-3">Event Type</th>
-                                        <th class="py-3 px-3 text-center">Status</th>
-                                        <th class="py-3 px-3">Ingested At</th>
-                                        <th class="py-3 px-3 text-right">Payload</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="stripe-webhooks-table-body" class="divide-y divide-gray-800/60 font-mono">
-                                    <tr>
-                                        <td colspan="5" class="py-8 text-center text-gray-500">Loading webhook stream...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Panel 3: Refunds & Adjustments Summary -->
-                    <div id="stripe-tab-refunds-panel" class="hidden space-y-3">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-xs border-collapse">
-                                <thead>
-                                    <tr class="border-b border-gray-800 text-gray-400 font-mono text-[10px] uppercase bg-gray-950/50">
-                                        <th class="py-3 px-3">Customer / UID</th>
-                                        <th class="py-3 px-3">Reference / Charge ID</th>
-                                        <th class="py-3 px-3 text-right">Refund Amount</th>
-                                        <th class="py-3 px-3">Reason / Type</th>
-                                        <th class="py-3 px-3">Refund Timestamp</th>
-                                        <th class="py-3 px-3 text-center">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="stripe-refunds-table-body" class="divide-y divide-gray-800/60 font-mono">
-                                    <tr>
-                                        <td colspan="6" class="py-8 text-center text-gray-500">Loading refunds summary...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -2366,7 +2165,7 @@
                 if (activeIndicator) activeIndicator.classList.add('hidden');
                 if (navFacilityConfig) navFacilityConfig.classList.add('hidden');
                 if (navBiAnalytics) navBiAnalytics.classList.remove('hidden');
-                if (navOpsTelemetry) navOpsTelemetry.classList.add('hidden');
+                if (navOpsTelemetry) navOpsTelemetry.classList.remove('hidden');
                 if (btnOpenOpsTerminal) btnOpenOpsTerminal.classList.add('hidden');
                 if (seedBtn) seedBtn.classList.add('hidden');
                 if (billingAuditActions) billingAuditActions.classList.remove('hidden');

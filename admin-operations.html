@@ -490,6 +490,143 @@
         </section>
 
         <!-- ========================================================================= -->
+        <!-- 4. STRIPE OPERATIONAL TELEMETRY & PAYMENT HEALTH (LIVE BRIDGE) -->
+        <!-- ========================================================================= -->
+        <section id="module-stripe-telemetry" class="glass-panel p-6 sm:p-8 rounded-3xl border border-indigo-500/30 space-y-6 shadow-2xl">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-5 gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 text-lg font-bold">
+                        ⚡
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-extrabold text-white flex items-center gap-2">
+                            Stripe Operational Telemetry &amp; Payment Health
+                            <span class="text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Live Bridge
+                            </span>
+                        </h3>
+                        <p class="text-xs text-gray-400 font-mono">Live webhook ingestion stream, dunning alerts, failed invoice recovery, and automated charge reconciliation</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span id="stripe-telemetry-last-sync" class="text-[11px] font-mono text-gray-400 px-2.5 py-1 bg-gray-950 rounded-xl border border-gray-850">
+                        Synced Just Now
+                    </span>
+                    <button onclick="loadStripeTelemetryHub()" class="px-3.5 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-850 text-gray-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-indigo-400"></i> Refresh Telemetry
+                    </button>
+                </div>
+            </div>
+
+            <!-- Telemetry KPI Summary Cards -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-gray-950/70 border border-gray-800 rounded-2xl p-4 space-y-1">
+                    <p class="text-[11px] font-mono uppercase text-gray-400">Failed Invoices &amp; Dunning</p>
+                    <p id="stripe-kpi-failed-count" class="text-2xl font-black text-amber-400 font-mono">0</p>
+                    <p id="stripe-kpi-failed-amt" class="text-[10px] text-amber-400/80 flex items-center gap-1 font-mono">$0.00 at risk</p>
+                </div>
+                <div class="bg-gray-950/70 border border-gray-800 rounded-2xl p-4 space-y-1">
+                    <p class="text-[11px] font-mono uppercase text-gray-400">Webhook Events Stream</p>
+                    <p id="stripe-kpi-webhook-count" class="text-2xl font-black text-indigo-400 font-mono">0</p>
+                    <p id="stripe-kpi-webhook-status" class="text-[10px] text-emerald-400 flex items-center gap-1 font-mono"><span>🟢</span> Ingested Live</p>
+                </div>
+                <div class="bg-gray-950/70 border border-gray-800 rounded-2xl p-4 space-y-1">
+                    <p class="text-[11px] font-mono uppercase text-gray-400">Refunds &amp; Adjustments</p>
+                    <p id="stripe-kpi-refunds-count" class="text-2xl font-black text-purple-400 font-mono">0</p>
+                    <p id="stripe-kpi-refunds-amt" class="text-[10px] text-purple-400/80 flex items-center gap-1 font-mono">$0.00 refunded</p>
+                </div>
+                <div class="bg-gray-950/70 border border-gray-800 rounded-2xl p-4 space-y-1">
+                    <p class="text-[11px] font-mono uppercase text-gray-400">Payment Gateway Health</p>
+                    <p id="stripe-kpi-health" class="text-2xl font-black text-emerald-400 font-mono">100%</p>
+                    <p class="text-[10px] text-emerald-400 flex items-center gap-1"><span>🛡️</span> All systems operational</p>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs: Failed Payments vs. Webhook Stream vs. Refunds Summary -->
+            <div class="space-y-4">
+                <div class="flex items-center space-x-2 border-b border-gray-800 pb-2 overflow-x-auto">
+                    <button id="stripe-tab-failed-btn" onclick="switchStripeTelemetryTab('failed')" class="px-4 py-2 text-xs font-bold rounded-xl border border-indigo-500/40 bg-indigo-600/20 text-indigo-300 flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap">
+                        <span>🚨</span> Failed Payments &amp; Dunning Alerts
+                    </button>
+                    <button id="stripe-tab-webhooks-btn" onclick="switchStripeTelemetryTab('webhooks')" class="px-4 py-2 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap">
+                        <span>📡</span> Live Stripe Webhook Ingestion Stream
+                    </button>
+                    <button id="stripe-tab-refunds-btn" onclick="switchStripeTelemetryTab('refunds')" class="px-4 py-2 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap">
+                        <span>🔄</span> Refunds &amp; Adjustments Summary
+                    </button>
+                </div>
+
+                <!-- Panel 1: Failed Payments & Dunning Alerts Table -->
+                <div id="stripe-tab-failed-panel" class="space-y-3">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="border-b border-gray-800 text-gray-400 font-mono text-[10px] uppercase bg-gray-950/50">
+                                    <th class="py-3 px-3">Customer Email</th>
+                                    <th class="py-3 px-3">Invoice / Ref</th>
+                                    <th class="py-3 px-3 text-right">Amount Due</th>
+                                    <th class="py-3 px-3">Decline Reason</th>
+                                    <th class="py-3 px-3">Failure Timestamp</th>
+                                    <th class="py-3 px-3 text-right stripe-action-column">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stripe-failed-table-body" class="divide-y divide-gray-800/60 font-mono">
+                                <tr>
+                                    <td colspan="6" class="py-8 text-center text-gray-500">Loading payment health alerts...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Panel 2: Live Stripe Webhook Ingestion Stream -->
+                <div id="stripe-tab-webhooks-panel" class="hidden space-y-3">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="border-b border-gray-800 text-gray-400 font-mono text-[10px] uppercase bg-gray-950/50">
+                                    <th class="py-3 px-3">Event ID</th>
+                                    <th class="py-3 px-3">Event Type</th>
+                                    <th class="py-3 px-3 text-center">Status</th>
+                                    <th class="py-3 px-3">Ingested At</th>
+                                    <th class="py-3 px-3 text-right">Payload</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stripe-webhooks-table-body" class="divide-y divide-gray-800/60 font-mono">
+                                <tr>
+                                    <td colspan="5" class="py-8 text-center text-gray-500">Loading webhook stream...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Panel 3: Refunds & Adjustments Summary -->
+                <div id="stripe-tab-refunds-panel" class="hidden space-y-3">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="border-b border-gray-800 text-gray-400 font-mono text-[10px] uppercase bg-gray-950/50">
+                                    <th class="py-3 px-3">Customer / UID</th>
+                                    <th class="py-3 px-3">Reference / Charge ID</th>
+                                    <th class="py-3 px-3 text-right">Refund Amount</th>
+                                    <th class="py-3 px-3">Reason / Type</th>
+                                    <th class="py-3 px-3">Refund Timestamp</th>
+                                    <th class="py-3 px-3 text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stripe-refunds-table-body" class="divide-y divide-gray-800/60 font-mono">
+                                <tr>
+                                    <td colspan="6" class="py-8 text-center text-gray-500">Loading refunds summary...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
         <!-- 5. REAL-TIME SYSTEM ACTIVITY & AUDIT LOG STREAM -->
         <!-- ========================================================================= -->
         <section class="glass-panel p-6 sm:p-8 rounded-3xl border border-gray-800 space-y-4 shadow-xl">
@@ -589,6 +726,28 @@
                     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                     <span>Permanently Erase</span>
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Stripe Webhook Payload Viewer -->
+    <div id="webhook-payload-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="bg-gray-900 border border-indigo-500/40 rounded-3xl p-6 sm:p-8 max-w-2xl w-full space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-gray-800 pb-3">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold">
+                        📡
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-extrabold text-white" id="webhook-modal-title">Stripe Webhook Event Payload</h3>
+                        <p class="text-[10px] font-mono text-gray-400" id="webhook-modal-id">evt_...</p>
+                    </div>
+                </div>
+                <button onclick="closeWebhookPayloadModal()" class="text-gray-400 hover:text-white text-sm font-bold cursor-pointer">✕</button>
+            </div>
+            <pre id="webhook-modal-payload" class="bg-gray-950 border border-gray-850 rounded-2xl p-4 text-[11px] font-mono text-emerald-300 max-h-96 overflow-y-auto whitespace-pre-wrap break-all"></pre>
+            <div class="flex justify-end pt-2">
+                <button type="button" onclick="closeWebhookPayloadModal()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl text-xs font-bold transition cursor-pointer">Close</button>
             </div>
         </div>
     </div>
@@ -695,31 +854,50 @@
         updateSlaCountdown();
 
         // =========================================================================
-        // Employee Context & Role Handling (Strictly Admin / Executive Only)
+        // Employee Context & Role Handling (Strictly Manager & Executive Only; Workers Blocked)
         // =========================================================================
         function applyActiveEmployeeContext(profile) {
             if (!profile || profile.role === 'customer') {
                 window.location.href = 'dashboard.html';
                 return;
             }
-            // Operations & Telemetry Console is strictly restricted to CloudVault Admins (executive role)
             const normalized = normalizeRole(profile.role);
-            if (normalized !== 'executive' && profile.role !== 'executive') {
-                alert("Restricted Access: The Operations & Telemetry Console is exclusively accessible by CloudVault Admins. Operations staff and warehouse managers do not have access.");
+            
+            // The entire Operations & Telemetry Console is shut off for warehouse workers
+            if (normalized === 'worker' || profile.role === 'warehouse_worker') {
+                alert("Restricted Access: The Operations & Telemetry Console is exclusively accessible by Managers and Executives. Warehouse fulfillment staff do not have access.");
                 window.location.href = 'admin.html';
                 return;
             }
-            actualUserRole = 'executive';
-            actualUserName = profile.name || profile.email || 'Admin';
+
+            actualUserRole = normalized;
+            actualUserName = profile.name || profile.email || (normalized === 'executive' ? 'Super Admin' : 'Operations Manager');
             actualAssignedFacilityId = profile.assigned_facility_id || null;
-            activeRole = 'executive';
+            activeRole = normalized;
 
             const userAvatar = document.getElementById('user-avatar');
             const userNameEl = document.getElementById('user-name');
             const userRoleLabel = document.getElementById('user-role-label');
             if (userAvatar) userAvatar.textContent = actualUserName.substring(0, 2).toUpperCase();
             if (userNameEl) userNameEl.textContent = actualUserName;
-            if (userRoleLabel) userRoleLabel.textContent = 'Super Admin';
+            if (userRoleLabel) userRoleLabel.textContent = (normalized === 'executive') ? 'Super Admin' : 'Facility Manager';
+
+            const roleSelectContainer = document.getElementById('role-select-container');
+            if (roleSelectContainer) {
+                if (normalized === 'executive') {
+                    roleSelectContainer.innerHTML = `
+                        <span class="text-[11px] text-amber-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                            <i data-lucide="shield-check" class="w-3.5 h-3.5 text-amber-400"></i> Super Admin Clearance
+                        </span>
+                    `;
+                } else {
+                    roleSelectContainer.innerHTML = `
+                        <span class="text-[11px] text-blue-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                            <i data-lucide="shield" class="w-3.5 h-3.5 text-blue-400"></i> Manager Clearance
+                        </span>
+                    `;
+                }
+            }
 
             const savedFac = localStorage.getItem('cloudvault_selected_facility');
             if (savedFac) {
@@ -729,51 +907,34 @@
                 window.currentSelectedFacilityId = actualAssignedFacilityId;
             }
 
-            const roleSel = document.getElementById('role-select');
-            if (roleSel) {
-                roleSel.value = 'executive';
-                lockRoleDropdown(true);
-            }
-
-            syncRoleRBACView();
-        }
-
-        function lockRoleDropdown(lock) {
-            const select = document.getElementById('role-select');
-            const badge = document.getElementById('role-lock-badge');
-            if (!select) return;
-            if (lock) {
-                if (badge) badge.classList.remove('hidden');
-                Array.from(select.options).forEach(opt => { if (opt.value !== 'executive') opt.disabled = true; });
-            } else {
-                if (badge) badge.classList.add('hidden');
-                Array.from(select.options).forEach(opt => { opt.disabled = false; });
-            }
-        }
-
-        function switchRole() {
-            const selectedVal = document.getElementById('role-select')?.value;
-            if (selectedVal !== 'executive') {
-                alert("The Operations & Telemetry Console requires Executive/Admin clearance.");
-                const roleSel = document.getElementById('role-select');
-                if (roleSel) roleSel.value = 'executive';
-                return;
-            }
-            activeRole = 'executive';
             syncRoleRBACView();
         }
 
         function syncRoleRBACView() {
             const isExecutive = (activeRole === 'executive');
 
-            // Module Visibility based on clearance
+            // 1. Customer Privacy & Statutory Erasure Hub -> Super Admin / Executive ONLY (Hidden for Managers)
             const privSection = document.getElementById('module-customer-privacy');
-            const relocSection = document.getElementById('module-customer-relocation');
-            const navFacilityConfig = document.getElementById('nav-facility-config');
-
             if (privSection) privSection.style.display = isExecutive ? 'block' : 'none';
-            if (relocSection) relocSection.style.display = isExecutive ? 'block' : 'none';
+
+            // 2. Customer Relocation Portal -> Accessible by both Managers and Executives
+            const relocSection = document.getElementById('module-customer-relocation');
+            if (relocSection) relocSection.style.display = 'block';
+
+            // 3. Facility Config in Navbar -> Executive ONLY
+            const navFacilityConfig = document.getElementById('nav-facility-config');
             if (navFacilityConfig) navFacilityConfig.style.display = isExecutive ? 'flex' : 'none';
+
+            // 4. Stripe Mutation Actions (e.g. Retry / Resolve buttons) -> Executive ONLY (Managers see read-only view)
+            const actionColumns = document.querySelectorAll('.stripe-action-column');
+            actionColumns.forEach(col => {
+                col.style.display = isExecutive ? '' : 'none';
+            });
+
+            const actionButtons = document.querySelectorAll('.stripe-action-btn');
+            actionButtons.forEach(btn => {
+                btn.style.display = isExecutive ? 'inline-flex' : 'none';
+            });
 
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
@@ -802,6 +963,7 @@
                 renderTelemetryGauges();
                 await loadCustomerRelocationRoster();
                 await loadPrivacyAuditLogs();
+                await loadStripeTelemetryHub();
                 logSystemActivity('Telemetry metrics and business radar refreshed.');
             } catch (err) {
                 console.error("Telemetry load failed:", err);
@@ -1268,6 +1430,373 @@
                 btn.innerHTML = origHTML;
                 btn.disabled = false;
                 if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        }
+
+        // =========================================================================
+        // Stripe Operational Telemetry & Payment Health Hub Controllers
+        // =========================================================================
+        let currentStripeTelemetryData = { events: [], failedInvoices: [], charges: [], refundCharges: [], refundEvents: [], metrics: {} };
+
+        async function loadStripeTelemetryHub() {
+            try {
+                const sb = window.supabase || (typeof supabase !== 'undefined' ? supabase : null);
+                let data = null;
+
+                if (typeof StripeBillingIntegration !== 'undefined' && typeof StripeBillingIntegration.fetchStripeTelemetryData === 'function') {
+                    data = await StripeBillingIntegration.fetchStripeTelemetryData();
+                } else if (sb) {
+                    const [eventsRes, invoicesRes, chargesRes] = await Promise.all([
+                        sb.from('stripe_webhook_events').select('*').order('created_at', { ascending: false }).limit(50),
+                        sb.from('invoices').select('*').order('created_at', { ascending: false }),
+                        sb.from('charges').select('*').order('charged_at', { ascending: false })
+                    ]);
+
+                    const events = eventsRes.data || [];
+                    const invoices = invoicesRes.data || [];
+                    const charges = chargesRes.data || [];
+
+                    const failedInvoices = invoices.filter(inv => {
+                        const status = (inv.payment_status || '').toLowerCase();
+                        return status === 'failed' || status === 'overdue' || status === 'unpaid' || status === 'requires_payment_method';
+                    });
+
+                    const failedEvents = events.filter(e => e.event_type === 'invoice.payment_failed' || e.event_type === 'charge.failed');
+                    const failedAmount = failedInvoices.reduce((sum, inv) => sum + Number(inv.amount_due || inv.total_amount || inv.subtotal || 0), 0);
+
+                    const refundCharges = charges.filter(c => (c.status || '').toLowerCase() === 'refunded');
+                    const refundEvents = events.filter(e => e.event_type === 'charge.refunded' || e.event_type === 'charge.refund.updated');
+                    let refundsAmount = refundCharges.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+                    if (refundsAmount === 0 && refundEvents.length > 0) {
+                        refundEvents.forEach(e => {
+                            const amt = e.payload?.data?.object?.amount_refunded || e.payload?.data?.object?.amount || 0;
+                            refundsAmount += Number(amt) / 100;
+                        });
+                    }
+
+                    data = {
+                        events,
+                        failedInvoices,
+                        failedEvents,
+                        refundCharges,
+                        refundEvents,
+                        charges,
+                        metrics: {
+                            failedCount: failedInvoices.length,
+                            failedAmount,
+                            webhookCount: events.length,
+                            refundsCount: Math.max(refundCharges.length, refundEvents.length),
+                            refundsAmount
+                        }
+                    };
+                }
+
+                if (!data) return;
+                currentStripeTelemetryData = data;
+
+                // 1. Update KPI Cards
+                const failedCountEl = document.getElementById('stripe-kpi-failed-count');
+                const failedAmtEl = document.getElementById('stripe-kpi-failed-amt');
+                const webhookCountEl = document.getElementById('stripe-kpi-webhook-count');
+                const webhookStatusEl = document.getElementById('stripe-kpi-webhook-status');
+                const refundsCountEl = document.getElementById('stripe-kpi-refunds-count');
+                const refundsAmtEl = document.getElementById('stripe-kpi-refunds-amt');
+                const healthEl = document.getElementById('stripe-kpi-health');
+                const lastSyncEl = document.getElementById('stripe-telemetry-last-sync');
+
+                if (failedCountEl) failedCountEl.textContent = data.metrics.failedCount || 0;
+                if (failedAmtEl) failedAmtEl.textContent = `$${(data.metrics.failedAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} at risk`;
+                if (webhookCountEl) webhookCountEl.textContent = data.metrics.webhookCount || 0;
+                if (webhookStatusEl) webhookStatusEl.innerHTML = `<span>🟢</span> ${data.events.length > 0 ? 'Ingested Live' : 'Listening'}`;
+                if (refundsCountEl) refundsCountEl.textContent = data.metrics.refundsCount || 0;
+                if (refundsAmtEl) refundsAmtEl.textContent = `$${(data.metrics.refundsAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} refunded`;
+
+                if (healthEl) {
+                    const isHealthy = (data.metrics.failedCount || 0) === 0;
+                    healthEl.textContent = isHealthy ? '100%' : '98.5%';
+                    healthEl.className = `text-2xl font-black font-mono ${isHealthy ? 'text-emerald-400' : 'text-amber-400'}`;
+                }
+
+                if (lastSyncEl) {
+                    const now = new Date();
+                    lastSyncEl.textContent = `Synced ${now.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+                }
+
+                // 2. Render Tables
+                renderStripeFailedInvoicesTable(data.failedInvoices, data.failedEvents);
+                renderStripeWebhooksStreamTable(data.events);
+                renderStripeRefundsTable(data.refundCharges, data.refundEvents);
+                syncRoleRBACView();
+
+            } catch (err) {
+                console.error("Failed to load Stripe Telemetry Hub:", err);
+            }
+        }
+
+        function renderStripeFailedInvoicesTable(failedInvoices = [], failedEvents = []) {
+            const tbody = document.getElementById('stripe-failed-table-body');
+            if (!tbody) return;
+
+            const allItems = [...failedInvoices];
+            if (allItems.length === 0 && failedEvents.length > 0) {
+                failedEvents.forEach(ev => {
+                    const obj = ev.payload?.data?.object || {};
+                    allItems.push({
+                        id: obj.id || ev.id,
+                        customer_email: obj.customer_email || obj.billing_details?.email || 'Customer',
+                        invoice_number: obj.number || obj.id || 'INV-DECLINED',
+                        amount_due: (obj.amount_due || obj.amount || 0) / (obj.amount_due ? 1 : 100),
+                        decline_reason: obj.last_payment_error?.message || obj.failure_message || 'card_declined',
+                        created_at: ev.created_at
+                    });
+                });
+            }
+
+            if (allItems.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="py-8 text-center text-gray-500 font-sans">
+                            <div class="flex flex-col items-center justify-center space-y-1">
+                                <span class="text-emerald-400 text-lg">🛡️</span>
+                                <p class="text-emerald-300 font-bold text-xs">Zero Dunning / Failed Invoices</p>
+                                <p class="text-[11px] text-gray-500">All customer payment methods and recurring subscription renewals are currently up to date.</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            const isExecutive = (activeRole === 'executive');
+
+            tbody.innerHTML = allItems.map(item => {
+                const email = escapeHtml(item.customer_email || 'Customer');
+                const invoiceRef = escapeHtml(item.invoice_number || item.stripe_invoice_id || item.id || 'N/A');
+                const amt = Number(item.amount_due || item.total_amount || item.subtotal || 0);
+                const reason = escapeHtml(item.decline_reason || item.notes || (item.payment_status === 'overdue' ? 'Payment past due date' : 'insufficient_funds / card_declined'));
+                const rawTime = item.created_at || item.due_date || Date.now(); const dateObj = new Date(rawTime); const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+                const invId = item.id || item.invoice_number;
+
+                const actionCell = isExecutive ? `
+                    <td class="py-3 px-3 text-right stripe-action-column">
+                        <button onclick="retryStripeDunningInvoice('${invId}', ${amt}, '${email}')" class="stripe-action-btn px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-bold transition cursor-pointer shadow-md flex items-center gap-1 ml-auto">
+                            💳 Retry / Resolve
+                        </button>
+                    </td>
+                ` : `
+                    <td class="py-3 px-3 text-right stripe-action-column">
+                        <span class="text-[10px] text-gray-500 font-mono">Executive Only</span>
+                    </td>
+                `;
+
+                return `
+                    <tr class="hover:bg-gray-900/50 transition">
+                        <td class="py-3 px-3">
+                            <span class="font-bold text-white text-xs">${email}</span>
+                        </td>
+                        <td class="py-3 px-3 font-mono text-gray-300 text-xs">${invoiceRef}</td>
+                        <td class="py-3 px-3 text-right font-black text-amber-400 font-mono text-xs">$${amt.toFixed(2)}</td>
+                        <td class="py-3 px-3">
+                            <span class="px-2 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-300 text-[10px] font-mono">
+                                ⚠️ ${reason}
+                            </span>
+                        </td>
+                        <td class="py-3 px-3 text-gray-400 text-[10px] font-mono whitespace-nowrap">${dateStr}</td>
+                        ${actionCell}
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderStripeWebhooksStreamTable(events = []) {
+            const tbody = document.getElementById('stripe-webhooks-table-body');
+            if (!tbody) return;
+
+            const latest25 = (events || []).slice(0, 25);
+
+            if (latest25.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="py-8 text-center text-gray-500 font-sans">
+                            No webhook events recorded in public.stripe_webhook_events yet. Live Stripe webhooks will stream here automatically.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = latest25.map(ev => {
+                const eventId = escapeHtml(ev.stripe_event_id || ev.id || 'evt_unknown');
+                const eventType = escapeHtml(ev.event_type || 'unknown_event');
+                const rawTime = ev.created_at || (ev.payload?.created ? ev.payload.created * 1000 : null) || Date.now(); const dateObj = new Date(rawTime); const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+                const status = (ev.status || 'processed').toLowerCase();
+
+                let typeColor = 'bg-blue-500/10 border-blue-500/30 text-blue-300';
+                if (eventType.includes('succeeded') || eventType.includes('paid')) {
+                    typeColor = 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300';
+                } else if (eventType.includes('failed') || eventType.includes('deleted')) {
+                    typeColor = 'bg-red-500/10 border-red-500/30 text-red-300';
+                } else if (eventType.includes('updated') || eventType.includes('created')) {
+                    typeColor = 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300';
+                } else if (eventType.includes('refund')) {
+                    typeColor = 'bg-purple-500/10 border-purple-500/30 text-purple-300';
+                }
+
+                return `
+                    <tr class="hover:bg-gray-900/50 transition">
+                        <td class="py-2.5 px-3 font-mono text-gray-300 text-[11px]">${eventId}</td>
+                        <td class="py-2.5 px-3">
+                            <span class="px-2 py-0.5 rounded-lg border text-[10px] font-bold font-mono ${typeColor}">
+                                ${eventType}
+                            </span>
+                        </td>
+                        <td class="py-2.5 px-3 text-center">
+                            <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold uppercase font-mono">
+                                ✓ ${status}
+                            </span>
+                        </td>
+                        <td class="py-2.5 px-3 text-gray-400 text-[10px] font-mono whitespace-nowrap">${dateStr}</td>
+                        <td class="py-2.5 px-3 text-right">
+                            <button onclick="inspectWebhookPayload('${ev.id || ev.stripe_event_id}')" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-[10px] font-mono transition cursor-pointer">
+                                🔍 Payload
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderStripeRefundsTable(refundCharges = [], refundEvents = []) {
+            const tbody = document.getElementById('stripe-refunds-table-body');
+            if (!tbody) return;
+
+            const allRefunds = [];
+
+            refundCharges.forEach(rc => {
+                allRefunds.push({
+                    customer: rc.uid ? `User (${rc.uid.slice(0, 8)}...)` : 'Customer',
+                    ref: rc.stripe_charge_id || rc.id || 'N/A',
+                    amount: Number(rc.amount || 0),
+                    type: rc.charge_type || 'Customer Storage Refund',
+                    date: rc.charged_at || Date.now()
+                });
+            });
+
+            refundEvents.forEach(re => {
+                const obj = re.payload?.data?.object || {};
+                allRefunds.push({
+                    customer: obj.billing_details?.email || obj.customer || 'Customer',
+                    ref: obj.id || re.stripe_event_id || 'N/A',
+                    amount: Number(obj.amount_refunded || obj.amount || 0) / 100,
+                    type: re.event_type || 'charge.refunded',
+                    date: re.created_at
+                });
+            });
+
+            if (allRefunds.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="py-8 text-center text-gray-500 font-sans">
+                            <div class="flex flex-col items-center justify-center space-y-1">
+                                <span class="text-purple-400 text-lg">💳</span>
+                                <p class="text-gray-300 font-bold text-xs">No Recent Refunds or Adjustments</p>
+                                <p class="text-[11px] text-gray-500">Refund transactions and charge reversals will be listed here in real time.</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = allRefunds.map(ref => {
+                const rawTime = ref.date || Date.now(); const dateObj = new Date(rawTime); const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+                return `
+                    <tr class="hover:bg-gray-900/50 transition">
+                        <td class="py-2.5 px-3 text-white text-xs font-medium">${escapeHtml(ref.customer)}</td>
+                        <td class="py-2.5 px-3 font-mono text-gray-400 text-[10px]">${escapeHtml(ref.ref)}</td>
+                        <td class="py-2.5 px-3 text-right font-black text-purple-400 font-mono text-xs">-$${ref.amount.toFixed(2)}</td>
+                        <td class="py-2.5 px-3 text-gray-300 text-[11px]">${escapeHtml(ref.type)}</td>
+                        <td class="py-2.5 px-3 text-gray-400 text-[10px] font-mono whitespace-nowrap">${dateStr}</td>
+                        <td class="py-2.5 px-3 text-center">
+                            <span class="px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 text-[10px] font-bold font-mono">
+                                REFUNDED
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function switchStripeTelemetryTab(tab) {
+            const failedBtn = document.getElementById('stripe-tab-failed-btn');
+            const webhooksBtn = document.getElementById('stripe-tab-webhooks-btn');
+            const refundsBtn = document.getElementById('stripe-tab-refunds-btn');
+            const failedPanel = document.getElementById('stripe-tab-failed-panel');
+            const webhooksPanel = document.getElementById('stripe-tab-webhooks-panel');
+            const refundsPanel = document.getElementById('stripe-tab-refunds-panel');
+
+            if (!failedBtn || !webhooksBtn || !refundsBtn || !failedPanel || !webhooksPanel || !refundsPanel) return;
+
+            const activeClass = "px-4 py-2 text-xs font-bold rounded-xl border border-indigo-500/40 bg-indigo-600/20 text-indigo-300 flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap";
+            const inactiveClass = "px-4 py-2 text-xs font-bold rounded-xl border border-gray-800 bg-gray-900 text-gray-400 hover:text-white flex items-center gap-1.5 cursor-pointer font-mono whitespace-nowrap";
+
+            failedBtn.className = tab === 'failed' ? activeClass : inactiveClass;
+            webhooksBtn.className = tab === 'webhooks' ? activeClass : inactiveClass;
+            refundsBtn.className = tab === 'refunds' ? activeClass : inactiveClass;
+
+            failedPanel.classList.toggle('hidden', tab !== 'failed');
+            webhooksPanel.classList.toggle('hidden', tab !== 'webhooks');
+            refundsPanel.classList.toggle('hidden', tab !== 'refunds');
+        }
+
+        function inspectWebhookPayload(eventId) {
+            const ev = (currentStripeTelemetryData.events || []).find(e => e.id === eventId || e.stripe_event_id === eventId);
+            const modal = document.getElementById('webhook-payload-modal');
+            const titleEl = document.getElementById('webhook-modal-title');
+            const idEl = document.getElementById('webhook-modal-id');
+            const payloadEl = document.getElementById('webhook-modal-payload');
+
+            if (!modal || !payloadEl) return;
+
+            if (ev) {
+                if (titleEl) titleEl.textContent = `Event: ${ev.event_type || 'Stripe Webhook'}`;
+                if (idEl) idEl.textContent = ev.stripe_event_id || ev.id;
+                payloadEl.textContent = JSON.stringify(ev.payload || ev, null, 2);
+            } else {
+                payloadEl.textContent = "No payload details found for event ID: " + eventId;
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeWebhookPayloadModal() {
+            const modal = document.getElementById('webhook-payload-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        async function retryStripeDunningInvoice(invId, amount, email) {
+            if (activeRole !== 'executive') {
+                alert("Restricted Access: Only Super Admins / Executives can authorize payment retries.");
+                return;
+            }
+            if (!confirm(`Authorize immediate payment collection retry for invoice ${invId} ($${Number(amount || 0).toFixed(2)}) on customer account ${email}?`)) {
+                return;
+            }
+            try {
+                showToast(`Attempting payment retry for invoice ${invId}...`);
+                if (typeof StripeBillingIntegration !== 'undefined' && typeof StripeBillingIntegration.retryInvoicePayment === 'function') {
+                    await StripeBillingIntegration.retryInvoicePayment(invId);
+                } else {
+                    await supabase.from('invoices').update({
+                        notes: `Manual retry requested by ${actualUserName} at ${new Date().toISOString()}`
+                    }).eq('id', invId);
+                }
+                showToast(`✓ Retry dispatch queued for invoice ${invId}!`);
+                logSystemActivity(`Payment retry triggered for ${email} (${invId})`);
+                setTimeout(() => loadStripeTelemetryHub(), 1000);
+            } catch (err) {
+                console.error("Payment retry failed:", err);
+                showToast("Payment retry failed: " + err.message, true);
             }
         }
 
