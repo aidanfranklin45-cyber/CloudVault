@@ -7816,7 +7816,7 @@
 
                             <div class="text-[11px] text-gray-400 font-mono space-y-0.5 pt-1 border-t border-gray-850">
                                 <p class="truncate"><span class="text-gray-500">Payout Email:</span> <span class="text-gray-300">${email}</span></p>
-                                <p><span class="text-gray-500">Tier:</span> <span class="text-purple-300 font-bold">${tier}</span> &bull; <span class="text-gray-500">Rate:</span> <span class="text-emerald-400 font-bold">${c.default_commission_pct || 10}%</span></p>
+                                <p><span class="text-gray-500">Tier:</span> <span class="text-purple-300 font-bold">${tier}</span> &bull; <span class="text-gray-500">Rate:</span> <span class="text-emerald-400 font-bold">${c.default_commission_pct != null ? Number(c.default_commission_pct).toFixed(1) + '%' : 'Negotiated'}</span></p>
                                 ${c.stripe_connect_id ? `<p class="truncate"><span class="text-gray-500">Connect ID:</span> <span class="text-gray-400">${c.stripe_connect_id}</span></p>` : ''}
                             </div>
 
@@ -7904,8 +7904,8 @@
                 const creatorName = escapeHtml(creator.name || 'Affiliate Partner');
                 const creatorHandle = escapeHtml(creator.handle || '@influencer');
                 const code = escapeHtml(p.code);
-                const discountText = `${p.customer_discount_pct || 20}% off (${p.customer_discount_duration_months || 2} mo)`;
-                const commText = `${p.commission_rate_pct || 10}% rev share (${p.commission_duration_months || 6} mo)`;
+                const discountText = `${p.customer_discount_pct != null ? Number(p.customer_discount_pct).toFixed(0) : '20'}% off (${p.customer_discount_duration_months || 2} mo)`;
+                const commText = `${p.commission_rate_pct != null ? Number(p.commission_rate_pct).toFixed(1) + '%' : 'Negotiated'} rev share (${p.commission_duration_months || 6} mo)`;
                 const redemptions = p.current_redemptions || 0;
                 
                 // Calculate attributed gross & commission for this specific code
@@ -8160,7 +8160,7 @@
                     data = await StripeBillingIntegration.fetchStripeTelemetryData();
                 } else if (sb) {
                     const [eventsRes, invoicesRes, chargesRes] = await Promise.all([
-                        sb.from('stripe_webhook_events').select('*').order('created_at', { ascending: false }).limit(25),
+                        sb.from('stripe_webhook_events').select('*').order('created_at', { ascending: false }).limit(50),
                         sb.from('invoices').select('*').order('created_at', { ascending: false }),
                         sb.from('charges').select('*').order('charged_at', { ascending: false })
                     ]);
@@ -8314,9 +8314,9 @@
             const tbody = document.getElementById('stripe-webhooks-table-body');
             if (!tbody) return;
 
-            const latest10 = (events || []).slice(0, 10);
+            const latest25 = (events || []).slice(0, 25);
 
-            if (latest10.length === 0) {
+            if (latest25.length === 0) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="5" class="py-8 text-center text-gray-500 font-sans">
@@ -8327,7 +8327,7 @@
                 return;
             }
 
-            tbody.innerHTML = latest10.map(ev => {
+            tbody.innerHTML = latest25.map(ev => {
                 const eventId = escapeHtml(ev.stripe_event_id || ev.id || 'evt_unknown');
                 const eventType = escapeHtml(ev.event_type || 'unknown_event');
                 const rawTime = ev.created_at || (ev.payload?.created ? ev.payload.created * 1000 : null) || Date.now(); const dateObj = new Date(rawTime); const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
