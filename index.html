@@ -3173,6 +3173,15 @@
                 if (waitlistSummary) {
                     waitlistSummary.textContent = `${flowData.totes || 5} Tote${(flowData.totes || 5) !== 1 ? 's' : ''}`;
                 }
+                const zip = flowData.zip || (document.getElementById('zip-input') ? document.getElementById('zip-input').value.trim() : '');
+                if (typeof window !== 'undefined' && window.CloudVaultBilling && typeof window.CloudVaultBilling.resolveWaitlistDeposit === 'function') {
+                    window.CloudVaultBilling.resolveWaitlistDeposit(zip).then(depInfo => {
+                        if (depInfo && depInfo.depositAmount != null) {
+                            activeWaitlistDeposit = depInfo.depositAmount;
+                            updateWaitlistDepositDisplay();
+                        }
+                    }).catch(e => console.warn('Waitlist deposit resolve notice:', e));
+                }
             } else {
                 document.getElementById(`step-${step}`).classList.remove('hidden-section');
                 document.getElementById('step-indicator').textContent = `Step ${step} of 4`;
@@ -3777,7 +3786,7 @@
         let activeWaitlistId = null;
         let activeWaitlistEmail = null;
         let activeWaitlistUserId = null;
-        let activeWaitlistDeposit = 25.00;
+        let activeWaitlistDeposit = 10.00;
         let activeWaitlistPromo = null;
         let waitlistStripe = null;
         let waitlistElements = null;
@@ -3985,7 +3994,7 @@
 
                 btn.textContent = "Processing...";
 
-                let reqDeposit = 20.00;
+                let reqDeposit = activeWaitlistDeposit || 10.00;
                 let priceLockYears = 3;
                 let refundGuaranteeDays = 365;
 
@@ -3997,16 +4006,19 @@
                 } else {
                     try {
                         const { data: meta } = await supabase.from('metadata').select('value').eq('id', 'unlaunched_deposit').maybeSingle();
-                        if (meta && meta.value) reqDeposit = Number(meta.value);
+                        if (meta && meta.value != null) {
+                            const parsed = typeof meta.value === 'object' ? (meta.value.amount != null ? meta.value.amount : meta.value) : meta.value;
+                            const parsedNum = Number(parsed);
+                            if (!isNaN(parsedNum) && parsedNum >= 0) reqDeposit = parsedNum;
+                        }
 
                         const { data: zone } = await supabase.from('operational_zones').select('required_deposit').contains('zip_codes', [zip]).maybeSingle();
-                        if (zone && zone.required_deposit) reqDeposit = Number(zone.required_deposit);
+                        if (zone && zone.required_deposit != null) reqDeposit = Number(zone.required_deposit);
                     } catch (e) { console.warn('Dynamic deposit fetch notice:', e); }
                 }
 
                 activeWaitlistDeposit = reqDeposit;
-                const depositDisplay = document.getElementById('waitlist-deposit-display');
-                if (depositDisplay) depositDisplay.textContent = `$${reqDeposit.toFixed(2)}`;
+                updateWaitlistDepositDisplay();
 
                 // 1. Create auth account immediately at step 1 so account exists even if payment is abandoned
                 activeWaitlistUserId = null;
@@ -4196,7 +4208,7 @@
                     stripeTokenId = token.id;
                 }
 
-                const grossDeposit = Number(activeWaitlistDeposit) || 20.00;
+                const grossDeposit = Number(activeWaitlistDeposit) || 10.00;
                 const discountAmt = activeWaitlistPromo ? Number(activeWaitlistPromo.discount_amount) : 0;
                 const netDeposit = activeWaitlistPromo ? Number(activeWaitlistPromo.net_deposit_paid) : grossDeposit;
 

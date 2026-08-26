@@ -89,7 +89,11 @@
 
           const { data: meta } = await sb.from('metadata').select('value').eq('id', 'unlaunched_deposit').maybeSingle();
           if (meta && meta.value != null) {
-            deposit = Number(meta.value);
+            const parsed = typeof meta.value === 'object' ? (meta.value.amount != null ? meta.value.amount : meta.value) : meta.value;
+            const parsedNum = Number(parsed);
+            if (!isNaN(parsedNum) && parsedNum >= 0) {
+              deposit = parsedNum;
+            }
           }
         } catch (err) {
           console.warn('[CloudVaultBilling] Error resolving waitlist deposit:', err.message);
