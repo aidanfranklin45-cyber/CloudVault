@@ -4973,7 +4973,7 @@
                         const toteIdsJson = JSON.stringify(totes.map(t => t.id)).replace(/"/g, '&quot;');
 
                         const activeFacId = (typeof getSafeSavedFacilityId === 'function' ? getSafeSavedFacilityId() : null) || document.getElementById('facility-select')?.value || 'facility_portland_central';
-                        const targetPrefix = typeof getFacilityTotePrefix === 'function' ? getFacilityTotePrefix(activeFacId) : 'CV-POR-';
+                        const targetPrefix = typeof getFacilityTotePrefix === 'function' ? getFacilityTotePrefix(activeFacId) : 'CV-PDX-';
                         const hasForeignPrefix = totes.some(t => t.tote_code && !t.tote_code.startsWith(targetPrefix));
                         const isTransferredIntake = hasForeignPrefix || totes.some(t => t.location_code === 'DEST-INTAKE-DOCK');
 
@@ -5907,11 +5907,11 @@
         function getFacilityTotePrefix(facId = null) {
             const rawId = facId || (typeof getSafeSavedFacilityId === 'function' ? getSafeSavedFacilityId() : null) || document.getElementById('facility-select')?.value || window.facMapState?.activeFacilityId || 'facility_portland_central';
             const id = String(rawId).toLowerCase();
-            if (id.includes('portland') || id.includes('pdx') || id.includes('por')) return 'CV-POR-';
+            if (id.includes('portland') || id.includes('pdx') || id.includes('por')) return 'CV-PDX-';
             if (id.includes('seattle') || id.includes('sea')) return 'CV-SEA-';
-            if (id.includes('spokane') || id.includes('spo')) return 'CV-SPO-';
-            if (id.includes('yakima') || id.includes('yak') || id.includes('selah')) return 'CV-YAK-';
-            return 'CV-POR-';
+            if (id.includes('spokane') || id.includes('geg') || id.includes('spo')) return 'CV-GEG-';
+            if (id.includes('yakima') || id.includes('ykm') || id.includes('yak') || id.includes('selah')) return 'CV-YKM-';
+            return 'CV-PDX-';
         }
 
         async function confirmTransferFreightArrival(customerUid, customerName, destFacId, toteIds = null) {
@@ -6011,9 +6011,9 @@
         async function batchReshelveTransferredTotes(customerUid, customerName, toteIds) {
             if (!Array.isArray(toteIds) || toteIds.length === 0) return;
             const targetFacId = (typeof getSafeSavedFacilityId === 'function' ? getSafeSavedFacilityId() : null) || document.getElementById('facility-select')?.value || 'facility_portland_central';
-            const facShort = (targetFacId.includes('portland') || targetFacId.includes('pdx') ? 'POR' :
+            const facShort = (targetFacId.includes('portland') || targetFacId.includes('pdx') ? 'PDX' :
                              targetFacId.includes('seattle') ? 'SEA' :
-                             targetFacId.includes('spokane') ? 'SPO' : 'YAK');
+                             targetFacId.includes('spokane') ? 'GEG' : 'YKM');
 
             const defaultShelf = `${facShort}-BAY-01-S01`;
             const facName = (targetFacId.includes('portland') ? 'Portland Central Hub' :
