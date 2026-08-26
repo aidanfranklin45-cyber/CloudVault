@@ -3210,9 +3210,54 @@
             }
         }
 
-        function initWizardState() {
+        async function initWizardState() {
             selectWizardTotes(wizardTotes);
             selectWizardLogistics(wizardLogistics);
+
+            // 1. Check if user already has an address on file in memory or database
+            if (!window.currentUserAddress && currentUser && typeof supabase !== 'undefined') {
+                try {
+                    const { data: addr } = await supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle();
+                    if (addr) window.currentUserAddress = addr;
+                } catch (e) { }
+            }
+
+            const userZip = window.currentUserAddress?.zip || window.currentUserAddress?.delivery_zip || window.currentUserAddress?.billing_zip || currentUserProfile?.zip || currentProfile?.zip || '';
+            const userFacilityId = currentUserProfile?.assigned_facility_id || currentProfile?.assigned_facility_id || currentUser?.assigned_facility_id || 'facility_yakima';
+
+            if (userZip && /^\d{5}$/.test(userZip.trim())) {
+                const zipInput = document.getElementById('wizard-zip-input');
+                if (zipInput) zipInput.value = userZip.trim();
+                await checkWizardZip();
+                return;
+            }
+
+            // Fallback: If assigned to a known active facility, bypass the prompt
+            if (userFacilityId && typeof supabase !== 'undefined') {
+                try {
+                    const { data: facData } = await supabase.from('facilities').select('*').eq('id', userFacilityId).maybeSingle();
+                    if (facData) {
+                        window.currentActiveFacility = facData;
+                        window.regionalRates = {
+                            tier1: Number(facData.tier1_rate),
+                            tier2: Number(facData.tier2_rate),
+                            tier3: Number(facData.tier3_rate),
+                            tier4: Number(facData.tier4_rate),
+                            valetBase: Number(facData.valet_base),
+                            valetAdder: Number(facData.valet_tote_adder)
+                        };
+                        wizardZip = facData.zip_code || '98908';
+                        document.getElementById('wizard-zip-check-container').classList.add('hidden');
+                        document.getElementById('wizard-subscription-container').classList.remove('hidden');
+                        document.getElementById('wizard-waitlist-container').classList.add('hidden');
+                        document.getElementById('wizard-onboarding-desc').textContent = `Plan Configuration — Servicing ${facData.name || 'Your Area'}`;
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('[initWizardState] Facility auto-resolve notice:', e);
+                }
+            }
+
             document.getElementById('wizard-zip-check-container').classList.remove('hidden');
             document.getElementById('wizard-subscription-container').classList.add('hidden');
             document.getElementById('wizard-waitlist-container').classList.add('hidden');
