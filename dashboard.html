@@ -87,10 +87,12 @@
                             <span class="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-mono font-bold">New</span>
                         </button>
                         <div class="border-t border-gray-100 my-1"></div>
-                        <button onclick="triggerCancelFlowUser()" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2" role="menuitem">
-                            <i data-lucide="x-circle" class="w-4 h-4 text-red-400"></i>
-                            <span>Cancel Subscription</span>
-                        </button>
+                        <div id="dropdown-sub-action-container">
+                            <button id="dropdown-cancel-sub-btn" onclick="triggerCancelFlowUser()" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2" role="menuitem">
+                                <i data-lucide="x-circle" class="w-4 h-4 text-red-400"></i>
+                                <span>Cancel Subscription</span>
+                            </button>
+                        </div>
                         <button onclick="handleSignOut()" class="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-900 hover:bg-gray-50 flex items-center gap-2" role="menuitem">
                             <i data-lucide="log-out" class="w-4 h-4 text-gray-500"></i>
                             <span>Sign Out</span>
@@ -3916,6 +3918,8 @@
                 const waitlistHub = document.getElementById('flow-waitlist-hub');
                 const cancBanner = document.getElementById('cancellation-alert-banner');
 
+                const dropdownActionContainer = document.getElementById('dropdown-sub-action-container');
+
                 if (sub && sub.status === 'active') {
                     if (cancBanner) cancBanner.classList.add('hidden');
                     currentSubscription = sub;
@@ -3927,9 +3931,28 @@
                     if (headerPlan) {
                         headerPlan.textContent = `${sub.total_totes} Totes Plan ($${Number(sub.tote_rate).toFixed(2)}/tote — $${Number(sub.recurring_storage).toFixed(2)}/mo)`;
                     }
+
+                    if (dropdownActionContainer) {
+                        dropdownActionContainer.innerHTML = `
+                            <button id="dropdown-cancel-sub-btn" onclick="triggerCancelFlowUser()" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer" role="menuitem">
+                                <i data-lucide="x-circle" class="w-4 h-4 text-red-400"></i>
+                                <span>Cancel Subscription</span>
+                            </button>`;
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
+                    }
+
                     updateAddTotesPreview();
                     checkOverdueStatus();
                     return;
+                }
+
+                if (dropdownActionContainer) {
+                    dropdownActionContainer.innerHTML = `
+                        <button onclick="reactivatePlanFromBilling(); document.getElementById('user-dropdown')?.classList.add('hidden');" class="w-full text-left px-4 py-2.5 text-xs font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-2 cursor-pointer" role="menuitem">
+                            <i data-lucide="sparkles" class="w-4 h-4 text-blue-500"></i>
+                            <span>🚀 Reactivate Plan</span>
+                        </button>`;
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
                 }
 
                 // Check if user has pending cancellation tote return
@@ -7546,6 +7569,13 @@
                 if (!currentUser) return;
                 document.getElementById('user-dropdown')?.classList.add('hidden');
 
+                const subStatus = (currentSubscription?.status || currentUserProfile?.subscription_status || currentProfile?.subscription_status || 'inactive').toLowerCase();
+                if (subStatus === 'cancelled' || subStatus === 'canceled' || subStatus === 'inactive' || !currentSubscription) {
+                    showToast('You do not have an active subscription.');
+                    reactivatePlanFromBilling();
+                    return;
+                }
+
                 const inv = currentInventory || [];
                 const withCustomerCount = inv.filter(t => t.status === 'with-customer').length;
                 const storedCount = inv.filter(t => t.status === 'stored').length;
@@ -7566,8 +7596,14 @@
                 if (modal) modal.classList.remove('hidden');
             }
 
+            function closePreDeliveryCancelModal() {
+                const modal = document.getElementById('pre-delivery-cancel-modal');
+                if (modal) modal.classList.add('hidden');
+            }
+
             function reactivatePlanFromBilling() {
                 closeBillingModal();
+                closePreDeliveryCancelModal();
                 const activeDashboard = document.getElementById('flow-active-dashboard');
                 const onboardingWizard = document.getElementById('flow-onboarding-wizard');
                 const waitlistHub = document.getElementById('flow-waitlist-hub');
