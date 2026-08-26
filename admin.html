@@ -8702,14 +8702,6 @@
                 }
 
                 // Build discrete delivery & pickup stops strictly per active scheduled valet order & active customers
-                let activeValetTotes = preloadedItems;
-                if (!activeValetTotes) {
-                    const { data } = await supabase.from('inventory')
-                        .select('id, uid, tote_code, label, status, facility_id')
-                        .eq('facility_id', queryFacilityId);
-                    activeValetTotes = data || [];
-                }
-
                 // Map active inventory totes per user
                 const userActiveItemsMap = new Map();
                 (activeValetTotes || []).forEach(item => {
