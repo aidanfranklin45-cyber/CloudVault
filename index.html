@@ -1312,40 +1312,6 @@
                                         </p>
                                     </div>
                                 </div>
-
-                                <!-- Logistics Option (Self Service vs Valet) -->
-                                <div>
-                                    <label class="font-extrabold text-slate-900 block mb-2 text-xs sm:text-sm">Pickup
-                                        &amp; Access Option</label>
-                                    <div class="space-y-2">
-                                        <div id="calc-opt-self"
-                                            class="flex items-center p-3 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer"
-                                            onclick="selectLogistics('self_service')">
-                                            <div class="w-3.5 h-3.5 rounded-full border-4 border-blue-600 bg-white mr-3 flex-shrink-0"
-                                                id="dot-self"></div>
-                                            <div>
-                                                <div class="font-extrabold text-xs sm:text-sm text-slate-900">
-                                                    Staging Room Pickup <span
-                                                        class="text-emerald-600 font-black">Free</span></div>
-                                                <div class="text-[11px] text-slate-500">Drive to our facility to pickup
-                                                    and drop off totes through our secure staging areas.</div>
-                                            </div>
-                                        </div>
-                                        <div id="calc-opt-valet"
-                                            class="flex items-center p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer"
-                                            onclick="selectLogistics('valet_pickup')">
-                                            <div class="w-3.5 h-3.5 rounded-full border-2 border-slate-300 bg-white mr-3 flex-shrink-0"
-                                                id="dot-valet"></div>
-                                            <div>
-                                                <div class="font-extrabold text-xs sm:text-sm text-slate-900">
-                                                    Valet Pickup <span class="text-slate-600 font-bold"
-                                                        id="valet-fee-label">$16+</span></div>
-                                                <div class="text-[11px] text-slate-500">We drop off the totes at your
-                                                    house or place of work, and pick them up at a later time.</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
 
                             <!-- Readout & CTA -->
@@ -1373,11 +1339,6 @@
                                         <span>Monthly Storage Rate</span>
                                         <span class="font-bold text-slate-900">$<span
                                                 id="calc-monthly">25.00</span>/mo</span>
-                                    </div>
-                                    <div class="flex justify-between text-slate-600" id="upfront-row">
-                                        <span>Setup / First Valet Pickup</span>
-                                        <span class="font-bold text-slate-900">$<span
-                                                id="calc-upfront">0.00</span></span>
                                     </div>
                                     <div class="h-px bg-slate-200 my-1"></div>
                                     <div class="flex justify-between items-center py-0.5">
@@ -2749,9 +2710,7 @@
             const totes = Math.max(1, parseInt(document.getElementById('calc-totes').value) || 1);
             const { rate, label, tier } = getTierRate(totes);
             const monthly = Math.round(totes * rate * 100) / 100;
-            const isValet = (typeof flowData !== 'undefined' && flowData.logisticsType === 'valet_pickup');
-            const upfront = isValet ? regionalRates.valet_base + (totes * regionalRates.valet_tote_adder) : 0;
-            const firstMonth = monthly + upfront;
+            const firstMonth = monthly;
 
             // Update readout
             const tierBadge = document.getElementById('tier-badge');
@@ -2778,14 +2737,12 @@
                 }
             }
 
-            const upfrontEl = document.getElementById('calc-upfront');
-            if (upfrontEl) upfrontEl.textContent = upfront.toFixed(2);
             const firstMonthEl = document.getElementById('calc-first-month');
             if (firstMonthEl) {
                 if (!isPriceLocked && facilityPricingRanges) {
                     const rangeObj = facilityPricingRanges[`tier${tier}`];
                     if (rangeObj && rangeObj.min !== rangeObj.max) {
-                        firstMonthEl.textContent = `${(totes * rangeObj.min + upfront).toFixed(2)} – ${(totes * rangeObj.max + upfront).toFixed(2)}`;
+                        firstMonthEl.textContent = `${(totes * rangeObj.min).toFixed(2)} – ${(totes * rangeObj.max).toFixed(2)}`;
                     } else {
                         firstMonthEl.textContent = firstMonth.toFixed(2);
                     }
