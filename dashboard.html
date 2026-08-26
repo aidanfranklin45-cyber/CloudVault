@@ -3875,8 +3875,79 @@
 
             // Real-time listener on user profile
             if (unsubscribeUsers) supabase.removeChannel(unsubscribeUsers);
-            
-            const handleProfileUpdate = (profileData) => {
+            if (unsubscribeSubs) supabase.removeChannel(unsubscribeSubs);
+
+            async function checkAndRouteUserFlow(sub, profile) {
+                const onboardingWizard = document.getElementById('flow-onboarding-wizard');
+                const activeDashboard = document.getElementById('flow-active-dashboard');
+                const waitlistHub = document.getElementById('flow-waitlist-hub');
+                const cancBanner = document.getElementById('cancellation-alert-banner');
+
+                if (sub && sub.status === 'active') {
+                    if (cancBanner) cancBanner.classList.add('hidden');
+                    currentSubscription = sub;
+                    if (onboardingWizard) onboardingWizard.classList.add('hidden');
+                    if (waitlistHub) waitlistHub.classList.add('hidden');
+                    if (activeDashboard) activeDashboard.classList.remove('hidden');
+
+                    const headerPlan = document.getElementById('active-plan-header');
+                    if (headerPlan) {
+                        headerPlan.textContent = `${sub.total_totes} Totes Plan ($${Number(sub.tote_rate).toFixed(2)}/tote — $${Number(sub.recurring_storage).toFixed(2)}/mo)`;
+                    }
+                    updateAddTotesPreview();
+                    checkOverdueStatus();
+                    return;
+                }
+
+                // Check if user has pending cancellation tote return
+                if (currentUser) {
+                    supabase.from('cancellations')
+                        .select('*')
+                        .eq('uid', currentUser.id)
+                        .eq('account_status', 'pending_tote_return')
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle()
+                        .then(({ data: canc }) => {
+                            if (canc) {
+                                document.getElementById('canc-totes-held-badge').textContent = `${canc.active_totes_held || 0} Totes Physical Storage`;
+                                if (cancBanner) cancBanner.classList.remove('hidden');
+                            } else {
+                                if (cancBanner) cancBanner.classList.add('hidden');
+                            }
+                        }).catch(() => {});
+                }
+
+                // Check if user is a waitlist / unlaunched market lead
+                const isWaitlistStatus = (profile && (profile.onboarding_status === 'waitlisted' || profile.onboarding_status === 'free_waitlist'));
+                let waitlistRow = null;
+                try {
+                    const { data: wl } = await supabase.from('waitlist')
+                        .select('*')
+                        .or(`user_id.eq.${currentUser.id},email.eq.${currentUser.email}`)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                    if (wl) waitlistRow = wl;
+                } catch (e) { }
+
+                if (isWaitlistStatus || waitlistRow) {
+                    if (activeDashboard) activeDashboard.classList.add('hidden');
+                    if (onboardingWizard) onboardingWizard.classList.add('hidden');
+                    if (waitlistHub) waitlistHub.classList.remove('hidden');
+                    renderWaitlistHub(profile, waitlistRow);
+                    return;
+                }
+
+                // Default to onboarding wizard for active market new/lapsed customers
+                if (activeDashboard) activeDashboard.classList.add('hidden');
+                if (waitlistHub) waitlistHub.classList.add('hidden');
+                if (onboardingWizard) onboardingWizard.classList.remove('hidden');
+                currentSubscription = null;
+                initWizardState();
+            }
+
+            function handleProfileUpdate(profileData) {
                 currentProfile = profileData;
                 currentUserProfile = profileData;
                 document.getElementById('loading-state').classList.add('hidden');
@@ -3916,13 +3987,16 @@
                     }
 
                     renderOnboardingTracker(profileData);
-                    if (typeof checkAndRouteUserFlow === 'function') {
-                        checkAndRouteUserFlow(currentSubscription, profileData);
-                    }
+                    checkAndRouteUserFlow(currentSubscription, profileData);
                 } else {
                     attachInventoryListener(currentUser.id);
                 }
-            };
+            }
+
+            function handleSubsUpdate(sub) {
+                currentSubscription = sub;
+                checkAndRouteUserFlow(sub, currentUserProfile || currentProfile);
+            }
 
         // ============================================================
         // Tote Plan Manager Modal (Add & Unsubscribe Flow)
@@ -4169,84 +4243,7 @@
                 })
                 .subscribe();
 
-            // Real-time listener on subscription
-            if (unsubscribeSubs) supabase.removeChannel(unsubscribeSubs);
-
-            const checkAndRouteUserFlow = async (sub, profile) => {
-                const onboardingWizard = document.getElementById('flow-onboarding-wizard');
-                const activeDashboard = document.getElementById('flow-active-dashboard');
-                const waitlistHub = document.getElementById('flow-waitlist-hub');
-                const cancBanner = document.getElementById('cancellation-alert-banner');
-
-                if (sub && sub.status === 'active') {
-                    if (cancBanner) cancBanner.classList.add('hidden');
-                    currentSubscription = sub;
-                    if (onboardingWizard) onboardingWizard.classList.add('hidden');
-                    if (waitlistHub) waitlistHub.classList.add('hidden');
-                    if (activeDashboard) activeDashboard.classList.remove('hidden');
-
-                    const headerPlan = document.getElementById('active-plan-header');
-                    if (headerPlan) {
-                        headerPlan.textContent = `${sub.total_totes} Totes Plan ($${Number(sub.tote_rate).toFixed(2)}/tote — $${Number(sub.recurring_storage).toFixed(2)}/mo)`;
-                    }
-                    updateAddTotesPreview();
-                    checkOverdueStatus();
-                    return;
-                }
-
-                // Check if user has pending cancellation tote return
-                if (currentUser) {
-                    supabase.from('cancellations')
-                        .select('*')
-                        .eq('uid', currentUser.id)
-                        .eq('account_status', 'pending_tote_return')
-                        .order('created_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle()
-                        .then(({ data: canc }) => {
-                            if (canc) {
-                                document.getElementById('canc-totes-held-badge').textContent = `${canc.active_totes_held || 0} Totes Physical Storage`;
-                                if (cancBanner) cancBanner.classList.remove('hidden');
-                            } else {
-                                if (cancBanner) cancBanner.classList.add('hidden');
-                            }
-                        }).catch(() => {});
-                }
-
-                // Check if user is a waitlist / unlaunched market lead
-                const isWaitlistStatus = (profile && (profile.onboarding_status === 'waitlisted' || profile.onboarding_status === 'free_waitlist'));
-                let waitlistRow = null;
-                try {
-                    const { data: wl } = await supabase.from('waitlist')
-                        .select('*')
-                        .or(`user_id.eq.${currentUser.id},email.eq.${currentUser.email}`)
-                        .order('created_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-                    if (wl) waitlistRow = wl;
-                } catch (e) { }
-
-                if (isWaitlistStatus || waitlistRow) {
-                    if (activeDashboard) activeDashboard.classList.add('hidden');
-                    if (onboardingWizard) onboardingWizard.classList.add('hidden');
-                    if (waitlistHub) waitlistHub.classList.remove('hidden');
-                    renderWaitlistHub(profile, waitlistRow);
-                    return;
-                }
-
-                // Default to onboarding wizard for active market new/lapsed customers
-                if (activeDashboard) activeDashboard.classList.add('hidden');
-                if (waitlistHub) waitlistHub.classList.add('hidden');
-                if (onboardingWizard) onboardingWizard.classList.remove('hidden');
-                currentSubscription = null;
-                initWizardState();
-            };
-
-            const handleSubsUpdate = (sub) => {
-                currentSubscription = sub;
-                checkAndRouteUserFlow(sub, currentUserProfile || currentProfile);
-            };
-
+            // Initial subscriptions fetch
             const { data: initialSubs } = await supabase.from('subscriptions').select('*').eq('uid', currentUser.id).limit(1);
             if (initialSubs && initialSubs.length > 0) {
                 handleSubsUpdate(initialSubs[0]);
