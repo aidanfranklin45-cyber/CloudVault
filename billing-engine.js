@@ -2565,6 +2565,10 @@
                           (invoiceObj.invoice_type || '').includes('surge') ? 'Expedited Staging Retrieval' :
                           'Vault Storage Subscription';
       const txnRef = invoiceObj.transaction_reference || 'TXN-VALET-860485';
+      const rawStatus = (invoiceObj.payment_status || invoiceObj.status || 'paid').toLowerCase();
+      const isRefunded = rawStatus === 'refunded';
+      const isOverdue = rawStatus === 'overdue';
+      const isUnpaid = rawStatus === 'pending' || rawStatus === 'unpaid';
 
       let lineItems = invoiceObj.line_items;
       if (typeof lineItems === 'string') {
@@ -2755,9 +2759,23 @@
               </div>
 
               <div class="text-right space-y-1">
-                <span class="inline-block px-3 py-1 text-xs font-extrabold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono tracking-wider">
-                  PAID
-                </span>
+                ${isRefunded ? `
+                  <span class="inline-block px-3 py-1 text-xs font-black rounded-full bg-rose-50 text-rose-700 border border-rose-200 font-mono tracking-wider">
+                    REFUNDED
+                  </span>
+                ` : isOverdue ? `
+                  <span class="inline-block px-3 py-1 text-xs font-black rounded-full bg-red-600 text-white border border-red-700 font-mono tracking-wider animate-pulse">
+                    OVERDUE
+                  </span>
+                ` : isUnpaid ? `
+                  <span class="inline-block px-3 py-1 text-xs font-black rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-mono tracking-wider">
+                    UNPAID
+                  </span>
+                ` : `
+                  <span class="inline-block px-3 py-1 text-xs font-extrabold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono tracking-wider">
+                    PAID
+                  </span>
+                `}
                 <h2 class="text-xl font-black font-mono text-slate-900 tracking-wider">${invNum}</h2>
                 <p class="text-xs text-slate-500 font-mono">Issued: ${createdAt}</p>
                 <div class="pt-0.5">
@@ -2836,10 +2854,35 @@
                   <span class="text-sm font-black text-slate-900 uppercase tracking-wider">Grand Total</span>
                   <span class="text-xl font-black font-mono text-blue-600">$${totalAmount} USD</span>
                 </div>
-                <div class="flex justify-between text-emerald-700 font-bold text-xs pt-1">
-                  <span>Amount Paid</span>
-                  <span class="font-mono">$${totalAmount} USD</span>
-                </div>
+                ${isRefunded ? `
+                  <div class="flex justify-between text-slate-500 font-medium text-xs pt-1">
+                    <span>Amount Paid</span>
+                    <span class="font-mono">$${totalAmount} USD</span>
+                  </div>
+                  <div class="flex justify-between text-rose-700 font-bold text-xs pt-1 border-t border-rose-200/60 bg-rose-50/70 p-2 rounded-xl mt-1">
+                    <span>Total Refunded (${invoiceObj.refunded_at ? new Date(invoiceObj.refunded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : createdAt})</span>
+                    <span class="font-mono font-black">-$${totalAmount} USD</span>
+                  </div>
+                  <div class="flex justify-between text-slate-900 font-black text-xs pt-1">
+                    <span>Net Balance</span>
+                    <span class="font-mono">$0.00 USD</span>
+                  </div>
+                  ${invoiceObj.notes ? `
+                    <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-medium leading-snug">
+                      ℹ️ ${invoiceObj.notes}
+                    </div>
+                  ` : ''}
+                ` : isUnpaid || isOverdue ? `
+                  <div class="flex justify-between text-red-700 font-bold text-xs pt-1">
+                    <span>Amount Due</span>
+                    <span class="font-mono">$${totalAmount} USD</span>
+                  </div>
+                ` : `
+                  <div class="flex justify-between text-emerald-700 font-bold text-xs pt-1">
+                    <span>Amount Paid</span>
+                    <span class="font-mono">$${totalAmount} USD</span>
+                  </div>
+                `}
               </div>
             </div>
 
