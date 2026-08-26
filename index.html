@@ -4055,17 +4055,29 @@
                     console.warn('[Waitlist Auth Step 1]', authErr.message);
                 }
 
-                // 2. Upsert provisional users row
+                // 2. Upsert provisional users row with zip and active zone
                 if (activeWaitlistUserId) {
                     await supabase.from('users').upsert({
                         id: activeWaitlistUserId,
                         email,
                         name: email.split('@')[0],
                         role: 'customer',
+                        zip: zip,
+                        active_zone: zip,
+                        assigned_facility_id: null,
                         onboarding_status: 'waitlisted',
                         has_price_lock: false,
                         is_active: false
                     }, { onConflict: 'id' });
+
+                    await supabase.from('customer_addresses').upsert({
+                        uid: activeWaitlistUserId,
+                        zip: zip,
+                        billing_zip: zip,
+                        city: '',
+                        state: '',
+                        address_line1: ''
+                    }, { onConflict: 'uid' }).catch(() => {});
                 }
 
                 // 3. Insert waitlist row (type=deposit, payment still pending)
@@ -4165,17 +4177,29 @@
                     console.warn('[Free Waitlist Auth]', authErr.message);
                 }
 
-                // 2. Upsert users row
+                // 2. Upsert users row with zip and active zone
                 if (createdUserId) {
                     await supabase.from('users').upsert({
                         id: createdUserId,
                         email,
                         name: email.split('@')[0],
                         role: 'customer',
+                        zip: zip,
+                        active_zone: zip,
+                        assigned_facility_id: null,
                         onboarding_status: 'free_waitlist',
                         has_price_lock: false,
                         is_active: false
                     }, { onConflict: 'id' });
+
+                    await supabase.from('customer_addresses').upsert({
+                        uid: createdUserId,
+                        zip: zip,
+                        billing_zip: zip,
+                        city: '',
+                        state: '',
+                        address_line1: ''
+                    }, { onConflict: 'uid' }).catch(() => {});
                 }
 
                 // 3. Insert waitlist row
@@ -4211,7 +4235,7 @@
             btn.textContent = 'Securing Deposit & Price Lock...';
 
             try {
-                // Tokenize Card with Stripe Elements if initialized
+                // Tokenize Card with Stripe Elements (Strict requirement: Stripe is source of truth)
                 let stripeTokenId = null;
                 if (waitlistStripe && waitlistCardNumber) {
                     const { token, error: stripeErr } = await waitlistStripe.createToken(waitlistCardNumber);
@@ -4223,11 +4247,18 @@
                         return;
                     }
                     stripeTokenId = token.id;
+                } else {
+                    errEl.textContent = 'Please enter your payment card details to process your deposit.';
+                    errEl.classList.remove('hidden-section');
+                    btn.disabled = false;
+                    updateWaitlistDepositDisplay();
+                    return;
                 }
 
                 const grossDeposit = Number(activeWaitlistDeposit) || 10.00;
                 const discountAmt = activeWaitlistPromo ? Number(activeWaitlistPromo.discount_amount) : 0;
                 const netDeposit = activeWaitlistPromo ? Number(activeWaitlistPromo.net_deposit_paid) : grossDeposit;
+                const zip = flowData.zip || (document.getElementById('zip-input') ? document.getElementById('zip-input').value.trim() : '');
 
                 const priceLockRates = {
                     tier1_rate: regionalRates.tier1,
@@ -4249,6 +4280,9 @@
                             email: activeWaitlistEmail,
                             name: activeWaitlistEmail.split('@')[0],
                             role: 'customer',
+                            zip: zip,
+                            active_zone: zip,
+                            assigned_facility_id: null,
                             onboarding_status: 'waitlisted',
                             has_price_lock: true,
                             price_lock_rates: priceLockRates,
@@ -4275,7 +4309,7 @@
                     deposit_discount_pct: activeWaitlistPromo?.customer_discount_pct || 0,
                     deposit_discount_amount: discountAmt,
                     net_deposit_paid: netDeposit,
-                    stripe_payment_intent_id: stripeTokenId || 'tok_waitlist_sim',
+                    stripe_payment_intent_id: stripeTokenId,
                     terms_accepted_at: new Date().toISOString()
                 };
 
@@ -4301,6 +4335,7 @@
                     }
                 }
 
+                // Create official Invoice record for this deposit
                 if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
                     try {
                         await window.CloudVaultBilling.createInvoiceRecord({
@@ -4308,11 +4343,12 @@
                             customer_name: activeWaitlistEmail ? activeWaitlistEmail.split('@')[0] : 'Waitlist Lead',
                             customer_email: activeWaitlistEmail || null,
                             invoice_type: 'unlaunched_deposit',
-                            payment_status: 'deposit_received',
+                            payment_status: 'paid',
                             subtotal: grossDeposit,
                             discount_amount: discountAmt,
                             total_amount: netDeposit,
                             payment_method: 'card',
+                            stripe_payment_intent_id: stripeTokenId,
                             line_items: [
                                 { 
                                     description: `Unlaunched Market Priority Queue Reservation & 3-Year Rate Lock Deposit${activeWaitlistPromo ? ` (Creator Code: ${activeWaitlistPromo.code})` : ''}`, 
@@ -4321,10 +4357,39 @@
                                     amount: netDeposit 
                                 }
                             ],
-                            notes: `Unlaunched market priority deposit ($${netDeposit.toFixed(2)} net / $${grossDeposit.toFixed(2)} gross) for email ${activeWaitlistEmail}. Stripe Token: ${stripeTokenId || 'sim'}.`
+                            notes: `Unlaunched market priority deposit ($${netDeposit.toFixed(2)} net / $${grossDeposit.toFixed(2)} gross) for ${activeWaitlistEmail}. Stripe Token: ${stripeTokenId}.`
                         });
                     } catch (invErr) {
                         console.warn('[CloudVault Billing] Waitlist deposit notice:', invErr);
+                    }
+                } else {
+                    // Direct database fallback for invoice creation
+                    try {
+                        await supabase.from('invoices').insert({
+                            uid: createdUserId || null,
+                            invoice_number: `INV-DEP-${Date.now().toString().slice(-6)}`,
+                            customer_name: activeWaitlistEmail ? activeWaitlistEmail.split('@')[0] : 'Waitlist Lead',
+                            customer_email: activeWaitlistEmail || null,
+                            invoice_type: 'unlaunched_deposit',
+                            payment_status: 'paid',
+                            subtotal: grossDeposit,
+                            discount_amount: discountAmt,
+                            total_amount: netDeposit,
+                            payment_method: 'card',
+                            paid_at: new Date().toISOString(),
+                            stripe_payment_intent_id: stripeTokenId,
+                            line_items: [
+                                { 
+                                    description: `Unlaunched Market Priority Queue Reservation & 3-Year Rate Lock Deposit${activeWaitlistPromo ? ` (Creator Code: ${activeWaitlistPromo.code})` : ''}`, 
+                                    qty: 1, 
+                                    unit_price: grossDeposit, 
+                                    amount: netDeposit 
+                                }
+                            ],
+                            notes: `Unlaunched market priority deposit ($${netDeposit.toFixed(2)} net / $${grossDeposit.toFixed(2)} gross). Stripe Token: ${stripeTokenId}.`
+                        });
+                    } catch (dirInvErr) {
+                        console.warn('[Direct Invoice Fallback]', dirInvErr);
                     }
                 }
 

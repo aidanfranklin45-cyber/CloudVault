@@ -401,6 +401,174 @@
         </div>
 
         <!-- ============================================================ -->
+        <!-- FLOW 3: UNLAUNCHED MARKET WAITLIST & EXPANSION HUB -->
+        <!-- ============================================================ -->
+        <div id="flow-waitlist-hub" class="hidden max-w-3xl mx-auto space-y-6 fade-in">
+            <!-- Header Card -->
+            <div class="bg-white border border-gray-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-5">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 shadow-inner">
+                            <i data-lucide="map-pin" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h1 class="text-2xl font-black text-gray-900 tracking-tight">Market Expansion Waitlist</h1>
+                                <span id="wl-hub-status-badge" class="px-2.5 py-0.5 rounded-full text-xs font-black uppercase font-mono bg-blue-100 text-blue-800">
+                                    Loading Status...
+                                </span>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1 font-medium">We're reviewing route density and preparing warehouse expansion in your area.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Market Details Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    <div class="bg-gray-50 border border-gray-200/80 p-4 rounded-2xl">
+                        <span class="text-[10px] font-extrabold uppercase text-gray-400 font-mono block">Registered ZIP</span>
+                        <span class="text-lg font-black text-gray-900 mt-0.5 block" id="wl-hub-zip">Loading...</span>
+                    </div>
+                    <div class="bg-gray-50 border border-gray-200/80 p-4 rounded-2xl">
+                        <span class="text-[10px] font-extrabold uppercase text-gray-400 font-mono block">Reserved Capacity</span>
+                        <span class="text-lg font-black text-gray-900 mt-0.5 block" id="wl-hub-totes">5 Totes</span>
+                    </div>
+                    <div class="bg-gray-50 border border-gray-200/80 p-4 rounded-2xl">
+                        <span class="text-[10px] font-extrabold uppercase text-gray-400 font-mono block">Rate-Lock Status</span>
+                        <span class="text-lg font-black text-emerald-600 mt-0.5 block" id="wl-hub-price-lock">Pending Deposit</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hub State 1: Active Rate-Lock Secured (Paid Deposit) -->
+            <div id="wl-hub-secured-card" class="hidden bg-gradient-to-br from-emerald-50 via-teal-50/40 to-white border-2 border-emerald-500/40 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+                <div class="flex items-start justify-between gap-4 border-b border-emerald-200/60 pb-5">
+                    <div class="flex items-center space-x-3.5">
+                        <div class="p-3 bg-emerald-600 text-white rounded-2xl shadow-md">
+                            <i data-lucide="shield-check" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <span class="bg-emerald-600/15 text-emerald-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-widest font-mono">Priority Queue Secured</span>
+                            <h3 class="text-xl font-black text-gray-950 mt-1">3-Year Launch Rate Lock Active</h3>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-2xl font-black text-emerald-700" id="wl-hub-secured-deposit-amount">$10.00</span>
+                        <span class="block text-[10px] text-gray-500 font-bold uppercase font-mono">Deposit Paid (100% Refundable)</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs text-gray-700">
+                    <div class="bg-white/80 border border-emerald-200/60 p-4 rounded-2xl flex items-start gap-3">
+                        <i data-lucide="lock" class="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5"></i>
+                        <div>
+                            <span class="font-extrabold text-gray-900 block">Guaranteed Launch Pricing</span>
+                            <span class="text-gray-500 text-[11px] mt-0.5 block">Your monthly tier pricing is locked for 3 full years from the date we open in your city.</span>
+                        </div>
+                    </div>
+                    <div class="bg-white/80 border border-emerald-200/60 p-4 rounded-2xl flex items-start gap-3">
+                        <i data-lucide="receipt" class="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5"></i>
+                        <div>
+                            <span class="font-extrabold text-gray-900 block">Official Deposit Statement</span>
+                            <span class="text-gray-500 text-[11px] mt-0.5 block">View or print your official tax receipt in your Billing History.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+                    <button onclick="openBillingModal()" class="bg-white hover:bg-gray-50 text-gray-800 font-extrabold text-xs px-4 py-3 rounded-xl border border-gray-300 shadow-sm flex items-center gap-2 cursor-pointer transition">
+                        <i data-lucide="file-text" class="w-4 h-4 text-indigo-600"></i>
+                        <span>View Billing History &amp; Official Receipts</span>
+                    </button>
+                    <span class="text-[11px] font-semibold text-emerald-800">✓ You will be notified before facility launch.</span>
+                </div>
+            </div>
+
+            <!-- Hub State 2: Deposit Pending / Free Waitlist (Stripe Checkout & Promo Upgrade Module) -->
+            <div id="wl-hub-upgrade-card" class="hidden bg-white border-2 border-blue-600/30 rounded-3xl p-6 sm:p-8 shadow-md space-y-6">
+                <div class="flex items-start justify-between gap-4 border-b border-gray-100 pb-5">
+                    <div class="flex items-center space-x-3.5">
+                        <div class="p-3 bg-blue-600 text-white rounded-2xl shadow-md">
+                            <i data-lucide="lock" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <span class="bg-blue-600/10 text-blue-700 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-widest font-mono">Priority Rate Lock Option</span>
+                            <h3 class="text-xl font-black text-gray-950 mt-1">Secure Priority Queue &amp; 3-Year Rate Lock</h3>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-2xl font-black text-gray-900" id="wl-hub-deposit-display">$10.00</span>
+                        <span class="block text-[10px] text-gray-500 font-bold uppercase font-mono">100% Fully Refundable</span>
+                    </div>
+                </div>
+
+                <p class="text-xs text-gray-600 leading-relaxed">
+                    CloudVault hasn't launched in your ZIP code yet. Place a refundable dynamic deposit to guarantee your monthly rate for 3 years and receive priority tote delivery when our facility opens.
+                </p>
+
+                <!-- Promo / Creator Code Section -->
+                <div class="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-2.5">
+                    <label class="block text-xs font-extrabold text-gray-700 uppercase tracking-wide">Creator or Referral Code (Optional)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="wl-hub-promo-input" placeholder="e.g. ROSS20" class="flex-1 px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold uppercase text-gray-900 focus:outline-none focus:border-blue-500">
+                        <button type="button" id="btn-wl-hub-apply-promo" onclick="applyDashboardWaitlistPromo()" class="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-bold text-xs rounded-xl cursor-pointer transition">Apply</button>
+                    </div>
+                    <div id="wl-hub-promo-feedback" class="hidden"></div>
+                </div>
+
+                <!-- Ledger Breakdown if Promo Applied -->
+                <div id="wl-hub-discount-breakdown" class="hidden bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-1.5 text-xs font-semibold">
+                    <div class="flex justify-between text-gray-600">
+                        <span>Standard Deposit:</span>
+                        <span id="wl-hub-gross-deposit-label" class="line-through text-gray-400">$10.00</span>
+                    </div>
+                    <div class="flex justify-between text-emerald-800 font-bold">
+                        <span>Creator Referral Discount:</span>
+                        <span id="wl-hub-discount-label">-$2.00</span>
+                    </div>
+                    <div class="border-t border-emerald-200 pt-1.5 flex justify-between text-emerald-950 font-black text-sm">
+                        <span>Total Deposit Today:</span>
+                        <span id="wl-hub-net-deposit-label">$8.00</span>
+                    </div>
+                </div>
+
+                <!-- Stripe Payment Form -->
+                <div class="space-y-3.5 bg-gray-50/70 border border-gray-200 rounded-2xl p-5">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-extrabold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="credit-card" class="w-4 h-4 text-blue-600"></i>
+                            <span>Card Details</span>
+                        </label>
+                        <span class="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-bold">🔒 100% PCI-DSS Secure</span>
+                    </div>
+
+                    <div>
+                        <span class="text-[11px] font-bold text-gray-500 block mb-1">Card Number</span>
+                        <div id="wl-hub-card-number-element" class="p-3 bg-white border border-gray-300 rounded-xl shadow-inner min-h-[42px]"></div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">Expiration Date</span>
+                            <div id="wl-hub-card-expiry-element" class="p-3 bg-white border border-gray-300 rounded-xl shadow-inner min-h-[42px]"></div>
+                        </div>
+                        <div>
+                            <span class="text-[11px] font-bold text-gray-500 block mb-1">CVC</span>
+                            <div id="wl-hub-card-cvc-element" class="p-3 bg-white border border-gray-300 rounded-xl shadow-inner min-h-[42px]"></div>
+                        </div>
+                    </div>
+
+                    <p id="wl-hub-payment-error" class="text-xs text-rose-600 font-bold hidden"></p>
+                </div>
+
+                <button id="btn-wl-hub-submit-deposit" onclick="submitDashboardWaitlistDeposit()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-extrabold py-4 rounded-2xl text-sm transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+                    <i data-lucide="lock" class="w-4 h-4"></i>
+                    <span id="btn-wl-hub-submit-text">Place $10.00 Deposit &amp; Lock 3-Year Rate</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
         <!-- FLOW 2: ACTIVE CUSTOMER VAULT DASHBOARD -->
         <!-- ============================================================ -->
         <div id="flow-active-dashboard" class="hidden space-y-8 fade-in">
@@ -1217,7 +1385,7 @@
                         <i data-lucide="map-pin" class="w-4 h-4 text-blue-600 flex-shrink-0"></i>
                         <span id="settings-facility-name" class="truncate">Yakima Fulfillment Center</span>
                     </div>
-                    <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono flex-shrink-0">Assigned</span>
+                    <span id="settings-facility-badge" class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono flex-shrink-0">Assigned</span>
                 </div>
                 <p class="text-[11px] text-gray-500 font-medium">Facility assignments are managed by CloudVault warehouse logistics. Contact support to request a transfer.</p>
             </div>
@@ -3101,32 +3269,394 @@
             }
         }
 
-        async function submitWizardWaitlist() {
-            const btn = document.getElementById('btn-wizard-waitlist-submit');
-            btn.textContent = 'Processing Deposit...';
-            btn.disabled = true;
+        // ============================================================
+        // Market Expansion Waitlist Hub Controller (Dynamic & Stripe-Backed)
+        // ============================================================
+        let activeHubWaitlistRow = null;
+        let hubWaitlistStripe = null;
+        let hubWaitlistElements = null;
+        let hubWaitlistCardNumber = null;
+        let hubWaitlistCardExpiry = null;
+        let hubWaitlistCardCvc = null;
+        let hubActivePromo = null;
+        let hubDynamicGrossDeposit = 10.00;
+
+        function initWaitlistHubStripe() {
+            if (hubWaitlistCardNumber) return; // already initialized
+            const pubKey = 'pk_test_51U5wFeAlEAaqjcFpgDerMMeeuUqacailYJDOBIfx0nq1B0YlCh5nqMIpkOkDmgIJO2q9XpdRTYUcr9JDMOR3ZSQm00ycqCdc2d';
+            if (typeof window.Stripe !== 'function') {
+                console.warn('[Stripe] Stripe.js not loaded yet for waitlist hub.');
+                return;
+            }
 
             try {
-                const fac = window.currentActiveFacility || activeFacilityPricing || {};
-                const { data: facData } = await supabase.from('facilities').select('*').limit(1).maybeSingle();
-                const depAmt = facData?.waitlist_deposit || 25.00; // Database-driven deposit config
+                if (!hubWaitlistStripe) hubWaitlistStripe = window.Stripe(pubKey);
+                if (!hubWaitlistElements) hubWaitlistElements = hubWaitlistStripe.elements();
 
-                await supabase.from('waitlist').insert({
-                    email: currentUser.email,
-                    zip_code: wizardZip,
-                    requested_totes: wizardTotes || 5,
-                    deposit_amount: depAmt,
-                    price_lock_years: 3,
-                    refund_guarantee_days: 365,
-                    payment_status: 'deposit_paid'
+                const elementStyle = {
+                    base: {
+                        color: '#0f172a',
+                        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+                        fontSmoothing: 'antialiased',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        '::placeholder': {
+                            color: '#94a3b8',
+                            fontWeight: '500'
+                        }
+                    },
+                    invalid: {
+                        color: '#ef4444',
+                        iconColor: '#ef4444'
+                    }
+                };
+
+                const numEl = document.getElementById('wl-hub-card-number-element');
+                const expEl = document.getElementById('wl-hub-card-expiry-element');
+                const cvcEl = document.getElementById('wl-hub-card-cvc-element');
+
+                if (numEl) numEl.innerHTML = '';
+                if (expEl) expEl.innerHTML = '';
+                if (cvcEl) cvcEl.innerHTML = '';
+
+                hubWaitlistCardNumber = hubWaitlistElements.create('cardNumber', { style: elementStyle, showIcon: true });
+                hubWaitlistCardExpiry = hubWaitlistElements.create('cardExpiry', { style: elementStyle });
+                hubWaitlistCardCvc = hubWaitlistElements.create('cardCvc', { style: elementStyle });
+
+                if (numEl) hubWaitlistCardNumber.mount('#wl-hub-card-number-element');
+                if (expEl) hubWaitlistCardExpiry.mount('#wl-hub-card-expiry-element');
+                if (cvcEl) hubWaitlistCardCvc.mount('#wl-hub-card-cvc-element');
+
+                const handleStripeChange = (event) => {
+                    const errEl = document.getElementById('wl-hub-payment-error');
+                    if (event.error) {
+                        if (errEl) {
+                            errEl.textContent = event.error.message;
+                            errEl.classList.remove('hidden');
+                        }
+                    } else {
+                        if (errEl) errEl.classList.add('hidden');
+                    }
+                };
+
+                hubWaitlistCardNumber.on('change', handleStripeChange);
+                hubWaitlistCardExpiry.on('change', handleStripeChange);
+                hubWaitlistCardCvc.on('change', handleStripeChange);
+            } catch (e) {
+                console.warn('[Waitlist Hub Stripe Notice]', e);
+            }
+        }
+
+        async function renderWaitlistHub(profile, waitlistRow) {
+            activeHubWaitlistRow = waitlistRow;
+            const zip = waitlistRow?.zip_code || profile?.zip || profile?.active_zone || 'Pending Market';
+            const totes = waitlistRow?.requested_totes || 5;
+
+            const zipEl = document.getElementById('wl-hub-zip');
+            const totesEl = document.getElementById('wl-hub-totes');
+            const badgeEl = document.getElementById('wl-hub-status-badge');
+            const priceLockEl = document.getElementById('wl-hub-price-lock');
+            const securedCard = document.getElementById('wl-hub-secured-card');
+            const upgradeCard = document.getElementById('wl-hub-upgrade-card');
+
+            if (zipEl) zipEl.textContent = zip;
+            if (totesEl) totesEl.textContent = `${totes} Totes`;
+
+            // Resolve dynamic unlaunched market deposit from billing engine or metadata
+            try {
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.resolveWaitlistDeposit === 'function') {
+                    const depInfo = await window.CloudVaultBilling.resolveWaitlistDeposit(zip);
+                    if (depInfo && depInfo.depositAmount != null) {
+                        hubDynamicGrossDeposit = depInfo.depositAmount;
+                    }
+                } else {
+                    const { data: meta } = await supabase.from('metadata').select('value').eq('id', 'unlaunched_deposit').maybeSingle();
+                    if (meta && meta.value != null) {
+                        const parsed = typeof meta.value === 'object' ? (meta.value.amount != null ? meta.value.amount : meta.value) : meta.value;
+                        const parsedNum = Number(parsed);
+                        if (!isNaN(parsedNum) && parsedNum >= 0) hubDynamicGrossDeposit = parsedNum;
+                    }
+                }
+            } catch (e) {
+                console.warn('[Waitlist Hub Dynamic Deposit Fetch Notice]', e);
+            }
+
+            const isPaidDeposit = (waitlistRow?.payment_status === 'deposit_paid' || waitlistRow?.deposit_status === 'paid' || profile?.has_price_lock === true);
+
+            if (isPaidDeposit) {
+                const paidAmt = Number(waitlistRow?.net_deposit_paid || profile?.deposit_paid_amount || hubDynamicGrossDeposit);
+                if (badgeEl) {
+                    badgeEl.textContent = '🟢 Priority Rate-Lock Active';
+                    badgeEl.className = 'px-3 py-1 rounded-full text-xs font-black uppercase font-mono bg-emerald-100 text-emerald-800 border border-emerald-300';
+                }
+                if (priceLockEl) {
+                    priceLockEl.textContent = 'Active (3 Years)';
+                    priceLockEl.className = 'text-lg font-black text-emerald-600 mt-0.5 block';
+                }
+                const secAmtEl = document.getElementById('wl-hub-secured-deposit-amount');
+                if (secAmtEl) secAmtEl.textContent = `$${paidAmt.toFixed(2)}`;
+
+                if (securedCard) securedCard.classList.remove('hidden');
+                if (upgradeCard) upgradeCard.classList.add('hidden');
+            } else {
+                const isFree = (waitlistRow?.type === 'free' || profile?.onboarding_status === 'free_waitlist');
+                if (badgeEl) {
+                    badgeEl.textContent = isFree ? '✉️ Free Waitlist Member' : '⏳ Deposit Pending';
+                    badgeEl.className = 'px-3 py-1 rounded-full text-xs font-black uppercase font-mono bg-amber-100 text-amber-900 border border-amber-300';
+                }
+                if (priceLockEl) {
+                    priceLockEl.textContent = 'Pending Deposit';
+                    priceLockEl.className = 'text-lg font-black text-amber-600 mt-0.5 block';
+                }
+
+                if (securedCard) securedCard.classList.add('hidden');
+                if (upgradeCard) upgradeCard.classList.remove('hidden');
+
+                updateDashboardWaitlistDepositDisplay();
+                setTimeout(initWaitlistHubStripe, 100);
+            }
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        async function applyDashboardWaitlistPromo() {
+            const input = document.getElementById('wl-hub-promo-input');
+            const feedback = document.getElementById('wl-hub-promo-feedback');
+            const btn = document.getElementById('btn-wl-hub-apply-promo');
+            const rawCode = (input ? input.value : '').trim();
+            const code = rawCode.replace(/[% ]/g, '').toUpperCase();
+
+            if (!code) {
+                if (feedback) {
+                    feedback.textContent = 'Please enter a creator or referral promo code.';
+                    feedback.className = 'text-xs font-semibold text-rose-600 mt-1 block';
+                    feedback.classList.remove('hidden');
+                }
+                return;
+            }
+
+            if (input) input.value = code;
+            if (btn) {
+                btn.textContent = '...';
+                btn.disabled = true;
+            }
+
+            try {
+                const { data, error } = await supabase.rpc('validate_promo_code_for_waitlist', {
+                    p_code: code,
+                    p_deposit_amount: hubDynamicGrossDeposit
                 });
-                document.getElementById('wizard-waitlist-success').classList.remove('hidden');
-                btn.classList.add('hidden');
+
+                if (error || !data || !data.valid) {
+                    hubActivePromo = null;
+                    if (feedback) {
+                        feedback.textContent = data?.message || error?.message || 'Invalid or inactive promo code.';
+                        feedback.className = 'text-xs font-semibold text-rose-600 mt-1 block';
+                        feedback.classList.remove('hidden');
+                    }
+                    updateDashboardWaitlistDepositDisplay();
+                } else {
+                    hubActivePromo = data;
+                    if (feedback) {
+                        feedback.innerHTML = `
+                            <div class="flex items-center justify-between gap-2">
+                                <span>${data.message || `✓ Code ${code} applied!`}</span>
+                                <button type="button" onclick="removeDashboardWaitlistPromo()" class="text-xs text-rose-700 hover:text-rose-900 font-bold underline cursor-pointer shrink-0">✕ Remove</button>
+                            </div>`;
+                        feedback.className = 'text-xs font-bold text-emerald-800 bg-emerald-100/80 p-2.5 rounded-xl border border-emerald-300 mt-1 block';
+                        feedback.classList.remove('hidden');
+                    }
+                    updateDashboardWaitlistDepositDisplay();
+                }
             } catch (err) {
-                console.error("Error joining waitlist:", err);
-                alert("Something went wrong processing your deposit. Please try again.");
-                btn.textContent = 'Place Deposit & Lock Legacy Rates';
-                btn.disabled = false;
+                console.error('Waitlist hub promo validation error:', err);
+                if (feedback) {
+                    feedback.textContent = 'Unable to validate code at this time.';
+                    feedback.className = 'text-xs font-semibold text-rose-600 mt-1 block';
+                    feedback.classList.remove('hidden');
+                }
+            } finally {
+                if (btn) {
+                    btn.textContent = 'Apply';
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        function removeDashboardWaitlistPromo() {
+            hubActivePromo = null;
+            const input = document.getElementById('wl-hub-promo-input');
+            if (input) input.value = '';
+            const feedback = document.getElementById('wl-hub-promo-feedback');
+            if (feedback) {
+                feedback.textContent = '';
+                feedback.classList.add('hidden');
+            }
+            updateDashboardWaitlistDepositDisplay();
+        }
+
+        function updateDashboardWaitlistDepositDisplay() {
+            const grossDeposit = hubDynamicGrossDeposit || 10.00;
+            const depositDisplay = document.getElementById('wl-hub-deposit-display');
+            const breakdownEl = document.getElementById('wl-hub-discount-breakdown');
+            const grossLabel = document.getElementById('wl-hub-gross-deposit-label');
+            const discountLabel = document.getElementById('wl-hub-discount-label');
+            const netLabel = document.getElementById('wl-hub-net-deposit-label');
+            const submitText = document.getElementById('btn-wl-hub-submit-text');
+
+            if (hubActivePromo && hubActivePromo.valid) {
+                const discAmt = Number(hubActivePromo.discount_amount) || 0;
+                const netAmt = Number(hubActivePromo.net_deposit_paid) || Math.max(0, grossDeposit - discAmt);
+
+                if (breakdownEl) breakdownEl.classList.remove('hidden');
+                if (grossLabel) grossLabel.textContent = `$${grossDeposit.toFixed(2)}`;
+                if (discountLabel) discountLabel.textContent = `-$${discAmt.toFixed(2)}`;
+                if (netLabel) netLabel.textContent = `$${netAmt.toFixed(2)}`;
+                if (depositDisplay) depositDisplay.textContent = `$${netAmt.toFixed(2)}`;
+                if (submitText) submitText.textContent = `Place $${netAmt.toFixed(2)} Deposit & Lock 3-Year Rate`;
+            } else {
+                if (breakdownEl) breakdownEl.classList.add('hidden');
+                if (depositDisplay) depositDisplay.textContent = `$${grossDeposit.toFixed(2)}`;
+                if (submitText) submitText.textContent = `Place $${grossDeposit.toFixed(2)} Deposit & Lock 3-Year Rate`;
+            }
+        }
+
+        async function submitDashboardWaitlistDeposit() {
+            const errEl = document.getElementById('wl-hub-payment-error');
+            const btn = document.getElementById('btn-wl-hub-submit-deposit');
+            const submitText = document.getElementById('btn-wl-hub-submit-text');
+
+            if (errEl) errEl.classList.add('hidden');
+            if (btn) btn.disabled = true;
+            if (submitText) submitText.textContent = 'Processing Deposit via Stripe...';
+
+            try {
+                let stripeTokenId = null;
+                if (hubWaitlistStripe && hubWaitlistCardNumber) {
+                    const { token, error: stripeErr } = await hubWaitlistStripe.createToken(hubWaitlistCardNumber);
+                    if (stripeErr) {
+                        if (errEl) {
+                            errEl.textContent = stripeErr.message;
+                            errEl.classList.remove('hidden');
+                        }
+                        if (btn) btn.disabled = false;
+                        updateDashboardWaitlistDepositDisplay();
+                        return;
+                    }
+                    stripeTokenId = token.id;
+                } else {
+                    if (errEl) {
+                        errEl.textContent = 'Please enter your payment card details to process your deposit.';
+                        errEl.classList.remove('hidden');
+                    }
+                    if (btn) btn.disabled = false;
+                    updateDashboardWaitlistDepositDisplay();
+                    return;
+                }
+
+                const grossDeposit = hubDynamicGrossDeposit || 10.00;
+                const discountAmt = hubActivePromo ? Number(hubActivePromo.discount_amount) : 0;
+                const netDeposit = hubActivePromo ? Number(hubActivePromo.net_deposit_paid) : grossDeposit;
+                const zip = (activeHubWaitlistRow && activeHubWaitlistRow.zip_code) || currentUserProfile?.zip || currentUserProfile?.active_zone || 'Expansion';
+
+                // 1. Update user profile
+                await supabase.from('users').update({
+                    onboarding_status: 'waitlisted',
+                    has_price_lock: true,
+                    deposit_paid_amount: netDeposit,
+                    zip: zip,
+                    active_zone: zip,
+                    assigned_facility_id: null,
+                    referred_by_code: hubActivePromo?.code || null,
+                    referred_by_creator_id: hubActivePromo?.creator_id || null
+                }).eq('id', currentUser.id);
+
+                // 2. Update waitlist entry
+                const updatePayload = {
+                    user_id: currentUser.id,
+                    deposit_amount: grossDeposit,
+                    deposit_status: 'paid',
+                    payment_status: 'deposit_paid',
+                    status: 'deposit_paid',
+                    promo_code: hubActivePromo?.code || null,
+                    promo_code_id: hubActivePromo?.promo_id || null,
+                    creator_id: hubActivePromo?.creator_id || null,
+                    deposit_discount_pct: hubActivePromo?.customer_discount_pct || 0,
+                    deposit_discount_amount: discountAmt,
+                    net_deposit_paid: netDeposit,
+                    stripe_payment_intent_id: stripeTokenId,
+                    terms_accepted_at: new Date().toISOString()
+                };
+
+                if (activeHubWaitlistRow && activeHubWaitlistRow.id) {
+                    await supabase.from('waitlist').update(updatePayload).eq('id', activeHubWaitlistRow.id);
+                } else {
+                    await supabase.from('waitlist').upsert({
+                        email: currentUser.email,
+                        zip_code: zip,
+                        requested_totes: 5,
+                        ...updatePayload
+                    }, { onConflict: 'email' });
+                }
+
+                // 3. Record promo redemption if promo used
+                if (hubActivePromo && hubActivePromo.valid && hubActivePromo.code) {
+                    try {
+                        await supabase.rpc('record_waitlist_promo_redemption', {
+                            p_code: hubActivePromo.code,
+                            p_waitlist_id: activeHubWaitlistRow?.id || null,
+                            p_user_uid: currentUser.id,
+                            p_deposit_amount: grossDeposit,
+                            p_discount_amount: discountAmt,
+                            p_net_deposit_paid: netDeposit
+                        });
+                    } catch (pErr) {
+                        console.warn('[Dashboard Waitlist Promo Notice]', pErr);
+                    }
+                }
+
+                // 4. Create official invoice record in public.invoices
+                if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
+                    try {
+                        await window.CloudVaultBilling.createInvoiceRecord({
+                            uid: currentUser.id,
+                            customer_name: currentUserProfile?.name || currentUser.email.split('@')[0],
+                            customer_email: currentUser.email,
+                            invoice_type: 'unlaunched_deposit',
+                            payment_status: 'paid',
+                            subtotal: grossDeposit,
+                            discount_amount: discountAmt,
+                            total_amount: netDeposit,
+                            payment_method: 'card',
+                            stripe_payment_intent_id: stripeTokenId,
+                            line_items: [
+                                {
+                                    description: `Unlaunched Market Priority Queue Reservation & 3-Year Rate Lock Deposit${hubActivePromo ? ` (Creator Code: ${hubActivePromo.code})` : ''}`,
+                                    qty: 1,
+                                    unit_price: grossDeposit,
+                                    amount: netDeposit
+                                }
+                            ],
+                            notes: `Unlaunched market priority deposit ($${netDeposit.toFixed(2)} net / $${grossDeposit.toFixed(2)} gross) for ${currentUser.email}. Stripe Token: ${stripeTokenId}.`
+                        });
+                    } catch (invErr) {
+                        console.warn('[Dashboard Waitlist Invoice Notice]', invErr);
+                    }
+                }
+
+                showToast('✓ Deposit secured! Your 3-year rate lock is now active.');
+                const { data: updatedProfile } = await supabase.from('users').select('*').eq('id', currentUser.id).maybeSingle();
+                const { data: updatedWl } = await supabase.from('waitlist').select('*').or(`user_id.eq.${currentUser.id},email.eq.${currentUser.email}`).order('created_at', { ascending: false }).limit(1).maybeSingle();
+                renderWaitlistHub(updatedProfile || currentUserProfile, updatedWl);
+            } catch (err) {
+                console.error('Waitlist deposit error:', err);
+                if (errEl) {
+                    errEl.textContent = 'Failed to process deposit: ' + (err.message || 'Please try again.');
+                    errEl.classList.remove('hidden');
+                }
+            } finally {
+                if (btn) btn.disabled = false;
+                updateDashboardWaitlistDepositDisplay();
             }
         }
 
@@ -3388,6 +3918,9 @@
                     }
 
                     renderOnboardingTracker(profileData);
+                    if (typeof checkAndRouteUserFlow === 'function') {
+                        checkAndRouteUserFlow(currentSubscription, profileData);
+                    }
                 } else {
                     attachInventoryListener(currentUser.id);
                 }
@@ -3641,18 +4174,30 @@
             // Real-time listener on subscription
             if (unsubscribeSubs) supabase.removeChannel(unsubscribeSubs);
 
-            const handleSubsUpdate = (sub) => {
+            const checkAndRouteUserFlow = async (sub, profile) => {
                 const onboardingWizard = document.getElementById('flow-onboarding-wizard');
                 const activeDashboard = document.getElementById('flow-active-dashboard');
+                const waitlistHub = document.getElementById('flow-waitlist-hub');
                 const cancBanner = document.getElementById('cancellation-alert-banner');
-                
-                if (!sub || sub.status !== 'active') {
-                    onboardingWizard.classList.remove('hidden');
-                    activeDashboard.classList.add('hidden');
-                    currentSubscription = null;
-                    initWizardState();
 
-                    // Check if user has pending cancellation tote return
+                if (sub && sub.status === 'active') {
+                    if (cancBanner) cancBanner.classList.add('hidden');
+                    currentSubscription = sub;
+                    if (onboardingWizard) onboardingWizard.classList.add('hidden');
+                    if (waitlistHub) waitlistHub.classList.add('hidden');
+                    if (activeDashboard) activeDashboard.classList.remove('hidden');
+
+                    const headerPlan = document.getElementById('active-plan-header');
+                    if (headerPlan) {
+                        headerPlan.textContent = `${sub.total_totes} Totes Plan ($${Number(sub.tote_rate).toFixed(2)}/tote — $${Number(sub.recurring_storage).toFixed(2)}/mo)`;
+                    }
+                    updateAddTotesPreview();
+                    checkOverdueStatus();
+                    return;
+                }
+
+                // Check if user has pending cancellation tote return
+                if (currentUser) {
                     supabase.from('cancellations')
                         .select('*')
                         .eq('uid', currentUser.id)
@@ -3667,20 +4212,41 @@
                             } else {
                                 if (cancBanner) cancBanner.classList.add('hidden');
                             }
-                        });
-                } else {
-                    if (cancBanner) cancBanner.classList.add('hidden');
-                    currentSubscription = sub;
-                    onboardingWizard.classList.add('hidden');
-                    activeDashboard.classList.remove('hidden');
-                    
-                    const headerPlan = document.getElementById('active-plan-header');
-                    if (headerPlan) {
-                        headerPlan.textContent = `${sub.total_totes} Totes Plan ($${Number(sub.tote_rate).toFixed(2)}/tote — $${Number(sub.recurring_storage).toFixed(2)}/mo)`;
-                    }
-                    updateAddTotesPreview();
-                    checkOverdueStatus();
+                        }).catch(() => {});
                 }
+
+                // Check if user is a waitlist / unlaunched market lead
+                const isWaitlistStatus = (profile && (profile.onboarding_status === 'waitlisted' || profile.onboarding_status === 'free_waitlist'));
+                let waitlistRow = null;
+                try {
+                    const { data: wl } = await supabase.from('waitlist')
+                        .select('*')
+                        .or(`user_id.eq.${currentUser.id},email.eq.${currentUser.email}`)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                    if (wl) waitlistRow = wl;
+                } catch (e) { }
+
+                if (isWaitlistStatus || waitlistRow) {
+                    if (activeDashboard) activeDashboard.classList.add('hidden');
+                    if (onboardingWizard) onboardingWizard.classList.add('hidden');
+                    if (waitlistHub) waitlistHub.classList.remove('hidden');
+                    renderWaitlistHub(profile, waitlistRow);
+                    return;
+                }
+
+                // Default to onboarding wizard for active market new/lapsed customers
+                if (activeDashboard) activeDashboard.classList.add('hidden');
+                if (waitlistHub) waitlistHub.classList.add('hidden');
+                if (onboardingWizard) onboardingWizard.classList.remove('hidden');
+                currentSubscription = null;
+                initWizardState();
+            };
+
+            const handleSubsUpdate = (sub) => {
+                currentSubscription = sub;
+                checkAndRouteUserFlow(sub, currentUserProfile || currentProfile);
             };
 
             const { data: initialSubs } = await supabase.from('subscriptions').select('*').eq('uid', currentUser.id).limit(1);
@@ -6056,50 +6622,67 @@
             // Display current assigned Home Facility and Saved Delivery Address
             try {
                 const facNameEl = document.getElementById('settings-facility-name');
-                const userFacId = (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
-                                  (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility));
-                
-                if (window.currentActiveFacility && window.currentActiveFacility.name) {
-                    if (facNameEl) facNameEl.textContent = window.currentActiveFacility.name;
+                const facBadgeEl = document.getElementById('settings-facility-badge');
+                const prof = currentUserProfile || currentProfile;
+                const userFacId = prof?.assigned_facility_id || prof?.assigned_facility;
+                const isWaitlist = (prof?.onboarding_status === 'waitlisted' || prof?.onboarding_status === 'free_waitlist' || !userFacId);
+
+                if (isWaitlist && !userFacId) {
+                    const zipLabel = prof?.zip || prof?.active_zone || 'Market Pending';
+                    if (facNameEl) facNameEl.textContent = `Market Expansion Pipeline (ZIP ${zipLabel})`;
+                    if (facBadgeEl) {
+                        facBadgeEl.textContent = 'Pending Launch';
+                        facBadgeEl.className = 'text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-mono flex-shrink-0';
+                    }
                 } else if (userFacId) {
                     const { data: fac } = await supabase.from('facilities').select('name').eq('id', userFacId).maybeSingle();
                     if (fac && facNameEl) facNameEl.textContent = fac.name;
+                    if (facBadgeEl) {
+                        facBadgeEl.textContent = 'Assigned';
+                        facBadgeEl.className = 'text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono flex-shrink-0';
+                    }
+                } else if (window.currentActiveFacility && window.currentActiveFacility.name) {
+                    if (facNameEl) facNameEl.textContent = window.currentActiveFacility.name;
                 }
 
                 // Load saved billing and delivery addresses
                 if (currentUser) {
                     const { data: addrData } = await supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle();
+                    const b1 = document.getElementById('settings-bill-line1');
+                    const b2 = document.getElementById('settings-bill-line2');
+                    const bc = document.getElementById('settings-bill-city');
+                    const bs = document.getElementById('settings-bill-state');
+                    const bz = document.getElementById('settings-bill-zip');
+
+                    const s1 = document.getElementById('settings-ship-line1');
+                    const s2 = document.getElementById('settings-ship-line2');
+                    const sc = document.getElementById('settings-ship-city');
+                    const ss = document.getElementById('settings-ship-state');
+                    const sz = document.getElementById('settings-ship-zip');
+
+                    const sameToggle = document.getElementById('settings-same-as-billing-toggle');
+
                     if (addrData) {
                         window.currentUserAddress = addrData;
-                        const b1 = document.getElementById('settings-bill-line1');
-                        const b2 = document.getElementById('settings-bill-line2');
-                        const bc = document.getElementById('settings-bill-city');
-                        const bs = document.getElementById('settings-bill-state');
-                        const bz = document.getElementById('settings-bill-zip');
-
-                        const s1 = document.getElementById('settings-ship-line1');
-                        const s2 = document.getElementById('settings-ship-line2');
-                        const sc = document.getElementById('settings-ship-city');
-                        const ss = document.getElementById('settings-ship-state');
-                        const sz = document.getElementById('settings-ship-zip');
-
-                        const sameToggle = document.getElementById('settings-same-as-billing-toggle');
 
                         if (b1) b1.value = addrData.billing_address_line1 || addrData.address_line1 || '';
                         if (b2) b2.value = addrData.billing_address_line2 || addrData.address_line2 || '';
                         if (bc) bc.value = addrData.billing_city || addrData.city || '';
                         if (bs) bs.value = addrData.billing_state || addrData.state || '';
-                        if (bz) bz.value = addrData.billing_zip || addrData.zip || '';
+                        if (bz) bz.value = addrData.billing_zip || addrData.zip || (prof?.zip || '');
 
                         if (s1) s1.value = addrData.address_line1 || '';
                         if (s2) s2.value = addrData.address_line2 || '';
                         if (sc) sc.value = addrData.city || '';
                         if (ss) ss.value = addrData.state || '';
-                        if (sz) sz.value = addrData.zip || '';
+                        if (sz) sz.value = addrData.zip || (prof?.zip || '');
 
                         const isSame = addrData.shipping_same_as_billing !== false;
                         if (sameToggle) sameToggle.checked = isSame;
                         toggleSettingsSameAsBilling();
+                    } else if (prof && prof.zip) {
+                        if (bz) bz.value = prof.zip;
+                        if (sz) sz.value = prof.zip;
                     }
                 }
                 // Refresh Account Erasure Eligibility Status

@@ -4442,9 +4442,12 @@
                                     leads: []
                                 };
                             }
+                            const isPaid = w.payment_status === 'deposit_paid' || w.deposit_status === 'paid';
+                            const capitalCollected = isPaid ? (Number(w.net_deposit_paid || w.deposit_amount) || 0) : 0;
+
                             cityGroups[cName].count++;
                             cityGroups[cName].totesDemanded += (Number(w.requested_totes) || 4);
-                            cityGroups[cName].totalCapital += (Number(w.deposit_amount) || currentGlobalDeposit);
+                            cityGroups[cName].totalCapital += capitalCollected;
                             cityGroups[cName].leads.push(w);
                         });
 
@@ -4501,7 +4504,7 @@
                             document.getElementById('wl-summary-prospects').textContent = `${totalSignups} Household Leads`;
                         }
                         if (document.getElementById('wl-summary-capital')) {
-                            document.getElementById('wl-summary-capital').textContent = `$${(grandCapital + depositInvoiceCapital).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+                            document.getElementById('wl-summary-capital').textContent = `$${grandCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
                         }
                         if (document.getElementById('wl-summary-mrr')) {
                             document.getElementById('wl-summary-mrr').textContent = `$${waitlistMRRPipeline.toLocaleString(undefined, { minimumFractionDigits: 2 })} / mo`;
