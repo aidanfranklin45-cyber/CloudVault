@@ -76,6 +76,25 @@ Deno.serve(async (req: Request) => {
 
     let accountId = creator.stripe_connect_id;
 
+    // Parse creator name and social/profile URL
+    const nameParts = (creator.name || "").trim().split(/\s+/);
+    const firstName = nameParts[0] || "Creator";
+    const lastName = nameParts.slice(1).join(" ") || "Partner";
+    const handleClean = (creator.handle || "").replace(/^@/, "");
+    const creatorWebsite = handleClean ? `https://instagram.com/${handleClean}` : "https://cloudvault-35a9b-6b3db.web.app";
+
+    const businessProfile = {
+      mcc: "7311", // Advertising Services & Influencer Marketing
+      url: creatorWebsite,
+      product_description: "CloudVault Affiliate Partner & Brand Ambassador",
+    };
+
+    const individualData = {
+      first_name: firstName,
+      last_name: lastName,
+      email: creator.payout_email || creator.email,
+    };
+
     // 2. Create Stripe Express Account if not already created
     if (!accountId) {
       console.log(`[StripeConnect] Creating new Express account for creator ${creator.name} (${creator.email})...`);
@@ -96,6 +115,8 @@ Deno.serve(async (req: Request) => {
           },
           email: creator.payout_email || creator.email,
           business_type: "individual",
+          business_profile: businessProfile,
+          individual: individualData,
           capabilities: {
             transfers: { requested: true },
           },
@@ -110,11 +131,13 @@ Deno.serve(async (req: Request) => {
         account = await stripe.accounts.create({
           type: "express",
           email: creator.payout_email || creator.email,
+          business_type: "individual",
+          business_profile: businessProfile,
+          individual: individualData,
           capabilities: {
             transfers: { requested: true },
             card_payments: { requested: true },
           },
-          business_type: "individual",
           metadata: {
             creator_id: creator.id,
             creator_name: creator.name,
@@ -136,6 +159,16 @@ Deno.serve(async (req: Request) => {
         .eq("id", creator.id);
 
       console.log(`[StripeConnect] Created Express account ${accountId} for creator ${creator.id}`);
+    } else {
+      // Pre-fill existing account with business profile so website/business questions are bypassed
+      try {
+        await stripe.accounts.update(accountId, {
+          business_profile: businessProfile,
+          individual: individualData,
+        });
+      } catch (updErr: any) {
+        console.warn("[StripeConnect] Notice updating existing account profile:", updErr.message);
+      }
     }
 
     // 3. Generate Hosted Onboarding URL
