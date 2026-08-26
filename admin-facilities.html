@@ -4833,6 +4833,9 @@
                             if (zoneErr) throw zoneErr;
                         }
 
+                        // Ensure client-side synchronization for service_areas active flag
+                        await supabase.from('service_areas').update({ active: activeVal }).eq('facility_id', currentLoadedFac.id);
+
                         // Synchronize updated subscription rates with Stripe for all affected customers in this facility
                         try {
                             const { data: affectedSubs } = await supabase
@@ -5040,6 +5043,9 @@
 
                     const facId = currentLoadedFac ? currentLoadedFac.id : (localStorage.getItem('cloudvault_selected_facility') || 'facility_seattle_north');
 
+                    const isMarketActive = (currentLoadedZone && currentLoadedZone.active !== false) &&
+                        (document.getElementById('conf-market-active-select')?.value !== "false");
+
                     try {
                         const { error } = await supabase
                             .from('service_areas')
@@ -5048,7 +5054,7 @@
                                 facility_id: facId,
                                 tax_rate: rateDecimal,
                                 tax_label: label || null,
-                                active: true
+                                active: isMarketActive
                             }, { onConflict: 'zip_code' });
 
                         if (error) throw error;

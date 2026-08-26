@@ -3626,19 +3626,52 @@
             btn.disabled = true;
 
             try {
-                const { data: area } = await supabase
+                // Check service_areas for matching ZIP
+                const { data: areaRecord } = await supabase
                     .from('service_areas')
                     .select('*')
                     .eq('zip_code', zip)
-                    .eq('active', true)
                     .maybeSingle();
+
+                let area = null;
+                let isMarketOperational = false;
+
+                if (areaRecord && areaRecord.active) {
+                    // Check if operational zone exists and is active
+                    const { data: zone } = await supabase
+                        .from('operational_zones')
+                        .select('active')
+                        .eq('facility_id', areaRecord.facility_id)
+                        .maybeSingle();
+
+                    if (!zone || zone.active !== false) {
+                        area = areaRecord;
+                        isMarketOperational = true;
+                    }
+                } else if (!areaRecord) {
+                    // Fallback to active operational_zones lookup
+                    const { data: zones } = await supabase.from('operational_zones').select('*').eq('active', true);
+                    if (zones) {
+                        const matchingZone = zones.find(z => (z.zip_codes || []).includes(zip));
+                        if (matchingZone) {
+                            area = {
+                                zip_code: zip,
+                                city: matchingZone.city,
+                                facility_id: matchingZone.facility_id || `facility_${matchingZone.city.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+                                active: true
+                            };
+                            isMarketOperational = true;
+                        }
+                    }
+                }
 
                 btn.textContent = originalText;
                 btn.disabled = false;
 
-                if (!area) {
+                if (!area || !isMarketOperational) {
                     flowData.zip = zip;
-                    logMilestone('zip_code_waitlist_trigger', { zip: zip, totes: flowData.totes });
+                    if (areaRecord?.city) flowData.city = areaRecord.city;
+                    logMilestone('zip_code_waitlist_trigger', { zip: zip, totes: flowData.totes, prelaunch: !isMarketOperational, areaFound: !!areaRecord });
                     setTimeout(() => {
                         showStep('waitlist');
                     }, 200);

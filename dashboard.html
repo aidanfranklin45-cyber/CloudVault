@@ -3009,10 +3009,13 @@
 
             try {
                 let area = null;
-                const { data: sa } = await supabase.from('service_areas').select('*').eq('zip_code', zip).eq('active', true).maybeSingle();
-                if (sa) {
-                    area = sa;
-                } else {
+                const { data: sa } = await supabase.from('service_areas').select('*').eq('zip_code', zip).maybeSingle();
+                if (sa && sa.active) {
+                    const { data: zone } = await supabase.from('operational_zones').select('active').eq('facility_id', sa.facility_id).maybeSingle();
+                    if (!zone || zone.active !== false) {
+                        area = sa;
+                    }
+                } else if (!sa) {
                     const { data: zones } = await supabase.from('operational_zones').select('*').eq('active', true);
                     if (zones) {
                         const matchingZone = zones.find(z => (z.zip_codes || []).includes(zip));

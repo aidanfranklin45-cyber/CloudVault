@@ -5517,6 +5517,13 @@ BEGIN
             active = EXCLUDED.active,
             zip_codes = EXCLUDED.zip_codes,
             updated_at = NOW();
+
+        -- Synchronize service_areas active status with market active status
+        IF p_zone_data ? 'active' THEN
+            UPDATE public.service_areas
+            SET active = COALESCE((p_zone_data->>'active')::BOOLEAN, true)
+            WHERE facility_id = v_fac_id;
+        END IF;
     END IF;
 
     -- Dynamically reconcile all non-price-locked subscriptions for this facility

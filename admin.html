@@ -2963,8 +2963,16 @@
                 `Are you sure you want to ${statusLabel} market "${marketId}"? Master Admin Security PIN required.`,
                 async () => {
                     try {
+                        const { data: zData } = await supabase.from('operational_zones').select('facility_id, zip_codes').eq('id', marketId).maybeSingle();
                         const { error } = await supabase.from('operational_zones').update({ active }).eq('id', marketId);
                         if (error) throw error;
+
+                        if (zData && zData.facility_id) {
+                            await supabase.from('service_areas').update({ active }).eq('facility_id', zData.facility_id);
+                        } else if (zData && zData.zip_codes && zData.zip_codes.length > 0) {
+                            await supabase.from('service_areas').update({ active }).in('zip_code', zData.zip_codes);
+                        }
+
                         alert(`Market ${statusLabel}d successfully!`);
                         loadLiveData();
                     } catch (e) {
@@ -2984,12 +2992,21 @@
 
                     try {
                         const zipList = zipCodesCsv ? zipCodesCsv.split(',').map(z => z.trim()).filter(Boolean) : [];
+                        const { data: zData } = await supabase.from('operational_zones').select('facility_id').eq('id', marketId).maybeSingle();
 
                         if (toWaitlist) {
                             // 1. Mark market deactivated in operational_zones
                             await supabase.from('operational_zones').update({ active: false }).eq('id', marketId);
 
-                            // 2. Insert waitlist records for each ZIP code so users see waitlist onboarding
+                            // 2. Sync service_areas to deactivated
+                            if (zData && zData.facility_id) {
+                                await supabase.from('service_areas').update({ active: false }).eq('facility_id', zData.facility_id);
+                            }
+                            if (zipList.length > 0) {
+                                await supabase.from('service_areas').update({ active: false }).in('zip_code', zipList);
+                            }
+
+                            // 3. Insert waitlist records for each ZIP code so users see waitlist onboarding
                             if (zipList.length > 0) {
                                 const waitlistRows = zipList.map(zip => ({
                                     city: cityName,
@@ -3004,7 +3021,9 @@
                             // Permanently Delete market and service areas
                             await supabase.from('operational_zones').delete().eq('id', marketId);
                             const slug = cityName.toLowerCase().replace(/[^a-z0-9]/g, '_');
-                            await supabase.from('facilities').delete().eq('id', `facility_${slug}`);
+                            const facId = zData?.facility_id || `facility_${slug}`;
+                            await supabase.from('service_areas').delete().eq('facility_id', facId);
+                            await supabase.from('facilities').delete().eq('id', facId);
 
                             alert(`Market "${cityName}" permanently deleted from database.`);
                         }
