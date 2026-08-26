@@ -1587,6 +1587,10 @@
       const baseUrl = (global.SUPABASE_URL || 'https://xbxvebnrjryvksvtufqj.supabase.co').replace(/\/$/, '');
       const anonKey = global.SUPABASE_ANON_KEY || 'sb_publishable_-cW5neaZRGmicOHaHw1n3g_laY5yFZQ';
 
+      const origin = window.location.origin || 'https://cloudvault-35a9b-6b3db.web.app';
+      const defaultReturn = `${origin}/admin.html?connect=success`;
+      const defaultRefresh = `${origin}/admin.html?connect=refresh`;
+
       const response = await fetch(`${baseUrl}/functions/v1/stripe-connect-onboard`, {
         method: 'POST',
         headers: {
@@ -1596,8 +1600,8 @@
         },
         body: JSON.stringify({
           creatorId,
-          returnUrl: returnUrl || window.location.href,
-          refreshUrl: window.location.href
+          returnUrl: returnUrl || defaultReturn,
+          refreshUrl: defaultRefresh
         })
       });
 

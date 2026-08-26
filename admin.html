@@ -7858,6 +7858,28 @@
                 renderPromoCodesTable(data.promoCodes);
                 renderCreatorsCards(data.creators);
                 renderPromoLedgerTable(data.redemptions);
+
+                // Handle Stripe Connect return query param if present
+                const urlParams = new URLSearchParams(window.location.search);
+                const connectParam = urlParams.get('connect');
+                const returnCreatorId = urlParams.get('creator_id');
+                if (connectParam === 'success') {
+                    if (typeof showToast === 'function') {
+                        showToast('🎉 Creator Payout Account Connected Successfully!');
+                    }
+                    if (returnCreatorId && sb) {
+                        try {
+                            await sb.from('creators').update({
+                                stripe_connect_status: 'connected',
+                                updated_at: new Date().toISOString()
+                            }).eq('id', returnCreatorId);
+                        } catch (e) {
+                            console.warn('Connect sync error:', e);
+                        }
+                    }
+                    switchPromoHubTab('creators');
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
             } catch (err) {
                 console.error("Failed to load Creator Governance Hub:", err);
             }

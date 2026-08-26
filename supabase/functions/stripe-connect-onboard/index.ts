@@ -171,11 +171,26 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    function appendParam(targetUrl: string, key: string, val: string): string {
+      const sep = targetUrl.includes("?") ? "&" : "?";
+      return `${targetUrl}${sep}${encodeURIComponent(key)}=${encodeURIComponent(val)}`;
+    }
+
+    let finalReturnUrl = appendParam(returnUrl, "creator_id", creator.id);
+    if (!finalReturnUrl.includes("connect=")) {
+      finalReturnUrl = appendParam(finalReturnUrl, "connect", "success");
+    }
+
+    let finalRefreshUrl = appendParam(refreshUrl, "creator_id", creator.id);
+    if (!finalRefreshUrl.includes("connect=")) {
+      finalRefreshUrl = appendParam(finalRefreshUrl, "connect", "refresh");
+    }
+
     // 3. Generate Hosted Onboarding URL
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
-      refresh_url: `${refreshUrl}&creator_id=${creator.id}`,
-      return_url: `${returnUrl}&creator_id=${creator.id}`,
+      refresh_url: finalRefreshUrl,
+      return_url: finalReturnUrl,
       type: "account_onboarding",
     });
 
