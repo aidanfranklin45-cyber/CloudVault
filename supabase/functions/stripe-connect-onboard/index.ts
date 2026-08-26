@@ -1,4 +1,4 @@
-﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "npm:stripe@^14.25.0";
 import { createClient } from "npm:@supabase/supabase-js@2.42.0";
 
@@ -31,12 +31,12 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+    const stripeSecretKey = Deno.env.get("Stripe_Secret_Key") || Deno.env.get("STRIPE_SECRET_KEY") || Deno.env.get("Str1pe_Secret_Key") || Deno.env.get("stripe_secret_key") || Deno.env.get("STRIPE_API_KEY") || "";
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
     if (!stripeSecretKey) {
-      throw new Error("STRIPE_SECRET_KEY environment variable is missing.");
+      throw new Error("Stripe secret key environment variable (Stripe_Secret_Key / STRIPE_SECRET_KEY) is missing in Supabase Edge Function secrets.");
     }
 
     const stripe = new Stripe(stripeSecretKey, {
