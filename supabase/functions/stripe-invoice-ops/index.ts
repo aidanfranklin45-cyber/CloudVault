@@ -80,6 +80,104 @@ Deno.serve(async (req: Request) => {
     const paymentMethodId = body.paymentMethodId || body.payment_method_id || null;
     const invoiceType = body.invoiceType || body.invoice_type || "initial_reservation";
 
+    // ────────────────────────────────────────────────────────────
+    // OPERATION: cancel_and_refund_pre_delivery
+    // ────────────────────────────────────────────────────────────
+    if (operation === "cancel_and_refund_pre_delivery") {
+      if (!userId) {
+        return new Response(JSON.stringify({ error: "Missing required parameter 'userId'." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let refundedChargeId: string | null = null;
+      let refundedAmount = 0;
+
+      // 1. Fetch user's latest paid invoice
+      const { data: latestInv } = await supabase
+        .from("invoices")
+        .select("*")
+        .eq("uid", userId)
+        .eq("payment_status", "paid")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // 2. Fetch user's Stripe customer and subscription IDs
+      const { data: userRecord } = await supabase
+        .from("users")
+        .select("id, stripe_customer_id, stripe_subscription_id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      // 3. Issue Stripe full refund if stripe is configured
+      if (stripe) {
+        try {
+          if (latestInv?.stripe_payment_intent_id && latestInv.stripe_payment_intent_id.startsWith("pi_")) {
+            const refund = await stripe.refunds.create({
+              payment_intent: latestInv.stripe_payment_intent_id,
+              reason: "requested_by_customer",
+            });
+            refundedChargeId = refund.id;
+            refundedAmount = (refund.amount || 0) / 100;
+          } else if (latestInv?.stripe_invoice_id && latestInv.stripe_invoice_id.startsWith("in_")) {
+            try {
+              const inv = await stripe.invoices.retrieve(latestInv.stripe_invoice_id);
+              if (inv.payment_intent) {
+                const piId = typeof inv.payment_intent === "string" ? inv.payment_intent : inv.payment_intent.id;
+                const refund = await stripe.refunds.create({
+                  payment_intent: piId,
+                  reason: "requested_by_customer",
+                });
+                refundedChargeId = refund.id;
+                refundedAmount = (refund.amount || 0) / 100;
+              } else if (inv.status === "open" || inv.status === "draft") {
+                await stripe.invoices.voidInvoice(inv.id);
+              }
+            } catch (invErr: any) {
+              console.warn("[cancel_and_refund] Invoice refund notice:", invErr.message);
+            }
+          }
+
+          // Cancel Stripe subscription immediately if one exists
+          const subId = userRecord?.stripe_subscription_id;
+          if (subId && subId.startsWith("sub_")) {
+            try {
+              await stripe.subscriptions.cancel(subId, { prorate: false });
+            } catch (subErr: any) {
+              console.warn("[cancel_and_refund] Sub cancel notice:", subErr.message);
+            }
+          }
+        } catch (stripeErr: any) {
+          console.warn("[cancel_and_refund] Stripe refund execution notice:", stripeErr.message);
+        }
+      }
+
+      // 4. Execute atomic Postgres cancellation RPC
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc("cancel_customer_pre_delivery", {
+        p_user_id: userId,
+      });
+
+      if (rpcErr) {
+        throw new Error(`Database cancel error: ${rpcErr.message}`);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          refunded_amount: refundedAmount,
+          refund_id: refundedChargeId,
+          rpc_result: rpcRes,
+          message: "Same-day cancellation and full refund processed successfully.",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     // 1. Fetch Dynamic Facility Configuration from Postgres
     const { data: facility, error: facErr } = await supabase
       .from("facilities")

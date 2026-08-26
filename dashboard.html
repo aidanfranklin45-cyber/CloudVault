@@ -1679,7 +1679,7 @@
             <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg space-y-4">
                 <div class="flex justify-between items-start">
                     <div>
-                        <span class="text-[10px] font-bold uppercase tracking-widest text-blue-200 bg-white/10 px-2.5 py-1 rounded-full border border-white/20">ACTIVE PLAN</span>
+                        <span id="billing-plan-badge" class="text-[10px] font-bold uppercase tracking-widest text-blue-200 bg-white/10 px-2.5 py-1 rounded-full border border-white/20">ACTIVE PLAN</span>
                         <h3 class="text-2xl font-extrabold mt-2 text-white" id="billing-plan-name">Loading...</h3>
                     </div>
                     <span class="text-2xl font-extrabold text-white" id="billing-monthly-amount">$0.00<span class="text-xs font-normal text-blue-200">/mo</span></span>
@@ -1798,14 +1798,16 @@
             </div>
 
             <div class="pt-2 flex justify-between items-center border-t border-gray-100 flex-wrap gap-2">
-                <button onclick="triggerCancelFlowUser()" class="text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-xl border border-red-200 transition">
-                    Cancel Subscription
-                </button>
+                <div id="billing-cancel-btn-container">
+                    <button id="billing-cancel-sub-btn" onclick="triggerCancelFlowUser()" class="text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-xl border border-red-200 transition cursor-pointer">
+                        Cancel Subscription
+                    </button>
+                </div>
                 <div class="flex items-center gap-2">
-                    <button onclick="openTotePlanManagerModal()" class="text-xs font-extrabold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl border border-blue-200 transition flex items-center gap-1.5 cursor-pointer">
+                    <button id="billing-manage-plan-btn" onclick="openTotePlanManagerModal()" class="text-xs font-extrabold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl border border-blue-200 transition flex items-center gap-1.5 cursor-pointer">
                         📦 Manage Plan / Add &amp; Unsubscribe Totes
                     </button>
-                    <button onclick="closeBillingModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold px-5 py-2 rounded-xl transition text-xs">
+                    <button onclick="closeBillingModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold px-5 py-2 rounded-xl transition text-xs cursor-pointer">
                         Close
                     </button>
                 </div>
@@ -6950,11 +6952,14 @@
             if (userDropdown) userDropdown.classList.add('hidden');
             if (billingModal) billingModal.classList.remove('hidden');
             
+            const badgeEl = document.getElementById('billing-plan-badge');
             const planNameEl = document.getElementById('billing-plan-name');
             const monthlyAmountEl = document.getElementById('billing-monthly-amount');
             const tierLabelEl = document.getElementById('billing-tier-label');
             const lastDateEl = document.getElementById('billing-last-date');
             const nextDateEl = document.getElementById('billing-next-date');
+            const cancelBtnContainer = document.getElementById('billing-cancel-btn-container');
+            const managePlanBtn = document.getElementById('billing-manage-plan-btn');
             
             if (planNameEl) planNameEl.textContent = 'Loading...';
             if (monthlyAmountEl) monthlyAmountEl.textContent = '...';
@@ -6962,27 +6967,39 @@
             if (lastDateEl) lastDateEl.textContent = '...';
             if (nextDateEl) nextDateEl.textContent = 'Loading...';
 
-            if (!currentSubscription && currentUser && typeof supabase !== 'undefined') {
+            if (currentUser && typeof supabase !== 'undefined') {
                 try {
                     const { data: directSubs } = await supabase.from('subscriptions')
                         .select('*')
                         .eq('uid', currentUser.id)
                         .order('created_at', { ascending: false });
                     if (directSubs && directSubs.length > 0) {
-                        currentSubscription = directSubs.find(s => s.status === 'active') || directSubs[0];
+                        currentSubscription = directSubs.find(s => s.status === 'active') || directSubs.find(s => s.status === 'canceling') || directSubs[0];
+                    } else {
+                        currentSubscription = null;
                     }
                 } catch (e) {
-                    console.warn('[Billing Modal Subs Fetch Fallback Notice]', e);
+                    console.warn('[Billing Modal Subs Fetch Notice]', e);
                 }
             }
 
-            if (currentSubscription) {
-                const totalTotes = currentSubscription.total_totes || 0;
-                const toteRate = Number(currentSubscription.tote_rate) || 5.00;
-                const baseMonthly = Number(currentSubscription.recurring_storage) || (totalTotes * toteRate);
+            const sub = currentSubscription;
+            const subStatus = (sub?.status || 'inactive').toLowerCase();
+            const isCancelled = subStatus === 'cancelled' || subStatus === 'canceled' || subStatus === 'inactive' || !sub;
+            const isCanceling = subStatus === 'canceling';
+            const isActive = subStatus === 'active';
+
+            if (isActive && sub) {
+                if (badgeEl) {
+                    badgeEl.textContent = 'ACTIVE PLAN';
+                    badgeEl.className = 'text-[10px] font-bold uppercase tracking-widest text-blue-200 bg-white/10 px-2.5 py-1 rounded-full border border-white/20';
+                }
+                const totalTotes = sub.total_totes || 0;
+                const toteRate = Number(sub.tote_rate) || 5.00;
+                const baseMonthly = Number(sub.recurring_storage) || (totalTotes * toteRate);
 
                 // Dynamic tax resolution based on active user facility/state
-                const userFac = currentUser?.assigned_facility_id || currentSubscription?.facility_id || 'facility_yakima';
+                const userFac = currentUser?.assigned_facility_id || sub?.facility_id || 'facility_yakima';
                 const userTaxRate = (userFac === 'facility_seattle_north' ? 0.1025 : (userFac === 'facility_portland_central' ? 0.00 : 0.085));
                 const monthlyTax = Math.round(baseMonthly * userTaxRate * 100) / 100;
                 const afterTaxMonthly = Math.round((baseMonthly + monthlyTax) * 100) / 100;
@@ -7006,8 +7023,7 @@
                             const discountPct = Number(promoData.customer_discount_pct);
                             const durationMonths = Number(promoData.customer_discount_duration_months);
 
-                            // Calculate referral / subscription start date
-                            const refDate = profile?.referred_at ? new Date(profile.referred_at) : (currentSubscription.created_at ? new Date(currentSubscription.created_at) : new Date());
+                            const refDate = profile?.referred_at ? new Date(profile.referred_at) : (sub.created_at ? new Date(sub.created_at) : new Date());
                             const now = new Date();
                             const monthDiff = Math.max(1, (now.getFullYear() - refDate.getFullYear()) * 12 + (now.getMonth() - refDate.getMonth()) + 1);
 
@@ -7017,7 +7033,6 @@
                                 const discountTax = Math.round(discountSubtotal * userTaxRate * 100) / 100;
                                 discountedAftertax = Math.round((discountSubtotal + discountTax) * 100) / 100;
 
-                                // Calculate exact expiration date (renewal date after durationMonths)
                                 const promoExpiryDate = new Date(refDate.getTime());
                                 promoExpiryDate.setMonth(promoExpiryDate.getMonth() + durationMonths);
 
@@ -7061,7 +7076,6 @@
                 }
 
                 if (lastDateEl) {
-                    const sub = currentSubscription;
                     const lastDate = sub.last_billed_at ? new Date(sub.last_billed_at) : (sub.created_at ? new Date(sub.created_at) : null);
                     lastDateEl.textContent = lastDate
                         ? lastDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
@@ -7069,8 +7083,6 @@
                 }
 
                 if (nextDateEl) {
-                    // Priority: next_billing_date → last_billed_at+30d → created_at+30d → current_period_end
-                    const sub = currentSubscription;
                     let nextDate = null;
                     if (sub.next_billing_date) {
                         nextDate = new Date(sub.next_billing_date);
@@ -7085,18 +7097,70 @@
                         ? nextDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
                         : 'Auto-Renews Monthly';
                 }
-            } else {
-                if (planNameEl) planNameEl.textContent = 'No Active Plan';
-                if (monthlyAmountEl) monthlyAmountEl.textContent = '$0.00';
-                if (tierLabelEl) tierLabelEl.textContent = 'Inactive';
-                if (lastDateEl) lastDateEl.textContent = 'N/A';
-                if (nextDateEl) nextDateEl.textContent = 'N/A';
+
+                if (cancelBtnContainer) {
+                    cancelBtnContainer.innerHTML = `<button id="billing-cancel-sub-btn" onclick="triggerCancelFlowUser()" class="text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-xl border border-red-200 transition cursor-pointer">Cancel Subscription</button>`;
+                }
+                if (managePlanBtn) managePlanBtn.classList.remove('hidden');
+
+            } else if (isCanceling && sub) {
+                // Scheduled cancellation (finishing the month they paid for)
+                if (badgeEl) {
+                    badgeEl.textContent = 'CANCELLATION SCHEDULED';
+                    badgeEl.className = 'text-[10px] font-black uppercase tracking-widest text-amber-200 bg-amber-950/70 border border-amber-400/40 px-2.5 py-1 rounded-full';
+                }
+                const totalTotes = sub.total_totes || 0;
+                const cancelEndDate = sub.cancel_at ? new Date(sub.cancel_at) : (sub.current_period_end ? new Date(sub.current_period_end) : (sub.last_billed_at ? new Date(new Date(sub.last_billed_at).getTime() + 30 * 24 * 60 * 60 * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)));
+                const cancelDateDisplay = cancelEndDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+
+                if (planNameEl) planNameEl.textContent = `${totalTotes} Totes Storage Plan`;
+                if (monthlyAmountEl) monthlyAmountEl.innerHTML = `Paid<span class="text-xs font-normal text-blue-200"> / Active</span>`;
+                if (tierLabelEl) tierLabelEl.textContent = `Active through paid billing period`;
+
+                if (lastDateEl) {
+                    const lastDate = sub.last_billed_at ? new Date(sub.last_billed_at) : (sub.created_at ? new Date(sub.created_at) : null);
+                    lastDateEl.textContent = lastDate ? lastDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+                }
+
+                if (nextDateEl) {
+                    nextDateEl.textContent = `Will Not Renew (Ends ${cancelDateDisplay})`;
+                }
+
                 const promoBanner = document.getElementById('billing-promo-banner-container');
                 if (promoBanner) promoBanner.classList.add('hidden');
+
+                if (cancelBtnContainer) {
+                    cancelBtnContainer.innerHTML = `<span class="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3.5 py-2 rounded-xl inline-flex items-center gap-1">⏳ Service Active Until ${cancelDateDisplay}</span>`;
+                }
+                if (managePlanBtn) managePlanBtn.classList.add('hidden');
+
+            } else {
+                // Cancelled / Inactive
+                if (badgeEl) {
+                    badgeEl.textContent = 'CANCELLED';
+                    badgeEl.className = 'text-[10px] font-black uppercase tracking-widest text-rose-200 bg-rose-950/70 border border-rose-400/40 px-2.5 py-1 rounded-full';
+                }
+                const totalTotes = sub ? (sub.total_totes || 0) : 0;
+                if (planNameEl) planNameEl.textContent = totalTotes ? `${totalTotes} Totes Plan (Cancelled)` : 'No Active Plan';
+                if (monthlyAmountEl) monthlyAmountEl.textContent = '$0.00';
+                if (tierLabelEl) tierLabelEl.textContent = 'Plan Terminated';
+                
+                if (lastDateEl) {
+                    const lastDate = sub?.canceled_at ? new Date(sub.canceled_at) : (sub?.created_at ? new Date(sub.created_at) : null);
+                    lastDateEl.textContent = lastDate ? lastDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+                }
+                if (nextDateEl) nextDateEl.textContent = 'None — Account Inactive';
+
+                const promoBanner = document.getElementById('billing-promo-banner-container');
+                if (promoBanner) promoBanner.classList.add('hidden');
+
+                if (cancelBtnContainer) {
+                    cancelBtnContainer.innerHTML = `<button onclick="reactivatePlanFromBilling()" class="text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"><span>🚀 Reactivate / Start New Plan</span></button>`;
+                }
+                if (managePlanBtn) managePlanBtn.classList.add('hidden');
             }
 
             // Grandfathered Price-Lock Countdown Timer (Shown only for eligible prelaunch accounts)
-            const sub = currentSubscription;
             const hasLock = !!(currentUser?.has_price_lock || sub?.has_price_lock);
             const lockContainer = document.getElementById('price-lock-banner-container');
             const lockExpiry = sub?.price_lock_expires_at ? new Date(sub.price_lock_expires_at) : (currentUser?.price_lock_expires_at ? new Date(currentUser.price_lock_expires_at) : null);
@@ -7502,9 +7566,15 @@
                 if (modal) modal.classList.remove('hidden');
             }
 
-            function closePreDeliveryCancelModal() {
-                const modal = document.getElementById('pre-delivery-cancel-modal');
-                if (modal) modal.classList.add('hidden');
+            function reactivatePlanFromBilling() {
+                closeBillingModal();
+                const activeDashboard = document.getElementById('flow-active-dashboard');
+                const onboardingWizard = document.getElementById('flow-onboarding-wizard');
+                const waitlistHub = document.getElementById('flow-waitlist-hub');
+                if (activeDashboard) activeDashboard.classList.add('hidden');
+                if (waitlistHub) waitlistHub.classList.add('hidden');
+                if (onboardingWizard) onboardingWizard.classList.remove('hidden');
+                initWizardState();
             }
 
             async function confirmPreDeliveryCancel() {
@@ -7517,7 +7587,19 @@
                 try {
                     if (!currentUser) throw new Error("No active user session");
 
-                    // Execute atomic server-side cancellation & tote release
+                    // 1. Invoke Stripe backend function for 100% full refund & subscription cancellation
+                    try {
+                        await supabase.functions.invoke('stripe-invoice-ops', {
+                            body: {
+                                operation: 'cancel_and_refund_pre_delivery',
+                                userId: currentUser.id
+                            }
+                        });
+                    } catch (stripeErr) {
+                        console.warn('[PreDeliveryCancel] Stripe refund invocation notice:', stripeErr);
+                    }
+
+                    // 2. Execute atomic server-side cancellation, tote release, invoice refunding, and promo code reversal
                     const { data, error } = await supabase.rpc('cancel_customer_pre_delivery', {
                         p_user_id: currentUser.id
                     });
@@ -7525,7 +7607,7 @@
                     if (error) throw error;
 
                     closePreDeliveryCancelModal();
-                    showToast('✓ Order and subscription cancelled. No return pickup required.');
+                    showToast('✓ Order and subscription cancelled. Full refund issued.');
                     
                     setTimeout(() => {
                         window.location.reload();
@@ -8232,6 +8314,7 @@
             window.setExcessFulfillment = setExcessFulfillment;
             window.submitExcessExitRetrieval = submitExcessExitRetrieval;
             window.triggerCancelFlowUser = triggerCancelFlowUser;
+            window.reactivatePlanFromBilling = reactivatePlanFromBilling;
             window.openPreDeliveryCancelModal = openPreDeliveryCancelModal;
             window.closePreDeliveryCancelModal = closePreDeliveryCancelModal;
             window.confirmPreDeliveryCancel = confirmPreDeliveryCancel;
