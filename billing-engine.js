@@ -977,8 +977,8 @@
       const isValet = req.fulfillment_type === 'valet_delivery' || req.request_type === 'valet' || req.fulfillment_type === 'valet';
 
       if (isValet && valetFee === 0) {
-        let valetBase = 15.00;
-        let valetAdder = 1.00;
+        let valetBase = 0.00;
+        let valetAdder = 0.00;
         const facId = req.facility_id || userObj.assigned_facility_id;
         if (sb && facId) {
           try {
@@ -987,8 +987,8 @@
               .eq('id', facId)
               .maybeSingle();
             if (fac) {
-              valetBase = Number(fac.valet_base) || 15.00;
-              valetAdder = Number(fac.valet_tote_adder) || 1.00;
+              valetBase = fac.valet_base != null ? Number(fac.valet_base) : 0.00;
+              valetAdder = fac.valet_tote_adder != null ? Number(fac.valet_tote_adder) : 0.00;
             }
           } catch (e) {
             console.warn('[CloudVaultBilling] Error fetching facility valet rates:', e.message);
@@ -1002,8 +1002,8 @@
       const grandTotal = subtotal + valetFee + surgeFee;
       const lineItems = [];
       if (isValet) {
-        let valetBase = 15.00;
-        let valetAdder = 1.00;
+        let valetBase = 0.00;
+        let valetAdder = 0.00;
         const facId = req.facility_id || userObj.assigned_facility_id;
         if (sb && facId) {
           try {
@@ -1012,8 +1012,8 @@
               .eq('id', facId)
               .maybeSingle();
             if (fac) {
-              valetBase = Number(fac.valet_base) || 15.00;
-              valetAdder = Number(fac.valet_tote_adder) || 1.00;
+              valetBase = fac.valet_base != null ? Number(fac.valet_base) : 0.00;
+              valetAdder = fac.valet_tote_adder != null ? Number(fac.valet_tote_adder) : 0.00;
             }
           } catch (e) {
             console.warn('[CloudVaultBilling] Error fetching facility valet rates:', e.message);

@@ -4716,7 +4716,7 @@
                                 timeSlot: req.time_slot || '09:00 AM - 12:00 PM',
                                 surgeTier: req.surge_tier,
                                 surgeFee: req.surge_fee,
-                                pin: req.pin || pinByUid[req.uid] || '1517',
+                                pin: req.pin || pinByUid[req.uid] || (req.uid ? String(Math.floor(1000 + (parseInt(req.uid.replace(/\D/g,'').slice(0,4) || '5821') % 9000))) : '----'),
                                 assignedRoom: resolvedRoom,
                                 status: req.status,
                                 totes: matchingTotes
@@ -4760,7 +4760,7 @@
                                     timeSlot: req.time_slot || '09:00 AM - 12:00 PM',
                                     surgeTier: req.surge_tier,
                                     surgeFee: req.surge_fee,
-                                    pin: req.pin || pinByUid[req.uid] || '1517',
+                                    pin: req.pin || pinByUid[req.uid] || (req.uid ? String(Math.floor(1000 + (parseInt(req.uid.replace(/\D/g,'').slice(0,4) || '5821') % 9000))) : '----'),
                                     assignedRoom: resolvedRoom,
                                     status: req.status,
                                     totes: matchingTotes
@@ -5041,6 +5041,9 @@
                         </div>
                     ` : '';
 
+                    const isFacilityStagingEnabled = currentLoadedFac ? (currentLoadedFac.staging_enabled !== false && (!currentLoadedFac.staging_disabled_until || new Date(currentLoadedFac.staging_disabled_until) <= new Date())) : true;
+                    const allocatedBatchRooms = new Map();
+
                     const sortedPullJobs = pullJobs.sort((a, b) => {
                         const tDateA = a.targetDate || '9999-12-31';
                         const tDateB = b.targetDate || '9999-12-31';
@@ -5063,11 +5066,11 @@
 
                         const numRooms = Number(currentLoadedFac?.num_staging_rooms || currentLoadedFac?.staging_rooms || 3);
                         let assignedRoomNum = job.assignedRoom;
+
                         if (!assignedRoomNum && window.activeTargetLocationCode && window.activeTargetLocationCode.startsWith('ROOM-')) {
                             const match = window.activeTargetLocationCode.match(/ROOM-?(\d+)/i);
                             if (match) assignedRoomNum = parseInt(match[1], 10);
                         }
-                        if (!assignedRoomNum) assignedRoomNum = 1;
 
                         // Check if this job can stage or if all rooms are occupied
                         let userOwnedRoom = null;
@@ -5078,7 +5081,28 @@
                             }
                         }
 
-                        const isJobRoomLocked = !isValet && !userOwnedRoom && isStagingAtFullCapacity;
+                        if (!isValet && isFacilityStagingEnabled) {
+                            if (userOwnedRoom) {
+                                assignedRoomNum = userOwnedRoom;
+                            } else if (!assignedRoomNum) {
+                                if (allocatedBatchRooms.has(job.uid)) {
+                                    assignedRoomNum = allocatedBatchRooms.get(job.uid);
+                                } else {
+                                    // Allocate lowest available room index
+                                    const takenRooms = new Set([...occupiedStagingRooms.keys(), ...allocatedBatchRooms.values()]);
+                                    for (let r = 1; r <= numRooms; r++) {
+                                        if (!takenRooms.has(r)) {
+                                            assignedRoomNum = r;
+                                            allocatedBatchRooms.set(job.uid, r);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        const isFacilityStagingPausedForJob = !isValet && !isFacilityStagingEnabled;
+                        const isJobRoomLocked = !isValet && (isFacilityStagingPausedForJob || (!userOwnedRoom && !assignedRoomNum) || (!userOwnedRoom && isStagingAtFullCapacity));
 
                         const isIntakeProcessingTote = totes.some(t => !t.activated || (t.location_code && t.location_code.startsWith('INTAKE')) || (t.status === 'pending-stage' && !t.activated));
 
@@ -5088,9 +5112,11 @@
 
                         const targetLocationBadge = isValet
                             ? `<span class="text-xs font-bold font-mono text-orange-400 bg-orange-500/10 border border-orange-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5"></i> Driver Loading Bay A</span>`
-                            : isJobRoomLocked
-                                ? `<span class="text-xs font-bold font-mono text-rose-450 bg-rose-500/10 border border-rose-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="lock" class="w-3.5 h-3.5 text-rose-400"></i> Staging Capacity Full (${numOccupiedRooms}/${totalStagingRooms})</span>`
-                                : `<span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="door-open" class="w-3.5 h-3.5"></i> Staging Room #${assignedRoomNum}</span>`;
+                            : isFacilityStagingPausedForJob
+                                ? `<span class="text-xs font-bold font-mono text-rose-400 bg-rose-500/10 border border-rose-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> Staging Paused for Facility</span>`
+                                : isJobRoomLocked
+                                    ? `<span class="text-xs font-bold font-mono text-rose-450 bg-rose-500/10 border border-rose-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="lock" class="w-3.5 h-3.5 text-rose-400"></i> Staging Capacity Full (${numOccupiedRooms}/${totalStagingRooms})</span>`
+                                    : `<span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="door-open" class="w-3.5 h-3.5"></i> Staging Room #${assignedRoomNum}</span>`;
 
                         const scheduleBadge = `<div class="flex items-center gap-3 text-xs bg-gray-900/90 px-3.5 py-1.5 rounded-xl border border-gray-800 font-mono">
                             <span class="text-blue-300 font-bold flex items-center gap-1.5"><i data-lucide="calendar" class="w-3.5 h-3.5 text-blue-400"></i> ${dateStr}</span>
@@ -5106,7 +5132,9 @@
 
                         const actionLabel = isValet
                             ? (isIntakeProcessingTote ? `SCAN &amp; DISPATCH INTAKE TOTE (${firstCode}) → DRIVER LOADING BAY` : `SCAN &amp; PULL TOTE (${firstCode}) FROM VAULT SHELF → DRIVER LOADING BAY`)
-                            : (isIntakeProcessingTote ? `SCAN &amp; STAGE INTAKE TOTE (${firstCode}) → STAGING ROOM #${assignedRoomNum}` : `SCAN &amp; PULL TOTE (${firstCode}) FROM VAULT SHELF → STAGING ROOM #${assignedRoomNum}`);
+                            : isFacilityStagingPausedForJob
+                                ? `CANNOT STAGE — FACILITY STAGING PAUSED (REROUTE TO VALET)`
+                                : (isIntakeProcessingTote ? `SCAN &amp; STAGE INTAKE TOTE (${firstCode}) → STAGING ROOM #${assignedRoomNum}` : `SCAN &amp; PULL TOTE (${firstCode}) FROM VAULT SHELF → STAGING ROOM #${assignedRoomNum}`);
 
                         const actionGradient = isValet
                             ? 'from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 border-orange-400/40'
@@ -5114,6 +5142,10 @@
 
                         const actionIcon = isValet ? 'truck' : (isIntakeProcessingTote ? 'zap' : 'archive-restore');
                         const expectedScanStatus = isValet ? 'out-for-delivery' : 'staged';
+
+                        const lockedReasonMessage = isFacilityStagingPausedForJob
+                            ? `🚫 SELF-SERVICE STAGING IS PAUSED FOR THIS FACILITY — REROUTE TO VALET DISPATCH`
+                            : `🔒 ALL STAGING ROOMS AT CAPACITY (${numOccupiedRooms}/${totalStagingRooms}) — AWAITING ROOM VACANCY`;
 
                         return `
                             <div class="border-2 ${borderColor} rounded-3xl p-5 shadow-xl space-y-4 hover:border-amber-500/60 transition">
@@ -5159,11 +5191,11 @@
                                                 <button onclick="revertToteStage('${t.tote_code}', 'stored')" class="text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 text-[10px] font-bold px-2 py-1.5 rounded-xl border border-amber-500/30 transition flex items-center gap-1 cursor-pointer" title="Move back to Vault Storage">↩ Revert</button>
                                                 <button onclick="openReportMissingModal('${t.tote_code}', '${customerName.replace(/'/g, "\\'")}', '${uid}', '${job.jobId}')" class="text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 text-[10px] font-bold px-2 py-1.5 rounded-xl border border-rose-500/30 transition cursor-pointer" title="Report Missing">⚠️</button>
                                                 ${isJobRoomLocked ? `
-                                                    <button disabled class="bg-gray-900 text-gray-600 border border-gray-800 text-[10px] font-bold px-2.5 py-1.5 rounded-xl cursor-not-allowed flex items-center gap-1 opacity-50" title="All staging rooms occupied">
+                                                    <button disabled class="bg-gray-900 text-gray-600 border border-gray-800 text-[10px] font-bold px-2.5 py-1.5 rounded-xl cursor-not-allowed flex items-center gap-1 opacity-50" title="${lockedReasonMessage}">
                                                         <i data-lucide="lock" class="w-3 h-3 text-gray-500"></i> Locked
                                                     </button>
                                                 ` : `
-                                                    <button onclick="executeVaultPullToStaging('${t.tote_code}', ${assignedRoomNum}, '${expectedScanStatus}', '${job.jobId}')" class="bg-gray-800 hover:bg-gray-700 text-amber-300 hover:text-white border border-amber-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
+                                                    <button onclick="executeVaultPullToStaging('${t.tote_code}', ${assignedRoomNum || 1}, '${expectedScanStatus}', '${job.jobId}')" class="bg-gray-800 hover:bg-gray-700 text-amber-300 hover:text-white border border-amber-500/30 text-[10px] font-bold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
                                                         <i data-lucide="${actionIcon}" class="w-3 h-3"></i> Pull
                                                     </button>
                                                 `}
@@ -5176,10 +5208,10 @@
                                 ${isJobRoomLocked ? `
                                     <button disabled class="w-full min-h-[60px] bg-gray-900 text-gray-500 font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-gray-800 shadow-none flex items-center justify-center gap-2 cursor-not-allowed opacity-60">
                                         <i data-lucide="lock" class="w-5 h-5 text-rose-400"></i>
-                                        <span>🔒 ALL STAGING ROOMS AT CAPACITY (${numOccupiedRooms}/${totalStagingRooms}) — AWAITING ROOM VACANCY</span>
+                                        <span>${lockedReasonMessage}</span>
                                     </button>
                                 ` : `
-                                    <button onclick="executeVaultPullToStaging('${firstCode}', ${assignedRoomNum}, '${expectedScanStatus}', '${job.jobId}')" class="w-full min-h-[60px] bg-gradient-to-r ${actionGradient} text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                    <button onclick="executeVaultPullToStaging('${firstCode}', ${assignedRoomNum || 1}, '${expectedScanStatus}', '${job.jobId}')" class="w-full min-h-[60px] bg-gradient-to-r ${actionGradient} text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
                                         <i data-lucide="${actionIcon}" class="w-6 h-6"></i>
                                         <span>${actionLabel}</span>
                                     </button>

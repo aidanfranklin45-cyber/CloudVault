@@ -2536,21 +2536,21 @@
                     const { data: fac } = await supabase.from('facilities').select('*').eq('id', facId).maybeSingle();
                     if (fac) {
                         isPriceLocked = true;
-                        const vEnabled = fac.valet_enabled !== false || (fac.valet_disabled_until && new Date(fac.valet_disabled_until) <= new Date());
-                        const sEnabled = fac.staging_enabled !== false || (fac.staging_disabled_until && new Date(fac.staging_disabled_until) <= new Date());
-                        regionalRates.isValetAvailable = vEnabled;
-                        regionalRates.isStagingAvailable = sEnabled;
+                        const vEnabled = (fac.valet_enabled === true) && (!fac.valet_disabled_until || new Date(fac.valet_disabled_until) <= new Date());
+                        const sEnabled = (fac.staging_enabled === true) && (!fac.staging_disabled_until || new Date(fac.staging_disabled_until) <= new Date());
+                        regionalRates.isValetAvailable = Boolean(vEnabled);
+                        regionalRates.isStagingAvailable = Boolean(sEnabled);
                         regionalRates.valetDisableReason = fac.valet_disable_reason || '';
                         regionalRates.stagingDisableReason = fac.staging_disable_reason || '';
 
-                        regionalRates.tier1 = Number(fac.tier1_rate) || regionalRates.tier1;
-                        regionalRates.tier2 = Number(fac.tier2_rate) || regionalRates.tier2;
-                        regionalRates.tier3 = Number(fac.tier3_rate) || regionalRates.tier3;
-                        regionalRates.tier4 = Number(fac.tier4_rate) || regionalRates.tier4;
-                        regionalRates.valet_base = Number(fac.valet_base) || regionalRates.valet_base;
-                        regionalRates.valet_tote_adder = Number(fac.valet_tote_adder) || regionalRates.valet_tote_adder;
-                        regionalRates.missing_tote_fee = Number(fac.missing_tote_fee) || regionalRates.missing_tote_fee;
-                        regionalRates.traditional_unit_baseline = Number(fac.traditional_unit_baseline) || 95.00;
+                        regionalRates.tier1 = fac.tier1_rate != null ? Number(fac.tier1_rate) : regionalRates.tier1;
+                        regionalRates.tier2 = fac.tier2_rate != null ? Number(fac.tier2_rate) : regionalRates.tier2;
+                        regionalRates.tier3 = fac.tier3_rate != null ? Number(fac.tier3_rate) : regionalRates.tier3;
+                        regionalRates.tier4 = fac.tier4_rate != null ? Number(fac.tier4_rate) : regionalRates.tier4;
+                        regionalRates.valet_base = fac.valet_base != null ? Number(fac.valet_base) : regionalRates.valet_base;
+                        regionalRates.valet_tote_adder = fac.valet_tote_adder != null ? Number(fac.valet_tote_adder) : regionalRates.valet_tote_adder;
+                        regionalRates.missing_tote_fee = fac.missing_tote_fee != null ? Number(fac.missing_tote_fee) : regionalRates.missing_tote_fee;
+                        regionalRates.traditional_unit_baseline = fac.traditional_unit_baseline != null ? Number(fac.traditional_unit_baseline) : 95.00;
                         regionalRates.facility_id = fac.id;
                         regionalRates.facility_name = fac.name;
                         regionalRates.city = areaInfo?.city || fac.city || 'Seattle';
@@ -3245,8 +3245,8 @@
             const valetOpt = document.getElementById('step4-opt-valet');
             const grid = selfOpt?.parentElement;
 
-            const isValetAvail = regionalRates.isValetAvailable !== false;
-            const isStagingAvail = regionalRates.isStagingAvailable !== false;
+            const isValetAvail = regionalRates.isValetAvailable === true;
+            const isStagingAvail = regionalRates.isStagingAvailable === true;
 
             if (isValetAvail && isStagingAvail) {
                 // Both methodologies active: render 2-column selector
@@ -3459,10 +3459,21 @@
             const flowMonthlyEl = document.getElementById('flow-monthly');
             if (flowMonthlyEl) flowMonthlyEl.textContent = monthly.toFixed(2);
 
+            const totalValetFee = Math.round((regionalRates.valet_base + (flowData.totes * regionalRates.valet_tote_adder)) * 100) / 100;
             const flowValetLabel = document.getElementById('flow-valet-fee-label');
-            if (flowValetLabel) flowValetLabel.textContent = `$${(regionalRates.valet_base + (flowData.totes * regionalRates.valet_tote_adder)).toFixed(0)}`;
+            if (flowValetLabel) {
+                flowValetLabel.textContent = totalValetFee === 0 ? 'Free' : `$${totalValetFee.toFixed(0)}`;
+            }
             const step4ValetLabel = document.getElementById('step4-valet-fee-label');
-            if (step4ValetLabel) step4ValetLabel.textContent = `+$${(regionalRates.valet_base + (flowData.totes * regionalRates.valet_tote_adder)).toFixed(2)}`;
+            if (step4ValetLabel) {
+                if (totalValetFee === 0) {
+                    step4ValetLabel.textContent = 'Free';
+                    step4ValetLabel.className = 'text-emerald-600 font-black';
+                } else {
+                    step4ValetLabel.textContent = `+$${totalValetFee.toFixed(2)}`;
+                    step4ValetLabel.className = 'text-slate-700 font-bold';
+                }
+            }
 
             const flowUpfrontEl = document.getElementById('flow-upfront');
             if (flowUpfrontEl) flowUpfrontEl.textContent = upfront.toFixed(2);
@@ -3683,6 +3694,10 @@
 
                 // Load dynamic facility rates for this validated ZIP
                 await loadRegionalRates(zip);
+
+                if (regionalRates.isStagingAvailable === false && regionalRates.isValetAvailable === true) {
+                    flowData.logisticsType = 'valet_pickup';
+                }
 
                 flowData.zip = zip;
                 flowData.city = area.city || '';
