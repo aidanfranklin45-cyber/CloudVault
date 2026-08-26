@@ -567,12 +567,21 @@
             }
         }
 
-        // Check URL params for inactivity auto-logout notice
+        // Check URL params for inactivity auto-logout notice or prefilled email
         window.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams(window.location.search);
             if (params.get('reason') === 'inactivity') {
                 const noticeEl = document.getElementById('auth-notice');
                 if (noticeEl) noticeEl.classList.remove('hidden');
+            }
+            const emailParam = params.get('email');
+            if (emailParam) {
+                const emailInput = document.getElementById('auth-email');
+                if (emailInput) {
+                    emailInput.value = emailParam.trim();
+                    const passInput = document.getElementById('auth-password');
+                    if (passInput) passInput.focus();
+                }
             }
         });
 

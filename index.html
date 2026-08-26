@@ -2945,7 +2945,7 @@
 
         let lastCollisionSource = 'onboarding';
 
-        function showAccountCollisionModal(email, source = 'onboarding') {
+        function showAccountCollisionModal(email, source = 'onboarding', checkResult = null) {
             lastCollisionSource = source;
             const modal = document.getElementById('account-collision-modal');
             const emailEl = document.getElementById('collision-modal-email');
@@ -2959,11 +2959,7 @@
 
             if (modal) modal.classList.remove('hidden');
 
-            if (source === 'onboarding') {
-                showEmailCollisionWarning(cleanEmail, 'onboarding');
-            } else {
-                showEmailCollisionWarning(cleanEmail, 'waitlist');
-            }
+            showEmailCollisionWarning(cleanEmail, source, checkResult);
         }
 
         function closeAccountCollisionModal(focusInput = false) {
@@ -2979,7 +2975,7 @@
             }
         }
 
-        function showEmailCollisionWarning(email, source = 'onboarding') {
+        function showEmailCollisionWarning(email, source = 'onboarding', checkResult = null) {
             const warningEl = document.getElementById(source === 'onboarding' ? 'email-collision-warning' : 'waitlist-email-collision-warning');
             const signinBtn = document.getElementById(source === 'onboarding' ? 'email-collision-signin-btn' : 'waitlist-collision-signin-btn');
             
@@ -2987,6 +2983,22 @@
                 signinBtn.href = email ? `login.html?email=${encodeURIComponent(email)}` : 'login.html';
             }
             if (warningEl) {
+                if (source === 'waitlist' && checkResult) {
+                    const titleEl = warningEl.querySelector('.font-bold');
+                    const descEl = warningEl.querySelector('p.text-\\[11px\\]');
+                    if (checkResult.source === 'waitlist') {
+                        if (checkResult.payment_status === 'deposit_paid' || checkResult.waitlist_type === 'deposit') {
+                            if (titleEl) titleEl.textContent = 'Priority Deposit Already Secured!';
+                            if (descEl) descEl.textContent = 'This email already has an active priority waitlist deposit and rate lock. Sign in to view your portal.';
+                        } else {
+                            if (titleEl) titleEl.textContent = 'Already on the Waitlist!';
+                            if (descEl) descEl.textContent = 'This email is already registered on our waitlist. Sign in to your portal or upgrade to a deposit.';
+                        }
+                    } else {
+                        if (titleEl) titleEl.textContent = 'An account already exists for this email.';
+                        if (descEl) descEl.textContent = 'Please sign in to manage your account or enter a different email address.';
+                    }
+                }
                 warningEl.classList.remove('hidden-section');
             }
         }
@@ -3964,7 +3976,7 @@
                 // 0. Collision Prevention Check
                 const check = await checkEmailAvailability(email, activeWaitlistUserId);
                 if (check && !check.available) {
-                    showAccountCollisionModal(email, 'waitlist');
+                    showAccountCollisionModal(email, 'waitlist', check);
                     btn.textContent = "Drop a Deposit & Lock In My Rate →";
                     btn.disabled = false;
                     return;
@@ -4006,7 +4018,8 @@
                 if (authData && authData.user) activeWaitlistUserId = authData.user.id;
                 if (authErr) {
                     if (authErr.message?.toLowerCase().includes('already registered') || authErr.message?.toLowerCase().includes('already exists')) {
-                        showAccountCollisionModal(email, 'waitlist');
+                        const directCheck = await checkEmailAvailability(email, null);
+                        showAccountCollisionModal(email, 'waitlist', directCheck);
                         btn.textContent = "Drop a Deposit & Lock In My Rate →";
                         btn.disabled = false;
                         return;
@@ -4037,7 +4050,7 @@
                     refund_guarantee_days: refundGuaranteeDays,
                     type: 'deposit',
                     payment_status: 'pending_deposit',
-                    status: 'pending_deposit',
+                    deposit_status: 'pending_deposit',
                     user_id: activeWaitlistUserId
                 }).select();
 
@@ -4095,7 +4108,7 @@
                 // 0. Collision Prevention Check
                 const check = await checkEmailAvailability(email, null);
                 if (check && !check.available) {
-                    showAccountCollisionModal(email, 'waitlist');
+                    showAccountCollisionModal(email, 'waitlist', check);
                     btn.textContent = "Just join the free waitlist";
                     btn.disabled = false;
                     return;
@@ -4114,7 +4127,8 @@
                 if (authData && authData.user) createdUserId = authData.user.id;
                 if (authErr) {
                     if (authErr.message?.toLowerCase().includes('already registered') || authErr.message?.toLowerCase().includes('already exists')) {
-                        showAccountCollisionModal(email, 'waitlist');
+                        const directCheck = await checkEmailAvailability(email, null);
+                        showAccountCollisionModal(email, 'waitlist', directCheck);
                         btn.textContent = "Just join the free waitlist";
                         btn.disabled = false;
                         return;
@@ -4143,7 +4157,7 @@
                     deposit_amount: 0,
                     type: 'free',
                     payment_status: 'free_waitlist',
-                    status: 'free_waitlist',
+                    deposit_status: 'free_waitlist',
                     user_id: createdUserId
                 });
 
@@ -4919,7 +4933,7 @@
                     if (val && val.includes('@')) {
                         const check = await checkEmailAvailability(val, null);
                         if (check && !check.available) {
-                            showEmailCollisionWarning(val, 'waitlist');
+                            showEmailCollisionWarning(val, 'waitlist', check);
                         } else {
                             hideEmailCollisionWarning('waitlist');
                         }

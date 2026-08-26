@@ -6231,6 +6231,8 @@ CREATE OR REPLACE FUNCTION public.check_email_availability(
 DECLARE
     v_clean_email TEXT;
     v_user RECORD;
+    v_waitlist RECORD;
+    v_auth_user RECORD;
 BEGIN
     IF p_email IS NULL OR TRIM(p_email) = '' THEN
         RETURN jsonb_build_object('available', false, 'exists', false, 'message', 'Please provide an email address.');
@@ -6238,6 +6240,7 @@ BEGIN
 
     v_clean_email := LOWER(TRIM(p_email));
 
+    -- 1. Check if matching current logged-in user
     IF p_current_uid IS NOT NULL THEN
         SELECT id, email, name INTO v_user
         FROM public.users
@@ -6255,7 +6258,8 @@ BEGIN
         END IF;
     END IF;
 
-    SELECT id, email, name, role, is_active INTO v_user
+    -- 2. Check public.users
+    SELECT id, email, name, role, is_active, onboarding_status INTO v_user
     FROM public.users
     WHERE LOWER(email) = v_clean_email
     LIMIT 1;
@@ -6274,9 +6278,64 @@ BEGIN
             'available', false,
             'exists', true,
             'is_current_user', false,
+            'source', 'users',
+            'onboarding_status', v_user.onboarding_status,
             'email', v_clean_email,
             'user_name', COALESCE(v_user.name, 'Valued Customer'),
             'message', 'We already have an account registered to this email address.',
+            'action', 'sign_in'
+        );
+    END IF;
+
+    -- 3. Check auth.users directly
+    SELECT id, email INTO v_auth_user
+    FROM auth.users
+    WHERE LOWER(email) = v_clean_email
+    LIMIT 1;
+
+    IF v_auth_user.id IS NOT NULL THEN
+        IF p_current_uid IS NOT NULL AND v_auth_user.id = p_current_uid THEN
+            RETURN jsonb_build_object(
+                'available', true,
+                'exists', true,
+                'is_current_user', true,
+                'email', v_clean_email
+            );
+        END IF;
+
+        RETURN jsonb_build_object(
+            'available', false,
+            'exists', true,
+            'is_current_user', false,
+            'source', 'auth',
+            'email', v_clean_email,
+            'message', 'An account with this email already exists. Please sign in to proceed.',
+            'action', 'sign_in'
+        );
+    END IF;
+
+    -- 4. Check public.waitlist
+    SELECT id, email, type, payment_status, deposit_status, deposit_amount INTO v_waitlist
+    FROM public.waitlist
+    WHERE LOWER(email) = v_clean_email
+    ORDER BY created_at DESC
+    LIMIT 1;
+
+    IF v_waitlist.id IS NOT NULL THEN
+        RETURN jsonb_build_object(
+            'available', false,
+            'exists', true,
+            'is_current_user', false,
+            'source', 'waitlist',
+            'waitlist_type', v_waitlist.type,
+            'payment_status', COALESCE(v_waitlist.payment_status, v_waitlist.deposit_status),
+            'deposit_amount', v_waitlist.deposit_amount,
+            'email', v_clean_email,
+            'message', CASE 
+                WHEN v_waitlist.type = 'deposit' OR v_waitlist.payment_status = 'deposit_paid' 
+                    THEN 'This email already has a secured priority waitlist deposit and price lock.'
+                ELSE 'This email is already registered on our expansion waitlist.'
+            END,
             'action', 'sign_in'
         );
     END IF;
