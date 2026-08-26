@@ -5107,6 +5107,7 @@
                         const uid = job.uid;
                         const totes = job.totes;
                         const isValet = job.fulfillmentType === 'valet_delivery';
+                        const isTransfer = job.request && (job.request.request_type === 'facility_transfer' || job.request.fulfillment_type === 'facility_transfer' || (job.request.delivery_notes && job.request.delivery_notes.includes('TRANSFER PULL')));
                         const owner = job.owner;
                         const customerName = job.customerName;
                         const pin = job.pin;
@@ -5134,7 +5135,7 @@
                             }
                         }
 
-                        if (!isValet && isFacilityStagingEnabled) {
+                        if (!isValet && !isTransfer && isFacilityStagingEnabled) {
                             if (userOwnedRoom) {
                                 assignedRoomNum = userOwnedRoom;
                             } else if (!assignedRoomNum) {
@@ -5154,22 +5155,26 @@
                             }
                         }
 
-                        const isFacilityStagingPausedForJob = !isValet && !isFacilityStagingEnabled;
-                        const isJobRoomLocked = !isValet && (isFacilityStagingPausedForJob || (!userOwnedRoom && !assignedRoomNum) || (!userOwnedRoom && isStagingAtFullCapacity));
+                        const isFacilityStagingPausedForJob = !isValet && !isTransfer && !isFacilityStagingEnabled;
+                        const isJobRoomLocked = !isValet && !isTransfer && (isFacilityStagingPausedForJob || (!userOwnedRoom && !assignedRoomNum) || (!userOwnedRoom && isStagingAtFullCapacity));
 
                         const isIntakeProcessingTote = totes.some(t => !t.activated || (t.location_code && t.location_code.startsWith('INTAKE')) || (t.status === 'pending-stage' && !t.activated));
 
-                        const originBadge = isIntakeProcessingTote
-                            ? `<span class="text-xs font-bold font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="zap" class="w-3.5 h-3.5 text-cyan-400"></i> Intake Processing Flow</span>`
-                            : `<span class="text-xs font-bold font-mono text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="archive" class="w-3.5 h-3.5 text-amber-400"></i> Deep Vault Storage Pull</span>`;
+                        const originBadge = isTransfer
+                            ? `<span class="text-xs font-bold font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="arrow-right-left" class="w-3.5 h-3.5 text-cyan-400"></i> Inter-Facility Transit Pull</span>`
+                            : isIntakeProcessingTote
+                                ? `<span class="text-xs font-bold font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="zap" class="w-3.5 h-3.5 text-cyan-400"></i> Intake Processing Flow</span>`
+                                : `<span class="text-xs font-bold font-mono text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="archive" class="w-3.5 h-3.5 text-amber-400"></i> Deep Vault Storage Pull</span>`;
 
-                        const targetLocationBadge = isValet
-                            ? `<span class="text-xs font-bold font-mono text-orange-400 bg-orange-500/10 border border-orange-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5"></i> Driver Loading Bay A</span>`
-                            : isFacilityStagingPausedForJob
-                                ? `<span class="text-xs font-bold font-mono text-rose-400 bg-rose-500/10 border border-rose-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> Staging Paused for Facility</span>`
-                                : isJobRoomLocked
-                                    ? `<span class="text-xs font-bold font-mono text-rose-450 bg-rose-500/10 border border-rose-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="lock" class="w-3.5 h-3.5 text-rose-400"></i> Staging Capacity Full (${numOccupiedRooms}/${totalStagingRooms})</span>`
-                                    : `<span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="door-open" class="w-3.5 h-3.5"></i> Staging Room #${assignedRoomNum}</span>`;
+                        const targetLocationBadge = isTransfer
+                            ? `<span class="text-xs font-bold font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5 text-cyan-400"></i> Freight Transit Loading Bay</span>`
+                            : isValet
+                                ? `<span class="text-xs font-bold font-mono text-orange-400 bg-orange-500/10 border border-orange-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5"></i> Driver Loading Bay A</span>`
+                                : isFacilityStagingPausedForJob
+                                    ? `<span class="text-xs font-bold font-mono text-rose-400 bg-rose-500/10 border border-rose-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> Staging Paused for Facility</span>`
+                                    : isJobRoomLocked
+                                        ? `<span class="text-xs font-bold font-mono text-rose-450 bg-rose-500/10 border border-rose-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="lock" class="w-3.5 h-3.5 text-rose-400"></i> Staging Capacity Full (${numOccupiedRooms}/${totalStagingRooms})</span>`
+                                        : `<span class="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="door-open" class="w-3.5 h-3.5"></i> Staging Room #${assignedRoomNum}</span>`;
 
                         const scheduleBadge = `<div class="flex items-center gap-3 text-xs bg-gray-900/90 px-3.5 py-1.5 rounded-xl border border-gray-800 font-mono">
                             <span class="text-blue-300 font-bold flex items-center gap-1.5"><i data-lucide="calendar" class="w-3.5 h-3.5 text-blue-400"></i> ${dateStr}</span>
@@ -5178,23 +5183,28 @@
                             ${isSameDay ? '<span class="text-[9px] font-black uppercase text-red-400 bg-red-500/20 px-2 py-0.5 rounded border border-red-500/30 animate-pulse">⚡ EXPEDITED SAME-DAY</span>' : ''}
                         </div>`;
 
-                        const borderColor = isSameDay ? 'border-red-500/70 bg-red-950/20'
-                            : isValet ? 'border-orange-500/30 bg-gray-950'
-                                : isJobRoomLocked ? 'border-rose-500/30 bg-gray-950'
-                                    : 'border-amber-500/30 bg-gray-950';
+                        const borderColor = isTransfer ? 'border-cyan-500/50 bg-cyan-950/10'
+                            : isSameDay ? 'border-red-500/70 bg-red-950/20'
+                                : isValet ? 'border-orange-500/30 bg-gray-950'
+                                    : isJobRoomLocked ? 'border-rose-500/30 bg-gray-950'
+                                        : 'border-amber-500/30 bg-gray-950';
 
-                        const actionLabel = isValet
-                            ? (isIntakeProcessingTote ? `SCAN &amp; DISPATCH INTAKE TOTE (${firstCode}) → DRIVER LOADING BAY` : `SCAN &amp; PULL TOTE (${firstCode}) FROM VAULT SHELF → DRIVER LOADING BAY`)
-                            : isFacilityStagingPausedForJob
-                                ? `CANNOT STAGE — FACILITY STAGING PAUSED (REROUTE TO VALET)`
-                                : (isIntakeProcessingTote ? `SCAN &amp; STAGE INTAKE TOTE (${firstCode}) → STAGING ROOM #${assignedRoomNum}` : `SCAN &amp; PULL TOTE (${firstCode}) FROM VAULT SHELF → STAGING ROOM #${assignedRoomNum}`);
+                        const actionLabel = isTransfer
+                            ? `SCAN &amp; PULL TOTE (${firstCode}) FROM VAULT SHELF → FREIGHT TRANSIT BAY`
+                            : isValet
+                                ? (isIntakeProcessingTote ? `SCAN &amp; DISPATCH INTAKE TOTE (${firstCode}) → DRIVER LOADING BAY` : `SCAN &amp; PULL TOTE (${firstCode}) FROM VAULT SHELF → DRIVER LOADING BAY`)
+                                : isFacilityStagingPausedForJob
+                                    ? `CANNOT STAGE — FACILITY STAGING PAUSED (REROUTE TO VALET)`
+                                    : (isIntakeProcessingTote ? `SCAN &amp; STAGE INTAKE TOTE (${firstCode}) → STAGING ROOM #${assignedRoomNum}` : `SCAN &amp; PULL TOTE (${firstCode}) FROM VAULT SHELF → STAGING ROOM #${assignedRoomNum}`);
 
-                        const actionGradient = isValet
-                            ? 'from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 border-orange-400/40'
-                            : 'from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 border-amber-400/40';
+                        const actionGradient = isTransfer
+                            ? 'from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 border-cyan-400/40'
+                            : isValet
+                                ? 'from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 border-orange-400/40'
+                                : 'from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 border-amber-400/40';
 
-                        const actionIcon = isValet ? 'truck' : (isIntakeProcessingTote ? 'zap' : 'archive-restore');
-                        const expectedScanStatus = isValet ? 'out-for-delivery' : 'staged';
+                        const actionIcon = isTransfer ? 'arrow-right-left' : isValet ? 'truck' : (isIntakeProcessingTote ? 'zap' : 'archive-restore');
+                        const expectedScanStatus = (isValet || isTransfer) ? 'out-for-delivery' : 'staged';
 
                         const lockedReasonMessage = isFacilityStagingPausedForJob
                             ? `🚫 SELF-SERVICE STAGING IS PAUSED FOR THIS FACILITY — REROUTE TO VALET DISPATCH`
@@ -5204,15 +5214,16 @@
                             <div class="border-2 ${borderColor} rounded-3xl p-5 shadow-xl space-y-4 hover:border-amber-500/60 transition">
                                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-850 pb-3">
                                     <div class="flex items-center space-x-3">
-                                        <div class="w-10 h-10 rounded-2xl ${isValet ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'} font-bold flex items-center justify-center text-sm border font-mono">
+                                        <div class="w-10 h-10 rounded-2xl ${isTransfer ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : isValet ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'} font-bold flex items-center justify-center text-sm border font-mono">
                                             ${owner.initials}
                                         </div>
                                         <div>
                                             <h4 class="text-sm font-extrabold text-white flex items-center gap-2 flex-wrap">
                                                 ${customerName}
                                                 ${owner.isFacility ? '<span class="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">Facility Asset</span>' : ''}
+                                                ${isTransfer ? '<span class="text-cyan-300 bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 font-black px-2.5 py-0.5 rounded text-[9px] uppercase animate-pulse">🚚 INTER-FACILITY TRANSFER PULL (' + totes.length + ' TOTES)</span>' : ''}
                                                 ${job.request && (job.request.request_type === 'exit_retrieval' || job.request.request_type === 'retrieval_exit') ? '<span class="text-rose-450 bg-rose-500/20 border border-rose-500/40 text-rose-300 font-black px-2.5 py-0.5 rounded text-[9px] uppercase animate-pulse">⚠️ PERMANENT EXIT PULL (' + totes.length + ' TOTES)</span>' : ''}
-                                                ${isValet ? '<span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 VALET DELIVERY</span>' : '<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE STAGING</span>'}
+                                                ${isTransfer ? '' : (isValet ? '<span class="text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚚 VALET DELIVERY</span>' : '<span class="text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold text-[9px] uppercase">🚪 SELF-SERVE STAGING</span>')}
                                             </h4>
                                             <p class="text-[11px] font-mono text-gray-400">Order ID: ${job.jobId.substring(0, 8)} • ${totes.length} Tote(s) in Order</p>
                                         </div>
@@ -5220,7 +5231,7 @@
                                     <div class="flex flex-wrap items-center gap-2">
                                         ${originBadge}
                                         ${targetLocationBadge}
-                                        ${!isValet ? `<span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-3 py-1 rounded-xl">PIN: ${pin}</span>` : ''}
+                                        ${(!isValet && !isTransfer) ? `<span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 px-3 py-1 rounded-xl">PIN: ${pin}</span>` : ''}
                                     </div>
                                 </div>
 
