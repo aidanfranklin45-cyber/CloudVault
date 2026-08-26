@@ -5027,24 +5027,28 @@
                     )
                 );
 
+                const isStagingEnabledForFac = currentLoadedFac ? (currentLoadedFac.staging_enabled !== false && (!currentLoadedFac.staging_disabled_until || new Date(currentLoadedFac.staging_disabled_until) <= new Date())) : true;
+
                 function isValetItem(i) {
                     const req = allRequests.find(r => {
                         const raw = [...(r.requested_items || []), ...(r.requested_tote_codes || [])];
                         return raw.includes(i.id) || raw.includes(i.tote_code);
                     });
-                    if (req) return req.fulfillment_type === 'valet_delivery' || req.request_type === 'valet_delivery';
-                    return i.status === 'pending-dispatch' || i.status === 'out-for-delivery';
+                    if (req) return req.fulfillment_type === 'valet_delivery' || req.request_type === 'valet_delivery' || req.request_type === 'facility_transfer' || req.fulfillment_type === 'facility_transfer' || !isStagingEnabledForFac;
+                    return i.status === 'pending-dispatch' || i.status === 'out-for-delivery' || !isStagingEnabledForFac;
                 }
 
-                const stagingItems = pullItems.filter(i => !isValetItem(i));
-                const valetItems = pullItems.filter(i => isValetItem(i));
+                const stagingItems = isStagingEnabledForFac ? pullItems.filter(i => !isValetItem(i)) : [];
+                const valetItems = isStagingEnabledForFac ? pullItems.filter(i => isValetItem(i)) : pullItems;
 
                 if (document.getElementById('cnt-pfilter-all')) document.getElementById('cnt-pfilter-all').textContent = pullItems.length;
-                if (document.getElementById('cnt-pfilter-staging')) document.getElementById('cnt-pfilter-staging').textContent = stagingItems.length;
+                if (document.getElementById('cnt-pfilter-staging')) {
+                    document.getElementById('cnt-pfilter-staging').textContent = isStagingEnabledForFac ? stagingItems.length : 'Paused';
+                }
                 if (document.getElementById('cnt-pfilter-valet')) document.getElementById('cnt-pfilter-valet').textContent = valetItems.length;
 
                 let filteredPullItems = pullItems;
-                if (window.currentPullFilter === 'staging') filteredPullItems = stagingItems;
+                if (window.currentPullFilter === 'staging') filteredPullItems = isStagingEnabledForFac ? stagingItems : [];
                 if (window.currentPullFilter === 'valet') filteredPullItems = valetItems;
 
                 document.getElementById('wtab-stage-count').textContent = pullItems.length;
