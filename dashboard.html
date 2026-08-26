@@ -2006,9 +2006,9 @@
                             <div>
                                 <div class="font-extrabold text-xs text-gray-900 flex items-center gap-1.5">
                                     <span>Self-Service Staging</span>
-                                    <span class="text-emerald-700 bg-emerald-100 text-[10px] font-black px-1.5 py-0.2 rounded">FREE</span>
+                                    <span id="excess-staging-badge" class="text-emerald-700 bg-emerald-100 text-[10px] font-black px-1.5 py-0.2 rounded">FREE</span>
                                 </div>
-                                <div class="text-[11px] text-gray-500 mt-0.5 leading-snug">Keypad PIN access during scheduled slot. Empty items &amp; deposit totes in return bin.</div>
+                                <div id="excess-staging-desc" class="text-[11px] text-gray-500 mt-0.5 leading-snug">Keypad PIN access during scheduled slot. Empty items &amp; deposit totes in return bin.</div>
                             </div>
                         </div>
 
@@ -2018,9 +2018,9 @@
                             <div>
                                 <div class="font-extrabold text-xs text-gray-900 flex items-center gap-1.5">
                                     <span>Valet Delivery</span>
-                                    <span class="text-gray-600 text-[10px] font-bold" id="excess-valet-fee-label">$55.00</span>
+                                    <span class="text-gray-600 text-[10px] font-bold" id="excess-valet-fee-label">$20.00</span>
                                 </div>
-                                <div class="text-[11px] text-gray-500 mt-0.5 leading-snug">Driver drop-off at your door + scheduled return pickup.</div>
+                                <div id="excess-valet-desc" class="text-[11px] text-gray-500 mt-0.5 leading-snug">Driver drop-off at your door + scheduled return pickup.</div>
                             </div>
                         </div>
                     </div>
@@ -2062,6 +2062,39 @@
                 </button>
                 <button onclick="submitExcessExitRetrieval()" id="btn-submit-excess-exit" disabled class="px-6 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-xs shadow-md transition flex items-center gap-2 cursor-pointer">
                     <span>Confirm Exit Retrieval (0 Selected)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pre-Delivery Order Cancellation Modal -->
+    <div id="pre-delivery-cancel-modal" class="fixed inset-0 bg-gray-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200 border border-gray-200">
+            <div class="w-14 h-14 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-2xl mx-auto shadow-inner">
+                📦
+            </div>
+            <div class="text-center space-y-1.5">
+                <h3 class="text-xl font-black text-gray-900 tracking-tight">Cancel Pending Order?</h3>
+                <p class="text-xs text-gray-500 leading-relaxed">
+                    Your initial empty tote delivery has not been fulfilled yet.
+                </p>
+            </div>
+            
+            <div class="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 text-xs text-amber-950 space-y-2">
+                <p class="font-bold flex items-center gap-1.5 text-amber-900">
+                    <span class="w-2 h-2 rounded-full bg-amber-600"></span> Zero Return Pickup Required
+                </p>
+                <p class="text-[11px] text-amber-800 leading-relaxed">
+                    Since you have not received physical containers and have no items stored in the warehouse, cancelling now will immediately void your pending delivery and terminate your subscription with <strong>zero retrieval fees</strong>.
+                </p>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-2 pt-2">
+                <button type="button" onclick="closePreDeliveryCancelModal()" class="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition cursor-pointer">
+                    Keep Order
+                </button>
+                <button type="button" id="btn-confirm-pre-delivery-cancel" onclick="confirmPreDeliveryCancel()" class="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition shadow-md shadow-red-500/20 cursor-pointer">
+                    Yes, Cancel Order
                 </button>
             </div>
         </div>
@@ -7450,7 +7483,91 @@
             function triggerCancelFlowUser() {
                 if (!currentUser) return;
                 document.getElementById('user-dropdown')?.classList.add('hidden');
-                openExcessTotesModal(true); // Open in full cancellation exit mode with 100% auto-selected
+
+                const inv = currentInventory || [];
+                const withCustomerCount = inv.filter(t => t.status === 'with-customer').length;
+                const storedCount = inv.filter(t => t.status === 'stored').length;
+                const pendingTotes = inv.filter(t => t.status === 'pending-dispatch' || t.status === 'in-transit' || t.status === 'intake' || t.status === 'pending-intake');
+
+                // If customer has NOT received totes yet and has ZERO stored items in warehouse
+                if (withCustomerCount === 0 && storedCount === 0) {
+                    openPreDeliveryCancelModal(pendingTotes.length);
+                    return;
+                }
+
+                // If customer has stored items or with-customer items, open exit modal
+                openExcessTotesModal(true);
+            }
+
+            function openPreDeliveryCancelModal(pendingCount) {
+                const modal = document.getElementById('pre-delivery-cancel-modal');
+                if (modal) modal.classList.remove('hidden');
+            }
+
+            function closePreDeliveryCancelModal() {
+                const modal = document.getElementById('pre-delivery-cancel-modal');
+                if (modal) modal.classList.add('hidden');
+            }
+
+            async function confirmPreDeliveryCancel() {
+                const btn = document.getElementById('btn-confirm-pre-delivery-cancel');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = 'Cancelling...';
+                }
+
+                try {
+                    if (!currentUser) throw new Error("No active user session");
+
+                    // 1. Cancel all pending access requests for this user
+                    await supabase
+                        .from('access_requests')
+                        .update({ 
+                            status: 'cancelled',
+                            delivery_notes: 'Order cancelled by customer before initial delivery completion' 
+                        })
+                        .eq('uid', currentUser.id)
+                        .in('status', ['pending', 'staged', 'pending-dispatch', 'scheduled', 'out-for-delivery']);
+
+                    // 2. Clear assigned un-intaked/empty totes from inventory
+                    await supabase
+                        .from('inventory')
+                        .delete()
+                        .eq('uid', currentUser.id)
+                        .in('status', ['pending-dispatch', 'pending-intake', 'intake', 'available']);
+
+                    // 3. Mark subscription as cancelled
+                    await supabase
+                        .from('subscriptions')
+                        .update({ 
+                            status: 'cancelled',
+                            cancelled_at: new Date().toISOString()
+                        })
+                        .eq('uid', currentUser.id);
+
+                    // 4. Update user profile
+                    await supabase
+                        .from('users')
+                        .update({
+                            subscription_status: 'cancelled',
+                            onboarding_status: 'cancelled'
+                        })
+                        .eq('id', currentUser.id);
+
+                    closePreDeliveryCancelModal();
+                    showToast('✓ Order and subscription cancelled. No return pickup required.');
+                    
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 800);
+                } catch (err) {
+                    console.error('Error cancelling pre-delivery order:', err);
+                    alert('Failed to cancel order: ' + (err.message || 'Please try again.'));
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Yes, Cancel Order';
+                    }
+                }
             }
 
             // ============================================================
@@ -7532,11 +7649,13 @@
                 }
             }
 
-            function openExcessTotesModal(isCancellation = false) {
+            async function openExcessTotesModal(isCancellation = false) {
                 const modal = document.getElementById('excess-totes-modal');
                 if (!modal) return;
 
                 isCancellationExitMode = isCancellation === true;
+
+                await loadAssignedFacilityPricing();
 
                 const storedCount = (currentInventory || []).length;
                 const subTotal = currentSubscription ? Number(currentSubscription.total_totes || 0) : 0;
@@ -7587,12 +7706,46 @@
                     dateHint.textContent = `📅 Must be scheduled on or before ${grace.formattedDate} (3-day grace window limit).`;
                 }
 
-                // Estimate valet fee
-                const vBase = Number(systemPricing?.valet_base || 15.00);
-                const vAdd = Number(systemPricing?.valet_tote_adder || 1.00);
+                // Estimate valet fee dynamically from active facility pricing
+                const vBase = Number(activeFacilityPricing?.valet_base != null ? activeFacilityPricing.valet_base : (systemPricing?.valet_base || 15.00));
+                const vAdd = Number(activeFacilityPricing?.valet_tote_adder != null ? activeFacilityPricing.valet_tote_adder : (systemPricing?.valet_tote_adder || 1.00));
                 const estValet = vBase + (targetExcessQuota * vAdd);
                 const vLabel = document.getElementById('excess-valet-fee-label');
                 if (vLabel) vLabel.textContent = `$${estValet.toFixed(2)}`;
+
+                // Adapt methodology options based on facility active availability
+                const isStagingAvail = (activeFacilityPricing && activeFacilityPricing.staging_available !== undefined) ? activeFacilityPricing.staging_available : true;
+                const stagingBadge = document.getElementById('excess-staging-badge');
+                const stagingDesc = document.getElementById('excess-staging-desc');
+                const stagingOpt = document.getElementById('excess-opt-staging');
+
+                if (!isStagingAvail) {
+                    if (stagingBadge) {
+                        stagingBadge.textContent = 'UNAVAILABLE';
+                        stagingBadge.className = 'text-rose-600 bg-rose-50 border border-rose-200 text-[10px] font-black px-1.5 py-0.5 rounded';
+                    }
+                    if (stagingDesc) {
+                        stagingDesc.textContent = activeFacilityPricing?.staging_disable_reason || 'Self-service staging is paused in your market.';
+                        stagingDesc.className = 'text-[11px] text-rose-500 font-semibold mt-0.5 leading-snug';
+                    }
+                    if (stagingOpt) {
+                        stagingOpt.setAttribute('title', 'Self-service staging is paused for your assigned facility.');
+                    }
+                    setExcessFulfillment('valet_delivery');
+                } else {
+                    if (stagingBadge) {
+                        stagingBadge.textContent = 'FREE';
+                        stagingBadge.className = 'text-emerald-700 bg-emerald-100 text-[10px] font-black px-1.5 py-0.2 rounded';
+                    }
+                    if (stagingDesc) {
+                        stagingDesc.textContent = 'Keypad PIN access during scheduled slot. Empty items & deposit totes in return bin.';
+                        stagingDesc.className = 'text-[11px] text-gray-500 mt-0.5 leading-snug';
+                    }
+                    if (stagingOpt) {
+                        stagingOpt.removeAttribute('title');
+                    }
+                    setExcessFulfillment('staging');
+                }
 
                 selectedExcessTotes.clear();
 
@@ -7603,7 +7756,6 @@
 
                 renderExcessTotesList();
                 updateExcessSelectionUI();
-                setExcessFulfillment('staging');
 
                 modal.classList.remove('hidden');
             }
@@ -7615,6 +7767,18 @@
             }
 
             function setExcessFulfillment(type) {
+                const isStagingAvail = (activeFacilityPricing && activeFacilityPricing.staging_available !== undefined) ? activeFacilityPricing.staging_available : true;
+                const isValetAvail = (activeFacilityPricing && activeFacilityPricing.valet_available !== undefined) ? activeFacilityPricing.valet_available : true;
+
+                if (type === 'staging' && !isStagingAvail) {
+                    showToast(activeFacilityPricing?.staging_disable_reason || 'Self-service staging is currently unavailable at your facility. Please use doorstep valet.', true);
+                    return;
+                }
+                if (type === 'valet_delivery' && !isValetAvail) {
+                    showToast(activeFacilityPricing?.valet_disable_reason || 'Doorstep valet delivery is currently unavailable at your facility.', true);
+                    return;
+                }
+
                 excessFulfillmentType = type;
                 const optStaging = document.getElementById('excess-opt-staging');
                 const optValet = document.getElementById('excess-opt-valet');
@@ -7628,9 +7792,13 @@
                     rValet.className = 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mt-0.5 flex-shrink-0';
                 } else {
                     optValet.className = 'p-3.5 rounded-2xl border-2 border-amber-600 bg-amber-50/60 cursor-pointer transition flex items-start gap-3';
-                    optStaging.className = 'p-3.5 rounded-2xl border-2 border-gray-200 bg-white hover:border-gray-300 cursor-pointer transition flex items-start gap-3';
+                    optStaging.className = !isStagingAvail 
+                        ? 'p-3.5 rounded-2xl border-2 border-dashed border-gray-300 bg-gray-100/90 text-gray-400 opacity-60 cursor-not-allowed select-none transition flex items-start gap-3'
+                        : 'p-3.5 rounded-2xl border-2 border-gray-200 bg-white hover:border-gray-300 cursor-pointer transition flex items-start gap-3';
                     rValet.className = 'w-4 h-4 rounded-full border-[4px] border-amber-600 bg-white mt-0.5 flex-shrink-0';
-                    rStaging.className = 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mt-0.5 flex-shrink-0';
+                    rStaging.className = !isStagingAvail
+                        ? 'w-4 h-4 rounded-full border-2 border-gray-300 bg-gray-200 mt-0.5 flex-shrink-0'
+                        : 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mt-0.5 flex-shrink-0';
                 }
             }
 
@@ -8094,6 +8262,9 @@
             window.setExcessFulfillment = setExcessFulfillment;
             window.submitExcessExitRetrieval = submitExcessExitRetrieval;
             window.triggerCancelFlowUser = triggerCancelFlowUser;
+            window.openPreDeliveryCancelModal = openPreDeliveryCancelModal;
+            window.closePreDeliveryCancelModal = closePreDeliveryCancelModal;
+            window.confirmPreDeliveryCancel = confirmPreDeliveryCancel;
             window.openFeedbackModal = openFeedbackModal;
             window.closeFeedbackModal = closeFeedbackModal;
             window.setFeedbackType = setFeedbackType;
