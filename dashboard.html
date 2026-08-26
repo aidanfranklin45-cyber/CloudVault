@@ -2116,7 +2116,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                     <div>
                         <label class="text-[11px] font-bold text-gray-600 block mb-1">Target Retrieval Date:</label>
-                        <input type="date" id="excess-target-date" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-amber-500">
+                        <input type="date" id="excess-target-date" onchange="onExcessDateChanged(this.value)" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-amber-500">
                         <p class="text-[10px] text-amber-800 font-bold mt-1" id="excess-date-limit-hint">Must be scheduled within your 3-day grace window.</p>
                     </div>
                     <div>
@@ -5893,7 +5893,7 @@
                 const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
                 const dateInput = selectId === 'retrieval-time-slot' 
                     ? document.getElementById('retrieval-target-date') 
-                    : document.getElementById('fulfillment-target-date');
+                    : (selectId === 'excess-time-slot' ? document.getElementById('excess-target-date') : document.getElementById('fulfillment-target-date'));
                 
                 if (dateInput) {
                     dateInput.min = tomorrowStr;
@@ -8381,7 +8381,7 @@
                     agreementDeadline.textContent = grace.fullDeadlineStr;
                 }
 
-                // Strictly enforce 3-day grace period on date picker using local timezone
+                // Strictly enforce valid date range and 3-day grace period on date picker
                 const toLocalYMD = (d) => {
                     const y = d.getFullYear();
                     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -8389,23 +8389,24 @@
                     return `${y}-${m}-${day}`;
                 };
 
-                const todayStr = toLocalYMD(new Date());
+                const earliestValidDate = typeof getEarliestValidDate === 'function' ? getEarliestValidDate() : toLocalYMD(new Date());
                 const maxGraceStr = toLocalYMD(grace.graceEnd);
-                
-                const tomorrow = new Date();
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                const tomorrowStr = toLocalYMD(tomorrow);
 
                 const dateInput = document.getElementById('excess-target-date');
                 if (dateInput) {
-                    dateInput.min = todayStr;
+                    dateInput.min = earliestValidDate;
                     dateInput.max = maxGraceStr;
-                    dateInput.value = (tomorrowStr <= maxGraceStr) ? tomorrowStr : todayStr;
+                    dateInput.value = earliestValidDate <= maxGraceStr ? earliestValidDate : maxGraceStr;
                 }
 
                 const dateHint = document.getElementById('excess-date-limit-hint');
                 if (dateHint) {
                     dateHint.textContent = `📅 Must be scheduled on or before ${grace.formattedDate} (3-day grace window limit).`;
+                }
+
+                // Filter available time slots for the chosen date (disables past slots for today)
+                if (dateInput) {
+                    await onExcessDateChanged(dateInput.value);
                 }
 
                 // Estimate valet fee dynamically from active facility pricing
@@ -8466,6 +8467,19 @@
                 const modal = document.getElementById('excess-totes-modal');
                 if (modal) modal.classList.add('hidden');
                 isCancellationExitMode = false;
+            }
+
+            async function onExcessDateChanged(dateStr) {
+                const facId = currentUserProfile?.assigned_facility_id || currentProfile?.assigned_facility_id || 'facility_seattle_north';
+                await checkSlotAvailability(facId, dateStr, 'excess-time-slot');
+                
+                const selectEl = document.getElementById('excess-time-slot');
+                if (selectEl) {
+                    const firstValid = Array.from(selectEl.options).find(opt => !opt.disabled);
+                    if (firstValid && (!selectEl.value || selectEl.selectedOptions[0]?.disabled)) {
+                        selectEl.value = firstValid.value;
+                    }
+                }
             }
 
             function setExcessFulfillment(type) {
@@ -8606,6 +8620,11 @@
                 const chosenDate = new Date(targetDate + 'T23:59:59');
                 if (chosenDate > grace.graceEnd) {
                     alert(`Exit retrieval must be scheduled within your 3-day grace window (on or before ${grace.formattedDate}).`);
+                    return;
+                }
+
+                if (typeof isSlotPastOrActive === 'function' && isSlotPastOrActive(targetDate, timeSlot)) {
+                    alert('⚠️ The selected time window has already passed for today. Please select an upcoming time slot or schedule for tomorrow.');
                     return;
                 }
 
