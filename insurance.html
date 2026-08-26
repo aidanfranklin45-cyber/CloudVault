@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storage Insurance &amp; Item Protection — CloudVault</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="shortcut icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #060913;
+            background-image:
+                radial-gradient(ellipse at top left, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
+                radial-gradient(ellipse at top right, rgba(14, 165, 233, 0.10) 0%, transparent 50%),
+                radial-gradient(ellipse at bottom center, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
+                radial-gradient(rgba(59, 130, 246, 0.15) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 100% 100%, 28px 28px;
+            color: #f1f5f9;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .glass-panel {
+            background: rgba(13, 18, 30, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+        }
+
+        .glow-indigo {
+            box-shadow: 0 0 35px -5px rgba(99, 102, 241, 0.35);
+        }
+
+        .meme-pulse {
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-8px) rotate(1deg); }
+        }
+
+        #toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast-item {
+            pointer-events: auto;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(99, 102, 241, 0.5);
+            backdrop-filter: blur(12px);
+            color: #ffffff;
+            padding: 14px 20px;
+            border-radius: 16px;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: opacity 0.3s, transform 0.3s;
+        }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(12px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col antialiased selection:bg-indigo-600 selection:text-white">
+
+    <!-- Header Navigation -->
+    <header class="bg-gray-950/80 backdrop-blur-md border-b border-gray-800/80 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <a href="dashboard.html" class="flex items-center space-x-3 group">
+                <img src="logo.png" alt="CloudVault Logo"
+                    class="w-9 h-9 object-contain rounded-xl group-hover:scale-105 transition shadow-md shadow-indigo-500/20">
+                <div>
+                    <h1 class="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
+                        CloudVault
+                        <span class="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded-full font-mono font-bold uppercase">Shield Care</span>
+                    </h1>
+                    <span class="text-[10px] text-gray-400 font-mono">Valet Storage &amp; Protection</span>
+                </div>
+            </a>
+
+            <div class="flex items-center space-x-3">
+                <a href="dashboard.html"
+                    class="px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 hover:text-white text-xs font-bold transition flex items-center gap-2 shadow-sm">
+                    <i data-lucide="arrow-left" class="w-4 h-4 text-indigo-400"></i>
+                    <span>Back to Dashboard</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 w-full space-y-12">
+
+        <!-- Hero Card -->
+        <section class="glass-panel p-8 sm:p-12 rounded-3xl border border-indigo-500/30 glow-indigo relative overflow-hidden text-center space-y-6">
+            <!-- Ambient Glow Circles -->
+            <div class="absolute -right-16 -top-16 w-72 h-72 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -left-16 -bottom-16 w-72 h-72 bg-cyan-600/15 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="relative z-10 max-w-3xl mx-auto space-y-4">
+                <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/20 border border-indigo-400/40 text-indigo-300 text-xs font-mono font-bold uppercase tracking-wider shadow-sm">
+                    <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400 animate-pulse"></i>
+                    <span>Official Vault Underwriting in Progress</span>
+                </div>
+
+                <h1 class="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
+                    Storage Insurance is <span class="bg-gradient-to-r from-indigo-400 via-purple-300 to-cyan-400 bg-clip-text text-transparent">Coming Soon!</span>
+                </h1>
+
+                <p class="text-sm sm:text-base text-gray-300 max-w-2xl mx-auto leading-relaxed">
+                    We are putting the final touches on our comprehensive <strong class="text-white">Zero-Deductible Storage Protection Plan</strong>. Until policies go live, our certified Chief Security Pup is personally standing guard over every single tote.
+                </p>
+            </div>
+
+            <!-- Cute Animal Meme Card -->
+            <div class="relative z-10 max-w-md mx-auto pt-4">
+                <div class="meme-pulse bg-gradient-to-b from-gray-900 to-gray-950 p-5 sm:p-6 rounded-3xl border-2 border-indigo-500/40 shadow-2xl space-y-4 relative">
+                    <!-- Top Meme Text -->
+                    <div class="bg-black/70 border border-gray-800 rounded-2xl py-2 px-4 shadow-inner">
+                        <p class="text-xs sm:text-sm font-black text-amber-300 uppercase tracking-widest font-mono">
+                            POV: YOU ARE SAFE WITH US 🐕📦
+                        </p>
+                    </div>
+
+                    <!-- Meme Artwork (Illustrated Security Guard Pup) -->
+                    <div class="relative rounded-2xl overflow-hidden border border-gray-800 bg-gradient-to-br from-indigo-950/60 via-slate-900 to-blue-950 p-6 flex flex-col items-center justify-center min-h-[240px]">
+                        
+                        <!-- Security Badge Icon Header -->
+                        <div class="absolute top-3 right-3 bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                            <span>⭐ Level 5 Good Boy</span>
+                        </div>
+
+                        <!-- Illustrated Dog Officer with Security Cap & Vault Bins -->
+                        <div class="relative flex flex-col items-center select-none">
+                            <div class="text-7xl sm:text-8xl filter drop-shadow-xl transform hover:scale-110 transition-transform duration-300 cursor-pointer" title="Certified Vault Guard Doggo">
+                                🐶
+                            </div>
+                            <!-- Security Guard Cap & Badge Details -->
+                            <div class="mt-2 flex items-center gap-2 bg-gray-900/90 border border-indigo-500/30 px-3 py-1 rounded-xl text-xs font-mono font-bold text-indigo-300">
+                                <span>👮 Chief Security Officer Barnaby</span>
+                            </div>
+                        </div>
+
+                        <!-- Storage Vault Bins in Background -->
+                        <div class="mt-4 flex items-center justify-center gap-3 text-2xl opacity-90">
+                            <span title="Blue Smart Tote">🟦</span>
+                            <span title="Locked Vault Bay">🏦</span>
+                            <span title="Blue Smart Tote">🟦</span>
+                            <span title="Security Key">🔑</span>
+                            <span title="Blue Smart Tote">🟦</span>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Meme Text / Rating -->
+                    <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-2xl p-3 text-center space-y-1">
+                        <p class="text-xs font-bold text-indigo-200">
+                            &ldquo;Do not worry fren, I protec the totes from dust, moisture &amp; bad vibes.&rdquo;
+                        </p>
+                        <div class="flex items-center justify-center gap-4 text-[10px] font-mono text-gray-400 pt-1 border-t border-indigo-500/20">
+                            <span>Tote Security: <strong class="text-emerald-400">100%</strong></span>
+                            <span>Boop Rate: <strong class="text-amber-400">10/10</strong></span>
+                            <span>Status: <strong class="text-indigo-400">On Duty</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Waitlist Notification Form -->
+            <div class="relative z-10 max-w-lg mx-auto pt-4 space-y-3">
+                <p class="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">Get Notified First When Insurance Launches</p>
+                <form id="insurance-waitlist-form" onsubmit="handleWaitlistSubmit(event)" class="flex flex-col sm:flex-row gap-2.5">
+                    <div class="relative flex-grow">
+                        <i data-lucide="mail" class="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5 pointer-events-none"></i>
+                        <input type="email" id="waitlist-email" required placeholder="Enter your email for early bird perks..."
+                            class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 rounded-xl pl-10 pr-4 py-3 text-xs text-white placeholder-gray-500 outline-none transition shadow-inner font-mono">
+                    </div>
+                    <button type="submit" id="btn-submit-waitlist"
+                        class="px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-xs font-extrabold transition shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap active:scale-95">
+                        <i data-lucide="bell-ring" class="w-4 h-4"></i>
+                        <span>Notify Me</span>
+                    </button>
+                </form>
+                <p class="text-[11px] text-gray-500 font-mono">Zero spam. Early bird members receive 1 free month of insurance coverage at launch.</p>
+            </div>
+        </section>
+
+        <!-- Feature Perks Preview Grid -->
+        <section class="space-y-6">
+            <div class="text-center space-y-1">
+                <h2 class="text-xl font-extrabold text-white">What You Can Expect at Launch</h2>
+                <p class="text-xs text-gray-400 font-mono">Comprehensive peace of mind engineered for valet smart-tote storage</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Perk 1 -->
+                <div class="glass-panel p-6 rounded-3xl border border-indigo-500/20 space-y-3 hover:border-indigo-500/40 transition">
+                    <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold">
+                        <i data-lucide="shield-check" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-base font-extrabold text-white">Up to $5,000 Coverage</h3>
+                    <p class="text-xs text-gray-400 leading-relaxed">
+                        Full replacement value for electronics, seasonal gear, family heirlooms, and collectibles stored within verified CloudVault bins.
+                    </p>
+                </div>
+
+                <!-- Perk 2 -->
+                <div class="glass-panel p-6 rounded-3xl border border-emerald-500/20 space-y-3 hover:border-emerald-500/40 transition">
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold">
+                        <i data-lucide="zap" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-base font-extrabold text-white">$0 Deductible Claims</h3>
+                    <p class="text-xs text-gray-400 leading-relaxed">
+                        No surprise out-of-pocket costs. File rapid digital claims straight from your customer portal with photo verification in under 48 hours.
+                    </p>
+                </div>
+
+                <!-- Perk 3 -->
+                <div class="glass-panel p-6 rounded-3xl border border-cyan-500/20 space-y-3 hover:border-cyan-500/40 transition">
+                    <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold">
+                        <i data-lucide="truck" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-base font-extrabold text-white">Valet In-Transit Warranty</h3>
+                    <p class="text-xs text-gray-400 leading-relaxed">
+                        Continuous coverage while totes are in transit with our delivery drivers, during intake laser scans, and while resting in climate-controlled vault bays.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ & Back Link -->
+        <section class="glass-panel p-8 rounded-3xl border border-gray-800 space-y-6">
+            <h3 class="text-base font-extrabold text-white flex items-center gap-2">
+                <i data-lucide="help-circle" class="w-5 h-5 text-blue-400"></i>
+                <span>Frequently Asked Questions</span>
+            </h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                <div class="space-y-1.5">
+                    <h4 class="font-bold text-gray-200">Are my items currently protected without insurance?</h4>
+                    <p class="text-gray-400 leading-relaxed">
+                        Yes! All stored items are protected under our standard Commercial Bailment Agreement and 24/7 biometric security protocols. Optional storage insurance adds enhanced full-replacement value and accidental damage coverage.
+                    </p>
+                </div>
+                <div class="space-y-1.5">
+                    <h4 class="font-bold text-gray-200">How much will storage insurance cost?</h4>
+                    <p class="text-gray-400 leading-relaxed">
+                        Plans will start at an affordable rate calculated dynamically based on tote count and chosen valuation tier, seamlessly added to your monthly recurring Stripe subscription.
+                    </p>
+                </div>
+            </div>
+
+            <div class="pt-4 border-t border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <span class="text-xs text-gray-500 font-mono">CloudVault Protection Services &bull; Seattle &amp; Yakima Hubs</span>
+                <a href="dashboard.html" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-indigo-600/20">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                    <span>Return to Customer Dashboard</span>
+                </a>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-auto py-6 border-t border-gray-900 text-center text-xs text-gray-500 font-mono">
+        &copy; 2026 CloudVault Inc. &bull; Item Protection &amp; Bailment Assurance &bull; Protected by Barnaby the Officer Doggo
+    </footer>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <!-- Supabase SDK for session auto-fill -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            // Pre-fill user email if signed in
+            try {
+                if (typeof supabase !== 'undefined') {
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    const session = sessionData?.session;
+                    if (session && session.user && session.user.email) {
+                        const emailInput = document.getElementById('waitlist-email');
+                        if (emailInput) emailInput.value = session.user.email;
+                    }
+                }
+            } catch (e) {}
+        });
+
+        function showToast(message, isSuccess = true) {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = 'toast-item';
+            toast.innerHTML = `<span>${isSuccess ? '🎉' : 'ℹ️'}</span> <span>${escapeHtml(message)}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(12px) scale(0.95)';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function handleWaitlistSubmit(event) {
+            event.preventDefault();
+            const emailInput = document.getElementById('waitlist-email');
+            const email = emailInput?.value?.trim();
+            if (!email) return;
+
+            const btn = document.getElementById('btn-submit-waitlist');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<i data-lucide="check" class="w-4 h-4 text-emerald-300"></i> <span>Added!</span>`;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+
+            try {
+                localStorage.setItem('cv_insurance_waitlist_' + email, new Date().toISOString());
+            } catch (e) {}
+
+            showToast(`You're on the list! We'll notify ${email} with 1 free month of insurance at launch.`);
+        }
+    </script>
+</body>
+
+</html>
