@@ -4970,6 +4970,63 @@
                         const customerName = owner.name;
                         const firstCode = totes[0].tote_code;
                         const allCodesStr = totes.map(t => t.tote_code).join(', ');
+                        const toteIdsJson = JSON.stringify(totes.map(t => t.id)).replace(/"/g, '&quot;');
+
+                        const targetPrefix = typeof getFacilityTotePrefix === 'function' ? getFacilityTotePrefix(window.currentLoadedFac?.id) : 'CV-SEA-';
+                        const hasForeignPrefix = totes.some(t => t.tote_code && !t.tote_code.startsWith(targetPrefix));
+                        const isTransferredIntake = hasForeignPrefix || totes.some(t => t.location_code === 'DEST-INTAKE-DOCK');
+
+                        if (isTransferredIntake) {
+                            return `
+                                <div class="bg-gray-950 border-2 border-cyan-500/40 rounded-3xl p-5 shadow-xl space-y-4 hover:border-cyan-500/70 transition">
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-850 pb-3">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center text-sm border border-cyan-500/30 font-mono">
+                                                ${owner.initials}
+                                            </div>
+                                            <div>
+                                                <div class="flex items-center gap-2 flex-wrap">
+                                                    <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
+                                                    <span class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase font-mono flex items-center gap-1">
+                                                        <i data-lucide="truck" class="w-3 h-3"></i> 🚚 Transferred Freight Arrived
+                                                    </span>
+                                                </div>
+                                                <p class="text-[11px] font-mono text-gray-400">Ready for label re-stamping with <strong class="text-cyan-300 font-mono font-bold">${targetPrefix}</strong> prefix &amp; vault shelving.</p>
+                                            </div>
+                                        </div>
+                                        <button onclick="reStampAndPrintDestinationTags('${uid}', '${customerName.replace(/'/g, "\\'")}', ${toteIdsJson})" class="bg-amber-500 hover:bg-amber-400 text-gray-950 font-black text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md">
+                                            <i data-lucide="printer" class="w-4 h-4"></i> 🖨️ Re-Stamp &amp; Print ${targetPrefix.replace('CV-', '').replace('-', '')} Tags (${totes.length})
+                                        </button>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        ${totes.map(t => {
+                                            const currentCode = t.tote_code;
+                                            const parts = currentCode.split('-');
+                                            const suffix = parts.length >= 3 ? parts.slice(2).join('-') : (parts[1] || 'TOTE');
+                                            const newStampedCode = `${targetPrefix}${suffix}`;
+                                            return `
+                                                <div class="bg-gray-900/80 p-3 rounded-xl border border-cyan-500/20 flex items-center justify-between font-mono text-xs">
+                                                    <div class="flex items-center space-x-2">
+                                                        <span class="text-gray-400 line-through">${currentCode}</span>
+                                                        <span class="text-cyan-300 font-extrabold">➔ ${newStampedCode}</span>
+                                                    </div>
+                                                    <button onclick="reStampSingleToteTag('${t.id}', '${newStampedCode}')" class="text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 text-[10px] font-bold px-2 py-1 rounded-xl border border-amber-500/30 transition flex items-center gap-1 cursor-pointer">🖨️ Re-Stamp Tag</button>
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+
+                                    <!-- Full-Width Reshelving Button -->
+                                    <button onclick="batchReshelveTransferredTotes('${uid}', '${customerName.replace(/'/g, "\\'")}', ${toteIdsJson})" class="w-full min-h-[60px] bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl border-2 border-emerald-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                        <i data-lucide="archive" class="w-6 h-6"></i>
+                                        <span>📦 PUT AWAY &amp; RESHELVE ALL ${totes.length} TOTES IN ${window.currentLoadedFac?.name ? window.currentLoadedFac.name.toUpperCase() : 'DESTINATION'} VAULT →</span>
+                                    </button>
+                                </div>
+                            `;
+                        }
+
+                        // Standard New Intake Card
                         return `
                             <div class="bg-gray-950 border-2 border-emerald-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-emerald-500/60 transition">
                                 <div class="flex items-center justify-between border-b border-gray-850 pb-3">
@@ -5400,14 +5457,88 @@
                             const { uid, targetDate, timeSlot, totes, customerName, owner, jobId, request } = job;
                             const firstCode = totes[0].tote_code;
 
+                            const reqType = job.requestType || request?.request_type;
+                            const notes = (request?.delivery_notes || '').toLowerCase();
+                            const isTransfer = reqType === 'facility_transfer' || request?.fulfillment_type === 'facility_transfer' || notes.includes('transfer pull') || notes.includes('relocate');
+
+                            // Resolve Destination Facility for transfer
+                            let destFacId = owner.assigned_facility_id || 'facility_portland_central';
+                            if (notes.includes('portland')) destFacId = 'facility_portland_central';
+                            else if (notes.includes('seattle')) destFacId = 'facility_seattle_north';
+                            else if (notes.includes('spokane')) destFacId = 'facility_spokane_hub';
+                            else if (notes.includes('yakima') || notes.includes('selah')) destFacId = 'facility_yakima';
+
+                            const destName = (destFacId === 'facility_portland_central' ? 'Portland Central Hub' :
+                                             destFacId === 'facility_seattle_north' ? 'Seattle North Fulfillment Center' :
+                                             destFacId === 'facility_spokane_hub' ? 'Spokane Regional Hub' : 'Yakima Fulfillment Center');
+                            const destShort = (destFacId === 'facility_portland_central' ? 'Portland' :
+                                              destFacId === 'facility_seattle_north' ? 'Seattle' :
+                                              destFacId === 'facility_spokane_hub' ? 'Spokane' : 'Yakima');
+
                             const reqDate = targetDate ? new Date(targetDate.split('T')[0] + 'T12:00:00') : new Date();
                             const dateStr = reqDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' });
                             const slotStr = timeSlot || '09:00 AM - 12:00 PM';
-                            const driver = request?.driver_name || 'Active Fleet Driver';
-                            const truck = request?.vehicle_info || (totes.find(t => t.location_code && (t.location_code.includes('TRUCK') || t.location_code.includes('VAN')))?.location_code) || 'VALET-TRUCK-A';
+                            const driver = request?.driver_name || (isTransfer ? 'Inter-City Freight Transport' : 'Active Fleet Driver');
+                            const truck = request?.vehicle_info || (totes.find(t => t.location_code && (t.location_code.includes('TRUCK') || t.location_code.includes('VAN')))?.location_code) || (isTransfer ? 'FREIGHT-TRANSPORT-1' : 'VALET-TRUCK-A');
                             const toteCodesJson = JSON.stringify(totes.map(t => t.tote_code)).replace(/"/g, '&quot;');
                             const toteIdsJson = JSON.stringify(totes.map(t => t.id)).replace(/"/g, '&quot;');
 
+                            if (isTransfer) {
+                                return `
+                                    <div class="bg-gray-950 border-2 border-cyan-500/40 rounded-3xl p-5 shadow-xl space-y-4 hover:border-cyan-500/70 transition">
+                                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-850 pb-3">
+                                            <div class="flex items-center space-x-3">
+                                                <div class="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center text-sm border border-cyan-500/30 font-mono">
+                                                    ${owner.initials}
+                                                </div>
+                                                <div>
+                                                    <div class="flex items-center gap-2 flex-wrap">
+                                                        <h4 class="text-sm font-extrabold text-white">${customerName}</h4>
+                                                        <span class="bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase font-mono flex items-center gap-1">
+                                                            <i data-lucide="truck" class="w-3 h-3"></i> Inter-Facility Hub Relocation
+                                                        </span>
+                                                    </div>
+                                                    <p class="text-[11px] font-mono text-gray-400">Order ID: <span class="text-cyan-300 font-bold font-mono">${jobId.startsWith('ORD-') ? jobId : jobId.substring(0, 8)}</span> • ${totes.length} Tote(s) in Road Transit • <span class="text-emerald-300 font-bold">📍 Destination: ${destName}</span></p>
+                                                </div>
+                                            </div>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="text-xs font-bold font-mono text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="truck" class="w-3.5 h-3.5 text-cyan-400"></i> ${truck}</span>
+                                                <span class="text-xs font-bold font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5"><i data-lucide="navigation" class="w-3.5 h-3.5"></i> 🚚 Freight En Route to ${destShort}</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Schedule & Destination Info -->
+                                        <div class="flex flex-wrap items-center justify-between gap-2 text-xs bg-gray-900/90 px-3.5 py-2 rounded-xl border border-cyan-500/20 font-mono">
+                                            <span class="text-cyan-300 font-bold flex items-center gap-1.5"><i data-lucide="building-2" class="w-3.5 h-3.5 text-cyan-400"></i> Destination Hub: ${destName}</span>
+                                            <span class="text-gray-500 font-semibold">•</span>
+                                            <span class="text-emerald-300 font-bold flex items-center gap-1.5"><i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i> Vault Storage Protected</span>
+                                        </div>
+
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
+                                                <span class="text-white font-bold">${t.tote_code}</span>
+                                                <div class="flex items-center gap-1.5">
+                                                    <button onclick="revertToteStage('${t.tote_code}', 'stored')" class="text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-amber-500/30 transition flex items-center gap-1 cursor-pointer" title="Move back to Origin Vault">↩ Move Back</button>
+                                                    <button onclick="confirmTransferFreightArrival('${uid}', '${customerName.replace(/'/g, "\\'")}', '${destFacId}', ['${t.id}'])" class="text-cyan-300 hover:text-white bg-cyan-500/15 hover:bg-cyan-500/25 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-cyan-500/30 transition cursor-pointer" title="Check in tote at destination facility dock">🏢 Arrived at ${destShort}</button>
+                                                </div>
+                                            </div>`).join('')}
+                                        </div>
+
+                                        <!-- Action Buttons for Freight Arrival -->
+                                        <div class="space-y-2">
+                                            <button onclick="confirmTransferFreightArrival('${uid}', '${customerName.replace(/'/g, "\\'")}', '${destFacId}', ${toteIdsJson})" class="w-full min-h-[60px] bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 hover:from-blue-500 hover:to-teal-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider rounded-2xl border-2 border-cyan-400/40 shadow-xl flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-98">
+                                                <i data-lucide="building-2" class="w-6 h-6"></i>
+                                                <span>🏢 CONFIRM FREIGHT ARRIVAL &amp; SEND TO ${destName.toUpperCase()} INTAKE (${totes.length} TOTES) →</span>
+                                            </button>
+                                            <button onclick="batchRevertTotes(${toteCodesJson}, 'stored')" class="w-full py-2 bg-gray-900/90 hover:bg-gray-850 text-gray-400 hover:text-amber-300 font-bold text-xs rounded-xl border border-gray-800 transition flex items-center justify-center gap-1.5 cursor-pointer font-mono">
+                                                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-amber-400"></i>
+                                                <span>↩ REVERT ALL ${totes.length} TOTE(S) OFF TRUCK TO ORIGIN VAULT</span>
+                                            </button>
+                                        </div>
+                                    </div>`;
+                            }
+
+                            // Standard Valet Delivery
                             return `
                                 <div class="bg-gray-950 border-2 border-orange-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-orange-500/60 transition">
                                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-850 pb-3">
@@ -5769,6 +5900,164 @@
                 console.error('Batch customer hand-off failed:', e);
                 triggerScanFeedbackOverlay(false, e.message || 'Batch hand-off failed.');
                 alert('Fail-Fast Error: ' + (e.message || 'Batch hand-off failed'));
+            }
+        }
+
+        function getFacilityTotePrefix(facId) {
+            if (facId === 'facility_seattle_north') return 'CV-SEA-';
+            if (facId === 'facility_portland_central') return 'CV-POR-';
+            if (facId === 'facility_spokane_hub') return 'CV-SPO-';
+            if (facId === 'facility_yakima') return 'CV-YAK-';
+            return 'CV-SEA-';
+        }
+
+        async function confirmTransferFreightArrival(customerUid, customerName, destFacId, toteIds = null) {
+            const destName = (destFacId === 'facility_portland_central' ? 'Portland Central Hub' :
+                             destFacId === 'facility_seattle_north' ? 'Seattle North Fulfillment Center' :
+                             destFacId === 'facility_spokane_hub' ? 'Spokane Regional Hub' : 'Yakima Fulfillment Center');
+
+            const countLabel = (Array.isArray(toteIds) && toteIds.length > 0) ? `${toteIds.length}` : 'ALL';
+            if (!confirm(`Confirm freight truck arrival at ${destName} for ${customerName} (${countLabel} totes)?\n\nTotes will be checked into ${destName} Tab 1 (New Intake) for barcode re-stamping and destination vault shelving.`)) {
+                return;
+            }
+
+            try {
+                let query = supabase.from('inventory')
+                    .update({
+                        status: 'intake',
+                        facility_id: destFacId,
+                        location_code: 'DEST-INTAKE-DOCK',
+                        activated: false,
+                        last_scanned_at: new Date().toISOString()
+                    });
+
+                if (Array.isArray(toteIds) && toteIds.length > 0) {
+                    query = query.in('id', toteIds);
+                } else {
+                    query = query.eq('uid', customerUid).eq('status', 'out-for-delivery');
+                }
+
+                const { data: updatedTotes, error: updateErr } = await query.select();
+                if (updateErr) throw updateErr;
+
+                // Sync facility metrics
+                await supabase.rpc('sync_facility_counts', {});
+
+                triggerScanFeedbackOverlay(true, `🚚 Freight Arrived! ${updatedTotes?.length || 0} totes checked into ${destName} Intake.`);
+                loadWorkerQueues();
+            } catch (e) {
+                console.error('Confirm freight arrival failed:', e);
+                alert('Freight arrival failed: ' + e.message);
+            }
+        }
+
+        async function reStampAndPrintDestinationTags(customerUid, customerName, toteIds) {
+            if (!Array.isArray(toteIds) || toteIds.length === 0) return;
+            const targetPrefix = getFacilityTotePrefix(window.currentLoadedFac?.id);
+
+            try {
+                const { data: totes, error: fetchErr } = await supabase.from('inventory')
+                    .select('id, tote_code')
+                    .in('id', toteIds);
+
+                if (fetchErr) throw fetchErr;
+
+                const newToteCodes = [];
+                for (const t of totes) {
+                    const parts = t.tote_code.split('-');
+                    const suffix = parts.length >= 3 ? parts.slice(2).join('-') : (parts[1] || 'TOTE');
+                    const newCode = `${targetPrefix}${suffix}`;
+                    newToteCodes.push(newCode);
+
+                    await supabase.from('inventory')
+                        .update({ tote_code: newCode, last_scanned_at: new Date().toISOString() })
+                        .eq('id', t.id);
+                }
+
+                showToast(`🏷️ Successfully re-stamped ${newToteCodes.length} totes with prefix ${targetPrefix}! Opening print window...`);
+                
+                if (typeof openPrintLabelModal === 'function') {
+                    openPrintLabelModal(newToteCodes.join(', '));
+                }
+
+                loadWorkerQueues();
+            } catch (e) {
+                console.error('Re-stamping tags failed:', e);
+                alert('Re-stamping tags failed: ' + e.message);
+            }
+        }
+
+        async function reStampSingleToteTag(toteId, newStampedCode) {
+            try {
+                await supabase.from('inventory')
+                    .update({ tote_code: newStampedCode, last_scanned_at: new Date().toISOString() })
+                    .eq('id', toteId);
+
+                showToast(`🏷️ Re-stamped tote to ${newStampedCode}!`);
+                if (typeof openPrintLabelModal === 'function') {
+                    openPrintLabelModal(newStampedCode);
+                }
+                loadWorkerQueues();
+            } catch (e) {
+                console.error('Single tote re-stamp failed:', e);
+                alert('Re-stamp failed: ' + e.message);
+            }
+        }
+
+        async function batchReshelveTransferredTotes(customerUid, customerName, toteIds) {
+            if (!Array.isArray(toteIds) || toteIds.length === 0) return;
+            const targetFacId = window.currentLoadedFac?.id || 'facility_portland_central';
+            const facShort = (targetFacId === 'facility_portland_central' ? 'POR' :
+                             targetFacId === 'facility_seattle_north' ? 'SEA' :
+                             targetFacId === 'facility_spokane_hub' ? 'SPO' : 'YAK');
+
+            const defaultShelf = `${facShort}-BAY-01-S01`;
+            const baseShelf = prompt(`Put away and reshelve ${toteIds.length} transferred totes in ${window.currentLoadedFac?.name || 'Vault'}.\n\nEnter starting shelf rack prefix:`, defaultShelf);
+            if (!baseShelf || !baseShelf.trim()) return;
+
+            try {
+                const cleanBase = baseShelf.trim().toUpperCase();
+                for (let i = 0; i < toteIds.length; i++) {
+                    const shelfNum = String(i + 1).padStart(2, '0');
+                    const shelfCode = cleanBase.replace(/\d+$/, '') + shelfNum;
+                    
+                    await supabase.from('inventory')
+                        .update({
+                            status: 'stored',
+                            location_code: shelfCode,
+                            activated: true,
+                            facility_id: targetFacId,
+                            last_scanned_at: new Date().toISOString()
+                        })
+                        .eq('id', toteIds[i]);
+                }
+
+                // Mark any pending transfer access requests as completed
+                const { data: reqs } = await supabase.from('access_requests')
+                    .select('id, request_type')
+                    .eq('uid', customerUid)
+                    .neq('status', 'completed')
+                    .neq('status', 'cancelled');
+
+                if (reqs && reqs.length > 0) {
+                    for (const r of reqs) {
+                        await supabase.from('access_requests').update({ status: 'completed' }).eq('id', r.id);
+                    }
+                }
+
+                // Update customer profile's assigned facility
+                await supabase.from('users')
+                    .update({ assigned_facility_id: targetFacId })
+                    .eq('id', customerUid);
+
+                // Sync facility counts
+                await supabase.rpc('sync_facility_counts', {});
+
+                triggerScanFeedbackOverlay(true, `🎉 All ${toteIds.length} totes shelved in ${window.currentLoadedFac?.name || 'Vault'}! Transfer Complete.`, customerName);
+                loadWorkerQueues();
+            } catch (e) {
+                console.error('Batch reshelving failed:', e);
+                alert('Reshelving failed: ' + e.message);
             }
         }
 
@@ -8866,20 +9155,35 @@
                         if (seenUserOrders.has(r.id)) return;
                         seenUserOrders.add(r.id);
 
+                        const isTransfer = r.request_type === 'facility_transfer' || (r.delivery_notes || '').toLowerCase().includes('transfer pull');
                         const isExplicitPickup = r.request_type === 'retrieval' || r.request_type === 'return_pickup' || r.request_type === 'exit_retrieval' || r.request_type === 'pickup';
                         const isInTransit = r.status === 'out-for-delivery' || r.status === 'in-transit';
 
                         // Stop type is RETURN PICKUP only for genuine retrieval/pickup requests
-                        const stopType = isExplicitPickup 
-                            ? 'return_pickup' 
-                            : (isInTransit ? 'in_transit' : 'scheduled_dropoff');
+                        const stopType = isTransfer 
+                            ? 'facility_transfer'
+                            : (isExplicitPickup 
+                                ? 'return_pickup' 
+                                : (isInTransit ? 'in_transit' : 'scheduled_dropoff'));
+
+                        let destFacilityAddress = '';
+                        if (isTransfer) {
+                            const notes = (r.delivery_notes || '').toLowerCase();
+                            if (notes.includes('portland')) destFacilityAddress = 'Portland Central Hub Loading Dock, 1000 SW Broadway, Portland, OR 97205';
+                            else if (notes.includes('seattle')) destFacilityAddress = 'Seattle North Fulfillment Center Loading Dock, 4821 Aurora Ave N, Seattle, WA 98103';
+                            else if (notes.includes('spokane')) destFacilityAddress = 'Spokane Regional Hub Loading Dock, Spokane, WA';
+                            else if (notes.includes('yakima')) destFacilityAddress = 'Yakima Fulfillment Center Loading Dock, Yakima, WA';
+                            else destFacilityAddress = 'Destination Facility Loading Dock';
+                        }
 
                         const addr1 = r.delivery_address_line1 || '';
                         const addr2 = r.delivery_address_line2 || '';
                         const city = r.delivery_city || '';
                         const state = r.delivery_state || '';
                         const zip = r.delivery_zip || r.users?.zip || r.users?.active_zone || '';
-                        const fullAddr = [addr1, addr2, [city, state].filter(Boolean).join(', '), zip].filter(Boolean).join(' ') || (zip ? `ZIP ${zip}` : 'Local Delivery Area');
+                        const fullAddr = isTransfer 
+                            ? destFacilityAddress 
+                            : ([addr1, addr2, [city, state].filter(Boolean).join(', '), zip].filter(Boolean).join(' ') || (zip ? `ZIP ${zip}` : 'Local Delivery Area'));
 
                         stops.push({
                             id: r.id,
@@ -8890,7 +9194,7 @@
                             status: r.status,
                             stopType: stopType,
                             address: fullAddr,
-                            hasSpecificAddress: Boolean(addr1 || city),
+                            hasSpecificAddress: Boolean(isTransfer || addr1 || city),
                             delivery_notes: r.delivery_notes || '',
                             requested_items: items
                         });
@@ -8922,11 +9226,13 @@
                             const toteCount = (s.requested_items || []).length || 1;
                             const mapUrl = s.hasSpecificAddress ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address)}` : `https://maps.google.com/?q=${encodeURIComponent(s.address)}`;
 
-                            const stopBadge = s.stopType === 'return_pickup'
-                                ? '<span class="text-[9px] font-black uppercase text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/30 font-mono">📦 DOORSTEP PICKUP</span>'
-                                : s.stopType === 'in_transit'
-                                    ? '<span class="text-[9px] font-black uppercase text-orange-400 bg-orange-500/20 px-2 py-0.5 rounded border border-orange-500/30 font-mono">🚚 IN TRANSIT</span>'
-                                    : '<span class="text-[9px] font-black uppercase text-cyan-400 bg-cyan-500/20 px-2 py-0.5 rounded border border-cyan-500/30 font-mono">📦 DROP-OFF</span>';
+                            const stopBadge = s.stopType === 'facility_transfer'
+                                ? '<span class="text-[9px] font-black uppercase text-cyan-300 bg-cyan-500/20 px-2 py-0.5 rounded border border-cyan-500/30 font-mono">🚚 FREIGHT DOCK INTAKE</span>'
+                                : (s.stopType === 'return_pickup'
+                                    ? '<span class="text-[9px] font-black uppercase text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/30 font-mono">📦 DOORSTEP PICKUP</span>'
+                                    : (s.stopType === 'in_transit'
+                                        ? '<span class="text-[9px] font-black uppercase text-orange-400 bg-orange-500/20 px-2 py-0.5 rounded border border-orange-500/30 font-mono">🚚 IN TRANSIT</span>'
+                                        : '<span class="text-[9px] font-black uppercase text-cyan-400 bg-cyan-500/20 px-2 py-0.5 rounded border border-cyan-500/30 font-mono">📦 DROP-OFF</span>'));
 
                             return `
                                 <div class="bg-gray-950 border border-gray-850 p-3.5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-blue-500/40 transition">
