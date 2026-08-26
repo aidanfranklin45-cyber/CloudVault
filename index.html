@@ -1951,7 +1951,7 @@
                     <div class="space-y-2">
                         <label class="font-extrabold text-slate-900 block text-xs sm:text-sm">Access &amp; Pickup Option</label>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <div id="step4-opt-self" onclick="selectFlowLogistics('self_service')"
+                            <div id="step4-opt-self" onclick="selectFlowLogistics('self_service', true)"
                                 class="p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-500 relative">
                                 <div class="font-black text-xs text-slate-900 flex items-center justify-between">
                                     <span>Staging Room</span>
@@ -1959,7 +1959,7 @@
                                 </div>
                                 <div id="step4-self-desc" class="text-[11px] text-slate-500 mt-0.5">Designated slot &amp; secure PIN access</div>
                             </div>
-                            <div id="step4-opt-valet" onclick="selectFlowLogistics('valet_pickup')"
+                            <div id="step4-opt-valet" onclick="selectFlowLogistics('valet_pickup', true)"
                                 class="p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-400 relative">
                                 <div class="font-black text-xs text-slate-900 flex items-center justify-between">
                                     <span>Doorstep Valet</span>
@@ -2446,7 +2446,11 @@
             facility_id: 'facility_seattle_north',
             facility_name: 'Seattle North Fulfillment Center',
             city: 'Seattle',
-            state: 'WA'
+            state: 'WA',
+            isValetAvailable: true,
+            isStagingAvailable: true,
+            valetDisableReason: '',
+            stagingDisableReason: ''
         };
         window.regionalRates = regionalRates;
 
@@ -2563,6 +2567,10 @@
                 } else if (!targetZip) {
                     // Pre-ZIP state: Always assume the highest ceiling rate across all operating facilities
                     isPriceLocked = false;
+                    regionalRates.isValetAvailable = true;
+                    regionalRates.isStagingAvailable = true;
+                    regionalRates.valetDisableReason = '';
+                    regionalRates.stagingDisableReason = '';
                     if (facilityPricingRanges) {
                         regionalRates.tier1 = facilityPricingRanges.tier1.max;
                         regionalRates.tier2 = facilityPricingRanges.tier2.max;
@@ -3350,18 +3358,27 @@
             }
         }
 
-        function selectFlowLogistics(type) {
-            const isValetAvail = regionalRates.isValetAvailable === true;
-            const isStagingAvail = regionalRates.isStagingAvailable === true;
+        function selectFlowLogistics(type, userInitiated = false) {
+            const isValetAvail = regionalRates.isValetAvailable !== false;
+            const isStagingAvail = regionalRates.isStagingAvailable !== false;
 
-            // Guard against selecting disabled methodologies with immediate user feedback
-            if (type === 'valet_pickup' && !isValetAvail) {
-                alert('Doorstep valet is currently unavailable in this market. Please use our self-service staging rooms.');
-                return;
-            }
-            if (type === 'self_service' && !isStagingAvail) {
-                alert('Self-service staging is currently unavailable in this market. Please use our doorstep valet service.');
-                return;
+            // Guard against selecting disabled methodologies with immediate user feedback ONLY on explicit user click
+            if (userInitiated) {
+                if (type === 'valet_pickup' && !isValetAvail) {
+                    alert(regionalRates.valetDisableReason || 'Doorstep valet is currently unavailable in this market. Please use our self-service staging rooms.');
+                    return;
+                }
+                if (type === 'self_service' && !isStagingAvail) {
+                    alert(regionalRates.stagingDisableReason || 'Self-service staging is currently unavailable in this market. Please use our doorstep valet service.');
+                    return;
+                }
+            } else {
+                // Programmatic selection fallback: if requested type is paused, gracefully switch to available option without popup
+                if (type === 'valet_pickup' && !isValetAvail && isStagingAvail) {
+                    type = 'self_service';
+                } else if (type === 'self_service' && !isStagingAvail && isValetAvail) {
+                    type = 'valet_pickup';
+                }
             }
 
             flowData.logisticsType = type;
