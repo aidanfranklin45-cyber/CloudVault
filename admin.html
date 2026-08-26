@@ -5492,9 +5492,18 @@
                         // 2. Active Customer Belongings Storage / New Tote Delivery Return Flow
                         // Totes contain customer belongings — CANNOT recirculate to clean stock.
                         // ONLY allowed action is reshelving belongings into Vault with Target Shelf Lock.
+                        const req = job.request;
+                        const addr1 = req?.delivery_address_line1 || '';
+                        const addr2 = req?.delivery_address_line2 || '';
+                        const city = req?.delivery_city || '';
+                        const state = req?.delivery_state || '';
+                        const zip = req?.delivery_zip || owner.zip || owner.active_zone || '';
+                        const formattedAddress = [addr1, addr2, [city, state].filter(Boolean).join(', '), zip].filter(Boolean).join(' ') || (zip ? `ZIP ${zip}` : 'Customer Address on File');
+                        const deliveryNotes = req?.delivery_notes ? escapeHtml(req.delivery_notes) : '';
+
                         return `
                             <div class="bg-gray-950 border-2 border-purple-500/30 rounded-3xl p-5 shadow-xl space-y-4 hover:border-purple-500/60 transition">
-                                <div class="flex items-center justify-between border-b border-gray-850 pb-3">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-850 pb-3">
                                     <div class="flex items-center space-x-3">
                                         <div class="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-400 font-bold flex items-center justify-center text-sm border border-purple-500/30 font-mono">
                                             ${owner.initials}
@@ -5517,6 +5526,21 @@
                                         <span class="text-xs font-mono font-bold text-purple-400 bg-purple-500/10 px-3 py-1 rounded-xl border border-purple-500/30">Active Belongings</span>
                                     </div>
                                 </div>
+
+                                <!-- Logistics Pickup Address & Status Bar for Valet/Dropoff -->
+                                ${isValet ? `
+                                <div class="flex flex-wrap items-center justify-between gap-2 text-xs bg-gray-900/90 px-3.5 py-2 rounded-xl border border-gray-800 font-mono">
+                                    <div class="flex items-center gap-2 text-cyan-300">
+                                        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-cyan-400"></i>
+                                        <span class="font-bold">Doorstep Pickup: ${escapeHtml(formattedAddress)}</span>
+                                    </div>
+                                    ${deliveryNotes ? `<span class="text-gray-400">📝 Note: ${deliveryNotes}</span>` : ''}
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[9px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">Drop-off: Complete ✓</span>
+                                        <span class="text-[9px] font-black uppercase text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">Pickup: En Route / Pending 🚚</span>
+                                    </div>
+                                </div>
+                                ` : ''}
 
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     ${totes.map(t => `<div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 flex items-center justify-between font-mono text-xs">
@@ -8677,19 +8701,50 @@
                     activeValetTotes = data || [];
                 }
 
-                // Build discrete delivery stops strictly per active scheduled valet order
-                const stops = [];
+                // Build discrete delivery & pickup stops strictly per active scheduled valet order & active customers
+                let activeValetTotes = preloadedItems;
+                if (!activeValetTotes) {
+                    const { data } = await supabase.from('inventory')
+                        .select('id, uid, tote_code, label, status, facility_id')
+                        .eq('facility_id', queryFacilityId);
+                    activeValetTotes = data || [];
+                }
 
-                (requests || []).forEach(r => {
+                // Map active inventory totes per user
+                const userActiveItemsMap = new Map();
+                (activeValetTotes || []).forEach(item => {
+                    if (item.uid && (item.status === 'with-customer' || item.status === 'out-for-delivery' || item.status === 'pending-stage')) {
+                        if (!userActiveItemsMap.has(item.uid)) userActiveItemsMap.set(item.uid, []);
+                        userActiveItemsMap.get(item.uid).push(item);
+                    }
+                });
+
+                const rawValetRequests = (preloadedRequests || []).filter(r => 
+                    matchesFacilityTarget(r, queryFacilityId) &&
+                    (r.fulfillment_type === 'valet_delivery' || r.request_type === 'valet_delivery' || r.fulfillment_type === 'valet')
+                );
+
+                const stops = [];
+                const seenUids = new Set();
+
+                // 1. Process Valet Requests
+                (rawValetRequests || []).forEach(r => {
                     if (matchesFacilityTarget(r, queryFacilityId)) {
                         const uId = r.uid || (r.users ? r.users.id : null);
                         if (uId) {
-                            const rawItems = r.requested_items || r.requested_tote_codes || [];
-                            // Resolve actual tote codes
+                            seenUids.add(uId);
+                            const userItems = userActiveItemsMap.get(uId) || [];
+                            const rawItems = r.requested_items || r.requested_tote_codes || (userItems.length > 0 ? userItems.map(t => t.tote_code) : []);
+                            
                             const items = rawItems.map(it => {
                                 const matched = (activeValetTotes || []).find(t => t.id === it || t.tote_code === it);
                                 return matched ? matched.tote_code : it;
                             });
+
+                            const isAllWithCustomer = userItems.length > 0 && userItems.every(t => t.status === 'with-customer');
+                            const isOutOnVan = userItems.some(t => t.status === 'out-for-delivery');
+                            const stopType = isAllWithCustomer ? 'return_pickup' : (isOutOnVan ? 'in_transit' : 'scheduled_dropoff');
+
                             const addr1 = r.delivery_address_line1 || '';
                             const addr2 = r.delivery_address_line2 || '';
                             const city = r.delivery_city || '';
@@ -8700,16 +8755,46 @@
                             stops.push({
                                 id: r.id,
                                 uid: uId,
-                                users: r.users || { name: `Customer ${uId.substring(0, 6)}` },
+                                users: r.users || { name: `Customer ${uId.substring(0, 6)}`, zip: zip },
                                 target_date: r.target_date,
                                 time_slot: r.time_slot || '09:00 AM - 12:00 PM',
                                 status: r.status,
+                                stopType: stopType,
                                 address: fullAddr,
                                 hasSpecificAddress: Boolean(addr1 || city),
                                 delivery_notes: r.delivery_notes || '',
-                                requested_items: items.length > 0 ? items : ['1 Tote']
+                                requested_items: items.length > 0 ? items : (userItems.length > 0 ? userItems.map(t => t.tote_code) : ['1 Tote'])
                             });
                         }
+                    }
+                });
+
+                // 2. Add any active customer who has totes with-customer or in-transit but request was marked completed
+                userActiveItemsMap.forEach((items, uId) => {
+                    if (!seenUids.has(uId)) {
+                        seenUids.add(uId);
+                        const owner = resolveToteOwner(uId, items);
+                        const latestReq = (preloadedRequests || []).find(r => r.uid === uId);
+                        const addr1 = latestReq?.delivery_address_line1 || '';
+                        const addr2 = latestReq?.delivery_address_line2 || '';
+                        const city = latestReq?.delivery_city || '';
+                        const state = latestReq?.delivery_state || '';
+                        const zip = latestReq?.delivery_zip || owner?.zip || owner?.active_zone || '';
+                        const fullAddr = [addr1, addr2, [city, state].filter(Boolean).join(', '), zip].filter(Boolean).join(' ') || (zip ? `ZIP ${zip}` : 'Local Delivery Area');
+
+                        stops.push({
+                            id: latestReq?.id || `REQ-RETURN-${uId.substring(0, 6)}`,
+                            uid: uId,
+                            users: { name: owner?.name || `Customer ${uId.substring(0, 6)}`, zip: zip },
+                            target_date: latestReq?.target_date || new Date().toISOString().split('T')[0],
+                            time_slot: latestReq?.time_slot || '09:00 AM - 12:00 PM',
+                            status: 'with-customer',
+                            stopType: 'return_pickup',
+                            address: fullAddr,
+                            hasSpecificAddress: Boolean(addr1 || city),
+                            delivery_notes: latestReq?.delivery_notes || '',
+                            requested_items: items.map(t => t.tote_code)
+                        });
                     }
                 });
 
@@ -8738,6 +8823,12 @@
                             const toteCount = (s.requested_items || []).length || 1;
                             const mapUrl = s.hasSpecificAddress ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address)}` : `https://maps.google.com/?q=${encodeURIComponent(s.address)}`;
 
+                            const stopBadge = s.stopType === 'return_pickup'
+                                ? '<span class="text-[9px] font-black uppercase text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/30 font-mono">📦 RETURN PICKUP</span>'
+                                : s.stopType === 'in_transit'
+                                    ? '<span class="text-[9px] font-black uppercase text-orange-400 bg-orange-500/20 px-2 py-0.5 rounded border border-orange-500/30 font-mono">🚚 IN TRANSIT</span>'
+                                    : '<span class="text-[9px] font-black uppercase text-cyan-400 bg-cyan-500/20 px-2 py-0.5 rounded border border-cyan-500/30 font-mono">📦 DROP-OFF</span>';
+
                             return `
                                 <div class="bg-gray-950 border border-gray-850 p-3.5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-blue-500/40 transition">
                                     <div class="flex items-start space-x-3">
@@ -8747,6 +8838,7 @@
                                         <div class="space-y-1">
                                             <div class="flex items-center gap-2 flex-wrap">
                                                 <h5 class="text-xs font-extrabold text-white">${escapeHtml(name)}</h5>
+                                                ${stopBadge}
                                                 <span class="text-[10px] font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded-md flex items-center gap-1">
                                                     📍 ${escapeHtml(s.address)}
                                                 </span>
