@@ -1950,22 +1950,22 @@
                     <!-- Pickup & Logistics Choice in Step 4 -->
                     <div class="space-y-2">
                         <label class="font-extrabold text-slate-900 block text-xs sm:text-sm">Access &amp; Pickup Option</label>
-                        <div class="grid grid-cols-2 gap-2">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <div id="step4-opt-self" onclick="selectFlowLogistics('self_service')"
-                                class="p-3 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer text-left transition hover:border-blue-500">
+                                class="p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-500 relative">
                                 <div class="font-black text-xs text-slate-900 flex items-center justify-between">
                                     <span>Staging Room</span>
-                                    <span class="text-emerald-600 font-black">Free</span>
+                                    <span id="step4-self-fee-label" class="text-emerald-600 font-black">Free</span>
                                 </div>
-                                <div class="text-[11px] text-slate-500 mt-0.5">Designated slot &amp; secure PIN access</div>
+                                <div id="step4-self-desc" class="text-[11px] text-slate-500 mt-0.5">Designated slot &amp; secure PIN access</div>
                             </div>
                             <div id="step4-opt-valet" onclick="selectFlowLogistics('valet_pickup')"
-                                class="p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-400">
+                                class="p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-400 relative">
                                 <div class="font-black text-xs text-slate-900 flex items-center justify-between">
                                     <span>Doorstep Valet</span>
-                                    <span class="text-slate-700 font-bold" id="step4-valet-fee-label">+$8.00</span>
+                                    <span class="text-slate-700 font-bold" id="step4-valet-fee-label">Free</span>
                                 </div>
-                                <div class="text-[11px] text-slate-500 mt-0.5">We pick up at your doorstep</div>
+                                <div id="step4-valet-desc" class="text-[11px] text-slate-500 mt-0.5">We pick up at your doorstep</div>
                             </div>
                         </div>
 
@@ -3243,29 +3243,61 @@
         function setupStep4LogisticsUI() {
             const selfOpt = document.getElementById('step4-opt-self');
             const valetOpt = document.getElementById('step4-opt-valet');
-            const grid = selfOpt?.parentElement;
+            const selfFee = document.getElementById('step4-self-fee-label');
+            const selfDesc = document.getElementById('step4-self-desc');
+            const valetFee = document.getElementById('step4-valet-fee-label');
+            const valetDesc = document.getElementById('step4-valet-desc');
 
             const isValetAvail = regionalRates.isValetAvailable === true;
             const isStagingAvail = regionalRates.isStagingAvailable === true;
 
-            if (isValetAvail && isStagingAvail) {
-                // Both methodologies active: render 2-column selector
-                if (grid) grid.className = 'grid grid-cols-2 gap-2';
-                if (selfOpt) selfOpt.classList.remove('hidden');
-                if (valetOpt) valetOpt.classList.remove('hidden');
-                selectFlowLogistics(flowData.logisticsType || 'self_service');
-            } else if (isValetAvail && !isStagingAvail) {
-                // Valet only: render single full-width card cleanly
-                if (grid) grid.className = 'grid grid-cols-1 gap-2';
-                if (selfOpt) selfOpt.classList.add('hidden');
-                if (valetOpt) valetOpt.classList.remove('hidden');
+            if (!isStagingAvail) {
+                if (selfFee) {
+                    selfFee.textContent = 'Unavailable';
+                    selfFee.className = 'text-rose-600 font-extrabold text-[10px] bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded';
+                }
+                if (selfDesc) {
+                    selfDesc.textContent = 'Paused in your market (Doorstep Valet only)';
+                    selfDesc.className = 'text-[10px] text-rose-500 font-semibold mt-0.5';
+                }
+                if (selfOpt) {
+                    selfOpt.setAttribute('title', 'Self-service staging is currently paused for this market.');
+                }
+            } else {
+                if (selfFee) {
+                    selfFee.textContent = 'Free';
+                    selfFee.className = 'text-emerald-600 font-black';
+                }
+                if (selfDesc) {
+                    selfDesc.textContent = 'Designated slot & secure PIN access';
+                    selfDesc.className = 'text-[11px] text-slate-500 mt-0.5';
+                }
+                if (selfOpt) {
+                    selfOpt.removeAttribute('title');
+                }
+            }
+
+            if (!isValetAvail) {
+                if (valetFee) {
+                    valetFee.textContent = 'Unavailable';
+                    valetFee.className = 'text-rose-600 font-extrabold text-[10px] bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded';
+                }
+                if (valetDesc) {
+                    valetDesc.textContent = 'Paused in your market (Staging Room only)';
+                    valetDesc.className = 'text-[10px] text-rose-500 font-semibold mt-0.5';
+                }
+                if (valetOpt) {
+                    valetOpt.setAttribute('title', 'Doorstep valet service is currently paused for this market.');
+                }
+            }
+
+            // Auto-select the active available methodology
+            if (isValetAvail && !isStagingAvail) {
                 selectFlowLogistics('valet_pickup');
             } else if (!isValetAvail && isStagingAvail) {
-                // Staging room only: render single full-width card cleanly
-                if (grid) grid.className = 'grid grid-cols-1 gap-2';
-                if (valetOpt) valetOpt.classList.add('hidden');
-                if (selfOpt) selfOpt.classList.remove('hidden');
                 selectFlowLogistics('self_service');
+            } else {
+                selectFlowLogistics(flowData.logisticsType || 'self_service');
             }
         }
 
@@ -3319,9 +3351,18 @@
         }
 
         function selectFlowLogistics(type) {
-            // Guard against selecting disabled methodologies
-            if (type === 'valet_pickup' && regionalRates.isValetAvailable === false) return;
-            if (type === 'self_service' && regionalRates.isStagingAvailable === false) return;
+            const isValetAvail = regionalRates.isValetAvailable === true;
+            const isStagingAvail = regionalRates.isStagingAvailable === true;
+
+            // Guard against selecting disabled methodologies with immediate user feedback
+            if (type === 'valet_pickup' && !isValetAvail) {
+                alert('Doorstep valet is currently unavailable in this market. Please use our self-service staging rooms.');
+                return;
+            }
+            if (type === 'self_service' && !isStagingAvail) {
+                alert('Self-service staging is currently unavailable in this market. Please use our doorstep valet service.');
+                return;
+            }
 
             flowData.logisticsType = type;
             const selfEl = document.getElementById('flow-opt-self');
@@ -3335,21 +3376,37 @@
 
             if (type === 'self_service') {
                 if (selfEl) selfEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
-                if (valetEl) valetEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-slate-200 bg-white cursor-pointer';
+                if (valetEl) {
+                    valetEl.className = isValetAvail
+                        ? 'flex items-center p-2.5 rounded-xl border-2 border-slate-200 bg-white cursor-pointer'
+                        : 'flex items-center p-2.5 rounded-xl border-2 border-dashed border-slate-300 bg-slate-100 opacity-60 cursor-not-allowed';
+                }
                 if (dotSelf) dotSelf.className = 'w-3.5 h-3.5 rounded-full border-4 border-blue-600 bg-white mr-2.5 flex-shrink-0';
                 if (dotValet) dotValet.className = 'w-3.5 h-3.5 rounded-full border-2 border-slate-300 bg-white mr-2.5 flex-shrink-0';
 
-                if (step4Self) step4Self.className = 'p-3 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer text-left transition';
-                if (step4Valet) step4Valet.className = 'p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-400';
+                if (step4Self) step4Self.className = 'p-3 rounded-xl border-2 border-blue-600 bg-blue-50/90 ring-2 ring-blue-500/20 cursor-pointer text-left transition shadow-sm';
+                if (step4Valet) {
+                    step4Valet.className = isValetAvail
+                        ? 'p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-400'
+                        : 'p-3 rounded-xl border-2 border-dashed border-slate-300 bg-slate-100/90 text-left opacity-60 cursor-not-allowed select-none';
+                }
                 if (valetAddrContainer) valetAddrContainer.classList.add('hidden');
             } else {
                 if (valetEl) valetEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer';
-                if (selfEl) selfEl.className = 'flex items-center p-2.5 rounded-xl border-2 border-slate-200 bg-white cursor-pointer';
+                if (selfEl) {
+                    selfEl.className = isStagingAvail
+                        ? 'flex items-center p-2.5 rounded-xl border-2 border-slate-200 bg-white cursor-pointer'
+                        : 'flex items-center p-2.5 rounded-xl border-2 border-dashed border-slate-300 bg-slate-100 opacity-60 cursor-not-allowed';
+                }
                 if (dotValet) dotValet.className = 'w-3.5 h-3.5 rounded-full border-4 border-blue-600 bg-white mr-2.5 flex-shrink-0';
                 if (dotSelf) dotSelf.className = 'w-3.5 h-3.5 rounded-full border-2 border-slate-300 bg-white mr-2.5 flex-shrink-0';
 
-                if (step4Valet) step4Valet.className = 'p-3 rounded-xl border-2 border-blue-600 bg-blue-50 cursor-pointer text-left transition';
-                if (step4Self) step4Self.className = 'p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-400';
+                if (step4Valet) step4Valet.className = 'p-3 rounded-xl border-2 border-blue-600 bg-blue-50/90 ring-2 ring-blue-500/20 cursor-pointer text-left transition shadow-sm';
+                if (step4Self) {
+                    step4Self.className = isStagingAvail
+                        ? 'p-3 rounded-xl border-2 border-slate-200 bg-white cursor-pointer text-left transition hover:border-blue-400'
+                        : 'p-3 rounded-xl border-2 border-dashed border-slate-300 bg-slate-100/90 text-left opacity-60 cursor-not-allowed select-none';
+                }
                 if (valetAddrContainer) valetAddrContainer.classList.remove('hidden');
             }
             calculateFlowTotal();
