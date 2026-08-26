@@ -340,24 +340,56 @@
             return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
-        function handleWaitlistSubmit(event) {
+        async function handleWaitlistSubmit(event) {
             event.preventDefault();
             const emailInput = document.getElementById('waitlist-email');
             const email = emailInput?.value?.trim();
             if (!email) return;
 
             const btn = document.getElementById('btn-submit-waitlist');
+            const originalContent = btn ? btn.innerHTML : '';
             if (btn) {
                 btn.disabled = true;
-                btn.innerHTML = `<i data-lucide="check" class="w-4 h-4 text-emerald-300"></i> <span>Added!</span>`;
-                if (typeof lucide !== 'undefined') lucide.createIcons();
+                btn.innerHTML = `<svg class="w-4 h-4 animate-spin text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg> <span>Saving...</span>`;
             }
 
             try {
-                localStorage.setItem('cv_insurance_waitlist_' + email, new Date().toISOString());
-            } catch (e) {}
+                let currentUserId = null;
+                if (typeof supabase !== 'undefined') {
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    currentUserId = sessionData?.session?.user?.id || null;
 
-            showToast(`You're on the list! We'll notify ${email} as soon as insurance coverage is live.`);
+                    // Insert or update waitlist entry in database
+                    const { error } = await supabase
+                        .from('insurance_waitlist')
+                        .upsert({
+                            email: email,
+                            user_id: currentUserId,
+                            source: 'insurance_landing_page'
+                        }, { onConflict: 'email' });
+
+                    if (error) {
+                        console.error('Supabase insurance waitlist insert error:', error);
+                    }
+                }
+
+                // Also record in localStorage for quick client-side session recall
+                localStorage.setItem('cv_insurance_waitlist_' + email, new Date().toISOString());
+
+                if (btn) {
+                    btn.innerHTML = `<i data-lucide="check" class="w-4 h-4 text-emerald-300"></i> <span>Added!</span>`;
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                }
+
+                showToast(`You're on the list! We'll notify ${email} as soon as insurance coverage is live.`);
+            } catch (err) {
+                console.error('Waitlist submission failed:', err);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalContent;
+                }
+                showToast(`Could not join waitlist: ${err.message || 'Please try again.'}`, false);
+            }
         }
     </script>
 </body>
