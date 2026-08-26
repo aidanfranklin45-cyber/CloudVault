@@ -1979,8 +1979,8 @@
                         <button onclick="autoSelectExcessTotes('empty')" class="px-3 py-1.5 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 rounded-xl text-xs font-bold transition shadow-sm">
                             Auto-Select Empty
                         </button>
-                        <button onclick="autoSelectExcessTotes('all')" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow-sm">
-                            Select First 40
+                        <button id="btn-excess-select-all" onclick="autoSelectExcessTotes('all')" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow-sm">
+                            Select All
                         </button>
                     </div>
                 </div>
@@ -1989,7 +1989,7 @@
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <label class="text-xs font-black uppercase text-gray-700 tracking-wider">Choose Containers to Exit Storage:</label>
-                        <span class="text-xs font-extrabold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 font-mono" id="excess-selected-counter">0 / 40 Selected</span>
+                        <span class="text-xs font-extrabold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 font-mono" id="excess-selected-counter">0 Selected</span>
                     </div>
                     <div id="excess-totes-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto p-1 bg-gray-50 border border-gray-200 rounded-2xl">
                         <!-- Populated dynamically via JS -->
@@ -7547,6 +7547,13 @@
 
                 document.getElementById('excess-modal-target-num').textContent = targetExcessQuota;
                 document.getElementById('excess-modal-total-num').textContent = storedCount;
+
+                const selectBtn = document.getElementById('btn-excess-select-all');
+                if (selectBtn) {
+                    selectBtn.textContent = (targetExcessQuota >= storedCount || isCancellationExitMode)
+                        ? `Select All (${targetExcessQuota})`
+                        : `Select First ${targetExcessQuota}`;
+                }
 
                 const subTitle = document.getElementById('excess-modal-subtitle');
                 if (subTitle) {
