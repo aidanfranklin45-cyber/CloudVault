@@ -4722,10 +4722,22 @@
                     const jobs = [];
                     const handledToteIds = new Set();
 
-                    // 1. Sort all requests newest first
+                    // 1. Sort requests: Active facility_transfer FIRST, then active requests, then historical requests
                     const allReqsSorted = (requests || [])
                         .filter(Boolean)
-                        .sort((a, b) => new Date(b.requested_at || 0) - new Date(a.requested_at || 0));
+                        .sort((a, b) => {
+                            const aIsActiveTransfer = (a.request_type === 'facility_transfer' || a.fulfillment_type === 'facility_transfer') && a.status !== 'completed' && a.status !== 'cancelled';
+                            const bIsActiveTransfer = (b.request_type === 'facility_transfer' || b.fulfillment_type === 'facility_transfer') && b.status !== 'completed' && b.status !== 'cancelled';
+                            if (aIsActiveTransfer && !bIsActiveTransfer) return -1;
+                            if (!aIsActiveTransfer && bIsActiveTransfer) return 1;
+
+                            const aIsActive = a.status !== 'completed' && a.status !== 'cancelled' && a.status !== 'returned-to-vault';
+                            const bIsActive = b.status !== 'completed' && b.status !== 'cancelled' && b.status !== 'returned-to-vault';
+                            if (aIsActive && !bIsActive) return -1;
+                            if (!aIsActive && bIsActive) return 1;
+
+                            return new Date(b.requested_at || 0) - new Date(a.requested_at || 0);
+                        });
 
                     const activeRequests = allReqsSorted.filter(r => r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault');
 
@@ -4734,15 +4746,24 @@
                         const rawItems = [...(req.requested_items || []), ...(req.requested_tote_codes || [])];
                         if (rawItems.length === 0) return;
                         const reqIdentifiers = new Set(rawItems);
+                        const reqSuffixes = new Set(rawItems.map(item => {
+                            if (typeof item === 'string' && item.includes('-')) {
+                                const parts = item.split('-');
+                                return parts.length >= 3 ? parts.slice(2).join('-') : parts[1];
+                            }
+                            return null;
+                        }).filter(Boolean));
                         
-                        let matchingTotes = (items || []).filter(t => 
-                            !handledToteIds.has(t.id) && (
-                                reqIdentifiers.has(t.id) ||
-                                reqIdentifiers.has(t.tote_code) ||
-                                reqIdentifiers.has(t.barcode) ||
-                                reqIdentifiers.has(t.label)
-                            )
-                        );
+                        let matchingTotes = (items || []).filter(t => {
+                            if (handledToteIds.has(t.id)) return false;
+                            if (reqIdentifiers.has(t.id) || reqIdentifiers.has(t.tote_code) || reqIdentifiers.has(t.barcode) || reqIdentifiers.has(t.label)) return true;
+                            if (t.tote_code) {
+                                const parts = t.tote_code.split('-');
+                                const suffix = parts.length >= 3 ? parts.slice(2).join('-') : parts[1];
+                                if (suffix && reqSuffixes.has(suffix)) return true;
+                            }
+                            return false;
+                        });
 
                         if (matchingTotes.length > 0) {
                             matchingTotes.forEach(t => handledToteIds.add(t.id));
