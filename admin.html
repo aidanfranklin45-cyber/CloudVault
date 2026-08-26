@@ -5924,7 +5924,7 @@
             try {
                 let query = supabase.from('inventory')
                     .update({
-                        status: 'intake',
+                        status: 'stored',
                         facility_id: destFacId,
                         location_code: 'DEST-INTAKE-DOCK',
                         activated: false,
