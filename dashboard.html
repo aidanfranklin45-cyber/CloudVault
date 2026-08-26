@@ -817,20 +817,26 @@
                 
                 <div class="space-y-4">
                     <!-- Option 1: Self-Service -->
-                    <div id="retrieval-opt-staging" class="flex items-center p-4 rounded-xl border-2 border-blue-500 bg-blue-50 cursor-pointer transition-all" onclick="selectRetrievalLogistics('staging')">
+                    <div id="retrieval-opt-staging" class="flex items-center p-4 rounded-xl border-2 border-blue-500 bg-blue-50 cursor-pointer transition-all" onclick="selectRetrievalLogistics('staging', true)">
                         <div class="w-5 h-5 rounded-full border-[5px] border-blue-600 bg-white mr-4 flex-shrink-0" id="retrieval-dot-staging"></div>
-                        <div>
-                            <div class="font-bold text-gray-900 text-lg">Self-Service Pickup <span class="text-green-600 ml-2 text-sm">Included</span></div>
-                            <div class="text-sm text-gray-500 mt-1">We'll stage it at your local facility.</div>
+                        <div class="flex-1">
+                            <div class="font-bold text-gray-900 text-lg flex items-center justify-between">
+                                <span>Self-Service Pickup</span>
+                                <span class="text-green-600 ml-2 text-sm" id="retrieval-staging-fee-label">Included</span>
+                            </div>
+                            <div class="text-sm text-gray-500 mt-1" id="retrieval-staging-desc">We'll stage it at your local facility.</div>
                         </div>
                     </div>
                     
                     <!-- Option 2: Valet Delivery -->
-                    <div id="retrieval-opt-valet" class="flex items-center p-4 rounded-xl border-2 border-gray-200 bg-white cursor-pointer transition-all" onclick="selectRetrievalLogistics('valet_delivery')">
+                    <div id="retrieval-opt-valet" class="flex items-center p-4 rounded-xl border-2 border-gray-200 bg-white cursor-pointer transition-all" onclick="selectRetrievalLogistics('valet_delivery', true)">
                         <div class="w-5 h-5 rounded-full border-2 border-gray-300 bg-white mr-4 flex-shrink-0" id="retrieval-dot-valet"></div>
-                        <div>
-                            <div class="font-bold text-gray-900 text-lg">Valet Delivery <span class="text-gray-600 ml-2 text-sm" id="retrieval-valet-fee-label">...</span></div>
-                            <div class="text-sm text-gray-500 mt-1">We'll deliver it to your door.</div>
+                        <div class="flex-1">
+                            <div class="font-bold text-gray-900 text-lg flex items-center justify-between">
+                                <span>Valet Delivery</span>
+                                <span class="text-gray-600 ml-2 text-sm" id="retrieval-valet-fee-label">...</span>
+                            </div>
+                            <div class="text-sm text-gray-500 mt-1" id="retrieval-valet-desc">We'll deliver it to your door.</div>
                         </div>
                     </div>
                 </div>
@@ -5099,23 +5105,71 @@
 
             const stagingOpt = document.getElementById('retrieval-opt-staging');
             const valetOpt = document.getElementById('retrieval-opt-valet');
-            const grid = stagingOpt?.parentElement;
+            const stagingFeeLabel = document.getElementById('retrieval-staging-fee-label');
+            const stagingDesc = document.getElementById('retrieval-staging-desc');
+            const valetFeeLabel = document.getElementById('retrieval-valet-fee-label');
+            const valetDesc = document.getElementById('retrieval-valet-desc');
 
-            if (isValetAvail && isStagingAvail) {
-                if (grid) grid.className = 'grid grid-cols-1 md:grid-cols-2 gap-4';
-                if (stagingOpt) stagingOpt.classList.remove('hidden');
-                if (valetOpt) valetOpt.classList.remove('hidden');
-                selectRetrievalLogistics('staging');
-            } else if (isValetAvail && !isStagingAvail) {
-                if (grid) grid.className = 'grid grid-cols-1 gap-4';
-                if (stagingOpt) stagingOpt.classList.add('hidden');
-                if (valetOpt) valetOpt.classList.remove('hidden');
+            if (stagingOpt) stagingOpt.classList.remove('hidden');
+            if (valetOpt) valetOpt.classList.remove('hidden');
+
+            if (!isStagingAvail) {
+                if (stagingFeeLabel) {
+                    stagingFeeLabel.textContent = 'Unavailable';
+                    stagingFeeLabel.className = 'text-rose-600 font-extrabold text-[11px] bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-lg';
+                }
+                if (stagingDesc) {
+                    stagingDesc.textContent = activeFacilityPricing?.staging_disable_reason || 'Self-service staging is paused in your market.';
+                    stagingDesc.className = 'text-xs text-rose-500 font-semibold mt-1';
+                }
+                if (stagingOpt) {
+                    stagingOpt.setAttribute('title', 'Self-service staging is paused for your assigned facility.');
+                }
+            } else {
+                if (stagingFeeLabel) {
+                    stagingFeeLabel.textContent = 'Included';
+                    stagingFeeLabel.className = 'text-green-600 text-sm font-bold';
+                }
+                if (stagingDesc) {
+                    stagingDesc.textContent = "We'll stage it at your local facility.";
+                    stagingDesc.className = 'text-sm text-gray-500 mt-1';
+                }
+                if (stagingOpt) {
+                    stagingOpt.removeAttribute('title');
+                }
+            }
+
+            if (!isValetAvail) {
+                if (valetFeeLabel) {
+                    valetFeeLabel.textContent = 'Unavailable';
+                    valetFeeLabel.className = 'text-rose-600 font-extrabold text-[11px] bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-lg';
+                }
+                if (valetDesc) {
+                    valetDesc.textContent = activeFacilityPricing?.valet_disable_reason || 'Doorstep valet delivery is paused in your market.';
+                    valetDesc.className = 'text-xs text-rose-500 font-semibold mt-1';
+                }
+                if (valetOpt) {
+                    valetOpt.setAttribute('title', 'Doorstep valet is paused for your assigned facility.');
+                }
+            } else {
+                if (valetFeeLabel) {
+                    valetFeeLabel.className = 'text-gray-600 text-sm font-bold';
+                }
+                if (valetDesc) {
+                    valetDesc.textContent = "We'll deliver it to your door.";
+                    valetDesc.className = 'text-sm text-gray-500 mt-1';
+                }
+                if (valetOpt) {
+                    valetOpt.removeAttribute('title');
+                }
+            }
+
+            if (isValetAvail && !isStagingAvail) {
                 selectRetrievalLogistics('valet_delivery');
             } else if (!isValetAvail && isStagingAvail) {
-                if (grid) grid.className = 'grid grid-cols-1 gap-4';
-                if (valetOpt) valetOpt.classList.add('hidden');
-                if (stagingOpt) stagingOpt.classList.remove('hidden');
                 selectRetrievalLogistics('staging');
+            } else {
+                selectRetrievalLogistics(retrievalLogisticsType || 'staging');
             }
 
             await handleReservationDateChange();
@@ -5170,9 +5224,26 @@
             }
         }
 
-        function selectRetrievalLogistics(type) {
-            if (type === 'valet_delivery' && activeFacilityPricing && activeFacilityPricing.valet_available === false) return;
-            if (type === 'staging' && activeFacilityPricing && activeFacilityPricing.staging_available === false) return;
+        function selectRetrievalLogistics(type, userInitiated = false) {
+            const isValetAvail = (activeFacilityPricing && activeFacilityPricing.valet_available !== undefined) ? activeFacilityPricing.valet_available : true;
+            const isStagingAvail = (activeFacilityPricing && activeFacilityPricing.staging_available !== undefined) ? activeFacilityPricing.staging_available : true;
+
+            if (userInitiated) {
+                if (type === 'valet_delivery' && !isValetAvail) {
+                    alert(activeFacilityPricing?.valet_disable_reason || 'Doorstep valet delivery is currently unavailable at your facility. Please use self-service staging.');
+                    return;
+                }
+                if (type === 'staging' && !isStagingAvail) {
+                    alert(activeFacilityPricing?.staging_disable_reason || 'Self-service staging is currently unavailable at your facility. Please use doorstep valet delivery.');
+                    return;
+                }
+            } else {
+                if (type === 'valet_delivery' && !isValetAvail && isStagingAvail) {
+                    type = 'staging';
+                } else if (type === 'staging' && !isStagingAvail && isValetAvail) {
+                    type = 'valet_delivery';
+                }
+            }
 
             retrievalLogisticsType = type;
             
@@ -5188,46 +5259,54 @@
             const slotLabel = document.getElementById('retrieval-slot-label');
 
             if (type === 'staging') {
-                stagingOpt.classList.replace('border-gray-200', 'border-blue-500');
-                stagingOpt.classList.replace('bg-white', 'bg-blue-50');
-                stagingDot.classList.replace('border-gray-300', 'border-blue-600');
-                stagingDot.classList.add('border-[5px]');
-                stagingDot.classList.remove('border-2');
+                if (stagingOpt) stagingOpt.className = 'flex items-center p-4 rounded-xl border-2 border-blue-500 bg-blue-50 cursor-pointer transition-all shadow-sm';
+                if (stagingDot) {
+                    stagingDot.className = 'w-5 h-5 rounded-full border-[5px] border-blue-600 bg-white mr-4 flex-shrink-0';
+                }
                 
-                valetOpt.classList.replace('border-blue-500', 'border-gray-200');
-                valetOpt.classList.replace('bg-blue-50', 'bg-white');
-                valetDot.classList.replace('border-blue-600', 'border-gray-300');
-                valetDot.classList.remove('border-[5px]');
-                valetDot.classList.add('border-2');
+                if (valetOpt) {
+                    valetOpt.className = isValetAvail
+                        ? 'flex items-center p-4 rounded-xl border-2 border-gray-200 bg-white cursor-pointer transition-all hover:border-gray-300'
+                        : 'flex items-center p-4 rounded-xl border-2 border-dashed border-gray-300 bg-gray-100/90 text-gray-400 opacity-60 cursor-not-allowed select-none transition-all';
+                }
+                if (valetDot) {
+                    valetDot.className = isValetAvail
+                        ? 'w-5 h-5 rounded-full border-2 border-gray-300 bg-white mr-4 flex-shrink-0'
+                        : 'w-5 h-5 rounded-full border-2 border-gray-300 bg-gray-200 mr-4 flex-shrink-0';
+                }
                 
-                termsBox.classList.add('hidden');
-                valetNotesContainer.classList.add('hidden');
+                if (termsBox) termsBox.classList.add('hidden');
+                if (valetNotesContainer) valetNotesContainer.classList.add('hidden');
                 if (valetAddressContainer) valetAddressContainer.classList.add('hidden');
-                calTitle.textContent = 'Schedule Staging Pickup';
-                dateLabel.textContent = 'Pickup Date';
-                slotLabel.textContent = 'Pickup Time Window';
+                if (calTitle) calTitle.textContent = 'Schedule Staging Pickup';
+                if (dateLabel) dateLabel.textContent = 'Pickup Date';
+                if (slotLabel) slotLabel.textContent = 'Pickup Time Window';
             } else {
-                valetOpt.classList.replace('border-gray-200', 'border-blue-500');
-                valetOpt.classList.replace('bg-white', 'bg-blue-50');
-                valetDot.classList.replace('border-gray-300', 'border-blue-600');
-                valetDot.classList.add('border-[5px]');
-                valetDot.classList.remove('border-2');
+                if (valetOpt) valetOpt.className = 'flex items-center p-4 rounded-xl border-2 border-blue-500 bg-blue-50 cursor-pointer transition-all shadow-sm';
+                if (valetDot) {
+                    valetDot.className = 'w-5 h-5 rounded-full border-[5px] border-blue-600 bg-white mr-4 flex-shrink-0';
+                }
                 
-                stagingOpt.classList.replace('border-blue-500', 'border-gray-200');
-                stagingOpt.classList.replace('bg-blue-50', 'bg-white');
-                stagingDot.classList.replace('border-blue-600', 'border-gray-300');
-                stagingDot.classList.remove('border-[5px]');
-                stagingDot.classList.add('border-2');
+                if (stagingOpt) {
+                    stagingOpt.className = isStagingAvail
+                        ? 'flex items-center p-4 rounded-xl border-2 border-gray-200 bg-white cursor-pointer transition-all hover:border-gray-300'
+                        : 'flex items-center p-4 rounded-xl border-2 border-dashed border-gray-300 bg-gray-100/90 text-gray-400 opacity-60 cursor-not-allowed select-none transition-all';
+                }
+                if (stagingDot) {
+                    stagingDot.className = isStagingAvail
+                        ? 'w-5 h-5 rounded-full border-2 border-gray-300 bg-white mr-4 flex-shrink-0'
+                        : 'w-5 h-5 rounded-full border-2 border-gray-300 bg-gray-200 mr-4 flex-shrink-0';
+                }
                 
-                termsBox.classList.remove('hidden');
-                valetNotesContainer.classList.remove('hidden');
+                if (termsBox) termsBox.classList.remove('hidden');
+                if (valetNotesContainer) valetNotesContainer.classList.remove('hidden');
                 if (valetAddressContainer) {
                     valetAddressContainer.classList.remove('hidden');
                     loadSavedCustomerAddress();
                 }
-                calTitle.textContent = 'Schedule Valet Delivery';
-                dateLabel.textContent = 'Delivery Date';
-                slotLabel.textContent = 'Delivery Time Window';
+                if (calTitle) calTitle.textContent = 'Schedule Valet Delivery';
+                if (dateLabel) dateLabel.textContent = 'Delivery Date';
+                if (slotLabel) slotLabel.textContent = 'Delivery Time Window';
             }
 
             updateReservationSurgeUI();
