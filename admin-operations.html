@@ -240,15 +240,15 @@
                         Operational &amp; Business Telemetry Radar
                         <span class="text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2.5 py-0.5 rounded-full uppercase">Realtime Stream</span>
                     </h2>
-                    <p class="text-xs text-gray-400 mt-0.5">Live warehouse density yields, subscription MRR streaming, queue velocity, and statutory compliance status.</p>
+                    <p class="text-xs text-gray-400 mt-0.5">Live warehouse density yields and recurring subscription MRR streaming.</p>
                 </div>
-                <button onclick="refreshAllTelemetryData()" class="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                <button onclick="refreshAllTelemetryData()" class="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 border border-gray-850 text-gray-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
                     <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-blue-400"></i> Sync Telemetry
                 </button>
             </div>
 
-            <!-- Telemetry Gauges Grid -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <!-- Telemetry Gauges Grid (2-Column Density & MRR) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <!-- Gauge 1: Facility Storage Density & Utilization -->
                 <div class="glass-panel p-5 rounded-3xl border border-blue-500/20 space-y-3 shadow-xl">
                     <div class="flex items-center justify-between">
@@ -290,54 +290,6 @@
                     <div class="flex justify-between text-[10px] text-gray-400 font-mono pt-1 border-t border-gray-850">
                         <span>Avg Tote Yield: <strong id="tel-avg-rate" class="text-white">$0.00/tote</strong></span>
                         <span>Stripe Sync: <strong class="text-emerald-300">Live</strong></span>
-                    </div>
-                </div>
-
-                <!-- Gauge 3: Operational Queue Velocity -->
-                <div class="glass-panel p-5 rounded-3xl border border-amber-500/20 space-y-3 shadow-xl">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center gap-1.5 font-mono">
-                            <i data-lucide="layers" class="w-4 h-4 text-amber-400"></i> Queue Velocity
-                        </span>
-                        <span id="tel-total-ops-count" class="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-mono">0 In Flight</span>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-center text-xs font-mono">
-                        <div class="bg-gray-950/80 p-1.5 rounded-xl border border-gray-850">
-                            <span class="text-[9px] text-gray-500 block uppercase">Intake</span>
-                            <span id="tel-q-intake" class="font-bold text-blue-400 text-sm">0</span>
-                        </div>
-                        <div class="bg-gray-950/80 p-1.5 rounded-xl border border-gray-850">
-                            <span class="text-[9px] text-gray-500 block uppercase">Staged</span>
-                            <span id="tel-q-staged" class="font-bold text-emerald-400 text-sm">0</span>
-                        </div>
-                        <div class="bg-gray-950/80 p-1.5 rounded-xl border border-gray-850">
-                            <span class="text-[9px] text-gray-500 block uppercase">Dispatch</span>
-                            <span id="tel-q-dispatch" class="font-bold text-orange-400 text-sm">0</span>
-                        </div>
-                        <div class="bg-gray-950/80 p-1.5 rounded-xl border border-gray-850">
-                            <span class="text-[9px] text-gray-500 block uppercase">Missing</span>
-                            <span id="tel-q-missing" class="font-bold text-rose-400 text-sm">0</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Gauge 4: Statutory Compliance & Privacy Index -->
-                <div class="glass-panel p-5 rounded-3xl border border-purple-500/20 space-y-3 shadow-xl">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center gap-1.5 font-mono">
-                            <i data-lucide="shield-check" class="w-4 h-4 text-purple-400"></i> Data Governance
-                        </span>
-                        <span class="text-[10px] font-bold text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 font-mono">GDPR/CCPA</span>
-                    </div>
-                    <div>
-                        <p id="tel-privacy-erased-count" class="text-2xl font-black text-white font-mono">0 Purged</p>
-                        <p class="text-[10px] text-purple-300 flex items-center gap-1 mt-1 font-mono">
-                            <i data-lucide="check" class="w-3 h-3 text-emerald-400"></i> 7-Yr Statutory Ledger Locked
-                        </p>
-                    </div>
-                    <div class="flex justify-between text-[10px] text-gray-400 font-mono pt-1 border-t border-gray-850">
-                        <span>Audit Log Ref: <strong id="tel-audit-latest" class="text-white">Active</strong></span>
-                        <span>Compliance: <strong class="text-emerald-300">100%</strong></span>
                     </div>
                 </div>
             </div>
@@ -1139,28 +1091,12 @@
             const totalAccounts = facSubs.length > 0 ? facSubs.length : facUserIds.size;
             const avgRate = facTotes.length > 0 ? (totalMrr / facTotes.length) : (Number(fac.tier1_rate) || 5.00);
 
-            document.getElementById('tel-mrr-total').textContent = `$${totalMrr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            document.getElementById('tel-subs-count').textContent = `${totalAccounts} Account${totalAccounts === 1 ? '' : 's'}`;
-            document.getElementById('tel-avg-rate').textContent = `$${avgRate.toFixed(2)}/tote`;
-
-            // 3. Queue Velocity (Intake / Staged / Dispatch / Missing)
-            const qIntake = facTotes.filter(i => i.status === 'intake' || (!i.status || i.status === 'pending-intake')).length;
-            const qStaged = facTotes.filter(i => i.status === 'staged' || i.status === 'pending-stage').length;
-            const qDispatch = facTotes.filter(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery' || i.status === 'with-customer').length;
-            const qMissing = facTotes.filter(i => i.status === 'missing-tote').length;
-
-            document.getElementById('tel-q-intake').textContent = qIntake;
-            document.getElementById('tel-q-staged').textContent = qStaged;
-            document.getElementById('tel-q-dispatch').textContent = qDispatch;
-            document.getElementById('tel-q-missing').textContent = qMissing;
-            document.getElementById('tel-total-ops-count').textContent = `${qIntake + qStaged + qDispatch + qMissing} In Flight`;
-
-            // 4. Data Governance & Statutory Logs
-            const purgedCount = cachedPrivacyLogs ? cachedPrivacyLogs.length : 0;
-            const purgedCountEl = document.getElementById('tel-privacy-erased-count');
-            if (purgedCountEl) purgedCountEl.textContent = `${purgedCount} Purged`;
-            const auditLatestEl = document.getElementById('tel-audit-latest');
-            if (auditLatestEl) auditLatestEl.textContent = purgedCount > 0 ? `${purgedCount} Logged` : 'Active';
+            const mrrEl = document.getElementById('tel-mrr-total');
+            const subsEl = document.getElementById('tel-subs-count');
+            const avgRateEl = document.getElementById('tel-avg-rate');
+            if (mrrEl) mrrEl.textContent = `$${totalMrr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            if (subsEl) subsEl.textContent = `${totalAccounts} Account${totalAccounts === 1 ? '' : 's'}`;
+            if (avgRateEl) avgRateEl.textContent = `$${avgRate.toFixed(2)}/tote`;
         }
 
         // =========================================================================
