@@ -3832,12 +3832,10 @@
         }
 
         const STAFF_ROLES = ['executive', 'warehouse_manager', 'warehouse_worker'];
+        let hasInitializedDashboardAuth = false;
 
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            if (!session) {
-                window.location.href = 'login.html';
-                return;
-            }
+        async function setupAuthenticatedDashboard(session) {
+            if (!session || !session.user) return;
             currentUser = session.user;
 
             try {
@@ -4261,7 +4259,66 @@
                     handleSubsUpdate(payload.new);
                 })
                 .subscribe();
+        }
+
+        async function initDashboardAuth() {
+            try {
+                if (typeof supabase === 'undefined') {
+                    console.error("Supabase SDK not loaded on dashboard.");
+                    return;
+                }
+
+                const { data: sessionData, error } = await supabase.auth.getSession();
+                const session = sessionData?.session;
+
+                if (!session || !session.user) {
+                    // Double check session with a slight delay to allow storage hydration across tabs
+                    setTimeout(async () => {
+                        try {
+                            const { data: retryData } = await supabase.auth.getSession();
+                            const retrySession = retryData?.session;
+                            if (retrySession && retrySession.user) {
+                                if (!hasInitializedDashboardAuth) {
+                                    hasInitializedDashboardAuth = true;
+                                    await setupAuthenticatedDashboard(retrySession);
+                                }
+                            } else {
+                                window.location.href = 'login.html';
+                            }
+                        } catch (e) {
+                            window.location.href = 'login.html';
+                        }
+                    }, 250);
+                    return;
+                }
+
+                if (hasInitializedDashboardAuth) return;
+                hasInitializedDashboardAuth = true;
+                await setupAuthenticatedDashboard(session);
+
+            } catch (err) {
+                console.error("Dashboard auth init exception:", err);
+                window.location.href = 'login.html';
+            }
+        }
+
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_OUT') {
+                clearUserCache();
+                window.location.href = 'login.html';
+                return;
+            }
+            if (session && session.user && !hasInitializedDashboardAuth) {
+                hasInitializedDashboardAuth = true;
+                await setupAuthenticatedDashboard(session);
+            }
         });
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => initDashboardAuth());
+        } else {
+            initDashboardAuth();
+        }
 
         // ============================================================
         // Stripe Split Card Elements Controller (Card Only • Dedicated Lines)

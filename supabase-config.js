@@ -4,28 +4,28 @@
 const SUPABASE_URL = "https://xbxvebnrjryvksvtufqj.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_-cW5neaZRGmicOHaHw1n3g_laY5yFZQ";
 
-// Custom Storage Engine supporting "Remember Me" toggle (localStorage vs sessionStorage)
+// Safe Session Storage Engine supporting cross-tab persistence & robust token recovery
 const customStorageEngine = {
     getItem: (key) => {
-        const isRemember = localStorage.getItem('cv_remember_me') === 'true';
-        if (isRemember) {
+        try {
             return localStorage.getItem(key) || sessionStorage.getItem(key);
+        } catch (e) {
+            return null;
         }
-        return sessionStorage.getItem(key) || localStorage.getItem(key);
     },
     setItem: (key, value) => {
-        const isRemember = localStorage.getItem('cv_remember_me') === 'true';
-        if (isRemember) {
+        try {
             localStorage.setItem(key, value);
-            sessionStorage.removeItem(key);
-        } else {
             sessionStorage.setItem(key, value);
-            localStorage.removeItem(key);
+        } catch (e) {
+            try { sessionStorage.setItem(key, value); } catch (e2) {}
         }
     },
     removeItem: (key) => {
-        localStorage.removeItem(key);
-        sessionStorage.removeItem(key);
+        try {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+        } catch (e) {}
     }
 };
 
