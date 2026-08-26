@@ -2514,12 +2514,18 @@
             const stagingRoomItems = (currentInventory || []).filter(i => i.status === 'pending-stage' || i.status === 'staged');
             const valetItems = (currentInventory || []).filter(i => i.status === 'pending-dispatch' || i.status === 'out-for-delivery');
             
+            const transferReqs = (currentRequests || []).filter(r => 
+                (r.request_type === 'facility_transfer' || r.fulfillment_type === 'facility_transfer' || (r.delivery_notes && r.delivery_notes.includes('TRANSFER PULL'))) &&
+                r.status !== 'completed' && r.status !== 'cancelled'
+            );
+            
             const activationReqs = (currentRequests || []).filter(r => 
                 (r.request_type === 'intake' || r.request_type === 'activation' || r.request_type === 'new_tote_delivery' || r.request_type === 'new_totes') &&
+                !transferReqs.includes(r) &&
                 r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
             );
             const retrievalReqs = (currentRequests || []).filter(r => 
-                !activationReqs.includes(r) &&
+                !activationReqs.includes(r) && !transferReqs.includes(r) &&
                 r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
             );
 
@@ -2554,33 +2560,42 @@
             };
 
             // ── 0. Inter-Facility Market Transfer Flow Cards ──────────────────────────────
-            const transferReqs = (currentRequests || []).filter(r => 
-                (r.request_type === 'facility_transfer' || r.fulfillment_type === 'facility_transfer' || (r.delivery_notes && r.delivery_notes.includes('TRANSFER PULL'))) &&
-                r.status !== 'completed' && r.status !== 'cancelled'
-            );
-
             if (transferReqs.length > 0) {
                 transferReqs.forEach(req => {
                     const isOutInTransit = req.status === 'out-for-delivery' || (currentInventory || []).some(t => t.status === 'out-for-delivery');
                     const isPulledPrepped = isOutInTransit || req.status === 'dispatched' || (currentInventory || []).some(t => t.status === 'pending-dispatch');
-                    const destFacilityName = window.currentActiveFacility?.name || 'Destination Hub';
+
+                    // Resolve Origin and Destination Hub names
+                    let originName = 'Yakima Fulfillment Center';
+                    if (req.facility_id === 'facility_seattle_north') originName = 'Seattle North Fulfillment Center';
+                    else if (req.facility_id === 'facility_portland_central') originName = 'Portland Central Hub';
+                    else if (req.facility_id === 'facility_spokane_hub') originName = 'Spokane Regional Hub';
+                    else if (req.facility_id === 'facility_yakima') originName = 'Yakima Fulfillment Center';
+
+                    const destFacId = currentUserProfile?.assigned_facility_id || currentProfile?.assigned_facility_id || 'facility_seattle_north';
+                    let destName = window.currentActiveFacility?.name || 'Seattle North Fulfillment Center';
+                    if (destFacId === 'facility_seattle_north') destName = 'Seattle North Fulfillment Center';
+                    else if (destFacId === 'facility_portland_central') destName = 'Portland Central Hub';
+                    else if (destFacId === 'facility_spokane_hub') destName = 'Spokane Regional Hub';
+                    else if (destFacId === 'facility_yakima') destName = 'Yakima Fulfillment Center';
 
                     (currentInventory || []).forEach(t => handledToteIds.add(t.id));
 
                     cards.push(buildFlowCard({
                         flowType: 'facility-transfer',
-                        icon: '🚚',
+                        icon: '🚛',
                         title: `Inter-Facility Market Transfer — Stored Totes in Transit`,
-                        subtitle: `Transferring your stored inventory safely to ${destFacilityName}`,
+                        subtitle: `Moving from ${originName} ➔ ${destName}`,
                         badgeText: isOutInTransit ? 'FREIGHT IN TRANSIT' : 'TRANSIT PULL IN PROGRESS',
-                        badgeColor: 'blue',
+                        badgeColor: isOutInTransit ? 'emerald' : 'blue',
                         steps: [
-                            { label: '1. Vault Shelf Pull', sub: isPulledPrepped ? '✓ Pulled at origin hub' : 'Pulling stored totes...', done: isPulledPrepped, active: !isPulledPrepped },
-                            { label: '2. Inter-City Freight', sub: isOutInTransit ? '🚚 On freight transport truck' : 'Staging for freight load...', done: isOutInTransit, active: isPulledPrepped && !isOutInTransit },
-                            { label: '3. Destination Intake', sub: `Intake & shelving at ${destFacilityName}`, done: false, active: isOutInTransit },
-                            { label: '4. Ready in New City', sub: 'Available for pickups & valet', done: false, active: false },
+                            { label: '1. Origin Vault Pull', sub: isPulledPrepped ? `✓ Pulled from ${originName}` : `Pulling in ${originName}...`, done: isPulledPrepped, active: !isPulledPrepped },
+                            { label: '2. Freight Bay Staging', sub: isPulledPrepped ? '✓ Staged for transport' : 'Dock staging pending...', done: isPulledPrepped, active: !isPulledPrepped },
+                            { label: '3. Road Freight Transit', sub: isOutInTransit ? '🚚 On transport truck' : 'Dispatching to road...', done: isOutInTransit, active: isPulledPrepped && !isOutInTransit },
+                            { label: '4. Destination Vault Intake', sub: `Incoming shelving at ${destName}`, done: false, active: isOutInTransit },
                         ],
                         totes: currentInventory,
+                        pinBlock: buildFacilityTransferBlock(originName, destName, isOutInTransit, isPulledPrepped),
                         overrideNotice: 'All active stored totes are being freight-transferred between facilities complimentary ($0.00). Your subscription rate and price-lock remain protected.',
                     }));
                 });
@@ -3051,6 +3066,54 @@
                 <p class="text-[10px] text-blue-200 font-mono">Driver scheduled for ${dateStr}</p>
             </div>
             ${liveBlock}`;
+        }
+
+        function buildFacilityTransferBlock(originName, destName, isOutInTransit, isPulledPrepped) {
+            let statusLabel = 'Vault Pull in Progress';
+            let statusSub = `Warehouse staff at ${escapeHtml(originName)} are pulling your totes from vault storage shelves.`;
+            let statusBadge = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+
+            if (isOutInTransit) {
+                statusLabel = '🚚 Freight Truck En Route';
+                statusSub = `Your stored totes are currently on a dedicated transport truck moving safely to ${escapeHtml(destName)}.`;
+                statusBadge = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+            } else if (isPulledPrepped) {
+                statusLabel = '📦 Staged at Loading Dock';
+                statusSub = `Totes have been pulled from shelves and staged at the ${escapeHtml(originName)} freight bay for transport dispatch.`;
+                statusBadge = 'bg-blue-500/20 text-blue-300 border-blue-500/40';
+            }
+
+            return `
+            <div class="mt-2.5 bg-gray-950/90 border border-blue-500/30 rounded-xl p-3.5 space-y-3 shadow-md">
+                <div class="flex items-center justify-between border-b border-gray-800 pb-2">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-7 h-7 rounded-lg bg-blue-600/30 border border-blue-500/40 text-blue-300 flex items-center justify-center text-sm">
+                            🚛
+                        </div>
+                        <div>
+                            <p class="text-xs font-black text-white uppercase tracking-wider">${statusLabel}</p>
+                            <p class="text-[10px] text-gray-400 font-mono">Dedicated Inter-Facility Road Freight</p>
+                        </div>
+                    </div>
+                    <span class="text-[9px] font-mono font-black border ${statusBadge} px-2.5 py-1 rounded-full uppercase">${isOutInTransit ? 'EN ROUTE' : (isPulledPrepped ? 'STAGED' : 'PULLING')}</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div class="bg-gray-900/90 p-2.5 rounded-lg border border-gray-800 space-y-0.5">
+                        <span class="text-[9px] uppercase font-bold text-gray-400 block">Origin Storage Hub</span>
+                        <p class="font-extrabold text-white text-xs">${escapeHtml(originName)}</p>
+                    </div>
+                    <div class="bg-gray-900/90 p-2.5 rounded-lg border border-gray-800 space-y-0.5">
+                        <span class="text-[9px] uppercase font-bold text-blue-400 block">Destination Storage Hub</span>
+                        <p class="font-extrabold text-emerald-400 text-xs">${escapeHtml(destName)}</p>
+                    </div>
+                </div>
+
+                <div class="bg-blue-950/50 p-2.5 rounded-lg border border-blue-800/40 flex items-start gap-2 text-[11px] text-blue-200">
+                    <span class="text-xs shrink-0">🛡️</span>
+                    <span>${statusSub} <strong>No customer action required</strong> — your totes will be securely sheltered directly into the new destination vault.</span>
+                </div>
+            </div>`;
         }
 
         function renderActiveRequests() {
