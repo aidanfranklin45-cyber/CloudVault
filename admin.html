@@ -13638,20 +13638,25 @@
                 return;
             }
 
-            if (!confirm(`Are you sure you want to immediately revoke physical badge credentials for ${activeBadgeTarget.userName}? They will be unable to scan-to-login.`)) {
+            const targetUserName = activeBadgeTarget.userName;
+            const badgeIdToRevoke = activeBadgeTarget.badgeId;
+
+            if (!confirm(`Are you sure you want to immediately revoke physical badge credentials for ${targetUserName}? They will be unable to scan-to-login.`)) {
                 return;
             }
 
             try {
                 const { error } = await supabase.rpc('revoke_employee_badge', {
-                    p_badge_id: activeBadgeTarget.badgeId
+                    p_badge_id: badgeIdToRevoke
                 });
 
                 if (error) throw error;
 
-                showBadgeScanToast(`✓ Badge revoked for ${activeBadgeTarget.userName}`, 'error');
+                showBadgeScanToast(`✓ Badge revoked for ${targetUserName}`, 'error');
                 closeEmployeeBadgeModal();
-                loadManagerLiveData();
+                if (typeof loadManagerLiveData === 'function') {
+                    loadManagerLiveData();
+                }
             } catch (err) {
                 alert("Revocation failed: " + (err.message || err));
             }
