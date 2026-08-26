@@ -2524,10 +2524,9 @@
                         const anyOnTruck = loadedCount > 0;
 
                         const effectiveReq = Object.assign({}, req, {
-                            status: allOnTruck ? 'out-for-delivery' : (anyOnTruck ? 'loading-on-van' : (req.status || 'pending')),
+                            status: allOnTruck ? 'out-for-delivery' : (anyOnTruck ? 'loading-for-delivery' : (req.status || 'pending')),
                             isOutForDelivery: allOnTruck,
-                            driver_name: req.driver_name || 'Active Fleet Driver',
-                            vehicle_info: req.vehicle_info || 'Valet Delivery Van (VALET-TRUCK-A)'
+                            driver_name: req.driver_name || 'CloudVault Driver'
                         });
 
                         if (allOnTruck) {
@@ -2541,7 +2540,7 @@
                                 steps: [
                                     { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
                                     { label: '2. Intake Prep', sub: `✓ All ${totalCount} empty totes prepped`, done: true },
-                                    { label: '3. On Truck', sub: `✓ All ${totalCount} totes on delivery van`, done: true },
+                                    { label: '3. Dispatched', sub: `✓ All ${totalCount} totes en route for delivery`, done: true },
                                     { label: '4. With Customer', sub: 'Driver en route • Arriving soon', done: false, active: true },
                                 ],
                                 totes: reqTotes,
@@ -2552,13 +2551,13 @@
                                 flowType: 'activation-valet',
                                 icon: '🚚',
                                 title: 'New Tote Activation — Valet Door Delivery',
-                                subtitle: `Loading in progress • ${loadedCount}/${totalCount} totes prepped on van`,
-                                badgeText: `LOADING IN PROGRESS (${loadedCount}/${totalCount})`,
+                                subtitle: `Dispatch in progress • ${loadedCount}/${totalCount} totes prepped`,
+                                badgeText: `DISPATCH IN PROGRESS (${loadedCount}/${totalCount})`,
                                 badgeColor: 'blue',
                                 steps: [
                                     { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
                                     { label: '2. Intake Prep', sub: `✓ Empty totes prepped`, done: true },
-                                    { label: '3. On Truck', sub: `Loading on van (${loadedCount}/${totalCount} prepped)`, done: false, active: true },
+                                    { label: '3. Dispatched', sub: `Prepping for delivery (${loadedCount}/${totalCount} prepped)`, done: false, active: true },
                                     { label: '4. With Customer', sub: `Scheduled: ${dateStr}`, done: false, active: false },
                                 ],
                                 totes: reqTotes,
@@ -2575,7 +2574,7 @@
                                 steps: [
                                     { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
                                     { label: '2. Intake Prep', sub: `Prepping ${totalCount} empty totes in intake`, done: false, active: true },
-                                    { label: '3. On Truck', sub: 'Loading on van', done: false, active: false },
+                                    { label: '3. Dispatched', sub: 'Prepping for delivery', done: false, active: false },
                                     { label: '4. With Customer', sub: `Scheduled: ${dateStr}`, done: false, active: false },
                                 ],
                                 totes: reqTotes,
@@ -2666,7 +2665,7 @@
                                 badgeColor: 'orange',
                                 steps: [
                                     { label: '1. Vault Pull', sub: '✓ Pulled from deep storage', done: true, active: false },
-                                    { label: '2. On Truck', sub: '✓ Loaded on delivery van', done: true, active: false },
+                                    { label: '2. En Route', sub: '✓ Dispatched for delivery', done: true, active: false },
                                     { label: '3. With Customer', sub: 'Driver en route • Arriving soon', done: false, active: true },
                                     { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
                                 ],
@@ -2684,7 +2683,7 @@
                                 badgeColor: 'blue',
                                 steps: [
                                     { label: '1. Vault Pull', sub: '✓ Pulled from deep storage', done: true, active: false },
-                                    { label: '2. On Truck', sub: 'Loading on delivery van', done: false, active: true },
+                                    { label: '2. Dispatched', sub: 'Prepping for delivery', done: false, active: true },
                                     { label: '3. With Customer', sub: dateStr, done: false, active: false },
                                     { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
                                 ],
@@ -2703,8 +2702,8 @@
                                 badgeColor: 'amber',
                                 steps: [
                                     { label: '1. Vault Storage', sub: 'Pulling from storage bay...', done: false, active: true },
-                                    { label: '2. Staging & Loading', sub: 'Awaiting truck loading...', done: false, active: false },
-                                    { label: '3. On Truck (Valet)', sub: `Dispatch window: ${timeStr}`, done: false, active: false },
+                                    { label: '2. Staging & Loading', sub: 'Awaiting dispatch...', done: false, active: false },
+                                    { label: '3. En Route (Valet)', sub: `Dispatch window: ${timeStr}`, done: false, active: false },
                                     { label: '4. With Customer', sub: dateStr, done: false, active: false },
                                 ],
                                 totes: groupTotesToDisplay,
@@ -2752,12 +2751,12 @@
                     badgeColor: isOutForDelivery ? 'orange' : 'blue',
                     steps: [
                         { label: '1. Vault & Intake Pull', sub: '✓ Pulled from deep storage', done: true },
-                        { label: '2. On Truck', sub: isOutForDelivery ? 'Driver en route to you' : 'Loading on van', done: false, active: true },
+                        { label: '2. En Route', sub: isOutForDelivery ? 'Driver en route to you' : 'Dispatched for delivery', done: false, active: true },
                         { label: '3. With Customer', sub: isOutForDelivery ? 'Arriving soon' : dateStr, done: false, active: false },
                         { label: '4. Back to Vault', sub: 'After customer done', done: false, active: false },
                     ],
                     totes: unhandledValetTotes,
-                    pinBlock: buildValetBlock(upcoming.timeSlot, dateStr, { driver_name: 'CloudVault Driver', vehicle_info: 'Sprinter Delivery Van', status: isOutForDelivery ? 'out-for-delivery' : 'pending-dispatch' }),
+                    pinBlock: buildValetBlock(upcoming.timeSlot, dateStr, { driver_name: 'CloudVault Driver', status: isOutForDelivery ? 'out-for-delivery' : 'pending-dispatch' }),
                 }));
             }
 
@@ -2772,8 +2771,7 @@
 
         function buildLiveDriverTrackingBlock(req) {
             if (!req) return '';
-            const driverName = req.driver_name || 'Active Fleet Driver';
-            const vehicle = req.vehicle_info || 'Valet Delivery Van (VALET-TRUCK-A)';
+            const driverName = req.driver_name || 'CloudVault Driver';
             const trkStatus = (req.status === 'out-for-delivery' || req.isOutForDelivery) ? 'out-for-delivery' : (req.status || 'out-for-delivery');
             const driverPhone = req.driver_phone || '';
 
@@ -2802,13 +2800,13 @@
                     </div>
 
                     <div class="flex items-center justify-between gap-2 text-xs">
-                        <div class="flex items-center space-x-2">
+                        <div class="flex items-center space-x-2.5">
                             <div class="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 font-bold flex items-center justify-center text-xs flex-shrink-0">
                                 🚚
                             </div>
                             <div>
                                 <p class="text-xs font-bold text-white leading-tight">${escapeHtml(driverName)}</p>
-                                <p class="text-[10px] text-gray-400 font-mono">${escapeHtml(vehicle)}</p>
+                                <p class="text-[10px] text-gray-400 font-mono">Doorstep Courier</p>
                             </div>
                         </div>
                         <div class="text-right">
@@ -7519,40 +7517,12 @@
                 try {
                     if (!currentUser) throw new Error("No active user session");
 
-                    // 1. Cancel all pending access requests for this user
-                    await supabase
-                        .from('access_requests')
-                        .update({ 
-                            status: 'cancelled',
-                            delivery_notes: 'Order cancelled by customer before initial delivery completion' 
-                        })
-                        .eq('uid', currentUser.id)
-                        .in('status', ['pending', 'staged', 'pending-dispatch', 'scheduled', 'out-for-delivery']);
+                    // Execute atomic server-side cancellation & tote release
+                    const { data, error } = await supabase.rpc('cancel_customer_pre_delivery', {
+                        p_user_id: currentUser.id
+                    });
 
-                    // 2. Clear assigned un-intaked/empty totes from inventory
-                    await supabase
-                        .from('inventory')
-                        .delete()
-                        .eq('uid', currentUser.id)
-                        .in('status', ['pending-dispatch', 'pending-intake', 'intake', 'available']);
-
-                    // 3. Mark subscription as cancelled
-                    await supabase
-                        .from('subscriptions')
-                        .update({ 
-                            status: 'cancelled',
-                            cancelled_at: new Date().toISOString()
-                        })
-                        .eq('uid', currentUser.id);
-
-                    // 4. Update user profile
-                    await supabase
-                        .from('users')
-                        .update({
-                            subscription_status: 'cancelled',
-                            onboarding_status: 'cancelled'
-                        })
-                        .eq('id', currentUser.id);
+                    if (error) throw error;
 
                     closePreDeliveryCancelModal();
                     showToast('✓ Order and subscription cancelled. No return pickup required.');

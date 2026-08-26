@@ -6349,3 +6349,57 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- RPC: Atomic Cancellation & Tote Release for Pre-Delivery Orders
+CREATE OR REPLACE FUNCTION public.cancel_customer_pre_delivery(
+    p_user_id UUID DEFAULT NULL
+) RETURNS JSONB SECURITY DEFINER AS $$
+DECLARE
+    v_user_id UUID;
+    v_req_count INT;
+    v_tote_count INT;
+BEGIN
+    v_user_id := COALESCE(p_user_id, auth.uid());
+    IF v_user_id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Not authenticated');
+    END IF;
+
+    -- 1. Cancel all active/pending access requests
+    UPDATE public.access_requests
+    SET status = 'cancelled',
+        delivery_notes = COALESCE(delivery_notes, '') || ' [Cancelled before delivery completion]'
+    WHERE uid = v_user_id
+      AND status NOT IN ('completed', 'cancelled', 'returned-to-vault');
+    GET DIAGNOSTICS v_req_count = ROW_COUNT;
+
+    -- 2. Clear any warehouse locations referencing user's totes
+    UPDATE public.warehouse_locations
+    SET assigned_tote_id = NULL
+    WHERE assigned_tote_id IN (SELECT id FROM public.inventory WHERE uid = v_user_id);
+
+    -- 3. Delete the pre-delivery empty tote records for this user
+    DELETE FROM public.inventory WHERE uid = v_user_id;
+    GET DIAGNOSTICS v_tote_count = ROW_COUNT;
+
+    -- 4. Cancel all subscriptions for this user
+    UPDATE public.subscriptions
+    SET status = 'cancelled',
+        canceled_at = NOW(),
+        updated_at = NOW()
+    WHERE uid = v_user_id;
+
+    -- 5. Update user profile
+    UPDATE public.users
+    SET subscription_status = 'cancelled',
+        onboarding_status = 'cancelled',
+        active_totes_held = 0
+    WHERE id = v_user_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'cancelled_requests', v_req_count,
+        'released_totes', v_tote_count,
+        'message', 'Order and subscription cancelled successfully.'
+    );
+END;
+$$ LANGUAGE plpgsql;
+
