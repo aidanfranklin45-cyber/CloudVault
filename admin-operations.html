@@ -1368,22 +1368,7 @@
             document.getElementById('relocate-customer-search').value = `${user.name || user.email} (${user.email})`;
             document.getElementById('relocate-customer-results').classList.add('hidden');
 
-            const box = document.getElementById('relocate-summary-box');
-            if (box) {
-                const toteCount = cachedInventory.filter(i => i.uid === user.id).length;
-                box.classList.remove('hidden');
-                box.innerHTML = `
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-bold text-gray-200">
-                        <span>Customer: <strong class="text-cyan-400">${escapeHtml(user.name || 'Customer')}</strong> &bull; <span class="text-gray-400">${escapeHtml(user.email)}</span></span>
-                        <span class="bg-gray-900 border border-gray-800 text-gray-400 px-2.5 py-0.5 rounded-lg font-mono text-[11px]">UID: ${user.id.substring(0, 8)}...</span>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-6 text-[11px] text-gray-400 pt-2 border-t border-gray-900">
-                        <div>Current Facility: <strong class="text-white">${user.assigned_facility_id || 'Unassigned'}</strong></div>
-                        <div>Active Zone: <strong class="text-white">${user.active_zone || 'None'}</strong></div>
-                        <div>Active Inventory: <strong class="text-emerald-400">${toteCount} Tote(s)</strong></div>
-                    </div>
-                `;
-            }
+            renderRelocateSummary();
         }
 
         function onRelocateFacilityChanged(facId) {
@@ -1393,8 +1378,82 @@
             if (zone && zone.zip_codes && zone.zip_codes.length > 0) {
                 zipInput.value = zone.zip_codes[0];
             } else {
-                zipInput.value = '';
+                const fac = cachedFacilities.find(f => f.id === facId);
+                zipInput.value = fac?.zip || '';
             }
+            renderRelocateSummary();
+        }
+
+        function renderRelocateSummary() {
+            const userId = document.getElementById('relocate-selected-user-id')?.value;
+            const user = allCustomersRoster.find(u => u.id === userId);
+            const box = document.getElementById('relocate-summary-box');
+            if (!box) return;
+
+            if (!user) {
+                box.classList.add('hidden');
+                return;
+            }
+
+            const targetSel = document.getElementById('relocate-target-facility-select');
+            const targetFacId = targetSel ? targetSel.value : null;
+            const targetFac = cachedFacilities.find(f => f.id === targetFacId);
+            const targetZip = document.getElementById('relocate-target-zip-input')?.value.trim() || targetFac?.zip || 'Pending ZIP';
+
+            const userTotes = cachedInventory.filter(i => i.uid === user.id);
+            const toteCount = userTotes.length || 1;
+
+            const isPriceLocked = user.has_price_lock && (!user.price_lock_expires_at || new Date(user.price_lock_expires_at) > new Date());
+
+            let previewNewRate = '5.00';
+            let tierName = 'Tier 1 Standard';
+            if (targetFac) {
+                if (isPriceLocked) {
+                    previewNewRate = 'Grandfathered Lock';
+                    tierName = 'Price-Locked Rate Protected';
+                } else {
+                    if (toteCount >= 30) {
+                        previewNewRate = `$${Number(targetFac.tier4_rate || 1.00).toFixed(2)}/tote`;
+                        tierName = 'Tier 4 Enterprise';
+                    } else if (toteCount >= 15) {
+                        previewNewRate = `$${Number(targetFac.tier3_rate || 2.00).toFixed(2)}/tote`;
+                        tierName = 'Tier 3 Commercial';
+                    } else if (toteCount >= 5) {
+                        previewNewRate = `$${Number(targetFac.tier2_rate || 3.50).toFixed(2)}/tote`;
+                        tierName = 'Tier 2 Preferred';
+                    } else {
+                        previewNewRate = `$${Number(targetFac.tier1_rate || 5.00).toFixed(2)}/tote`;
+                        tierName = 'Tier 1 Standard';
+                    }
+                }
+            }
+
+            box.classList.remove('hidden');
+            box.innerHTML = `
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-bold text-gray-200">
+                    <span>Customer: <strong class="text-cyan-400">${escapeHtml(user.name || 'Customer')}</strong> &bull; <span class="text-gray-400">${escapeHtml(user.email)}</span></span>
+                    <span class="bg-gray-900 border border-gray-800 text-gray-400 px-2.5 py-0.5 rounded-lg font-mono text-[11px]">UID: ${user.id.substring(0, 8)}...</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-gray-300 pt-2 border-t border-gray-900">
+                    <div class="bg-gray-900/60 p-2.5 rounded-xl border border-gray-800 space-y-1">
+                        <div class="text-gray-400 font-bold uppercase text-[10px]">Current Location</div>
+                        <div>Facility: <strong class="text-white">${user.assigned_facility_id || 'Unassigned'}</strong></div>
+                        <div>Active Zone: <strong class="text-amber-300">${user.active_zone || 'None'}</strong></div>
+                        <div>Active Totes: <strong class="text-emerald-400">${userTotes.length} Tote(s)</strong></div>
+                    </div>
+                    <div class="bg-cyan-950/20 p-2.5 rounded-xl border border-cyan-500/30 space-y-1">
+                        <div class="text-cyan-400 font-bold uppercase text-[10px]">Target Destination</div>
+                        <div>Target Facility: <strong class="text-white">${targetFac ? targetFac.name : 'Select facility...'}</strong></div>
+                        <div>Target ZIP: <strong class="text-amber-300">${targetZip}</strong></div>
+                        <div>Pricing Matrix: <strong class="text-cyan-300">${previewNewRate} (${tierName})</strong></div>
+                    </div>
+                    <div class="bg-indigo-950/20 p-2.5 rounded-xl border border-indigo-500/30 space-y-1">
+                        <div class="text-indigo-400 font-bold uppercase text-[10px]">Stripe Dynamic Taxes</div>
+                        <div class="text-[10px] text-gray-300">Stripe Tax dynamically calculates destination sales tax via customer billing address (ZIP: <span class="text-amber-300 font-bold font-mono">${targetZip}</span>).</div>
+                        <div class="text-[10px] text-emerald-400 font-bold">✓ Zero hardcoded tax rates</div>
+                    </div>
+                </div>
+            `;
         }
 
         async function executeCustomerRelocation() {
@@ -1417,7 +1476,7 @@
             const userName = user ? (user.name || user.email) : userId;
             const targetFacName = targetSel.options[targetSel.selectedIndex]?.text || newFacilityId;
 
-            if (!confirm(`Are you sure you want to transfer ${userName} to ${targetFacName}${newZip ? ` (ZIP: ${newZip})` : ''}?`)) {
+            if (!confirm(`Are you sure you want to transfer ${userName} to ${targetFacName}${newZip ? ` (ZIP: ${newZip})` : ''}?\n\nThis will reassign their facility, update their address ZIP for Stripe dynamic tax, and re-rate their subscription.`)) {
                 return;
             }
 
@@ -1428,6 +1487,7 @@
 
             try {
                 let movedTotesCount = 0;
+                let newRateText = '';
                 const { data: rpcRes, error: rpcErr } = await supabase.rpc('transfer_customer_facility', {
                     p_target_uid: userId,
                     p_new_facility_id: newFacilityId,
@@ -1436,20 +1496,20 @@
                 });
 
                 if (rpcErr) {
-                    await supabase.from('users').update({ assigned_facility_id: newFacilityId, active_zone: newZip || null }).eq('id', userId);
-                    if (moveTotes) {
-                        const { data: updatedTotes } = await supabase.from('inventory').update({ facility_id: newFacilityId }).eq('uid', userId).select('id');
-                        if (updatedTotes) movedTotesCount = updatedTotes.length;
-                    }
-                } else if (rpcRes && rpcRes.totes_reassigned) {
-                    movedTotesCount = rpcRes.totes_reassigned;
+                    console.error("RPC Error:", rpcErr);
+                    throw rpcErr;
+                } else if (rpcRes) {
+                    movedTotesCount = rpcRes.totes_reassigned || 0;
+                    newRateText = rpcRes.new_tote_rate ? ` @ $${Number(rpcRes.new_tote_rate).toFixed(2)}/tote` : '';
                 }
 
-                showToast(`✓ Success! Customer transferred to ${targetFacName}. (${movedTotesCount} totes reassigned)`);
-                logSystemActivity(`Customer ${userName} transferred to ${targetFacName}`);
-                loadAllConsoleData();
+                showToast(`✓ Success! ${userName} transferred to ${targetFacName}${newRateText}. (${movedTotesCount} totes moved to transit)`);
+                logSystemActivity(`Customer ${userName} relocated to ${targetFacName} (ZIP: ${newZip || 'default'}, ${movedTotesCount} totes reassigned)`);
+                await loadAllConsoleData();
+                renderRelocateSummary();
             } catch (err) {
-                alert("Transfer failed: " + err.message);
+                console.error("Relocation failed:", err);
+                alert("Transfer failed: " + (err.message || err));
             } finally {
                 btn.innerHTML = origHTML;
                 btn.disabled = false;
