@@ -4972,7 +4972,8 @@
                         const allCodesStr = totes.map(t => t.tote_code).join(', ');
                         const toteIdsJson = JSON.stringify(totes.map(t => t.id)).replace(/"/g, '&quot;');
 
-                        const targetPrefix = typeof getFacilityTotePrefix === 'function' ? getFacilityTotePrefix(window.currentLoadedFac?.id) : 'CV-SEA-';
+                        const activeFacId = (typeof getSafeSavedFacilityId === 'function' ? getSafeSavedFacilityId() : null) || document.getElementById('facility-select')?.value || 'facility_portland_central';
+                        const targetPrefix = typeof getFacilityTotePrefix === 'function' ? getFacilityTotePrefix(activeFacId) : 'CV-POR-';
                         const hasForeignPrefix = totes.some(t => t.tote_code && !t.tote_code.startsWith(targetPrefix));
                         const isTransferredIntake = hasForeignPrefix || totes.some(t => t.location_code === 'DEST-INTAKE-DOCK');
 
@@ -5903,12 +5904,14 @@
             }
         }
 
-        function getFacilityTotePrefix(facId) {
-            if (facId === 'facility_seattle_north') return 'CV-SEA-';
-            if (facId === 'facility_portland_central') return 'CV-POR-';
-            if (facId === 'facility_spokane_hub') return 'CV-SPO-';
-            if (facId === 'facility_yakima') return 'CV-YAK-';
-            return 'CV-SEA-';
+        function getFacilityTotePrefix(facId = null) {
+            const rawId = facId || (typeof getSafeSavedFacilityId === 'function' ? getSafeSavedFacilityId() : null) || document.getElementById('facility-select')?.value || window.facMapState?.activeFacilityId || 'facility_portland_central';
+            const id = String(rawId).toLowerCase();
+            if (id.includes('portland') || id.includes('pdx') || id.includes('por')) return 'CV-POR-';
+            if (id.includes('seattle') || id.includes('sea')) return 'CV-SEA-';
+            if (id.includes('spokane') || id.includes('spo')) return 'CV-SPO-';
+            if (id.includes('yakima') || id.includes('yak') || id.includes('selah')) return 'CV-YAK-';
+            return 'CV-POR-';
         }
 
         async function confirmTransferFreightArrival(customerUid, customerName, destFacId, toteIds = null) {
@@ -5953,7 +5956,8 @@
 
         async function reStampAndPrintDestinationTags(customerUid, customerName, toteIds) {
             if (!Array.isArray(toteIds) || toteIds.length === 0) return;
-            const targetPrefix = getFacilityTotePrefix(window.currentLoadedFac?.id);
+            const activeFacId = (typeof getSafeSavedFacilityId === 'function' ? getSafeSavedFacilityId() : null) || document.getElementById('facility-select')?.value || 'facility_portland_central';
+            const targetPrefix = getFacilityTotePrefix(activeFacId);
 
             try {
                 const { data: totes, error: fetchErr } = await supabase.from('inventory')
@@ -6006,13 +6010,16 @@
 
         async function batchReshelveTransferredTotes(customerUid, customerName, toteIds) {
             if (!Array.isArray(toteIds) || toteIds.length === 0) return;
-            const targetFacId = window.currentLoadedFac?.id || 'facility_portland_central';
-            const facShort = (targetFacId === 'facility_portland_central' ? 'POR' :
-                             targetFacId === 'facility_seattle_north' ? 'SEA' :
-                             targetFacId === 'facility_spokane_hub' ? 'SPO' : 'YAK');
+            const targetFacId = (typeof getSafeSavedFacilityId === 'function' ? getSafeSavedFacilityId() : null) || document.getElementById('facility-select')?.value || 'facility_portland_central';
+            const facShort = (targetFacId.includes('portland') || targetFacId.includes('pdx') ? 'POR' :
+                             targetFacId.includes('seattle') ? 'SEA' :
+                             targetFacId.includes('spokane') ? 'SPO' : 'YAK');
 
             const defaultShelf = `${facShort}-BAY-01-S01`;
-            const baseShelf = prompt(`Put away and reshelve ${toteIds.length} transferred totes in ${window.currentLoadedFac?.name || 'Vault'}.\n\nEnter starting shelf rack prefix:`, defaultShelf);
+            const facName = (targetFacId.includes('portland') ? 'Portland Central Hub' :
+                            targetFacId.includes('seattle') ? 'Seattle North Fulfillment Center' :
+                            targetFacId.includes('spokane') ? 'Spokane Regional Hub' : 'Yakima Fulfillment Center');
+            const baseShelf = prompt(`Put away and reshelve ${toteIds.length} transferred totes in ${facName} Vault.\n\nEnter starting shelf rack prefix:`, defaultShelf);
             if (!baseShelf || !baseShelf.trim()) return;
 
             try {
