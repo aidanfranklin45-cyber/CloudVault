@@ -8809,46 +8809,71 @@
                 const activeCity = [fac.city, fac.state].filter(Boolean).join(', ') || fac.name;
                 const hubName = fac.name;
 
-                let rawValetRequests = [];
+                let activeValetTotes = preloadedItems;
+                if (!activeValetTotes) {
+                    const { data } = await supabase.from('inventory')
+                        .select('id, uid, tote_code, label, status, facility_id, location_code')
+                        .eq('facility_id', queryFacilityId);
+                    activeValetTotes = data || [];
+                }
+
+                let allValetRequests = [];
                 if (preloadedRequests && Array.isArray(preloadedRequests)) {
-                    rawValetRequests = preloadedRequests.filter(r => 
+                    allValetRequests = preloadedRequests.filter(r => 
                         matchesFacilityTarget(r, queryFacilityId) &&
                         (r.fulfillment_type === 'valet_delivery' || r.request_type === 'valet_delivery' || r.fulfillment_type === 'valet' || (r.fulfillment_type && r.fulfillment_type.includes('valet')) || (r.request_type && r.request_type.includes('valet'))) &&
-                        r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
+                        r.status !== 'cancelled' && r.status !== 'returned-to-vault'
                     );
                 } else {
                     const { data: rawRequests } = await supabase.from('access_requests')
                         .select('*, users!uid(id, name, active_zone, assigned_facility_id)')
                         .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%');
-                    rawValetRequests = (rawRequests || []).filter(r => 
+                    allValetRequests = (rawRequests || []).filter(r => 
                         matchesFacilityTarget(r, queryFacilityId) &&
-                        r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
+                        r.status !== 'cancelled' && r.status !== 'returned-to-vault'
                     );
                 }
 
-                let activeValetTotes = preloadedItems;
-                if (!activeValetTotes) {
-                    const { data } = await supabase.from('inventory')
-                        .select('id, uid, tote_code, label, status, facility_id')
-                        .eq('facility_id', queryFacilityId);
-                    activeValetTotes = data || [];
-                }
+                // Filter to requests that are either active/pending OR have associated totes with-customer / out-for-delivery
+                const rawValetRequests = allValetRequests.filter(r => {
+                    if (r.status !== 'completed') return true;
+                    // For completed initial requests, include if their totes are currently with the customer (awaiting pickup)
+                    const rawItems = r.requested_items || r.requested_tote_codes || [];
+                    const userTotes = (activeValetTotes || []).filter(t => 
+                        rawItems.includes(t.id) || rawItems.includes(t.tote_code) || t.uid === r.uid
+                    );
+                    return userTotes.some(t => t.status === 'with-customer' || t.status === 'out-for-delivery' || t.status === 'in-transit');
+                });
 
                 const stops = [];
+                const seenUserOrders = new Set();
 
                 // Process Active & Pending Valet Requests
                 (rawValetRequests || []).forEach(r => {
                     const uId = r.uid || (r.users ? r.users.id : null);
                     if (uId) {
                         const rawItems = r.requested_items || r.requested_tote_codes || [];
-                        const items = rawItems.map(it => {
-                            const matched = (activeValetTotes || []).find(t => t.id === it || t.tote_code === it);
-                            return matched ? matched.tote_code : it;
-                        });
+                        let matchedTotes = (activeValetTotes || []).filter(t => 
+                            rawItems.includes(t.id) || rawItems.includes(t.tote_code) || (t.uid === uId && (t.status === 'with-customer' || t.status === 'out-for-delivery' || t.status === 'pending-dispatch'))
+                        );
+                        if (matchedTotes.length === 0 && rawItems.length > 0) {
+                            matchedTotes = rawItems.map(it => ({ tote_code: it, status: 'with-customer' }));
+                        }
+                        const items = matchedTotes.map(t => t.tote_code || t.id);
 
-                        const isPickup = r.request_type === 'retrieval' || r.request_type === 'return_pickup' || r.request_type === 'exit_retrieval';
-                        const isInTransit = r.status === 'out-for-delivery' || r.status === 'in-transit';
-                        const stopType = isPickup ? 'return_pickup' : (isInTransit ? 'in_transit' : 'scheduled_dropoff');
+                        // Deduplicate stops per user if they share the same active tote batch
+                        const dedupKey = `${uId}_${items.sort().join(',')}`;
+                        if (seenUserOrders.has(dedupKey)) return;
+                        seenUserOrders.add(dedupKey);
+
+                        const hasWithCustomerTotes = matchedTotes.some(t => t.status === 'with-customer');
+                        const isExplicitPickup = r.request_type === 'retrieval' || r.request_type === 'return_pickup' || r.request_type === 'exit_retrieval';
+                        const isInTransit = r.status === 'out-for-delivery' || r.status === 'in-transit' || matchedTotes.some(t => t.status === 'out-for-delivery' || t.status === 'in-transit');
+
+                        // Stop type is RETURN PICKUP if totes are already with the customer (drop-off done) or explicit retrieval
+                        const stopType = (hasWithCustomerTotes || isExplicitPickup) 
+                            ? 'return_pickup' 
+                            : (isInTransit ? 'in_transit' : 'scheduled_dropoff');
 
                         const addr1 = r.delivery_address_line1 || '';
                         const addr2 = r.delivery_address_line2 || '';
@@ -8899,7 +8924,7 @@
                             const mapUrl = s.hasSpecificAddress ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address)}` : `https://maps.google.com/?q=${encodeURIComponent(s.address)}`;
 
                             const stopBadge = s.stopType === 'return_pickup'
-                                ? '<span class="text-[9px] font-black uppercase text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/30 font-mono">📦 RETURN PICKUP</span>'
+                                ? '<span class="text-[9px] font-black uppercase text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/30 font-mono">📦 DOORSTEP PICKUP</span>'
                                 : s.stopType === 'in_transit'
                                     ? '<span class="text-[9px] font-black uppercase text-orange-400 bg-orange-500/20 px-2 py-0.5 rounded border border-orange-500/30 font-mono">🚚 IN TRANSIT</span>'
                                     : '<span class="text-[9px] font-black uppercase text-cyan-400 bg-cyan-500/20 px-2 py-0.5 rounded border border-cyan-500/30 font-mono">📦 DROP-OFF</span>';
