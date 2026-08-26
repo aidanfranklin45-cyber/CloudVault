@@ -6408,12 +6408,25 @@
                     if (!inv) return 0;
                     const rawTotal = Number(inv.total_amount !== undefined ? inv.total_amount : (inv.totalAmount !== undefined ? inv.totalAmount : 0));
                     const rawTax = Number(inv.tax !== undefined ? inv.tax : (inv.taxAmount !== undefined ? inv.taxAmount : 0));
+                    const rawDiscount = Number(inv.discount !== undefined ? inv.discount : (inv.discountAmount !== undefined ? inv.discountAmount : 0));
                     
-                    if (rawTotal > 0 && rawTax > 0) return rawTotal;
-                    if (rawTotal > 0 && String(inv.facility_id || '').includes('portland')) return rawTotal; // Oregon has 0 tax
+                    if (rawTotal > 0 && (rawTax > 0 || rawDiscount > 0 || String(inv.facility_id || '').includes('portland'))) return rawTotal;
 
                     const subtotal = Number(inv.subtotal || 0);
-                    const discount = Number(inv.discount || 0);
+                    let discount = rawDiscount;
+
+                    // If discount is not recorded on invoice but promo is active on user account, apply promo discount
+                    if (discount === 0 && subtotal > 0 && currentUser?.referred_by_promo_code) {
+                        const promoMonths = currentUser.promo_discount_months || 2;
+                        const promoPct = currentUser.promo_discount_percent || 20;
+                        const promoStart = currentUser.promo_start_date ? new Date(currentUser.promo_start_date) : (currentUser.created_at ? new Date(currentUser.created_at) : new Date());
+                        const promoEnd = currentUser.promo_end_date ? new Date(currentUser.promo_end_date) : new Date(promoStart.getTime() + promoMonths * 30 * 24 * 60 * 60 * 1000);
+                        const invDate = new Date(inv.created_at || Date.now());
+                        if (invDate <= promoEnd) {
+                            discount = Math.round(subtotal * (promoPct / 100) * 100) / 100;
+                        }
+                    }
+
                     const netTaxable = Math.max(0, subtotal - discount);
 
                     // If tax was recorded, use it; otherwise dynamically calculate based on facility
