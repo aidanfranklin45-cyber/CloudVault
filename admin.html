@@ -2499,6 +2499,14 @@
             if (!targetFacId) return true;
             const cleanTarget = targetFacId.toLowerCase().replace('facility_', '').replace(/[^a-z0-9]/g, '');
 
+            // 0. Inter-facility transfer requests match BOTH origin AND destination facilities!
+            if (itemOrReq.request_type === 'facility_transfer' || itemOrReq.fulfillment_type === 'facility_transfer' || (itemOrReq.delivery_notes && itemOrReq.delivery_notes.includes('TRANSFER PULL'))) {
+                const notes = (itemOrReq.delivery_notes || '').toLowerCase();
+                if (notes.includes(cleanTarget) || (itemOrReq.destination_facility_id && itemOrReq.destination_facility_id.includes(cleanTarget))) {
+                    return true;
+                }
+            }
+
             // 1. Direct facility_id match
             const directFac = itemOrReq.facility_id;
             if (directFac) {
@@ -4754,8 +4762,11 @@
                             return null;
                         }).filter(Boolean));
                         
+                        const isTransfer = req.request_type === 'facility_transfer' || req.fulfillment_type === 'facility_transfer' || (req.delivery_notes && req.delivery_notes.includes('TRANSFER PULL'));
+                        
                         let matchingTotes = (items || []).filter(t => {
                             if (handledToteIds.has(t.id)) return false;
+                            if (isTransfer && t.uid === req.uid) return true;
                             if (reqIdentifiers.has(t.id) || reqIdentifiers.has(t.tote_code) || reqIdentifiers.has(t.barcode) || reqIdentifiers.has(t.label)) return true;
                             if (t.tote_code) {
                                 const parts = t.tote_code.split('-');
@@ -6074,10 +6085,16 @@
                     })
                     .in('id', toteIds);
 
-                // 3. Update customer profile's assigned facility
-                await supabase.from('users')
-                    .update({ assigned_facility_id: activeFacId })
-                    .eq('id', customerUid);
+                // 3. Update customer profile's assigned facility & transfer request facility_id
+                await Promise.all([
+                    supabase.from('users')
+                        .update({ assigned_facility_id: activeFacId })
+                        .eq('id', customerUid),
+                    supabase.from('access_requests')
+                        .update({ facility_id: activeFacId, status: 'pending' })
+                        .eq('uid', customerUid)
+                        .eq('request_type', 'facility_transfer')
+                ]);
 
                 // 4. Sync facility counts
                 await supabase.rpc('sync_facility_counts', {});
