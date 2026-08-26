@@ -4232,10 +4232,60 @@
         window.updateTpmLedger = updateTpmLedger;
         window.submitTpmAction = submitTpmAction;
 
-            // Get initial user profile
-            const { data: initialUser } = await supabase.from('users').select('*').eq('id', currentUser.id).maybeSingle();
-            handleProfileUpdate(initialUser);
+            // Parallel load profile, active subscriptions, and addresses
+            try {
+                const [userRes, subRes, addrRes] = await Promise.all([
+                    supabase.from('users').select('*').eq('id', currentUser.id).maybeSingle(),
+                    supabase.from('subscriptions').select('*').eq('uid', currentUser.id).order('created_at', { ascending: false }),
+                    supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle()
+                ]);
 
+                const initialUser = userRes?.data;
+                const subsList = subRes?.data || [];
+                const activeSub = subsList.find(s => s.status === 'active') || (subsList.length > 0 ? subsList[0] : null);
+                currentSubscription = activeSub;
+
+                if (addrRes?.data) {
+                    window.currentUserAddress = addrRes.data;
+                }
+
+                if (initialUser) {
+                    currentProfile = initialUser;
+                    currentUserProfile = initialUser;
+                    sessionStorage.setItem(`cv_user_${currentUser.id}`, JSON.stringify(initialUser));
+                    
+                    if (initialUser.name) {
+                        const pi = initialUser.name.split(' ').map(s => s[0]).join('').toUpperCase().slice(0, 2);
+                        const userAvatar = document.getElementById('user-avatar');
+                        if (userAvatar) userAvatar.textContent = pi;
+                    }
+                    if (initialUser.avatar_color) {
+                        currentUserColor = initialUser.avatar_color;
+                        applyAvatarColor(currentUserColor);
+                    }
+                    
+                    const userFac = initialUser.assigned_facility_id || initialUser.assigned_facility || 'facility_yakima';
+                    await loadAssignedFacilityPricing(userFac);
+                    renderOnboardingTracker(initialUser);
+                }
+
+                // Route dashboard flow with BOTH subscription and profile available
+                await checkAndRouteUserFlow(currentSubscription, currentProfile || currentUserProfile);
+
+                // Reveal dashboard
+                document.getElementById('loading-state').classList.add('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+
+                // Attach inventory listener
+                attachInventoryListener(currentUser.id);
+
+            } catch (loadErr) {
+                console.error("Dashboard initial data load error:", loadErr);
+                document.getElementById('loading-state').classList.add('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+            }
+
+            // Real-time listener on user profile
             if (unsubscribeUsers) supabase.removeChannel(unsubscribeUsers);
             unsubscribeUsers = supabase.channel(`users_changes_${currentUser.id}_${Date.now()}`)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `id=eq.${currentUser.id}` }, payload => {
@@ -4243,14 +4293,8 @@
                 })
                 .subscribe();
 
-            // Initial subscriptions fetch
-            const { data: initialSubs } = await supabase.from('subscriptions').select('*').eq('uid', currentUser.id).limit(1);
-            if (initialSubs && initialSubs.length > 0) {
-                handleSubsUpdate(initialSubs[0]);
-            } else {
-                handleSubsUpdate(null);
-            }
-
+            // Real-time listener on subscription
+            if (unsubscribeSubs) supabase.removeChannel(unsubscribeSubs);
             unsubscribeSubs = supabase.channel(`subscriptions_changes_${currentUser.id}_${Date.now()}`)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions', filter: `uid=eq.${currentUser.id}` }, payload => {
                     handleSubsUpdate(payload.new);
@@ -6886,6 +6930,20 @@
             if (tierLabelEl) tierLabelEl.textContent = '...';
             if (lastDateEl) lastDateEl.textContent = '...';
             if (nextDateEl) nextDateEl.textContent = 'Loading...';
+
+            if (!currentSubscription && currentUser && typeof supabase !== 'undefined') {
+                try {
+                    const { data: directSubs } = await supabase.from('subscriptions')
+                        .select('*')
+                        .eq('uid', currentUser.id)
+                        .order('created_at', { ascending: false });
+                    if (directSubs && directSubs.length > 0) {
+                        currentSubscription = directSubs.find(s => s.status === 'active') || directSubs[0];
+                    }
+                } catch (e) {
+                    console.warn('[Billing Modal Subs Fetch Fallback Notice]', e);
+                }
+            }
 
             if (currentSubscription) {
                 const totalTotes = currentSubscription.total_totes || 0;
