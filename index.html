@@ -3899,9 +3899,12 @@
                     updateWaitlistDepositDisplay();
                 } else {
                     activeWaitlistPromo = data;
-                    sessionStorage.setItem('cv_promo_code', code);
                     if (feedback) {
-                        feedback.textContent = data.message || `✓ Code ${code} applied!`;
+                        feedback.innerHTML = `
+                            <div class="flex items-center justify-between gap-2">
+                                <span>${data.message || `✓ Code ${code} applied!`}</span>
+                                <button type="button" onclick="removeWaitlistPromoCode()" class="text-xs text-rose-700 hover:text-rose-900 font-bold underline cursor-pointer shrink-0">✕ Remove</button>
+                            </div>`;
                         feedback.className = 'text-xs font-bold text-emerald-800 bg-emerald-100/70 p-2.5 rounded-xl border border-emerald-300 mt-1';
                         feedback.classList.remove('hidden-section');
                     }
@@ -3920,6 +3923,19 @@
                     btn.disabled = false;
                 }
             }
+        }
+
+        function removeWaitlistPromoCode() {
+            activeWaitlistPromo = null;
+            sessionStorage.removeItem('cv_promo_code');
+            const input = document.getElementById('waitlist-promo-input');
+            if (input) input.value = '';
+            const feedback = document.getElementById('waitlist-promo-feedback');
+            if (feedback) {
+                feedback.textContent = '';
+                feedback.classList.add('hidden-section');
+            }
+            updateWaitlistDepositDisplay();
         }
 
         function updateWaitlistDepositDisplay() {
@@ -4072,12 +4088,13 @@
                 document.getElementById('waitlist-step-email').classList.add('hidden-section');
                 document.getElementById('waitlist-step-payment').classList.remove('hidden-section');
 
-                // Initialize Stripe Elements & check for auto-applied promo codes
+                // Initialize Stripe Elements & check for auto-applied promo codes only if explicitly passed in URL
                 setTimeout(() => {
                     initWaitlistStripe();
-                    const storedPromo = sessionStorage.getItem('cv_promo_code') || (new URLSearchParams(window.location.search)).get('ref') || (new URLSearchParams(window.location.search)).get('promo');
-                    if (storedPromo) {
-                        applyWaitlistPromoCode(storedPromo);
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const activeQueryPromo = urlParams.get('ref') || urlParams.get('promo');
+                    if (activeQueryPromo) {
+                        applyWaitlistPromoCode(activeQueryPromo);
                     } else {
                         updateWaitlistDepositDisplay();
                     }
@@ -4968,6 +4985,8 @@
                     setTimeout(() => {
                         applyCustomerPromoCode(queryPromo);
                     }, 600);
+                } else {
+                    sessionStorage.removeItem('cv_promo_code');
                 }
 
                 // Auto-open unified checkout flow if returning from login or direct link
