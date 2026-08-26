@@ -134,12 +134,11 @@
             <div class="flex items-center space-x-6">
                 <a href="admin.html" class="flex items-center space-x-3 group">
                     <img src="logo.png" alt="CloudVault Logo"
-                        class="w-9 h-9 object-contain rounded-xl group-hover:scale-105 transition shadow-md shadow-amber-500/20">
+                        class="h-8 sm:h-9 w-auto max-h-9 object-contain shrink-0 group-hover:scale-105 transition">
                     <div>
                         <h1 class="text-base font-extrabold text-white tracking-tight">
                             CloudVault Hub
                         </h1>
-                        <span class="text-[10px] text-amber-400 font-mono font-bold tracking-wider uppercase">Operations &amp; Telemetry</span>
                     </div>
                 </a>
 
@@ -154,8 +153,8 @@
                         <i data-lucide="building-2" class="w-4 h-4 text-gray-400"></i> Facility Configuration
                     </a>
                     <a href="admin-operations.html" id="nav-logistics-ops"
-                        class="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600/20 border border-amber-500/40 transition flex items-center gap-1.5 shadow-sm">
-                        <i data-lucide="activity" class="w-4 h-4 text-amber-400"></i> Operations &amp; Telemetry
+                        class="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-blue-600/20 border border-blue-500/40 transition flex items-center gap-1.5 shadow-sm">
+                        <i data-lucide="activity" class="w-4 h-4 text-blue-400"></i> Operations &amp; Telemetry
                     </a>
                 </nav>
             </div>
@@ -187,7 +186,7 @@
                 <div class="flex items-center space-x-3 pl-2 border-l border-gray-800">
                     <div class="flex items-center space-x-2.5">
                         <div id="user-avatar"
-                            class="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-600 to-orange-600 text-white font-bold flex items-center justify-center text-xs shadow-md">
+                            class="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-md">
                             CV
                         </div>
                         <div class="hidden lg:block text-left">
@@ -204,23 +203,19 @@
         </div>
 
         <!-- Operational Telemetry & SLA Sub-Header Bar -->
-        <div class="bg-gray-950/80 border-t border-b border-gray-800/80 px-4 sm:px-6 lg:px-8 py-2 text-xs flex flex-wrap justify-between items-center font-mono gap-3">
+        <div class="bg-gray-950/80 border-t border-b border-gray-800/80 px-4 sm:px-6 lg:px-8 py-2.5 text-xs flex flex-wrap justify-between items-center font-mono gap-3">
             <div class="flex items-center space-x-3 text-gray-400">
-                <span class="flex items-center text-amber-400 font-bold tracking-wider text-xs">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping mr-2"></span>
-                    BUSINESS TELEMETRY LINK
-                </span>
-                <span class="text-gray-600">|</span>
-                <span id="realtime-status-badge" class="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded font-bold uppercase">
-                    ⚡ POSTGRES REALTIME: LIVE
+                <span class="flex items-center text-blue-400 font-bold tracking-wider text-xs">
+                    <i data-lucide="activity" class="w-3.5 h-3.5 mr-1.5 text-blue-400"></i>
+                    OPERATIONS TELEMETRY
                 </span>
             </div>
 
             <!-- Staging SLA Cutoff Countdown Widget -->
-            <div class="flex items-center space-x-3 bg-amber-950/40 border border-amber-500/20 px-3 py-1 rounded-xl">
-                <i data-lucide="clock" class="w-4 h-4 text-amber-400"></i>
-                <span class="text-gray-400 font-medium text-[11px] uppercase tracking-wider">Staging SLA (6:00 PM):</span>
-                <span id="cutoff-countdown-clock" class="font-bold text-amber-300 tracking-wider text-xs">--h --m --s</span>
+            <div class="flex items-center space-x-3 bg-blue-950/40 border border-blue-500/20 px-3 py-1 rounded-xl">
+                <i data-lucide="clock" class="w-4 h-4 text-blue-400"></i>
+                <span class="text-gray-400 font-medium text-[11px] uppercase tracking-wider">Staging Cutoff SLA (<span id="cutoff-time-label">6:00 PM</span>):</span>
+                <span id="cutoff-countdown-clock" class="font-bold text-blue-300 tracking-wider text-xs">--h --m --s</span>
                 <span id="cutoff-sla-status"
                     class="text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">ON TARGET</span>
             </div>
