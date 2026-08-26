@@ -8837,7 +8837,7 @@
                     rawValetRequests = preloadedRequests.filter(r => 
                         matchesFacilityTarget(r, queryFacilityId) &&
                         (r.fulfillment_type === 'valet_delivery' || r.request_type === 'valet_delivery' || r.fulfillment_type === 'valet' || (r.fulfillment_type && r.fulfillment_type.includes('valet')) || (r.request_type && r.request_type.includes('valet'))) &&
-                        r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
+                        r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault' && r.status !== 'with-customer'
                     );
                 } else {
                     const { data: rawRequests } = await supabase.from('access_requests')
@@ -8845,7 +8845,7 @@
                         .or('fulfillment_type.ilike.%valet%,request_type.ilike.%valet%');
                     rawValetRequests = (rawRequests || []).filter(r => 
                         matchesFacilityTarget(r, queryFacilityId) &&
-                        r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
+                        r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault' && r.status !== 'with-customer'
                     );
                 }
 

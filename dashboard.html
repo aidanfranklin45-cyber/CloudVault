@@ -2524,11 +2524,11 @@
             const activationReqs = (currentRequests || []).filter(r => 
                 (r.request_type === 'intake' || r.request_type === 'activation' || r.request_type === 'new_tote_delivery' || r.request_type === 'new_totes') &&
                 !transferReqs.includes(r) &&
-                r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
+                r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault' && r.status !== 'with-customer'
             );
             const retrievalReqs = (currentRequests || []).filter(r => 
                 !activationReqs.includes(r) && !transferReqs.includes(r) &&
-                r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault'
+                r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'returned-to-vault' && r.status !== 'with-customer'
             );
 
             const cards = [];
