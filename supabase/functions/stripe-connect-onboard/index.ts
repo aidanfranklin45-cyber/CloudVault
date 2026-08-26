@@ -79,20 +79,49 @@ Deno.serve(async (req: Request) => {
     // 2. Create Stripe Express Account if not already created
     if (!accountId) {
       console.log(`[StripeConnect] Creating new Express account for creator ${creator.name} (${creator.email})...`);
-      const account = await stripe.accounts.create({
-        type: "express",
-        email: creator.payout_email || creator.email,
-        capabilities: {
-          transfers: { requested: true },
-          card_payments: { requested: true },
-        },
-        business_type: "individual",
-        metadata: {
-          creator_id: creator.id,
-          creator_name: creator.name,
-          platform: "CloudVault",
-        },
-      });
+      let account;
+      try {
+        // Modern Stripe Connect Controller configuration
+        account = await stripe.accounts.create({
+          controller: {
+            stripe_dashboard: {
+              type: "express",
+            },
+            fees: {
+              payer: "application",
+            },
+            losses: {
+              payments: "application",
+            },
+          },
+          email: creator.payout_email || creator.email,
+          business_type: "individual",
+          capabilities: {
+            transfers: { requested: true },
+          },
+          metadata: {
+            creator_id: creator.id,
+            creator_name: creator.name,
+            platform: "CloudVault",
+          },
+        });
+      } catch (modernErr: any) {
+        console.warn("[StripeConnect] Controller creation notice, falling back to legacy express format:", modernErr.message);
+        account = await stripe.accounts.create({
+          type: "express",
+          email: creator.payout_email || creator.email,
+          capabilities: {
+            transfers: { requested: true },
+            card_payments: { requested: true },
+          },
+          business_type: "individual",
+          metadata: {
+            creator_id: creator.id,
+            creator_name: creator.name,
+            platform: "CloudVault",
+          },
+        });
+      }
 
       accountId = account.id;
 
