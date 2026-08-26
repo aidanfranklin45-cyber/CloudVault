@@ -192,7 +192,7 @@
                 <form id="insurance-waitlist-form" onsubmit="handleWaitlistSubmit(event)" class="flex flex-col sm:flex-row gap-2.5">
                     <div class="relative flex-grow">
                         <i data-lucide="mail" class="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5 pointer-events-none"></i>
-                        <input type="email" id="waitlist-email" required placeholder="Enter your email for early bird perks..."
+                        <input type="email" id="waitlist-email" required placeholder="Enter your email to receive early access..."
                             class="w-full bg-gray-950 border border-gray-800 focus:border-indigo-500 rounded-xl pl-10 pr-4 py-3 text-xs text-white placeholder-gray-500 outline-none transition shadow-inner font-mono">
                     </div>
                     <button type="submit" id="btn-submit-waitlist"
@@ -201,7 +201,7 @@
                         <span>Notify Me</span>
                     </button>
                 </form>
-                <p class="text-[11px] text-gray-500 font-mono">Zero spam. Early bird members receive 1 free month of insurance coverage at launch.</p>
+                <p class="text-[11px] text-gray-500 font-mono">Zero spam. We will only email you when insurance policies go live.</p>
             </div>
         </section>
 
@@ -357,7 +357,7 @@
                 localStorage.setItem('cv_insurance_waitlist_' + email, new Date().toISOString());
             } catch (e) {}
 
-            showToast(`You're on the list! We'll notify ${email} with 1 free month of insurance at launch.`);
+            showToast(`You're on the list! We'll notify ${email} as soon as insurance coverage is live.`);
         }
     </script>
 </body>
