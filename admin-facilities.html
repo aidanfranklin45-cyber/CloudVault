@@ -361,36 +361,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Physical Staging Room Reservation & Schedule Calendar -->
-                <div class="glass-panel p-6 rounded-3xl space-y-6 border border-indigo-500/20">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-4">
-                        <div>
-                            <h3 class="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
-                                <i data-lucide="calendar" class="w-5 h-5 text-indigo-400"></i> Staging Room Reservation &amp; Pickup Schedule
-                            </h3>
-                            <p class="text-xs text-gray-400">Ultra-specific reservation grid showing which staging rooms are reserved by customer, time slot, and PIN state.</p>
-                        </div>
-
-                        <!-- Schedule Date Picker & Filter Controls -->
-                        <div class="flex flex-wrap items-center gap-2">
-                            <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex items-center space-x-2">
-                                <i data-lucide="calendar-days" class="w-3.5 h-3.5 text-indigo-400"></i>
-                                <input type="date" id="staging-date-select" onchange="onStagingDateChange(this.value)"
-                                    class="bg-transparent text-xs text-white font-bold outline-none cursor-pointer">
-                            </div>
-                            <button onclick="setStagingDate('today')"
-                                class="bg-gray-900 hover:bg-gray-800 text-xs font-bold text-gray-300 hover:text-white px-3 py-1.5 rounded-xl border border-gray-800 transition">Today</button>
-                            <button onclick="setStagingDate('tomorrow')"
-                                class="bg-gray-900 hover:bg-gray-800 text-xs font-bold text-gray-300 hover:text-white px-3 py-1.5 rounded-xl border border-gray-800 transition">Tomorrow</button>
-                        </div>
-                    </div>
-
-                    <!-- Staging Rooms Interactive Grid -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="staging-rooms-schedule-grid">
-                        <!-- Dynamically populated staging room reservation cards -->
-                    </div>
-                </div>
             </div>
         </div>
 
