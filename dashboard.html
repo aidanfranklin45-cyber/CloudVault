@@ -692,9 +692,6 @@
                 </div>
             </div>
 
-            <!-- active-requests-panel kept for legacy JS compatibility -->
-            <div id="active-requests-panel" class="hidden"><div id="active-requests-list"></div></div>
-
             <!-- Empty Inventory State -->
             <div id="empty-state" class="hidden text-center py-16 bg-white border border-gray-150 rounded-3xl">
                 <div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -2924,37 +2921,38 @@
 
         function buildLiveDriverTrackingBlock(req) {
             if (!req) return '';
-            const driverName = req.driver_name || 'CloudVault Driver';
-            const trkStatus = (req.status === 'out-for-delivery' || req.isOutForDelivery) ? 'out-for-delivery' : (req.status || 'out-for-delivery');
-            const driverPhone = req.driver_phone || '';
+            const isEnRoute = req.status === 'out-for-delivery' || req.isOutForDelivery;
+            // Only display live courier tracking block when the driver is actively out for delivery
+            if (!isEnRoute) return '';
 
-            let etaText = "Arriving Soon";
+            const driverName = req.driver_name || 'Assigned Courier';
+            const driverPhone = req.driver_phone && !req.driver_phone.includes('555-') ? req.driver_phone : '';
+
+            let etaText = "En Route";
             if (req.estimated_arrival_at) {
                 const diffMs = new Date(req.estimated_arrival_at).getTime() - Date.now();
-                const diffMin = Math.max(1, Math.round(diffMs / 60000));
-                etaText = `ETA: ~${diffMin} min`;
+                if (diffMs > 0) {
+                    const diffMin = Math.max(1, Math.round(diffMs / 60000));
+                    etaText = `ETA: ~${diffMin} min`;
+                }
             }
 
-            const isEnRoute = trkStatus === 'out-for-delivery' || req.isOutForDelivery;
-            const badgeBg = isEnRoute ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-amber-400 bg-amber-500/10 border-amber-500/30';
-            const badgeLabel = isEnRoute ? 'OUT FOR DELIVERY' : trkStatus.replace(/[-_]/g, ' ').toUpperCase();
-
             return `
-                <div class="mt-2.5 bg-gray-900/90 border border-amber-500/30 rounded-xl p-3 space-y-2 shadow-md">
+                <div class="mt-2.5 bg-gray-900/90 border border-emerald-500/30 rounded-xl p-3 space-y-2 shadow-md">
                     <div class="flex items-center justify-between border-b border-gray-800 pb-1.5">
                         <div class="flex items-center space-x-1.5">
                             <span class="relative flex h-2 w-2">
-                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full ${isEnRoute ? 'bg-emerald-400' : 'bg-amber-400'} opacity-75"></span>
-                                <span class="relative inline-flex rounded-full h-2 w-2 ${isEnRoute ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                             </span>
                             <span class="text-[10px] font-bold text-white uppercase tracking-wider">Live Valet Driver Tracking</span>
                         </div>
-                        <span class="text-[9px] font-mono font-bold ${badgeBg} px-2 py-0.5 rounded-full uppercase">${badgeLabel}</span>
+                        <span class="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full uppercase">OUT FOR DELIVERY</span>
                     </div>
 
                     <div class="flex items-center justify-between gap-2 text-xs">
                         <div class="flex items-center space-x-2.5">
-                            <div class="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 font-bold flex items-center justify-center text-xs flex-shrink-0">
+                            <div class="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold flex items-center justify-center text-xs flex-shrink-0">
                                 🚚
                             </div>
                             <div>
@@ -2963,7 +2961,7 @@
                             </div>
                         </div>
                         <div class="text-right">
-                            <p class="text-xs font-extrabold text-amber-400 font-mono">${etaText}</p>
+                            <p class="text-xs font-extrabold text-emerald-400 font-mono">${etaText}</p>
                             ${driverPhone ? `<a href="tel:${driverPhone}" class="text-[9px] text-blue-400 hover:underline font-bold">📞 ${escapeHtml(driverPhone)}</a>` : ''}
                         </div>
                     </div>
@@ -3146,31 +3144,10 @@
 
         function renderActiveRequests() {
             renderFulfillmentFlows();
-            const panel = document.getElementById('active-requests-panel');
-            const list = document.getElementById('active-requests-list');
-            if (panel) panel.classList.add('hidden');
-            if (list) list.innerHTML = '';
         }
 
         async function cancelActiveRequest(requestId) {
-            if (!confirm('Are you sure you want to cancel this retrieval request? Your items will remain safely stored in the facility.')) {
-                return;
-            }
-
-            try {
-                const { data, error } = await supabase.rpc('cancel_retrieval_request', {
-                    p_request_id: requestId
-                });
-                if (error) throw error;
-
-                showToast('Retrieval request cancelled. Your totes remain safely stored.');
-
-                if (typeof globalFetchRequests === 'function') globalFetchRequests();
-                if (typeof globalFetchInventory === 'function') globalFetchInventory();
-            } catch (err) {
-                console.error('Cancel request failed:', err);
-                alert('Failed to cancel request: ' + (err.message || 'Unknown error'));
-            }
+            return cancelFulfillmentRequest(requestId);
         }
 
         // ============================================================
@@ -7914,13 +7891,15 @@
         };
 
 
-        function launchStripePortalMock() {
+        function launchStripeCustomerPortal() {
             if (typeof openUpdatePaymentModal === 'function') {
                 openUpdatePaymentModal();
             } else if (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.launchCustomerPortal === 'function') {
                 window.StripeBillingIntegration.launchCustomerPortal(currentUser?.stripe_customer_id, currentUser?.id);
             }
         }
+        window.launchStripeCustomerPortal = launchStripeCustomerPortal;
+        window.launchStripePortalMock = launchStripeCustomerPortal;
 
         function closeBillingModal() {
             document.getElementById('billing-modal').classList.add('hidden');
@@ -8097,10 +8076,30 @@
             let excessFulfillmentType = 'staging';
             let targetExcessQuota = 0;
 
-            function getGraceWindowDetails() {
+            function getGraceWindowDetails(isCancellation = false) {
                 const sub = currentSubscription;
-                const reductionDate = (sub && (sub.updated_at || sub.last_updated || sub.created_at)) ? new Date(sub.updated_at || sub.last_updated || sub.created_at) : new Date();
-                const graceEnd = new Date(reductionDate.getTime() + (3 * 24 * 60 * 60 * 1000));
+                const isCanc = isCancellation === true || isCancellationExitMode === true || sub?.status === 'canceling';
+                
+                let baseDate = new Date();
+                if (!isCanc) {
+                    if (sub && sub.plan_reduced_at) {
+                        baseDate = new Date(sub.plan_reduced_at);
+                    } else if (sub && sub.status === 'canceling' && sub.cancellation_requested_at) {
+                        baseDate = new Date(sub.cancellation_requested_at);
+                    } else {
+                        baseDate = new Date();
+                    }
+                }
+
+                // Grace window is 3 days from the initiation/reduction date
+                let graceEnd = new Date(baseDate.getTime() + (3 * 24 * 60 * 60 * 1000));
+
+                // If cancellation is being initiated or graceEnd has lapsed into the past,
+                // ensure the user has 3 days from TODAY to schedule their tote exit retrieval
+                const minAllowedEnd = new Date(Date.now() + (3 * 24 * 60 * 60 * 1000));
+                if (isCanc || graceEnd < new Date()) {
+                    graceEnd = minAllowedEnd;
+                }
                 
                 const formattedDate = graceEnd.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
                 const formattedTime = graceEnd.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
@@ -8358,7 +8357,7 @@
                 
                 // If full cancellation: ALL totes must exit (100%). If partial reduction: excess amount.
                 targetExcessQuota = isCancellationExitMode ? storedCount : Math.max(1, storedCount - subTotal);
-                const grace = getGraceWindowDetails();
+                const grace = getGraceWindowDetails(isCancellationExitMode);
 
                 document.getElementById('excess-modal-target-num').textContent = targetExcessQuota;
                 document.getElementById('excess-modal-total-num').textContent = storedCount;
@@ -8382,19 +8381,26 @@
                     agreementDeadline.textContent = grace.fullDeadlineStr;
                 }
 
-                // Strictly enforce 3-day grace period on date picker
-                const todayStr = new Date().toISOString().split('T')[0];
-                const maxGraceStr = grace.graceEnd.toISOString().split('T')[0];
+                // Strictly enforce 3-day grace period on date picker using local timezone
+                const toLocalYMD = (d) => {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${day}`;
+                };
+
+                const todayStr = toLocalYMD(new Date());
+                const maxGraceStr = toLocalYMD(grace.graceEnd);
                 
                 const tomorrow = new Date();
                 tomorrow.setDate(tomorrow.getDate() + 1);
-                const tomorrowStr = tomorrow.toISOString().split('T')[0];
+                const tomorrowStr = toLocalYMD(tomorrow);
 
                 const dateInput = document.getElementById('excess-target-date');
                 if (dateInput) {
                     dateInput.min = todayStr;
                     dateInput.max = maxGraceStr;
-                    dateInput.value = (tomorrowStr <= maxGraceStr) ? tomorrowStr : maxGraceStr;
+                    dateInput.value = (tomorrowStr <= maxGraceStr) ? tomorrowStr : todayStr;
                 }
 
                 const dateHint = document.getElementById('excess-date-limit-hint');
@@ -8596,7 +8602,7 @@
                 const timeSlot = document.getElementById('excess-time-slot').value;
                 const submitBtn = document.getElementById('btn-submit-excess-exit');
 
-                const grace = getGraceWindowDetails();
+                const grace = getGraceWindowDetails(isCancellationExitMode);
                 const chosenDate = new Date(targetDate + 'T23:59:59');
                 if (chosenDate > grace.graceEnd) {
                     alert(`Exit retrieval must be scheduled within your 3-day grace window (on or before ${grace.formattedDate}).`);
