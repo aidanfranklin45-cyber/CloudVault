@@ -681,9 +681,14 @@
                             </p>
                         </div>
                     </div>
-                    <button onclick="openExcessTotesModal()" class="w-full sm:w-auto px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-2 flex-shrink-0 cursor-pointer">
-                        <span>📦 Select Totes for Exit Retrieval</span>
-                    </button>
+                    <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto shrink-0">
+                        <button id="btn-excess-upgrade-plan" onclick="upgradePlanToMatchInventory()" class="w-full sm:w-auto px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
+                            <span>⚡ Upgrade Plan (<span id="excess-target-total">12</span> Totes)</span>
+                        </button>
+                        <button onclick="openExcessTotesModal()" class="w-full sm:w-auto px-4 py-3 bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold text-xs rounded-2xl border border-amber-300 shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
+                            <span>📦 Exit Retrieval</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -2669,6 +2674,8 @@
                                 subtitle: `Driver en route • ${timeStr}`,
                                 badgeText: 'OUT FOR DELIVERY',
                                 badgeColor: 'orange',
+                                reqId: req.id,
+                                canCancel: false,
                                 steps: [
                                     { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
                                     { label: '2. Intake Prep', sub: `✓ All ${totalCount} empty totes prepped`, done: true },
@@ -2686,6 +2693,8 @@
                                 subtitle: `Dispatch in progress • ${loadedCount}/${totalCount} totes prepped`,
                                 badgeText: `DISPATCH IN PROGRESS (${loadedCount}/${totalCount})`,
                                 badgeColor: 'blue',
+                                reqId: req.id,
+                                canCancel: true,
                                 steps: [
                                     { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
                                     { label: '2. Intake Prep', sub: `✓ Empty totes prepped`, done: true },
@@ -2703,6 +2712,8 @@
                                 subtitle: `Dispatch window: ${dateStr} • ${timeStr}`,
                                 badgeText: 'INTAKE PREPARATION',
                                 badgeColor: 'blue',
+                                reqId: req.id,
+                                canCancel: true,
                                 steps: [
                                     { label: '1. Activation Room', sub: 'Barcode & QR assigned', done: true },
                                     { label: '2. Intake Prep', sub: `Prepping ${totalCount} empty totes in intake`, done: false, active: true },
@@ -2724,6 +2735,8 @@
                                 : `Intake preparation in progress • ${dateStr} • ${timeStr}`,
                             badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'INTAKE PREPARATION IN PROGRESS',
                             badgeColor: isStagedReady ? 'emerald' : 'blue',
+                            reqId: req.id,
+                            canCancel: true,
                             steps: [
                                 { label: '1. Intake & Activation', sub: '✓ Empty totes prepped', done: true, active: false },
                                 { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting room assignment...', done: isStagedReady, active: !isStagedReady },
@@ -2795,6 +2808,8 @@
                                 subtitle: `Driver en route • Scheduled window: ${dateStr} • ${timeStr}`,
                                 badgeText: 'OUT FOR DELIVERY',
                                 badgeColor: 'orange',
+                                reqId: primaryReq.id,
+                                canCancel: false,
                                 steps: [
                                     { label: '1. Vault Pull', sub: '✓ Pulled from deep storage', done: true, active: false },
                                     { label: '2. En Route', sub: '✓ Dispatched for delivery', done: true, active: false },
@@ -2813,6 +2828,8 @@
                                 subtitle: `Prepped for dispatch • Scheduled: ${dateStr} • ${timeStr}`,
                                 badgeText: 'DISPATCH PENDING',
                                 badgeColor: 'blue',
+                                reqId: primaryReq.id,
+                                canCancel: true,
                                 steps: [
                                     { label: '1. Vault Pull', sub: '✓ Pulled from deep storage', done: true, active: false },
                                     { label: '2. Dispatched', sub: 'Prepping for delivery', done: false, active: true },
@@ -2832,6 +2849,8 @@
                                 subtitle: `Scheduled retrieval • Window: ${dateStr} • ${timeStr}`,
                                 badgeText: 'VAULT PULL IN PROGRESS',
                                 badgeColor: 'amber',
+                                reqId: primaryReq.id,
+                                canCancel: true,
                                 steps: [
                                     { label: '1. Vault Storage', sub: 'Pulling from storage bay...', done: false, active: true },
                                     { label: '2. Staging & Loading', sub: 'Awaiting dispatch...', done: false, active: false },
@@ -2854,6 +2873,8 @@
                                 : `Vault pull in progress • Window: ${dateStr} • ${timeStr}`,
                             badgeText: isStagedReady ? `READY IN ROOM #${roomNum}` : 'VAULT PULL IN PROGRESS',
                             badgeColor: isStagedReady ? 'emerald' : 'amber',
+                            reqId: primaryReq.id,
+                            canCancel: true,
                             steps: [
                                 { label: '1. Vault & Intake Pull', sub: isStagedReady ? '✓ Pulled from deep storage' : 'Pulling from storage bay...', done: isStagedReady, active: !isStagedReady },
                                 { label: '2. Staging Room', sub: isStagedReady ? `Room #${roomNum} ready` : 'Awaiting room placement...', done: isStagedReady, active: false },
@@ -2950,7 +2971,7 @@
         }
 
         // ── Flow card builder helpers ─────────────────────────────────────────
-        function buildFlowCard({ icon, title, subtitle, badgeText, badgeColor, steps, totes, pinBlock, overrideNotice }) {
+        function buildFlowCard({ icon, title, subtitle, badgeText, badgeColor, steps, totes, pinBlock, overrideNotice, reqId, canCancel }) {
             const badgeClasses = {
                 emerald: 'text-emerald-400 bg-emerald-500/20 border-emerald-500/40',
                 blue:    'text-blue-300 bg-blue-500/20 border-blue-500/40',
@@ -3005,7 +3026,14 @@
                             <p class="text-[10px] text-blue-200 font-mono mt-0.5">${subtitle}</p>
                         </div>
                     </div>
-                    <span class="text-[9px] font-extrabold font-mono uppercase tracking-wider px-2.5 py-1 rounded-lg border ${bc} self-start sm:self-center whitespace-nowrap">${badgeText}</span>
+                    <div class="flex items-center gap-2 self-start sm:self-center">
+                        ${(canCancel && reqId) ? `
+                            <button onclick="cancelFulfillmentRequest('${reqId}')" class="text-[10px] font-bold text-rose-300 hover:text-white bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1 shadow-xs" title="Cancel this request">
+                                <span>✕ Cancel Request</span>
+                            </button>
+                        ` : ''}
+                        <span class="text-[9px] font-extrabold font-mono uppercase tracking-wider px-2.5 py-1 rounded-lg border ${bc} whitespace-nowrap">${badgeText}</span>
+                    </div>
                 </div>
 
                 <!-- 4-Step Progress -->
@@ -8120,8 +8148,10 @@
                 if (excess > 0 && !hasPendingExitReq && subTotal > 0) {
                     const badge = document.getElementById('excess-badge-count');
                     const msg = document.getElementById('excess-banner-message');
+                    const targetTotalEl = document.getElementById('excess-target-total');
 
                     if (badge) badge.textContent = `${excess} Excess`;
+                    if (targetTotalEl) targetTotalEl.textContent = storedCount;
                     if (msg) msg.innerHTML = `Your current subscription covers <strong>${subTotal} totes</strong>, but you have <strong>${storedCount} totes</strong> in warehouse storage. Please select which containers to keep and schedule an exit retrieval for your <strong>${excess} excess totes</strong>.`;
                     
                     const graceMsg = document.getElementById('excess-grace-msg');
@@ -8138,6 +8168,180 @@
                     banner.classList.remove('hidden');
                 } else {
                     banner.classList.add('hidden');
+                }
+            }
+
+            async function upgradePlanToMatchInventory() {
+                if (!currentUser || !currentSubscription) {
+                    showToast('Unable to upgrade plan: No active subscription session.');
+                    return;
+                }
+
+                const activeStoredItems = (currentInventory || []).filter(item => item.status !== 'missing-tote' && item.status !== 'missing');
+                const targetTotal = activeStoredItems.length;
+
+                if (targetTotal <= (currentSubscription.total_totes || 0)) {
+                    showToast('Your subscription plan is already in sync with your totes.');
+                    checkExcessTotesState();
+                    return;
+                }
+
+                const btn = document.getElementById('btn-excess-upgrade-plan');
+                const origText = btn ? btn.innerHTML : '';
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = `<span>⏳ Syncing Plan...</span>`;
+                }
+
+                try {
+                    // Dynamic facility rate calculation strictly from database
+                    if (!activeFacilityPricing) {
+                        await loadAssignedFacilityPricing(currentUser.assigned_facility_id || currentSubscription.facility_id || 'facility_yakima');
+                    }
+
+                    const fac = activeFacilityPricing || {};
+                    let toteRate = 5.00;
+                    if (targetTotal <= 3) toteRate = Number(fac.tier1_rate ?? 5.00);
+                    else if (targetTotal <= 7) toteRate = Number(fac.tier2_rate ?? 4.50);
+                    else if (targetTotal <= 15) toteRate = Number(fac.tier3_rate ?? 3.50);
+                    else toteRate = Number(fac.tier4_rate ?? 2.50);
+
+                    const recurringStorage = Math.round(targetTotal * toteRate * 100) / 100;
+
+                    // 1. Update Subscriptions in Supabase
+                    const { error: subErr } = await supabase
+                        .from('subscriptions')
+                        .update({
+                            total_totes: targetTotal,
+                            tote_rate: toteRate,
+                            recurring_storage: recurringStorage,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', currentSubscription.id);
+
+                    if (subErr) throw subErr;
+
+                    // 2. Update user profile active_totes_held
+                    await supabase
+                        .from('users')
+                        .update({ active_totes_held: targetTotal })
+                        .eq('id', currentUser.id);
+
+                    // 3. Update local state
+                    currentSubscription.total_totes = targetTotal;
+                    currentSubscription.tote_rate = toteRate;
+                    currentSubscription.recurring_storage = recurringStorage;
+                    if (currentUserProfile) currentUserProfile.active_totes_held = targetTotal;
+
+                    // 4. Update Header Plan text
+                    const headerPlan = document.getElementById('active-plan-header');
+                    if (headerPlan) {
+                        headerPlan.textContent = `${targetTotal} Totes Plan ($${toteRate.toFixed(2)}/tote — $${recurringStorage.toFixed(2)}/mo)`;
+                    }
+
+                    showToast(`✓ Plan upgraded to ${targetTotal} totes! Account is now in sync.`);
+                    checkExcessTotesState();
+                    
+                    const billingModal = document.getElementById('billing-modal');
+                    if (billingModal && !billingModal.classList.contains('hidden')) {
+                        openBillingModal();
+                    }
+                } catch (err) {
+                    console.error('[upgradePlanToMatchInventory] Error:', err);
+                    alert('Failed to update plan: ' + (err.message || 'Please try again.'));
+                } finally {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = origText;
+                    }
+                }
+            }
+
+            async function cancelFulfillmentRequest(reqId) {
+                if (!reqId || !currentUser) return;
+
+                const req = (currentRequests || []).find(r => r.id === reqId);
+                const isActivation = req && (req.request_type === 'new-tote-activation' || req.request_type === 'activation_staging' || req.request_type === 'activation_valet' || req.request_type === 'initial_delivery');
+
+                const confirmMsg = isActivation
+                    ? "Cancel this new tote activation? Any unfulfilled extra empty totes from this request will be removed and your plan will sync to your current stored total."
+                    : "Are you sure you want to cancel this retrieval request?";
+
+                if (!confirm(confirmMsg)) return;
+
+                try {
+                    // 1. If it's an activation, clean up unfulfilled inventory items & unassign staging room
+                    if (isActivation) {
+                        const rawItems = req.requested_items || req.requested_tote_codes || req.totes || [];
+                        const reqToteIds = new Set(rawItems);
+                        
+                        const { data: pendingTotes } = await supabase
+                            .from('inventory')
+                            .select('id')
+                            .eq('uid', currentUser.id)
+                            .in('status', ['pending-intake', 'intake', 'pending-dispatch', 'staged']);
+
+                        if (pendingTotes && pendingTotes.length > 0) {
+                            const idsToDelete = pendingTotes.map(t => t.id).filter(id => reqToteIds.size === 0 || reqToteIds.has(id));
+                            if (idsToDelete.length > 0) {
+                                await supabase.from('warehouse_locations').update({ assigned_tote_id: null, is_occupied: false }).in('assigned_tote_id', idsToDelete);
+                                await supabase.from('inventory').delete().in('id', idsToDelete);
+                            }
+                        }
+                    }
+
+                    // 2. Mark access request as cancelled
+                    const { error: reqErr } = await supabase
+                        .from('access_requests')
+                        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                        .eq('id', reqId);
+
+                    if (reqErr) throw reqErr;
+
+                    // 3. Re-sync subscription count to actual active items
+                    const { data: activeInv } = await supabase
+                        .from('inventory')
+                        .select('id, status')
+                        .eq('uid', currentUser.id)
+                        .in('status', ['stored', 'with-customer', 'staged']);
+
+                    const activeCount = activeInv ? activeInv.length : 0;
+                    if (currentSubscription && activeCount > 0 && currentSubscription.total_totes !== activeCount) {
+                        if (!activeFacilityPricing) {
+                            await loadAssignedFacilityPricing(currentUser.assigned_facility_id || currentSubscription.facility_id || 'facility_yakima');
+                        }
+                        const fac = activeFacilityPricing || {};
+                        let toteRate = 5.00;
+                        if (activeCount <= 3) toteRate = Number(fac.tier1_rate ?? 5.00);
+                        else if (activeCount <= 7) toteRate = Number(fac.tier2_rate ?? 4.50);
+                        else if (activeCount <= 15) toteRate = Number(fac.tier3_rate ?? 3.50);
+                        else toteRate = Number(fac.tier4_rate ?? 2.50);
+
+                        const recurringStorage = Math.round(activeCount * toteRate * 100) / 100;
+
+                        await supabase.from('subscriptions').update({
+                            total_totes: activeCount,
+                            tote_rate: toteRate,
+                            recurring_storage: recurringStorage,
+                            updated_at: new Date().toISOString()
+                        }).eq('id', currentSubscription.id);
+
+                        currentSubscription.total_totes = activeCount;
+                        currentSubscription.tote_rate = toteRate;
+                        currentSubscription.recurring_storage = recurringStorage;
+
+                        const headerPlan = document.getElementById('active-plan-header');
+                        if (headerPlan) {
+                            headerPlan.textContent = `${activeCount} Totes Plan ($${toteRate.toFixed(2)}/tote — $${recurringStorage.toFixed(2)}/mo)`;
+                        }
+                    }
+
+                    showToast('✓ Request cancelled and tote count synchronized.');
+                    if (typeof globalFetchRequests === 'function') await globalFetchRequests();
+                    if (typeof attachInventoryListener === 'function') attachInventoryListener(currentUser.id);
+                } catch (err) {
+                    console.error('[cancelFulfillmentRequest] Error:', err);
+                    alert('Failed to cancel request: ' + (err.message || 'Please try again.'));
                 }
             }
 
@@ -8749,6 +8953,8 @@
 
             window.openExcessTotesModal = openExcessTotesModal;
             window.closeExcessTotesModal = closeExcessTotesModal;
+            window.upgradePlanToMatchInventory = upgradePlanToMatchInventory;
+            window.cancelFulfillmentRequest = cancelFulfillmentRequest;
             window.toggleExcessToteSelection = toggleExcessToteSelection;
             window.autoSelectExcessTotes = autoSelectExcessTotes;
             window.setExcessFulfillment = setExcessFulfillment;
