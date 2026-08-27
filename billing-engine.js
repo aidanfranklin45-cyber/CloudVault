@@ -2637,6 +2637,8 @@
                             facilityId === 'facility_portland_central' ? 'Oregon Sales Tax (0.00%)' :
                             'Washington State & Local Sales Tax (8.50%)';
 
+      this.ensurePrintStyles();
+
       // Discount Resolution
       let discountAmount = Number(invoiceObj.discount || invoiceObj.discount_amount || 0);
       let promoCodeName = invoiceObj.promo_code || (promoRecord ? promoRecord.promo_code : null);
@@ -2649,22 +2651,18 @@
 
       if (promoCodeName && (discountAmount === 0 || Math.abs(discountAmount - (grossSubtotal * 0.20)) < 0.05)) {
         const pctMatch = promoCodeName.match(/(\d+)%/);
-        const pct = pctMatch ? parseFloat(pctMatch[1]) : 20;
+        const pct = pctMatch ? parseFloat(pctMatch[1]) : (promoCodeName.includes('50') ? 50 : 20);
         discountAmount = Math.round(grossSubtotal * (pct / 100.0) * 100) / 100;
-      }
-
-      // If recorded discount was set to full delivery fee or discrepancy, enforce exact percentage if promo code is on file
-      if (promoCodeName && discountAmount !== Math.round(grossSubtotal * 0.20 * 100) / 100 && promoCodeName.includes('20')) {
-        discountAmount = Math.round(grossSubtotal * 0.20 * 100) / 100;
       }
 
       if (!promoCodeName && discountAmount > 0) {
         promoCodeName = 'ROSS20%';
       }
 
+      const calculatedDiscountPct = grossSubtotal > 0 && discountAmount > 0 ? Math.round((discountAmount / grossSubtotal) * 100) : 20;
       let promoLabel = 'Creator Promo Discount';
       if (promoCodeName) {
-        promoLabel = `Creator Promo Discount (${promoCodeName} — 20% off)`;
+        promoLabel = `Creator Promo Discount (${promoCodeName} — ${calculatedDiscountPct}% off)`;
       } else if (discountLines.length > 0 && discountLines[0].description) {
         promoLabel = discountLines[0].description.replace(/^[-–—\s]+/, '');
       }
@@ -2684,10 +2682,10 @@
 
       const linesHtml = serviceLines.map(item => `
         <tr class="border-b border-slate-100 text-xs">
-          <td class="py-3 px-4 font-semibold text-slate-800">${item.description || 'Service Line'}</td>
-          <td class="py-3 px-4 text-center font-mono text-slate-600">${item.qty || 1}</td>
-          <td class="py-3 px-4 text-right font-mono text-slate-600">$${Number(item.unit_price || item.amount || 0).toFixed(2)}</td>
-          <td class="py-3 px-4 text-right font-mono font-bold text-slate-900">$${Number(item.amount || ((item.qty || 1) * (item.unit_price || 0))).toFixed(2)}</td>
+          <td class="py-2.5 px-3.5 font-semibold text-slate-800">${item.description || 'Service Line'}</td>
+          <td class="py-2.5 px-3.5 text-center font-mono text-slate-600">${item.qty || 1}</td>
+          <td class="py-2.5 px-3.5 text-right font-mono text-slate-600">$${Number(item.unit_price || item.amount || 0).toFixed(2)}</td>
+          <td class="py-2.5 px-3.5 text-right font-mono font-bold text-slate-900">$${Number(item.amount || ((item.qty || 1) * (item.unit_price || 0))).toFixed(2)}</td>
         </tr>
       `).join('');
 
@@ -2708,9 +2706,9 @@
       }
 
       modalEl.innerHTML = `
-        <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-auto border border-slate-200 overflow-hidden text-slate-800 my-4 sm:my-8 relative">
-          <!-- Top Controls Bar (Sticky at top of modal) -->
-          <div class="sticky top-0 z-30 no-print p-4 bg-slate-900 text-white flex justify-between items-center px-4 sm:px-6 border-b border-slate-800 shadow-md">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-auto border border-slate-200 overflow-hidden text-slate-800 my-4 sm:my-6 relative">
+          <!-- Top Controls Bar (Hidden during Print) -->
+          <div class="sticky top-0 z-30 no-print p-3.5 bg-slate-900 text-white flex justify-between items-center px-4 sm:px-6 border-b border-slate-800 shadow-md">
             <div class="flex items-center space-x-3 overflow-hidden">
               <img src="logo.png" alt="CloudVault Logo" class="w-7 h-7 object-contain rounded-lg shrink-0" />
               <div class="truncate">
@@ -2743,43 +2741,43 @@
             </div>
           </div>
 
-          <!-- Official Stripe Statement Document -->
-          <div class="p-8 sm:p-12 space-y-8 bg-white" id="official-statement-content">
+          <!-- Official Stripe Statement Document (Optimized for 1-page fit) -->
+          <div class="p-6 sm:p-8 space-y-4 sm:space-y-5 bg-white" id="official-statement-content">
             <!-- Header Section -->
-            <div class="flex justify-between items-start flex-wrap gap-6 border-b border-slate-100 pb-6">
-              <div class="space-y-2">
-                <div class="flex items-center space-x-3">
-                  <img src="logo.png" alt="CloudVault Logo" class="w-10 h-10 object-contain rounded-xl shadow-xs" />
+            <div class="flex justify-between items-start flex-wrap gap-4 border-b border-slate-100 pb-4">
+              <div class="space-y-1.5">
+                <div class="flex items-center space-x-2.5">
+                  <img src="logo.png" alt="CloudVault Logo" class="w-8 h-8 object-contain rounded-lg shadow-xs" />
                   <div>
-                    <h1 class="text-2xl font-black text-slate-900 tracking-tight leading-none">CloudVault</h1>
-                    <span class="text-[9px] font-extrabold text-blue-600 uppercase tracking-[0.2em] block mt-1">Storage &amp; Logistics Solutions</span>
+                    <h1 class="text-xl font-black text-slate-900 tracking-tight leading-none">CloudVault</h1>
+                    <span class="text-[8px] font-extrabold text-blue-600 uppercase tracking-[0.2em] block mt-0.5">Storage &amp; Logistics Solutions</span>
                   </div>
                 </div>
-                <p class="text-xs text-slate-500 font-mono">CloudVault Storage Inc. • support@cloudvault.io • Selah, WA 98942</p>
+                <p class="text-[11px] text-slate-500 font-mono">CloudVault Storage Inc. • support@cloudvault.io • Selah, WA 98942</p>
               </div>
 
-              <div class="text-right space-y-1">
+              <div class="text-right space-y-0.5">
                 ${isRefunded ? `
-                  <span class="inline-block px-3 py-1 text-xs font-black rounded-full bg-rose-50 text-rose-700 border border-rose-200 font-mono tracking-wider">
+                  <span class="inline-block px-2.5 py-0.5 text-[11px] font-black rounded-full bg-rose-50 text-rose-700 border border-rose-200 font-mono tracking-wider">
                     REFUNDED
                   </span>
                 ` : isOverdue ? `
-                  <span class="inline-block px-3 py-1 text-xs font-black rounded-full bg-red-600 text-white border border-red-700 font-mono tracking-wider animate-pulse">
+                  <span class="inline-block px-2.5 py-0.5 text-[11px] font-black rounded-full bg-red-600 text-white border border-red-700 font-mono tracking-wider animate-pulse">
                     OVERDUE
                   </span>
                 ` : isUnpaid ? `
-                  <span class="inline-block px-3 py-1 text-xs font-black rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-mono tracking-wider">
+                  <span class="inline-block px-2.5 py-0.5 text-[11px] font-black rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-mono tracking-wider">
                     UNPAID
                   </span>
                 ` : `
-                  <span class="inline-block px-3 py-1 text-xs font-extrabold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono tracking-wider">
+                  <span class="inline-block px-2.5 py-0.5 text-[11px] font-extrabold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono tracking-wider">
                     PAID
                   </span>
                 `}
-                <h2 class="text-xl font-black font-mono text-slate-900 tracking-wider">${invNum}</h2>
-                <p class="text-xs text-slate-500 font-mono">Issued: ${createdAt}</p>
+                <h2 class="text-lg font-black font-mono text-slate-900 tracking-wider">${invNum}</h2>
+                <p class="text-[11px] text-slate-500 font-mono">Issued: ${createdAt}</p>
                 <div class="pt-0.5">
-                  <span class="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
+                  <span class="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded">
                     💳 Stripe: ${stripeId}
                   </span>
                 </div>
@@ -2787,30 +2785,30 @@
             </div>
 
             <!-- Customer & Facility Metadata -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50/70 p-6 rounded-2xl border border-slate-200/60 text-xs">
-              <div class="space-y-1.5">
-                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Billed To</span>
-                <p class="font-extrabold text-sm text-slate-900">${customerName}</p>
-                <p class="text-slate-600 font-mono">${customerEmail}</p>
-                <p class="text-slate-600 font-medium">${formattedBillingAddress}</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/70 p-4 rounded-xl border border-slate-200/60 text-xs">
+              <div class="space-y-1">
+                <span class="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Billed To</span>
+                <p class="font-extrabold text-xs text-slate-900">${customerName}</p>
+                <p class="text-slate-600 font-mono text-[11px]">${customerEmail}</p>
+                <p class="text-slate-600 font-medium text-[11px]">${formattedBillingAddress}</p>
               </div>
-              <div class="space-y-1.5">
-                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Service &amp; Facility Hub</span>
-                <p class="font-semibold text-slate-800"><span class="text-slate-500">Facility:</span> ${facilityDisplay}</p>
-                <p class="font-semibold text-slate-800"><span class="text-slate-500">Service:</span> ${servicePlan}</p>
-                <p class="text-slate-600 font-mono"><span class="text-slate-500">Txn Ref:</span> ${txnRef}</p>
+              <div class="space-y-1">
+                <span class="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Service &amp; Facility Hub</span>
+                <p class="font-semibold text-[11px] text-slate-800"><span class="text-slate-500">Facility:</span> ${facilityDisplay}</p>
+                <p class="font-semibold text-[11px] text-slate-800"><span class="text-slate-500">Service:</span> ${servicePlan}</p>
+                <p class="text-slate-600 font-mono text-[11px]"><span class="text-slate-500">Txn Ref:</span> ${txnRef}</p>
               </div>
             </div>
 
             <!-- Itemized Table -->
-            <div class="overflow-x-auto rounded-2xl border border-slate-200 shadow-xs">
+            <div class="overflow-x-auto rounded-xl border border-slate-200 shadow-xs">
               <table class="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr class="bg-slate-50 text-slate-500 font-mono text-[10px] uppercase tracking-wider border-b border-slate-200">
-                    <th class="py-3 px-4">Description</th>
-                    <th class="py-3 px-4 text-center">Qty</th>
-                    <th class="py-3 px-4 text-right">Unit Price</th>
-                    <th class="py-3 px-4 text-right">Amount</th>
+                  <tr class="bg-slate-50 text-slate-500 font-mono text-[9px] uppercase tracking-wider border-b border-slate-200">
+                    <th class="py-2 px-3.5">Description</th>
+                    <th class="py-2 px-3.5 text-center">Qty</th>
+                    <th class="py-2 px-3.5 text-right">Unit Price</th>
+                    <th class="py-2 px-3.5 text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -2820,14 +2818,14 @@
             </div>
 
             <!-- Financial Summary Breakdown -->
-            <div class="flex justify-end pt-2">
-              <div class="w-full sm:w-80 space-y-2 text-xs">
-                <div class="flex justify-between text-slate-600">
+            <div class="flex justify-end pt-1">
+              <div class="w-full sm:w-80 space-y-1.5 text-xs">
+                <div class="flex justify-between text-slate-600 text-xs">
                   <span>Subtotal</span>
                   <span class="font-mono font-medium">$${grossSubtotal.toFixed(2)}</span>
                 </div>
                 ${discountAmount > 0 ? `
-                  <div class="flex justify-between text-emerald-600 font-bold">
+                  <div class="flex justify-between text-emerald-600 font-bold text-xs">
                     <span class="flex items-center gap-1">
                       <svg class="w-3.5 h-3.5 inline text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
                       ${promoLabel}
@@ -2839,23 +2837,23 @@
                     <span class="font-mono font-medium">$${netTaxable.toFixed(2)}</span>
                   </div>
                 ` : `
-                  <div class="flex justify-between text-slate-600">
+                  <div class="flex justify-between text-slate-600 text-xs">
                     <span>Total excluding tax</span>
                     <span class="font-mono font-medium">$${grossSubtotal.toFixed(2)}</span>
                   </div>
                 `}
                 ${taxAmount > 0 ? `
-                  <div class="flex justify-between text-slate-600">
+                  <div class="flex justify-between text-slate-600 text-xs">
                     <span>${taxRegionName}</span>
                     <span class="font-mono font-medium">$${taxAmount.toFixed(2)}</span>
                   </div>
                 ` : ''}
-                <div class="border-t-2 border-slate-200 pt-3 flex justify-between items-center">
-                  <span class="text-sm font-black text-slate-900 uppercase tracking-wider">Grand Total</span>
-                  <span class="text-xl font-black font-mono text-blue-600">$${totalAmount} USD</span>
+                <div class="border-t-2 border-slate-200 pt-2 flex justify-between items-center">
+                  <span class="text-xs font-black text-slate-900 uppercase tracking-wider">Grand Total</span>
+                  <span class="text-lg font-black font-mono text-blue-600">$${totalAmount} USD</span>
                 </div>
                 ${isRefunded ? `
-                  <div class="flex justify-between text-slate-500 font-medium text-xs pt-1">
+                  <div class="flex justify-between text-slate-500 font-medium text-xs pt-0.5">
                     <span>Amount Paid</span>
                     <span class="font-mono">$${totalAmount} USD</span>
                   </div>
@@ -2863,22 +2861,22 @@
                     <span>Total Refunded (${invoiceObj.refunded_at ? new Date(invoiceObj.refunded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : createdAt})</span>
                     <span class="font-mono font-black">-$${totalAmount} USD</span>
                   </div>
-                  <div class="flex justify-between text-slate-900 font-black text-xs pt-1">
+                  <div class="flex justify-between text-slate-900 font-black text-xs pt-0.5">
                     <span>Net Balance</span>
                     <span class="font-mono">$0.00 USD</span>
                   </div>
                   ${invoiceObj.notes ? `
-                    <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-medium leading-snug">
+                    <div class="p-2 rounded-xl bg-amber-50 border border-amber-200 text-[10px] text-amber-900 font-medium leading-snug">
                       ℹ️ ${invoiceObj.notes}
                     </div>
                   ` : ''}
                 ` : isUnpaid || isOverdue ? `
-                  <div class="flex justify-between text-red-700 font-bold text-xs pt-1">
+                  <div class="flex justify-between text-red-700 font-bold text-xs pt-0.5">
                     <span>Amount Due</span>
                     <span class="font-mono">$${totalAmount} USD</span>
                   </div>
                 ` : `
-                  <div class="flex justify-between text-emerald-700 font-bold text-xs pt-1">
+                  <div class="flex justify-between text-emerald-700 font-bold text-xs pt-0.5">
                     <span>Amount Paid</span>
                     <span class="font-mono">$${totalAmount} USD</span>
                   </div>
@@ -2887,7 +2885,7 @@
             </div>
 
             <!-- Statement Footer -->
-            <div class="border-t border-slate-100 pt-6 text-center text-xs text-slate-500 font-mono">
+            <div class="border-t border-slate-100 pt-4 text-center text-[10px] text-slate-400 font-mono">
               CloudVault Storage &amp; Logistics Solutions • Selah, WA 98942 • support@cloudvault.io • Official Statement
             </div>
           </div>
@@ -3010,31 +3008,48 @@
             print-color-adjust: exact !important;
           }
           @page {
-            margin: 10mm;
-            size: auto;
+            margin: 8mm 10mm !important;
+            size: portrait !important;
+          }
+          body {
+            background: white !important;
+            color: #0f172a !important;
+            padding: 0 !important;
+            margin: 0 !important;
           }
           body > *:not(#printable-invoice-modal) {
             display: none !important;
           }
           #printable-invoice-modal {
-            position: absolute !important;
-            inset: 0 !important;
-            background: white !important;
+            position: static !important;
+            inset: auto !important;
+            background: transparent !important;
             display: block !important;
             padding: 0 !important;
             margin: 0 !important;
-            z-index: 99999 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            box-shadow: none !important;
+            overflow: visible !important;
+            z-index: 1 !important;
           }
           #printable-invoice-modal > div {
             box-shadow: none !important;
-            border: 1px solid #e2e8f0 !important;
+            border: none !important;
             margin: 0 !important;
+            padding: 0 !important;
             max-width: 100% !important;
             width: 100% !important;
-            border-radius: 12px !important;
+            border-radius: 0 !important;
           }
-          .no-print {
+          .no-print, header, nav, footer, #main-content, #billing-modal, #user-dropdown {
             display: none !important;
+          }
+          #official-statement-content {
+            padding: 0 !important;
+            margin: 0 !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
         }
       `;

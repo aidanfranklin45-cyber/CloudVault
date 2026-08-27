@@ -39,6 +39,56 @@
         .fade-in { animation: fadeIn 0.4s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .saving-indicator { transition: opacity 0.3s; }
+        @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            @page {
+                margin: 8mm 10mm;
+                size: portrait;
+            }
+            body {
+                background: white !important;
+                color: #0f172a !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            body > *:not(#printable-invoice-modal) {
+                display: none !important;
+            }
+            #printable-invoice-modal {
+                position: static !important;
+                inset: auto !important;
+                background: transparent !important;
+                display: block !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                box-shadow: none !important;
+                overflow: visible !important;
+                z-index: 1 !important;
+            }
+            #printable-invoice-modal > div {
+                box-shadow: none !important;
+                border: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                max-width: 100% !important;
+                width: 100% !important;
+                border-radius: 0 !important;
+            }
+            .no-print, header, nav, footer, #main-content, #billing-modal, #user-dropdown {
+                display: none !important;
+            }
+            #official-statement-content {
+                padding: 0 !important;
+                margin: 0 !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+        }
     </style>
 </head>
 <body class="antialiased min-h-screen flex flex-col pb-24">
