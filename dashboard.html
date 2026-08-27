@@ -3988,8 +3988,6 @@
                 }
             }
 
-            const fac = window.currentActiveFacility || activeFacilityPricing || {};
-            const rates = window.regionalRates || { valetBase: Number(fac.valet_base || 0), valetAdder: Number(fac.valet_tote_adder || 0) };
             const monthly = wizardTotes * rate;
             const logisticsFee = wizardLogistics === 'valet_pickup' ? (rates.valetBase + (wizardTotes * rates.valetAdder)) : 0;
             const total = monthly + logisticsFee;
