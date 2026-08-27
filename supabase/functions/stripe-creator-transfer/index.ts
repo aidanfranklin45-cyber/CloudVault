@@ -50,7 +50,199 @@ Deno.serve(async (req: Request) => {
       auth: { persistSession: false },
     });
 
-    const body: TransferRequestBody = await req.json().catch(() => ({}));
+    const body: any = await req.json().catch(() => ({}));
+    const operation = body.operation || "transfer";
+
+    // ────────────────────────────────────────────────────────────
+    // OPERATION: create_promo_code (Server-side Stripe coupon & promo code sync)
+    // ────────────────────────────────────────────────────────────
+    if (operation === "create_promo_code") {
+      const creatorData = body.creatorData || {};
+      const promoData = body.promoData || {};
+      const cleanCode = (promoData.code || "").trim().toUpperCase();
+
+      if (!cleanCode) {
+        return new Response(
+          JSON.stringify({ error: "Promo code string is required (e.g. ALEX20 or CV50OFF)" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (!creatorData.name || !creatorData.email) {
+        return new Response(
+          JSON.stringify({ error: "Partner/Creator name and contact email are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const custDiscountPct = Number(promoData.customerDiscountPct) || 20.00;
+      const custDiscountMonths = Number(promoData.customerDiscountMonths) || 2;
+      
+      const rawComm = promoData.commissionRatePct !== undefined && promoData.commissionRatePct !== null && promoData.commissionRatePct !== ""
+        ? promoData.commissionRatePct
+        : creatorData.defaultCommissionPct;
+      const commRatePct = (rawComm !== undefined && rawComm !== null && rawComm !== "") ? Number(rawComm) : 0.00;
+
+      const rawCommMonths = promoData.commissionMonths !== undefined && promoData.commissionMonths !== null && promoData.commissionMonths !== ""
+        ? promoData.commissionMonths
+        : creatorData.commissionMonths;
+      const commMonths = (rawCommMonths !== undefined && rawCommMonths !== null && rawCommMonths !== "") ? Number(rawCommMonths) : 0;
+
+      // 1. Create or retrieve Stripe Coupon
+      let liveCouponId = cleanCode;
+      try {
+        const duration = custDiscountMonths > 0 ? "repeating" : "once";
+        const couponParams: any = {
+          id: cleanCode,
+          name: `${cleanCode} (${custDiscountPct}% Off)`,
+          percent_off: custDiscountPct,
+          duration: duration,
+        };
+        if (duration === "repeating") {
+          couponParams.duration_in_months = custDiscountMonths;
+        }
+
+        const cData = await stripe.coupons.create(couponParams);
+        if (cData && cData.id) {
+          liveCouponId = cData.id;
+          console.log(`[StripeCreatorTransfer] Live Stripe Coupon Created: ${liveCouponId}`);
+        }
+      } catch (cErr: any) {
+        if (cErr.message?.includes("already exists") || cErr.code === "resource_already_exists") {
+          liveCouponId = cleanCode;
+          console.log(`[StripeCreatorTransfer] Reusing existing Stripe Coupon: ${liveCouponId}`);
+        } else {
+          console.warn("[StripeCreatorTransfer] Stripe coupon creation warning:", cErr.message);
+        }
+      }
+
+      // 2. Create Stripe Promotion Code
+      let livePromoId = null;
+      try {
+        const cleanPromoCode = cleanCode.replace(/[^a-zA-Z0-9_-]/g, "");
+        const pData = await stripe.promotionCodes.create({
+          coupon: liveCouponId,
+          code: cleanPromoCode,
+        });
+        if (pData && pData.id) {
+          livePromoId = pData.id;
+          console.log(`[StripeCreatorTransfer] Live Stripe Promotion Code Created: ${pData.code} (${livePromoId})`);
+        }
+      } catch (pErr: any) {
+        console.warn("[StripeCreatorTransfer] Stripe promotion code creation notice:", pErr.message);
+      }
+
+      const stripeCouponId = liveCouponId || `co_${cleanCode}`;
+      const stripePromoId = livePromoId || `promo_${cleanCode}`;
+
+      // 3. Insert or update Creator Entity in Supabase
+      const { data: creatorRec, error: creatorErr } = await supabase
+        .from("creators")
+        .insert({
+          name: creatorData.name,
+          handle: creatorData.handle || `@${creatorData.name.toLowerCase().replace(/\\s+/g, "")}`,
+          email: creatorData.email,
+          payout_email: creatorData.payoutEmail || creatorData.email,
+          tier: creatorData.tier || (commRatePct === 0 ? "Internal Promo" : "Standard Influencer"),
+          default_commission_pct: commRatePct,
+          commission_duration_months: commMonths,
+          status: "ACTIVE",
+          notes: creatorData.notes || "Created via CloudVault Executive Promo Hub",
+        })
+        .select()
+        .single();
+
+      if (creatorErr) {
+        console.error("[StripeCreatorTransfer] Error creating creator record in Supabase:", creatorErr.message);
+        return new Response(
+          JSON.stringify({ error: `Failed to save partner/creator in database: ${creatorErr.message}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // 4. Insert Promo Code record
+      const { data: promoRec, error: promoErr } = await supabase
+        .from("promo_codes")
+        .insert({
+          creator_id: creatorRec.id,
+          code: cleanCode,
+          stripe_coupon_id: stripeCouponId,
+          stripe_promo_code_id: stripePromoId,
+          customer_discount_pct: custDiscountPct,
+          customer_discount_duration_months: custDiscountMonths,
+          commission_rate_pct: commRatePct,
+          commission_duration_months: commMonths,
+          max_redemptions: promoData.maxRedemptions ? Number(promoData.maxRedemptions) : null,
+          allow_waitlist_deposits: promoData.allowWaitlistDeposits !== false,
+          waitlist_deposit_discount_pct: Number(promoData.waitlistDepositDiscountPct) || custDiscountPct,
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (promoErr) {
+        console.error("[StripeCreatorTransfer] Error creating promo code record in Supabase:", promoErr.message);
+        return new Response(
+          JSON.stringify({ error: `Failed to save promo code in database: ${promoErr.message}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          creatorId: creatorRec.id,
+          promoId: promoRec.id,
+          code: cleanCode,
+          creatorName: creatorData.name,
+          handle: creatorData.handle || `@${creatorData.name.toLowerCase().replace(/\\s+/g, "")}`,
+          customerDiscount: `${custDiscountPct}% off for ${custDiscountMonths} months`,
+          creatorCommission: `${commRatePct}% revenue share for ${commMonths} months`,
+          stripeCouponId: stripeCouponId,
+          stripePromoCodeId: stripePromoId,
+          createdAt: new Date().toISOString(),
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // OPERATION: update_promo_lifecycle (Synchronize promo status with Stripe)
+    // ────────────────────────────────────────────────────────────
+    if (operation === "update_promo_lifecycle") {
+      const promoId = body.promoId || body.promo_id;
+      const active = body.active !== undefined ? Boolean(body.active) : true;
+
+      if (!promoId) {
+        return new Response(
+          JSON.stringify({ error: "Missing promoId parameter" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: promoRec } = await supabase
+        .from("promo_codes")
+        .select("stripe_promo_code_id")
+        .eq("id", promoId)
+        .single();
+
+      if (promoRec?.stripe_promo_code_id && !promoRec.stripe_promo_code_id.startsWith("promo_CV_") && !promoRec.stripe_promo_code_id.startsWith("promo_")) {
+        try {
+          await stripe.promotionCodes.update(promoRec.stripe_promo_code_id, { active });
+          console.log(`[StripeCreatorTransfer] Updated Stripe promotion code ${promoRec.stripe_promo_code_id} active=${active}`);
+        } catch (sErr: any) {
+          console.warn("[StripeCreatorTransfer] Stripe promo code update notice:", sErr.message);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, promoId, active }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // OPERATION: transfer (Creator Commission Payout Transfer)
+    // ────────────────────────────────────────────────────────────
     const creatorId = body.creatorId || body.creator_id;
     const amount = Number(body.amount);
     const currency = (body.currency || "usd").toLowerCase();

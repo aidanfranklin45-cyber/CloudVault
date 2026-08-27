@@ -1086,75 +1086,56 @@
         throw new Error(`Invalid commission rate: ${commRatePct}%. Must be between 0% and 100%.`);
       }
 
-      // 1. Create Live Coupon & Promotion Code on Stripe
-      const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
-      if (!apiKey) throw new Error('[Security] Stripe API key not configured. Set window.STRIPE_RESTRICTED_KEY before calling this method.');
-
-      let liveCouponId = cleanCode;
-      let livePromoId = null;
-
-      if (apiKey) {
+      // 1. Invoke Supabase Edge Function (holds secure Stripe secret key)
+      if (sb && sb.functions) {
         try {
-          const duration = custDiscountMonths > 0 ? 'repeating' : 'once';
-          const couponParams = new URLSearchParams({
-            id: cleanCode,
-            name: `${cleanCode} (${custDiscountPct}% Off)`,
-            percent_off: custDiscountPct.toString(),
-            duration: duration
+          const { data: fnData, error: fnErr } = await sb.functions.invoke('stripe-creator-transfer', {
+            body: {
+              operation: 'create_promo_code',
+              creatorData: {
+                name: creatorData.name,
+                handle: creatorData.handle,
+                email: creatorData.email,
+                payoutEmail: creatorData.payoutEmail,
+                tier: creatorData.tier,
+                defaultCommissionPct: commRatePct,
+                commissionMonths: commMonths,
+                notes: creatorData.notes
+              },
+              promoData: {
+                code: cleanCode,
+                customerDiscountPct: custDiscountPct,
+                customerDiscountMonths: custDiscountMonths,
+                commissionRatePct: commRatePct,
+                commissionMonths: commMonths,
+                maxRedemptions: promoData.maxRedemptions,
+                allowWaitlistDeposits: promoData.allowWaitlistDeposits,
+                waitlistDepositDiscountPct: promoData.waitlistDepositDiscountPct
+              }
+            }
           });
-          if (duration === 'repeating') {
-            couponParams.append('duration_in_months', custDiscountMonths.toString());
-          }
 
-          const cRes = await fetch('https://api.stripe.com/v1/coupons', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: couponParams
-          });
-          const cData = await cRes.json();
-          if (cData && cData.id) {
-            liveCouponId = cData.id;
-            console.log('[StripeBillingIntegration] Live Stripe Coupon Created:', liveCouponId);
-          } else if (cData && cData.error && cData.error.message?.includes('already exists')) {
-            liveCouponId = cleanCode;
+          if (!fnErr && fnData && fnData.success) {
+            console.log('[StripeBillingIntegration] Created promo code via Supabase Edge Function:', fnData);
+            return fnData;
           }
-
-          // Create Promotion Code for Customer Checkout
-          const cleanPromoCode = cleanCode.replace(/[^a-zA-Z0-9_-]/g, '');
-          const pRes = await fetch('https://api.stripe.com/v1/promotion_codes', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: new URLSearchParams({
-              'promotion[type]': 'coupon',
-              'promotion[coupon]': liveCouponId,
-              'code': cleanPromoCode
-            })
-          });
-          const pData = await pRes.json();
-          if (pData && pData.id) {
-            livePromoId = pData.id;
-            console.log('[StripeBillingIntegration] Live Stripe Promotion Code Created:', pData.code, livePromoId);
+          if (fnErr) {
+            console.warn('[StripeBillingIntegration] Edge function notice, falling back to direct DB record:', fnErr.message);
           }
-        } catch (stripeErr) {
-          console.warn('[StripeBillingIntegration] Stripe API coupon creation notice:', stripeErr.message);
+        } catch (fnEx) {
+          console.warn('[StripeBillingIntegration] Edge function invoke exception:', fnEx.message);
         }
       }
 
-      const stripeCouponId = liveCouponId || `co_${cleanCode}`;
-      const stripePromoId = livePromoId || `promo_${cleanCode}`;
+      const stripeCouponId = `co_${cleanCode}`;
+      const stripePromoId = `promo_${cleanCode}`;
 
       let creatorId = null;
       let promoId = null;
 
       if (sb) {
         try {
-          // 2. Insert Creator Record
+          // 2. Direct Supabase Fallback Insert
           const { data: creatorRec, error: creatorErr } = await sb
             .from('creators')
             .insert({
@@ -1162,7 +1143,7 @@
               handle: creatorData.handle || `@${creatorData.name.toLowerCase().replace(/\s+/g, '')}`,
               email: creatorData.email,
               payout_email: creatorData.payoutEmail || creatorData.email,
-              tier: creatorData.tier || 'Standard Influencer',
+              tier: creatorData.tier || (commRatePct === 0 ? 'Internal Promo' : 'Standard Influencer'),
               default_commission_pct: commRatePct,
               commission_duration_months: commMonths,
               status: 'ACTIVE',
@@ -1178,7 +1159,7 @@
 
           creatorId = creatorRec.id;
 
-          // 2. Insert Promo Code Record
+          // Insert Promo Code Record
           const { data: promoRec, error: promoErr } = await sb
             .from('promo_codes')
             .insert({
@@ -1205,7 +1186,8 @@
 
           promoId = promoRec.id;
         } catch (dbErr) {
-          console.warn('[StripeBillingIntegration] Supabase insert fallback to memory simulation:', dbErr.message);
+          console.warn('[StripeBillingIntegration] Supabase insert fallback notice:', dbErr.message);
+          throw dbErr;
         }
       }
 
@@ -1253,28 +1235,18 @@
           throw rpcErr;
         }
 
-        // Synchronize with Stripe API:
-        // 'ACTIVE' -> Stripe promo code active: true (new checkouts allowed)
-        // 'WINDING_DOWN' -> Stripe promo code active: false (blocks new checkouts; existing subscriptions grandfathered)
-        // 'DEACTIVATED' -> Stripe promo code active: false
-        const apiKey = global.STRIPE_RESTRICTED_KEY || global.STRIPE_SECRET_KEY;
-        if (apiKey) {
+        // Synchronize with Stripe via Edge Function
+        if (sb.functions) {
           try {
-            const { data: promoRec } = await sb.from('promo_codes').select('stripe_promo_code_id').eq('id', promoId).single();
-            if (promoRec && promoRec.stripe_promo_code_id && !promoRec.stripe_promo_code_id.startsWith('promo_CV_')) {
-              const shouldBeActiveInStripe = (newStatus === 'ACTIVE');
-              await fetch(`https://api.stripe.com/v1/promotion_codes/${promoRec.stripe_promo_code_id}`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${apiKey}`,
-                  'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: new URLSearchParams({ active: shouldBeActiveInStripe.toString() })
-              });
-              console.log(`[StripeBillingIntegration] Stripe Promo Code ${promoRec.stripe_promo_code_id} active set to:`, shouldBeActiveInStripe);
-            }
-          } catch (stripeErr) {
-            console.warn('[StripeBillingIntegration] Stripe promo lifecycle sync notice:', stripeErr.message);
+            await sb.functions.invoke('stripe-creator-transfer', {
+              body: {
+                operation: 'update_promo_lifecycle',
+                promoId: promoId,
+                active: (newStatus === 'ACTIVE')
+              }
+            });
+          } catch (fnErr) {
+            console.warn('[StripeBillingIntegration] Edge function lifecycle sync notice:', fnErr.message);
           }
         }
 
