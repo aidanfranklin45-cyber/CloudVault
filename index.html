@@ -5054,8 +5054,9 @@
                     sessionStorage.removeItem('cv_promo_code');
                 }
 
-                // Auto-open unified checkout flow if returning from login or direct link
-                if (urlParams.get('flow') === 'checkout') {
+                // Auto-open unified checkout flow if returning from login, sign up link, or direct link
+                const flowType = urlParams.get('flow');
+                if (flowType === 'checkout' || flowType === 'onboarding' || flowType === 'signup') {
                     const totesParam = urlParams.get('totes');
                     const zipParam = urlParams.get('zip');
                     setTimeout(() => {

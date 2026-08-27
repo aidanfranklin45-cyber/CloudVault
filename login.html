@@ -100,7 +100,7 @@
             <div class="mt-6 text-center">
                 <p class="text-sm font-medium text-gray-700">
                     <span id="toggle-text">Don't have an account?</span>
-                    <button onclick="toggleMode()" class="text-blue-700 font-bold hover:underline ml-1" id="toggle-btn">Sign Up</button>
+                    <a href="index.html?flow=onboarding" class="text-blue-700 font-bold hover:underline ml-1" id="toggle-btn">Sign Up &amp; Check Availability →</a>
                 </p>
             </div>
         </div>
@@ -499,16 +499,7 @@
         }
 
         function toggleMode() {
-            isSignUp = !isSignUp;
-            document.getElementById('auth-title').textContent = isSignUp ? 'Create Your Vault' : 'Welcome Back';
-            document.getElementById('auth-subtitle').textContent = isSignUp ? 'Sign up to get started.' : 'Sign in to access your vault.';
-            document.getElementById('auth-submit').textContent = isSignUp ? 'Create Account' : 'Sign In';
-            document.getElementById('toggle-text').textContent = isSignUp ? 'Already have an account?' : "Don't have an account?";
-            document.getElementById('toggle-btn').textContent = isSignUp ? 'Sign In' : 'Sign Up';
-            document.getElementById('name-field').classList.toggle('hidden', !isSignUp);
-            document.getElementById('phone-field').classList.toggle('hidden', !isSignUp);
-            document.getElementById('remember-me-field').classList.toggle('hidden', isSignUp);
-            document.getElementById('auth-error').classList.add('hidden');
+            window.location.href = 'index.html?flow=onboarding';
         }
 
         async function handleAuth() {

@@ -3404,7 +3404,6 @@
             }
 
             const userZip = window.currentUserAddress?.zip || window.currentUserAddress?.delivery_zip || window.currentUserAddress?.billing_zip || currentUserProfile?.zip || currentProfile?.zip || '';
-            const userFacilityId = currentUserProfile?.assigned_facility_id || currentProfile?.assigned_facility_id || currentUser?.assigned_facility_id || 'facility_yakima';
 
             if (userZip && /^\d{5}$/.test(userZip.trim())) {
                 const zipInput = document.getElementById('wizard-zip-input');
@@ -3413,32 +3412,7 @@
                 return;
             }
 
-            // Fallback: If assigned to a known active facility, bypass the prompt
-            if (userFacilityId && typeof supabase !== 'undefined') {
-                try {
-                    const { data: facData } = await supabase.from('facilities').select('*').eq('id', userFacilityId).maybeSingle();
-                    if (facData) {
-                        window.currentActiveFacility = facData;
-                        window.regionalRates = {
-                            tier1: Number(facData.tier1_rate),
-                            tier2: Number(facData.tier2_rate),
-                            tier3: Number(facData.tier3_rate),
-                            tier4: Number(facData.tier4_rate),
-                            valetBase: Number(facData.valet_base),
-                            valetAdder: Number(facData.valet_tote_adder)
-                        };
-                        wizardZip = facData.zip_code || '98908';
-                        document.getElementById('wizard-zip-check-container').classList.add('hidden');
-                        document.getElementById('wizard-subscription-container').classList.remove('hidden');
-                        document.getElementById('wizard-waitlist-container').classList.add('hidden');
-                        document.getElementById('wizard-onboarding-desc').textContent = `Plan Configuration — Servicing ${facData.name || 'Your Area'}`;
-                        return;
-                    }
-                } catch (e) {
-                    console.warn('[initWizardState] Facility auto-resolve notice:', e);
-                }
-            }
-
+            // Always present the ZIP check for users without a verified address on file
             document.getElementById('wizard-zip-check-container').classList.remove('hidden');
             document.getElementById('wizard-subscription-container').classList.add('hidden');
             document.getElementById('wizard-waitlist-container').classList.add('hidden');
@@ -3518,6 +3492,7 @@
                     };
                 }
 
+                updateWizardLedger();
                 document.getElementById('wizard-zip-check-container').classList.add('hidden');
                 document.getElementById('wizard-subscription-container').classList.remove('hidden');
                 document.getElementById('wizard-onboarding-desc').textContent = `Plan Configuration — Servicing ${area.city || zip}`;
@@ -3984,18 +3959,30 @@
 
         function updateWizardLedger() {
             const { rate, tier } = getWizardTierRate(wizardTotes);
+            const fac = window.currentActiveFacility || activeFacilityPricing || {};
+            const rates = window.regionalRates || { 
+                tier1: Number(fac.tier1_rate != null ? fac.tier1_rate : 5.00), 
+                tier2: Number(fac.tier2_rate != null ? fac.tier2_rate : 3.50), 
+                tier3: Number(fac.tier3_rate != null ? fac.tier3_rate : 2.00), 
+                tier4: Number(fac.tier4_rate != null ? fac.tier4_rate : 1.00), 
+                valetBase: Number(fac.valet_base || 0), 
+                valetAdder: Number(fac.valet_tote_adder || 0) 
+            };
             
             for (let i = 1; i <= 4; i++) {
                 const card = document.getElementById(`wizard-tier-${i}`);
                 if (card) {
                     const presetCount = i === 1 ? 5 : i === 2 ? 10 : i === 3 ? 25 : 50;
+                    const tierRate = i === 1 ? rates.tier1 : i === 2 ? rates.tier2 : i === 3 ? rates.tier3 : rates.tier4;
+                    const badge = card.querySelector('.text-lg');
+                    if (badge) {
+                        badge.innerHTML = `$${tierRate.toFixed(2)}<span class="text-xs font-normal text-gray-500">/tote</span>`;
+                    }
                     if (wizardTotes === presetCount) {
                         card.className = 'border-2 border-blue-600 bg-blue-50/50 rounded-2xl p-4 text-center cursor-pointer transition transform hover:scale-[1.02] shadow-sm';
-                        const badge = card.querySelector('.text-lg');
                         if (badge) badge.className = 'block font-extrabold text-blue-600 text-lg mt-1';
                     } else {
                         card.className = 'border border-gray-200 bg-white rounded-2xl p-4 text-center cursor-pointer transition transform hover:scale-[1.02] opacity-70';
-                        const badge = card.querySelector('.text-lg');
                         if (badge) badge.className = 'block font-extrabold text-gray-900 text-lg mt-1';
                     }
                 }
