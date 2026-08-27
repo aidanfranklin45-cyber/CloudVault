@@ -411,36 +411,6 @@
             pointer-events: none;
         }
 
-        /* Mobile sticky CTA */
-        .mobile-cta-bar {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: rgba(255, 255, 255, 0.96);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            border-top: 1px solid #e2e8f0;
-            padding: 12px 18px;
-            z-index: 40;
-            transform: translateY(100%);
-            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
-        }
-
-        .mobile-cta-bar.visible {
-            transform: translateY(0);
-        }
-
-        @media (min-width: 768px) {
-            .mobile-cta-bar {
-                display: none !important;
-            }
-        }
-
         /* Pricing Loading Skeleton */
         .skeleton {
             background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
@@ -2227,19 +2197,6 @@
             <p>Designed for human-first physical storage.</p>
         </div>
     </footer>
-
-    <!-- Mobile Sticky CTA Bar -->
-    <div id="mobile-cta-bar" class="mobile-cta-bar">
-        <div>
-            <div class="text-[11px] text-slate-500 font-bold">CloudVault Storage</div>
-            <span class="text-xs sm:text-sm font-extrabold text-slate-900" id="mobile-rate-display">From <span
-                    class="text-blue-600">$1.00/tote/mo</span></span>
-        </div>
-        <button onclick="startCheckoutFlow({ source: 'mobile_sticky_bar' })"
-            class="bg-blue-600 text-white px-4 py-2 rounded-xl font-extrabold text-xs sm:text-sm hover:bg-blue-700 transition shadow-md">
-            Get Started
-        </button>
-    </div>
 
     <!-- Landing Page Feedback & Bug Reporting Modal -->
     <div id="landing-feedback-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
@@ -4841,17 +4798,6 @@
                     header.classList.add('scrolled');
                 } else {
                     header.classList.remove('scrolled');
-                }
-            }
-
-            const mobileCta = document.getElementById('mobile-cta-bar');
-            const landingView = document.getElementById('view-landing');
-            if (mobileCta && landingView) {
-                const isLandingVisible = !landingView.classList.contains('hidden-section');
-                if (isLandingVisible && window.scrollY > 400) {
-                    mobileCta.classList.add('visible');
-                } else {
-                    mobileCta.classList.remove('visible');
                 }
             }
         });

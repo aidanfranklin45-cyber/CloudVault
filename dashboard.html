@@ -623,47 +623,51 @@
         <!-- ============================================================ -->
         <!-- FLOW 2: ACTIVE CUSTOMER VAULT DASHBOARD -->
         <!-- ============================================================ -->
-        <div id="flow-active-dashboard" class="hidden space-y-8 fade-in">
+        <div id="flow-active-dashboard" class="hidden space-y-6 sm:space-y-8 pb-28 sm:pb-16 fade-in">
             
             <!-- Exciting Welcome & Daily Storage Quip Banner -->
-            <div id="welcome-greeting-banner" class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 p-6 sm:p-7 text-white shadow-xl shadow-blue-600/10 border border-blue-400/30">
+            <div id="welcome-greeting-banner" class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 p-5 sm:p-7 text-white shadow-xl shadow-blue-600/10 border border-blue-400/30">
                 <!-- Background decorative glowing ambient shapes -->
                 <div class="absolute -right-10 -top-10 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
                 <div class="absolute right-1/4 -bottom-10 w-40 h-40 bg-sky-400/20 rounded-full blur-xl pointer-events-none"></div>
                 
-                <div class="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div class="space-y-1.5 flex-1 min-w-0 pr-2">
+                <div class="relative z-10 space-y-2.5">
+                    <!-- Top Row: Greeting on left, Daily Spark button on top-right -->
+                    <div class="flex items-center justify-between gap-3">
                         <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center" spellcheck="false">
                             Hi, <span id="welcome-first-name" class="text-white font-black ml-1.5" spellcheck="false">there</span>!<span class="inline-block hover:rotate-12 transition-transform cursor-default ml-2">👋</span>
                         </h1>
-                        <p id="welcome-quip-text" class="text-xs sm:text-sm md:text-[15px] text-blue-100 font-medium leading-normal transition-opacity duration-200 truncate" spellcheck="false">
-                            Your closet called — it said thank you for giving it room to breathe! 🌬️
-                        </p>
+                        <button onclick="cycleWelcomeJoke()" title="Click for another fun storage thought!" class="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl bg-white/15 hover:bg-white/25 active:scale-95 transition-all text-xs font-bold text-white border border-white/25 backdrop-blur-md shadow-sm cursor-pointer group select-none">
+                            <span class="text-sm group-hover:rotate-45 transition-transform duration-300">✨</span>
+                            <span>Daily Spark</span>
+                        </button>
                     </div>
-
-                    <!-- Mini Joke / Storage Depth Button -->
-                    <button onclick="cycleWelcomeJoke()" title="Click for another fun storage thought!" class="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/15 hover:bg-white/25 active:scale-95 transition-all text-xs font-bold text-white border border-white/25 backdrop-blur-md shadow-sm cursor-pointer group select-none">
-                        <span class="text-sm group-hover:rotate-45 transition-transform duration-300">✨</span>
-                        <span>Daily Spark</span>
-                    </button>
+                    <!-- Spark Quip text -->
+                    <p id="welcome-quip-text" class="text-xs sm:text-sm text-blue-100/90 font-medium leading-snug line-clamp-2 sm:truncate" spellcheck="false">
+                        Your closet called — it said thank you for giving it room to breathe! 🌬️
+                    </p>
                 </div>
             </div>
 
             <!-- Vault Subscription Plan Header Summary Card -->
-            <div class="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                <div class="flex items-center space-x-5">
-                    <div class="p-4 bg-blue-50 text-blue-600 rounded-2xl">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            <div class="bg-white border border-gray-200 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div class="flex items-center space-x-4 min-w-0">
+                    <div class="p-3.5 bg-blue-50 text-blue-600 rounded-2xl flex-shrink-0">
+                        <svg class="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                     </div>
-                    <div>
-                        <p class="text-xs text-gray-500 uppercase tracking-wide font-bold">Active Space Plan</p>
-                        <h2 class="text-2xl font-extrabold text-gray-900 mt-0.5" id="active-plan-header">Loading plan...</h2>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <p class="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wider font-bold">Active Space Plan</p>
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        </div>
+                        <h2 class="text-lg sm:text-2xl font-extrabold text-gray-900 tracking-tight truncate" id="active-plan-header">Loading plan...</h2>
                     </div>
                 </div>
-                <div class="flex flex-wrap gap-3">
-                    <button onclick="openAddTotesPanel()" class="bg-blue-600 text-white px-5 py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition shadow-sm flex items-center">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
-                        Rent More Totes
+                <div class="w-full sm:w-auto flex-shrink-0">
+                    <button onclick="openAddTotesPanel()" class="w-full sm:w-auto bg-blue-600 text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm hover:bg-blue-700 active:scale-98 transition shadow-sm flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+                        <span>Rent More Totes</span>
+                    </button>
                 </div>
             </div>
 
@@ -1323,12 +1327,12 @@
     </div>
 
     <!-- Floating Report Bug / Feedback Button -->
-    <div id="floating-feedback-trigger" class="fixed bottom-6 right-6 z-40">
-        <button onclick="openFeedbackModal('bug')" class="bg-gray-950/90 hover:bg-black text-white text-xs font-bold px-4 py-3 rounded-full shadow-2xl border border-gray-700/80 backdrop-blur-md transition-all transform hover:scale-105 flex items-center gap-2 cursor-pointer group">
-            <span class="text-base group-hover:scale-125 transition-transform">💬</span>
+    <div id="floating-feedback-trigger" class="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-30">
+        <button onclick="openFeedbackModal('bug')" class="bg-gray-950/90 hover:bg-black text-white text-[11px] sm:text-xs font-bold px-3 py-2 sm:px-4 sm:py-3 rounded-full shadow-2xl border border-gray-700/80 backdrop-blur-md transition-all transform hover:scale-105 active:scale-95 flex items-center gap-1.5 sm:gap-2 cursor-pointer group">
+            <span class="text-sm sm:text-base group-hover:scale-125 transition-transform">💬</span>
             <span class="hidden sm:inline font-sans">Report Bug / Feedback</span>
             <span class="sm:hidden font-sans">Feedback</span>
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-pulse"></span>
         </button>
     </div>
 
@@ -3055,20 +3059,20 @@
             const stepsHtml = steps.map((s, i) => {
                 let dot, textColor, subColor;
                 if (s.done) {
-                    dot = `<div class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto text-xs font-bold flex-shrink-0">✓</div>`;
+                    dot = `<div class="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto text-[10px] sm:text-xs font-bold flex-shrink-0">✓</div>`;
                     textColor = 'text-white'; subColor = 'text-emerald-300';
                 } else if (s.active) {
-                    dot = `<div class="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto text-xs font-bold flex-shrink-0 animate-pulse">●</div>`;
+                    dot = `<div class="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto text-[10px] sm:text-xs font-bold flex-shrink-0 animate-pulse">●</div>`;
                     textColor = 'text-white'; subColor = 'text-blue-200';
                 } else {
-                    dot = `<div class="w-7 h-7 rounded-full bg-gray-800 text-gray-500 flex items-center justify-center mx-auto text-[10px] font-bold flex-shrink-0">${i + 1}</div>`;
+                    dot = `<div class="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gray-800 text-gray-500 flex items-center justify-center mx-auto text-[9px] sm:text-[10px] font-bold flex-shrink-0">${i + 1}</div>`;
                     textColor = 'text-gray-400'; subColor = 'text-gray-600';
                 }
                 return `
-                    <div class="flex flex-col items-center text-center gap-1 min-w-0">
+                    <div class="flex flex-col items-center text-center gap-0.5 sm:gap-1 min-w-0">
                         ${dot}
-                        <p class="text-[10px] font-bold ${textColor} leading-tight">${s.label}</p>
-                        <p class="text-[8.5px] ${subColor} leading-tight px-0.5">${s.sub}</p>
+                        <p class="text-[8.5px] sm:text-[10px] font-bold ${textColor} leading-tight">${s.label}</p>
+                        <p class="text-[7px] sm:text-[8.5px] ${subColor} leading-tight px-0.5">${s.sub}</p>
                     </div>`;
             }).join('');
 
@@ -3078,7 +3082,7 @@
             }).join('') + ((totes || []).length > 6 ? `<span class="text-[9px] text-gray-500">+${totes.length - 6} more</span>` : '');
 
             return `
-            <div class="bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 text-white rounded-2xl p-4 shadow-lg border border-blue-500/25 space-y-3">
+            <div class="bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 text-white rounded-2xl p-3.5 sm:p-4 shadow-lg border border-blue-500/25 space-y-3">
                 <!-- Operational Override Notice if Staff modified methodology -->
                 ${overrideNotice ? `
                 <div class="bg-amber-950/50 border border-amber-500/50 rounded-xl p-2.5 flex items-start gap-2.5 text-xs text-amber-200">
@@ -3091,14 +3095,14 @@
 
                 <!-- Header -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-800/40 pb-2.5">
-                    <div class="flex items-center gap-2.5">
+                    <div class="flex items-center gap-2.5 min-w-0">
                         <div class="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center text-base border border-blue-500/30 flex-shrink-0">${icon}</div>
-                        <div>
+                        <div class="min-w-0">
                             <h4 class="text-xs sm:text-sm font-bold text-white leading-tight">${title}</h4>
                             <p class="text-[10px] text-blue-200 font-mono mt-0.5">${subtitle}</p>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2 self-start sm:self-center">
+                    <div class="flex items-center gap-2 self-start sm:self-center flex-wrap">
                         ${(canCancel && reqId) ? `
                             <button onclick="cancelFulfillmentRequest('${reqId}')" class="text-[10px] font-bold text-rose-300 hover:text-white bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1 shadow-xs" title="Cancel this request">
                                 <span>✕ Cancel Request</span>
@@ -3109,9 +3113,9 @@
                 </div>
 
                 <!-- 4-Step Progress -->
-                <div class="grid grid-cols-4 gap-1.5 relative py-1">
+                <div class="grid grid-cols-4 gap-1 sm:gap-1.5 relative py-1">
                     <!-- Progress bar track -->
-                    <div class="absolute top-4 left-[12.5%] right-[12.5%] h-0.5 bg-gray-700 hidden sm:block"></div>
+                    <div class="absolute top-3.5 sm:top-4 left-[12.5%] right-[12.5%] h-0.5 bg-gray-700 hidden sm:block"></div>
                     ${stepsHtml}
                 </div>
 
