@@ -798,6 +798,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
     <script src="billing-engine.js"></script>
+    <script src="stripe-billing-integration.js"></script>
 
     <script>
         // =========================================================================
@@ -1546,7 +1547,14 @@
                     });
 
                     const failedEvents = events.filter(e => e.event_type === 'invoice.payment_failed' || e.event_type === 'charge.failed');
-                    const failedAmount = failedInvoices.reduce((sum, inv) => sum + Number(inv.amount_due || inv.total_amount || inv.subtotal || 0), 0);
+                    const failedAmount = failedInvoices.reduce((sum, inv) => {
+                        const amt = (typeof StripeBillingIntegration !== 'undefined' && typeof StripeBillingIntegration.extractInvoiceGrandTotal === 'function')
+                            ? StripeBillingIntegration.extractInvoiceGrandTotal(inv)
+                            : (typeof CloudVaultBilling !== 'undefined' && typeof CloudVaultBilling.extractInvoiceGrandTotal === 'function')
+                            ? CloudVaultBilling.extractInvoiceGrandTotal(inv)
+                            : Number(inv.amount_due || inv.total_amount || inv.subtotal || 0);
+                        return sum + amt;
+                    }, 0);
 
                     const refundCharges = charges.filter(c => (c.status || '').toLowerCase() === 'refunded');
                     const refundEvents = events.filter(e => e.event_type === 'charge.refunded' || e.event_type === 'charge.refund.updated');
@@ -1656,7 +1664,11 @@
             tbody.innerHTML = allItems.map(item => {
                 const email = escapeHtml(item.customer_email || 'Customer');
                 const invoiceRef = escapeHtml(item.invoice_number || item.stripe_invoice_id || item.id || 'N/A');
-                const amt = Number(item.amount_due || item.total_amount || item.subtotal || 0);
+                const amt = (typeof StripeBillingIntegration !== 'undefined' && typeof StripeBillingIntegration.extractInvoiceGrandTotal === 'function')
+                    ? StripeBillingIntegration.extractInvoiceGrandTotal(item)
+                    : (typeof CloudVaultBilling !== 'undefined' && typeof CloudVaultBilling.extractInvoiceGrandTotal === 'function')
+                    ? CloudVaultBilling.extractInvoiceGrandTotal(item)
+                    : Number(item.amount_due || item.total_amount || item.subtotal || 0);
                 const reason = escapeHtml(item.decline_reason || item.notes || (item.payment_status === 'overdue' ? 'Payment past due date' : 'insufficient_funds / card_declined'));
                 const rawTime = item.created_at || item.due_date || Date.now(); const dateObj = new Date(rawTime); const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
                 const invId = item.id || item.invoice_number;

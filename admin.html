@@ -11466,7 +11466,12 @@
 
             if (isOverdue && overdueBanner) {
                 overdueBanner.classList.remove('hidden');
-                const overdueTotal = overdueInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || inv.subtotal || 0), 0);
+                const overdueTotal = overdueInvoices.reduce((sum, inv) => {
+                    const amt = (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.extractInvoiceGrandTotal === 'function')
+                        ? window.StripeBillingIntegration.extractInvoiceGrandTotal(inv)
+                        : Number(inv.total_amount || inv.subtotal || 0);
+                    return sum + amt;
+                }, 0);
                 if (overdueBannerText) {
                     overdueBannerText.textContent = overdueTotal > 0
                         ? `This customer has $${overdueTotal.toFixed(2)} in overdue storage fees exceeding the 3-day grace period.`
@@ -11796,7 +11801,9 @@
                                 const invTypeRaw = (inv.invoice_type || inv.invoiceType || 'subscription').toLowerCase();
                                 const isPaid = (rawStatus === 'paid' || rawStatus === 'success' || rawStatus === 'succeeded') && invTypeRaw !== 'refund';
 
-                                const totalVal = Number(inv.total_amount !== undefined ? inv.total_amount : (inv.totalAmount !== undefined ? inv.totalAmount : inv.subtotal || 0));
+                                const totalVal = (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.extractInvoiceGrandTotal === 'function')
+                                    ? window.StripeBillingIntegration.extractInvoiceGrandTotal(inv)
+                                    : Number(inv.total_amount !== undefined ? inv.total_amount : (inv.totalAmount !== undefined ? inv.totalAmount : inv.subtotal || 0));
                                 const isNegative = totalVal < 0 || invTypeRaw === 'refund';
                                 const totalFormatted = isNegative
                                     ? `<span class="text-rose-400 font-mono font-bold">-$${Math.abs(totalVal).toFixed(2)}</span>`
@@ -11966,7 +11973,12 @@
             });
 
             if (overdueInvoices.length > 0) {
-                chargeAmount = overdueInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || inv.subtotal || 0), 0);
+                chargeAmount = overdueInvoices.reduce((sum, inv) => {
+                    const amt = (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.extractInvoiceGrandTotal === 'function')
+                        ? window.StripeBillingIntegration.extractInvoiceGrandTotal(inv)
+                        : Number(inv.total_amount || inv.subtotal || 0);
+                    return sum + amt;
+                }, 0);
             }
 
             if (chargeAmount <= 0) {
@@ -12164,7 +12176,12 @@
                 return st === 'overdue' || st === 'unpaid' || st === 'pending';
             });
 
-            const overdueAmount = overdueInvoices.reduce((sum, inv) => sum + Number(inv.total_amount || inv.subtotal || 0), 0);
+            const overdueAmount = overdueInvoices.reduce((sum, inv) => {
+                const amt = (window.StripeBillingIntegration && typeof window.StripeBillingIntegration.extractInvoiceGrandTotal === 'function')
+                    ? window.StripeBillingIntegration.extractInvoiceGrandTotal(inv)
+                    : Number(inv.total_amount || inv.subtotal || 0);
+                return sum + amt;
+            }, 0);
             const displayAmount = overdueAmount > 0 ? `$${overdueAmount.toFixed(2)}` : '$38.50';
 
             alert(`📩 Invoice Reminder & Grace Period Warning Sent!\n\nRecipient: ${user.name || 'Customer'} (${userEmail})\nOutstanding Balance: ${displayAmount}\nNotice: Customer notified to pay within grace period.`);

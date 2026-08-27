@@ -270,6 +270,143 @@
     },
 
     /**
+     * Extracts and resolves the final grand total (total amount due / total payable) from an invoice object.
+     * Targets authoritative final total payable fields (e.g., grand_total, total_amount_due, total_amount, total)
+     * rather than intermediate fields like tax or subtotal.
+     * Handles edge cases: multi-line taxes, zero-tax invoices, discounts, and itemized line items.
+     * 
+     * @param {Object} invoice - The invoice data object (from Supabase, Stripe, or in-memory)
+     * @returns {number} The final grand total payable amount as a float (e.g. 21.69)
+     */
+    extractInvoiceGrandTotal: function (invoice) {
+      if (!invoice || typeof invoice !== 'object') return 0.00;
+
+      // 1. Check direct final total payable fields in priority order (grand_total, total_amount_due, total_amount, etc.)
+      const finalCandidates = [
+        invoice.grand_total,
+        invoice.grandTotal,
+        invoice.total_amount_due,
+        invoice.totalAmountDue,
+        invoice.total_amount,
+        invoice.totalAmount,
+        invoice.final_total,
+        invoice.finalTotal,
+        invoice.total
+      ];
+
+      for (const candidate of finalCandidates) {
+        if (candidate !== undefined && candidate !== null && candidate !== '') {
+          const num = Number(candidate);
+          if (!isNaN(num) && num > 0) {
+            return Math.round(num * 100) / 100;
+          }
+        }
+      }
+
+      // 2. Check amount_due / amount (Stripe / Webhook / Charge formats)
+      const amountDueRaw = invoice.amount_due !== undefined ? invoice.amount_due : invoice.amountDue;
+      if (amountDueRaw !== undefined && amountDueRaw !== null && amountDueRaw !== '') {
+        let num = Number(amountDueRaw);
+        if (!isNaN(num) && num > 0) {
+          // Normalize Stripe cents if applicable
+          if (invoice.stripe_invoice_id || invoice.currency || (num >= 1000 && !String(amountDueRaw).includes('.'))) {
+            const sub = Number(invoice.subtotal || invoice.sub_total || 0);
+            if (sub > 0 && Math.abs(num - sub * 100) < 50) {
+              num = num / 100;
+            }
+          }
+          return Math.round(num * 100) / 100;
+        }
+      }
+
+      // 3. Parse line items if available to support multi-line taxes, itemized discounts, and multi-service items
+      let lineItems = invoice.line_items || invoice.lineItems || [];
+      if (typeof lineItems === 'string') {
+        try { lineItems = JSON.parse(lineItems); } catch (e) { lineItems = []; }
+      }
+      if (!Array.isArray(lineItems)) lineItems = [];
+
+      const isTaxItem = li => {
+        if (!li || typeof li !== 'object') return false;
+        const desc = String(li.description || li.name || '').toLowerCase();
+        return li.is_tax === true || li.tax === true || desc.includes('sales tax') || desc.includes('state tax') || desc.includes('local tax') || desc.includes('vat');
+      };
+
+      const isDiscountItem = li => {
+        if (!li || typeof li !== 'object') return false;
+        const desc = String(li.description || li.name || '').toLowerCase();
+        const amt = Number(li.amount !== undefined ? li.amount : li.unit_price);
+        return li.is_discount === true || li.discount === true || amt < 0 || desc.includes('discount') || desc.includes('promo') || desc.includes('coupon') || desc.includes('waiver');
+      };
+
+      // Sum multi-line taxes if present in line items
+      let lineTaxSum = 0;
+      lineItems.forEach(li => {
+        if (isTaxItem(li)) {
+          const amt = Number(li.amount !== undefined ? li.amount : (li.unit_price !== undefined ? li.unit_price : (li.unit_amount ? li.unit_amount / 100 : 0)));
+          if (!isNaN(amt)) lineTaxSum += Math.abs(amt);
+        }
+        if (Array.isArray(li.tax_amounts)) {
+          li.tax_amounts.forEach(ta => {
+            const tAmt = Number(ta.amount || 0);
+            lineTaxSum += (tAmt > 100 && !invoice.currency ? tAmt / 100 : tAmt);
+          });
+        }
+      });
+
+      // Sum discount line items
+      let lineDiscountSum = 0;
+      lineItems.forEach(li => {
+        if (isDiscountItem(li)) {
+          const amt = Number(li.amount !== undefined ? li.amount : (li.unit_price !== undefined ? li.unit_price : 0));
+          if (!isNaN(amt)) lineDiscountSum += Math.abs(amt);
+        }
+      });
+
+      // Sum service line items
+      let lineServiceSum = 0;
+      const serviceLines = lineItems.filter(li => !isTaxItem(li) && !isDiscountItem(li));
+      serviceLines.forEach(li => {
+        const qty = Number(li.qty || li.quantity || 1);
+        const unit = Number(li.unit_price !== undefined ? li.unit_price : (li.unit_amount ? li.unit_amount / 100 : li.amount || 0));
+        const amt = Number(li.amount !== undefined ? li.amount : qty * unit);
+        if (!isNaN(amt)) lineServiceSum += amt;
+      });
+
+      // 4. Resolve components (Subtotal, Fees, Discount, Tax)
+      const rawSubtotal = Number(invoice.subtotal !== undefined ? invoice.subtotal : (invoice.sub_total !== undefined ? invoice.sub_total : 0));
+      const delFee = Number(invoice.delivery_fee || invoice.deliveryFee || 0);
+      const surgeFee = Number(invoice.surge_fee || invoice.surgeFee || 0);
+
+      const grossSubtotal = lineServiceSum > 0 ? lineServiceSum : (rawSubtotal + delFee + surgeFee);
+
+      const rawDiscount = Number(invoice.discount !== undefined ? invoice.discount : (invoice.discount_amount !== undefined ? invoice.discount_amount : (invoice.discountAmount !== undefined ? invoice.discountAmount : 0)));
+      const totalDiscount = rawDiscount > 0 ? rawDiscount : lineDiscountSum;
+
+      const rawTax = Number(invoice.tax !== undefined ? invoice.tax : (invoice.tax_amount !== undefined ? invoice.tax_amount : (invoice.taxAmount !== undefined ? invoice.taxAmount : 0)));
+      const totalTax = rawTax > 0 ? rawTax : lineTaxSum;
+
+      const netTaxable = Math.max(0, grossSubtotal - totalDiscount);
+      const calculatedGrandTotal = Math.max(0, Math.round((netTaxable + totalTax) * 100) / 100);
+
+      if (calculatedGrandTotal > 0) {
+        return calculatedGrandTotal;
+      }
+
+      // 5. Fallback to amount_paid if marked paid or valid
+      const amountPaidRaw = invoice.amount_paid !== undefined ? invoice.amount_paid : invoice.amountPaid;
+      if (amountPaidRaw !== undefined && amountPaidRaw !== null && amountPaidRaw !== '') {
+        const paidNum = Number(amountPaidRaw);
+        if (!isNaN(paidNum) && paidNum > 0) {
+          return Math.round(paidNum * 100) / 100;
+        }
+      }
+
+      // 6. Zero-tax / Zero-cost explicit invoice
+      return 0.00;
+    },
+
+    /**
      * Formats the invoice due date as a user-friendly string (e.g. "Due: Aug 15, 2026").
      * @param {Object} invoice - Invoice object
      * @returns {string}
@@ -348,7 +485,10 @@
           inv = global.userLoadedInvoices.find(i => i.invoice_number === invoiceNumberOrId || i.id === invoiceNumberOrId);
         }
 
-        let amt = Number(inv ? (inv.total_amount || inv.subtotal || inv.amount_due) : 0);
+        let amt = this.extractInvoiceGrandTotal(inv);
+        if (!amt || isNaN(amt) || amt <= 0) {
+          amt = Number(inv ? (inv.total_amount || inv.grand_total || inv.total_amount_due || inv.subtotal || inv.amount_due) : 0);
+        }
         if (!amt || isNaN(amt) || amt <= 0) {
           throw new Error(`[StripeBillingIntegration] Invalid or zero invoice balance for ${invoiceNumberOrId}`);
         }
@@ -509,7 +649,7 @@
           unpaidInvoices.forEach(inv => {
             if (StripeBillingIntegration.isOverdue(inv)) {
               overdueCount++;
-              overdueAmount += Number(inv.total_amount || inv.subtotal || 0);
+              overdueAmount += StripeBillingIntegration.extractInvoiceGrandTotal(inv);
               if (inv.uid) overdueUids.add(inv.uid);
             }
           });
@@ -1513,7 +1653,7 @@
         // Also check if any failed charge events exist in webhook logs
         const failedEvents = events.filter(e => e.event_type === 'invoice.payment_failed' || e.event_type === 'charge.failed');
 
-        const failedAmount = failedInvoices.reduce((sum, inv) => sum + Number(inv.amount_due || inv.total_amount || inv.subtotal || 0), 0);
+        const failedAmount = failedInvoices.reduce((sum, inv) => sum + StripeBillingIntegration.extractInvoiceGrandTotal(inv), 0);
 
         // Refunds from charges table or charge.refunded webhook events
         const refundCharges = charges.filter(c => (c.status || '').toLowerCase() === 'refunded');
