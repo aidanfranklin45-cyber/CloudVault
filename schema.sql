@@ -5895,17 +5895,42 @@ BEGIN
         END IF;
 
         IF v_facility_id IS NULL THEN
-            v_facility_id := COALESCE(v_user.assigned_facility_id, 'facility_yakima');
+            v_facility_id := COALESCE(v_user.assigned_facility_id, 'facility_seattle_north');
+            IF v_facility_id = 'facility_seattle_north' THEN
+                v_tax_rate := 0.1025;
+                v_tax_label := 'WA State & Seattle Sales Tax (10.25%)';
+            ELSIF v_facility_id = 'facility_portland_central' THEN
+                v_tax_rate := 0.00;
+                v_tax_label := 'Oregon Sales Tax (0.00%)';
+            ELSE
+                v_tax_rate := 0.085;
+                v_tax_label := 'WA State & Local Sales Tax (8.50%)';
+            END IF;
         END IF;
 
         v_subtotal := COALESCE(NEW.total_totes * NEW.tote_rate, NEW.recurring_storage, 0.00);
         v_valet := COALESCE(NEW.valet_fee, 0.00);
-        
-        IF v_tax_rate > 0 THEN
-            v_tax := ROUND(v_subtotal * v_tax_rate, 2);
+
+        -- Check for active creator promo code
+        IF v_user IS NOT NULL AND COALESCE(v_user.referred_by_promo_code, v_user.referred_by_code) IS NOT NULL THEN
+            SELECT * INTO v_promo FROM public.promo_codes 
+            WHERE code ILIKE TRIM(COALESCE(v_user.referred_by_promo_code, v_user.referred_by_code))
+               OR code ILIKE TRIM(COALESCE(v_user.referred_by_promo_code, v_user.referred_by_code)) || '%'
+            LIMIT 1;
+
+            IF FOUND AND COALESCE(v_promo.customer_discount_pct, 0) > 0 THEN
+                v_promo_code := v_promo.code;
+                v_discount := ROUND(v_subtotal * (v_promo.customer_discount_pct / 100.0), 2);
+            END IF;
         END IF;
         
-        v_total := v_subtotal + v_valet + v_tax;
+        v_net_taxable := GREATEST(0.00, v_subtotal - v_discount);
+
+        IF v_tax_rate > 0 THEN
+            v_tax := ROUND(v_net_taxable * v_tax_rate, 2);
+        END IF;
+        
+        v_total := v_net_taxable + v_valet + v_tax;
         v_inv_num := 'INV-' || TO_CHAR(COALESCE(NEW.created_at, NOW()), 'YYYY') || '-' || SUBSTRING(MD5(RANDOM()::TEXT) FROM 1 FOR 6);
 
         v_line_items := jsonb_build_array(
@@ -5916,6 +5941,19 @@ BEGIN
                 'amount', v_subtotal
             )
         );
+
+        IF v_discount > 0 THEN
+            v_line_items := v_line_items || jsonb_build_array(
+                jsonb_build_object(
+                    'description', 'Creator Promo Discount (' || COALESCE(v_promo_code, 'PROMO') || ' — ' || (v_promo.customer_discount_pct)::text || '% off)',
+                    'qty', 1,
+                    'unit_price', -v_discount,
+                    'amount', -v_discount,
+                    'is_discount', true,
+                    'promo_code', v_promo_code
+                )
+            );
+        END IF;
 
         IF v_valet > 0 THEN
             v_line_items := v_line_items || jsonb_build_array(
@@ -5935,7 +5973,8 @@ BEGIN
                     'qty', 1,
                     'unit_price', v_tax,
                     'amount', v_tax,
-                    'tax_rate', v_tax_rate
+                    'tax_rate', v_tax_rate,
+                    'is_tax', true
                 )
             );
         END IF;
@@ -5976,12 +6015,12 @@ BEGIN
             v_valet,
             0.00,
             v_tax,
-            0.00,
+            v_discount,
             v_total,
             v_total,
             'Stripe Card on File',
             COALESCE(NEW.stripe_subscription_id, 'stripe_initial_checkout'),
-            'Initial reservation & monthly tote storage allocation',
+            CASE WHEN v_promo_code IS NOT NULL THEN 'Initial reservation with applied promo ' || v_promo_code ELSE 'Initial reservation & monthly tote storage allocation' END,
             v_line_items,
             CURRENT_DATE + interval '30 days',
             NOW(),

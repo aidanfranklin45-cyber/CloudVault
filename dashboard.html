@@ -7498,14 +7498,24 @@
                 const toteRate = Number(sub.tote_rate) || 5.00;
                 const baseMonthly = Number(sub.recurring_storage) || (totalTotes * toteRate);
 
-                // Dynamic tax resolution based on active user facility/state
-                const userFac = currentUser?.assigned_facility_id || sub?.facility_id || 'facility_yakima';
-                const userTaxRate = (userFac === 'facility_seattle_north' ? 0.1025 : (userFac === 'facility_portland_central' ? 0.00 : 0.085));
+                // 1. Resolve Active Customer Profile, Assigned Facility & Dynamic Tax Rate
+                const profile = (currentUserProfile || currentProfile || (currentUser ? await getCachedUserProfile(currentUser.id) : null));
+                const userFac = profile?.assigned_facility_id || profile?.assigned_facility || sub?.facility_id || window.currentActiveFacility?.id || 'facility_seattle_north';
+                let userTaxRate = 0.1025;
+                if (window.currentActiveFacility && window.currentActiveFacility.id === userFac && window.currentActiveFacility.tax_rate != null) {
+                    userTaxRate = Number(window.currentActiveFacility.tax_rate);
+                } else if (userFac === 'facility_seattle_north') {
+                    userTaxRate = 0.1025;
+                } else if (userFac === 'facility_portland_central') {
+                    userTaxRate = 0.00;
+                } else if (userFac === 'facility_yakima' || userFac === 'facility_spokane_hub') {
+                    userTaxRate = 0.085;
+                }
+
                 const monthlyTax = Math.round(baseMonthly * userTaxRate * 100) / 100;
                 const afterTaxMonthly = Math.round((baseMonthly + monthlyTax) * 100) / 100;
 
-                // 1. Resolve Active Customer Promo Code & Expiry Timeline
-                const profile = (currentUserProfile || currentProfile || (currentUser ? await getCachedUserProfile(currentUser.id) : null));
+                // 2. Resolve Active Customer Promo Code & Expiry Timeline
                 const rawPromoCode = profile?.referred_by_promo_code || profile?.referred_by_code;
                 const promoBanner = document.getElementById('billing-promo-banner-container');
                 let isPromoActive = false;
@@ -7800,21 +7810,46 @@
                 // Helper to resolve authoritative Stripe after-tax total
                 function resolveInvoiceAfterTaxTotal(inv) {
                     if (!inv) return 0;
+                    
                     const rawTotal = Number(inv.total_amount !== undefined ? inv.total_amount : (inv.totalAmount !== undefined ? inv.totalAmount : 0));
+                    const rawPaid = Number(inv.amount_paid !== undefined ? inv.amount_paid : (inv.amountPaid !== undefined ? inv.amountPaid : 0));
                     const rawTax = Number(inv.tax !== undefined ? inv.tax : (inv.taxAmount !== undefined ? inv.taxAmount : 0));
                     const rawDiscount = Number(inv.discount !== undefined ? inv.discount : (inv.discountAmount !== undefined ? inv.discountAmount : 0));
                     
-                    if (rawTotal > 0 && (rawTax > 0 || rawDiscount > 0 || String(inv.facility_id || '').includes('portland'))) return rawTotal;
+                    let lineItems = inv.line_items || inv.lineItems || [];
+                    if (typeof lineItems === 'string') {
+                        try { lineItems = JSON.parse(lineItems); } catch (e) { lineItems = []; }
+                    }
+                    
+                    let lineDiscount = 0;
+                    if (Array.isArray(lineItems)) {
+                        const dLine = lineItems.find(li => li.is_discount === true || Number(li.amount || 0) < 0 || String(li.description || '').toLowerCase().includes('discount'));
+                        if (dLine) {
+                            lineDiscount = Math.abs(Number(dLine.amount || dLine.unit_price || 0));
+                        }
+                    }
+
+                    const effectiveDiscount = rawDiscount > 0 ? rawDiscount : lineDiscount;
+
+                    // If invoice record already has the final discounted total, return it directly
+                    if (effectiveDiscount > 0 && rawTotal > 0) {
+                        return rawTotal;
+                    }
+                    if (rawPaid > 0 && rawTotal > 0 && Math.abs(rawPaid - rawTotal) < 0.02) {
+                        return rawPaid;
+                    }
 
                     const subtotal = Number(inv.subtotal || 0);
-                    let discount = rawDiscount;
+                    let discount = effectiveDiscount;
 
                     // If discount is not recorded on invoice but promo is active on user account, apply promo discount
-                    if (discount === 0 && subtotal > 0 && currentUser?.referred_by_promo_code) {
-                        const promoMonths = currentUser.promo_discount_months || 2;
-                        const promoPct = currentUser.promo_discount_percent || 20;
-                        const promoStart = currentUser.promo_start_date ? new Date(currentUser.promo_start_date) : (currentUser.created_at ? new Date(currentUser.created_at) : new Date());
-                        const promoEnd = currentUser.promo_end_date ? new Date(currentUser.promo_end_date) : new Date(promoStart.getTime() + promoMonths * 30 * 24 * 60 * 60 * 1000);
+                    const profile = currentUserProfile || currentProfile;
+                    const promoCode = profile?.referred_by_promo_code || profile?.referred_by_code;
+                    if (discount === 0 && subtotal > 0 && promoCode) {
+                        const promoMonths = profile.promo_discount_duration_months || 2;
+                        const promoPct = profile.promo_discount_percent || 50;
+                        const promoStart = profile.referred_at ? new Date(profile.referred_at) : (inv.created_at ? new Date(inv.created_at) : new Date());
+                        const promoEnd = new Date(promoStart.getTime() + promoMonths * 30 * 24 * 60 * 60 * 1000);
                         const invDate = new Date(inv.created_at || Date.now());
                         if (invDate <= promoEnd) {
                             discount = Math.round(subtotal * (promoPct / 100) * 100) / 100;
@@ -7823,11 +7858,12 @@
 
                     const netTaxable = Math.max(0, subtotal - discount);
 
-                    // If tax was recorded, use it; otherwise dynamically calculate based on facility
+                    // Dynamic tax calculation based on facility
+                    const fac = inv.facility_id || profile?.assigned_facility_id || 'facility_seattle_north';
+                    const rate = (fac === 'facility_seattle_north' ? 0.1025 : (fac === 'facility_portland_central' ? 0.00 : 0.085));
+                    
                     let tax = rawTax;
-                    if (tax === 0 && subtotal > 0) {
-                        const fac = inv.facility_id || currentUser?.assigned_facility_id || 'facility_yakima';
-                        const rate = (fac === 'facility_seattle_north' ? 0.1025 : (fac === 'facility_portland_central' ? 0.00 : 0.085));
+                    if (discount > 0 || tax === 0) {
                         tax = Math.round(netTaxable * rate * 100) / 100;
                     }
 
