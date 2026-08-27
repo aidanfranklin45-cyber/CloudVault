@@ -5952,7 +5952,7 @@
             if (id.includes('portland') || id.includes('pdx') || id.includes('por')) return 'CV-PDX-';
             if (id.includes('seattle') || id.includes('sea')) return 'CV-SEA-';
             if (id.includes('spokane') || id.includes('geg') || id.includes('spo')) return 'CV-GEG-';
-            if (id.includes('yakima') || id.includes('ykm') || id.includes('yak') || id.includes('selah')) return 'CV-YKM-';
+            if (id.includes('yakima') || id.includes('ykm') || id.includes('yak') || id.includes('selah')) return 'CV-YAK-';
             return 'CV-PDX-';
         }
 
@@ -6119,7 +6119,7 @@
             const targetFacId = (typeof getSafeSavedFacilityId === 'function' ? getSafeSavedFacilityId() : null) || document.getElementById('facility-select')?.value || 'facility_portland_central';
             const facShort = (targetFacId.includes('portland') || targetFacId.includes('pdx') ? 'PDX' :
                              targetFacId.includes('seattle') ? 'SEA' :
-                             targetFacId.includes('spokane') ? 'GEG' : 'YKM');
+                             targetFacId.includes('spokane') ? 'GEG' : 'YAK');
 
             const defaultShelf = `${facShort}-BAY-01-S01`;
             const facName = (targetFacId.includes('portland') ? 'Portland Central Hub' :
