@@ -8505,6 +8505,7 @@
                 const creator = p.creators || {};
                 const creatorName = escapeHtml(creator.name || 'Affiliate Partner');
                 const creatorHandle = escapeHtml(creator.handle || '@influencer');
+                const code = escapeHtml(p.code || '');
                 const discountText = `${p.customer_discount_pct != null ? Number(p.customer_discount_pct).toFixed(0) : '20'}% off (${p.customer_discount_duration_months || 2} mo)`;
                 const commText = Number(p.commission_rate_pct) === 0 
                     ? `<span class="text-gray-400">0% (Internal Promo)</span>`
