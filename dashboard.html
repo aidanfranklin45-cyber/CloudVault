@@ -575,6 +575,34 @@
         <!-- ============================================================ -->
         <div id="flow-active-dashboard" class="hidden space-y-8 fade-in">
             
+            <!-- Exciting Welcome & Daily Storage Quip Banner -->
+            <div id="welcome-greeting-banner" class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 p-6 sm:p-7 text-white shadow-xl shadow-blue-600/10 border border-blue-400/30">
+                <!-- Background decorative glowing ambient shapes -->
+                <div class="absolute -right-10 -top-10 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div class="absolute right-1/4 -bottom-10 w-40 h-40 bg-sky-400/20 rounded-full blur-xl pointer-events-none"></div>
+                
+                <div class="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+                    <div class="space-y-1.5 max-w-2xl">
+                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-blue-100 text-xs font-semibold">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span>Vault Status: Protected &amp; Active</span>
+                        </div>
+                        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
+                            Hi, <span id="welcome-first-name" class="underline decoration-sky-300 decoration-wavy decoration-2">there</span>! <span class="inline-block hover:rotate-12 transition-transform cursor-default">👋</span>
+                        </h1>
+                        <p id="welcome-quip-text" class="text-sm sm:text-base text-blue-100 font-medium leading-relaxed transition-opacity duration-200">
+                            Your closet called — it said thank you for giving it room to breathe! 🌬️
+                        </p>
+                    </div>
+
+                    <!-- Mini Joke / Storage Depth Button -->
+                    <button onclick="cycleWelcomeJoke()" title="Click for another fun storage thought!" class="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/15 hover:bg-white/25 active:scale-95 transition-all text-xs font-bold text-white border border-white/25 backdrop-blur-md shadow-sm cursor-pointer group select-none">
+                        <span class="text-sm group-hover:rotate-45 transition-transform duration-300">✨</span>
+                        <span>Daily Spark</span>
+                    </button>
+                </div>
+            </div>
+
             <!-- Vault Subscription Plan Header Summary Card -->
             <div class="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div class="flex items-center space-x-5">
@@ -4080,6 +4108,55 @@
         const STAFF_ROLES = ['executive', 'warehouse_manager', 'warehouse_worker'];
         let hasInitializedDashboardAuth = false;
 
+        const STORAGE_JOKES = [
+            "Your closet called — it said thank you for giving it room to breathe! 🌬️",
+            "Why keep clutter in your living room when it can live securely in our high-tech vault? 📦✨",
+            "Remember: You don't have too much stuff, you just had too little offsite cloud space! ☁️",
+            "They say money can't buy peace of mind, but knowing where all your gear is comes pretty close. 🧘",
+            "Out of sight, out of mind, but always just 1 click away from your front door. ⚡",
+            "Fun fact: Packing totes burns approximately 100% of bad clutter vibes. Keep thriving! 🎯",
+            "Status: High-density organization unlocked. Your future self is already thanking you. 🚀",
+            "If you haven't worn it since 2019, it's not 'vintage' yet — but it's safe in the vault! 📦",
+            "Minimalist aesthetic achieved. We won't tell anyone what's in Tote #4. 🤫",
+            "Your home feels 200 sq ft bigger already. Enjoy the extra elbow room! 🛋️"
+        ];
+
+        let currentJokeIndex = Math.floor(Math.random() * STORAGE_JOKES.length);
+
+        function updateWelcomeGreeting(customName) {
+            const rawName = (customName || currentProfile?.name || currentUserProfile?.name || currentUser?.user_metadata?.name || (currentUser?.email ? currentUser.email.split('@')[0] : '') || '').trim();
+            let firstName = 'there';
+            if (rawName) {
+                const clean = rawName.split(/[ ._]/)[0];
+                if (clean) {
+                    firstName = clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+                }
+            }
+            const nameEl = document.getElementById('welcome-first-name');
+            if (nameEl) nameEl.textContent = firstName;
+        }
+
+        function renderInitialWelcomeJoke() {
+            const quipEl = document.getElementById('welcome-quip-text');
+            if (quipEl && STORAGE_JOKES[currentJokeIndex]) {
+                quipEl.textContent = STORAGE_JOKES[currentJokeIndex];
+            }
+        }
+
+        function cycleWelcomeJoke() {
+            currentJokeIndex = (currentJokeIndex + 1) % STORAGE_JOKES.length;
+            const quipEl = document.getElementById('welcome-quip-text');
+            if (quipEl) {
+                quipEl.style.opacity = '0';
+                setTimeout(() => {
+                    quipEl.textContent = STORAGE_JOKES[currentJokeIndex];
+                    quipEl.style.opacity = '1';
+                }, 150);
+            }
+        }
+        window.cycleWelcomeJoke = cycleWelcomeJoke;
+        window.updateWelcomeGreeting = updateWelcomeGreeting;
+
         async function setupAuthenticatedDashboard(session) {
             if (!session || !session.user) return;
             currentUser = session.user;
@@ -4097,6 +4174,8 @@
             const initials = (currentUser.user_metadata?.name || currentUser.email || '--')
                 .split(' ').map(s => s[0]).join('').toUpperCase().slice(0, 2);
             document.getElementById('user-avatar').textContent = initials;
+            updateWelcomeGreeting();
+            renderInitialWelcomeJoke();
 
             try {
                 const userFac = (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
@@ -4142,6 +4221,9 @@
                     if (headerPlan) {
                         headerPlan.textContent = `${sub.total_totes} Totes Plan ($${Number(sub.tote_rate).toFixed(2)}/tote — $${Number(sub.recurring_storage).toFixed(2)}/mo)`;
                     }
+
+                    updateWelcomeGreeting(profile?.name);
+                    renderInitialWelcomeJoke();
 
                     if (dropdownActionContainer) {
                         dropdownActionContainer.innerHTML = `
@@ -4228,6 +4310,7 @@
                     if (profileData.name) {
                         const pi = profileData.name.split(' ').map(s => s[0]).join('').toUpperCase().slice(0, 2);
                         document.getElementById('user-avatar').textContent = pi;
+                        updateWelcomeGreeting(profileData.name);
                     }
                     if (profileData.avatar_color) {
                         currentUserColor = profileData.avatar_color;
