@@ -1066,16 +1066,24 @@
 
       const custDiscountPct = Number(promoData.customerDiscountPct) || 20.00; // Default 20% off
       const custDiscountMonths = Number(promoData.customerDiscountMonths) || 2; // Default 2 months
-      const commRatePct = Number(promoData.commissionRatePct || creatorData.defaultCommissionPct) || 10.00; // Customizable %
-      const commMonths = Number(promoData.commissionMonths || creatorData.commissionMonths) || 6; // 6 months revenue share
+      
+      const rawComm = promoData.commissionRatePct !== undefined && promoData.commissionRatePct !== null && promoData.commissionRatePct !== ''
+        ? promoData.commissionRatePct
+        : creatorData.defaultCommissionPct;
+      const commRatePct = (rawComm !== undefined && rawComm !== null && rawComm !== '') ? Number(rawComm) : 10.00;
+
+      const rawCommMonths = promoData.commissionMonths !== undefined && promoData.commissionMonths !== null && promoData.commissionMonths !== ''
+        ? promoData.commissionMonths
+        : creatorData.commissionMonths;
+      const commMonths = (rawCommMonths !== undefined && rawCommMonths !== null && rawCommMonths !== '') ? Number(rawCommMonths) : 6;
 
       // Guard: reject zero, negative, or 100%+ discount — prevents division issues and Stripe coupon rejection
-      if (custDiscountPct <= 0 || custDiscountPct >= 100) {
+      if (isNaN(custDiscountPct) || custDiscountPct <= 0 || custDiscountPct >= 100) {
         throw new Error(`Invalid customer discount: ${custDiscountPct}%. Must be between 1% and 99%.`);
       }
-      // Guard: commission rate must be a positive, reasonable percentage
-      if (commRatePct <= 0 || commRatePct > 100) {
-        throw new Error(`Invalid commission rate: ${commRatePct}%. Must be between 1% and 100%.`);
+      // Guard: commission rate must be a non-negative, valid percentage (0% is allowed for internal promos)
+      if (isNaN(commRatePct) || commRatePct < 0 || commRatePct > 100) {
+        throw new Error(`Invalid commission rate: ${commRatePct}%. Must be between 0% and 100%.`);
       }
 
       // 1. Create Live Coupon & Promotion Code on Stripe

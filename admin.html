@@ -1234,11 +1234,11 @@
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
                                     <label class="block text-[10px] uppercase text-gray-400 mb-1">Commission % (Revenue Share)</label>
-                                    <input type="number" id="cc-comm-pct" value="10" min="1" max="50" step="0.5" class="w-full bg-gray-900 border border-purple-500/40 rounded-xl px-3 py-1.5 text-purple-300 font-bold outline-none">
+                                    <input type="number" id="cc-comm-pct" value="10" min="0" max="50" step="0.5" class="w-full bg-gray-900 border border-purple-500/40 rounded-xl px-3 py-1.5 text-purple-300 font-bold outline-none">
                                 </div>
                                 <div>
                                     <label class="block text-[10px] uppercase text-gray-400 mb-1">Commission Window (Months)</label>
-                                    <input type="number" id="cc-comm-months" value="6" min="1" max="24" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 text-white outline-none">
+                                    <input type="number" id="cc-comm-months" value="6" min="0" max="24" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 text-white outline-none">
                                 </div>
                             </div>
                         </div>
@@ -8505,9 +8505,10 @@
                 const creator = p.creators || {};
                 const creatorName = escapeHtml(creator.name || 'Affiliate Partner');
                 const creatorHandle = escapeHtml(creator.handle || '@influencer');
-                const code = escapeHtml(p.code);
                 const discountText = `${p.customer_discount_pct != null ? Number(p.customer_discount_pct).toFixed(0) : '20'}% off (${p.customer_discount_duration_months || 2} mo)`;
-                const commText = `${p.commission_rate_pct != null ? Number(p.commission_rate_pct).toFixed(1) + '%' : 'Negotiated'} rev share (${p.commission_duration_months || 6} mo)`;
+                const commText = Number(p.commission_rate_pct) === 0 
+                    ? `<span class="text-gray-400">0% (Internal Promo)</span>`
+                    : `${p.commission_rate_pct != null ? Number(p.commission_rate_pct).toFixed(1) + '%' : 'Negotiated'} rev share (${p.commission_duration_months ?? 6} mo)`;
                 const waitlistText = p.allow_waitlist_deposits 
                     ? `<span class="text-blue-300 text-[10px] block">✓ Waitlist: ${Number(p.waitlist_deposit_discount_pct || p.customer_discount_pct || 20).toFixed(0)}% off</span>` 
                     : `<span class="text-gray-500 text-[10px] block">✕ No waitlist</span>`;
