@@ -230,28 +230,29 @@
             </div>
         </div>
 
-        <!-- Cancellation Return Alert Banner (Visible when user cancelled & holds physical totes) -->
-        <div id="cancellation-alert-banner" class="hidden mb-8 bg-red-950/90 border-2 border-red-500 rounded-3xl p-6 text-white shadow-xl backdrop-blur-md fade-in">
+        <!-- Cancellation Return Alert Banner (Visible when user cancelled & holds physical totes or has scheduled exit retrieval) -->
+        <div id="cancellation-alert-banner" class="hidden mb-8 bg-gradient-to-r from-amber-950/95 via-gray-900 to-amber-950/95 border-2 border-amber-500 rounded-3xl p-6 text-white shadow-xl backdrop-blur-md fade-in">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div class="flex items-start space-x-4">
-                    <div class="w-12 h-12 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center flex-shrink-0 text-xl font-bold">
-                        ⚠️
+                    <div class="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center flex-shrink-0 text-xl font-bold">
+                        ⏳
                     </div>
                     <div>
                         <div class="flex items-center gap-2">
-                            <span class="text-xs font-mono font-extrabold uppercase tracking-widest text-red-400 bg-red-500/20 border border-red-500/30 px-2.5 py-0.5 rounded-full">ACTION REQUIRED</span>
-                            <span class="text-xs font-bold text-gray-300 font-mono" id="canc-totes-held-badge">0 Totes Physical Storage</span>
+                            <span class="text-xs font-mono font-extrabold uppercase tracking-widest text-amber-400 bg-amber-500/20 border border-amber-500/30 px-2.5 py-0.5 rounded-full" id="canc-status-pill">SUBSCRIPTION CANCELING</span>
+                            <span class="text-xs font-bold text-gray-300 font-mono" id="canc-totes-held-badge">1 Tote Exit in Progress</span>
                         </div>
-                        <h3 class="text-lg font-bold text-white mt-1">Return Physical Totes to Avoid Penalty Charge</h3>
-                        <p class="text-xs text-red-200 mt-0.5 leading-relaxed">
-                            Your subscription is cancelled. Please return all empty physical totes to our staging room within your 14-day window. Unreturned totes are billed at $15.00/tote.
+                        <h3 class="text-lg font-bold text-white mt-1" id="canc-banner-title">Subscription Cancellation &amp; Container Return in Progress</h3>
+                        <p class="text-xs text-amber-200/90 mt-0.5 leading-relaxed" id="canc-banner-desc">
+                            Your cancellation request has been submitted. Your vault retrieval order is scheduled below. Once your items are delivered and physical totes returned, your account closure will finalize.
                         </p>
                     </div>
                 </div>
-                <button onclick="openCancelReturnModal()" class="w-full sm:w-auto bg-red-600 hover:bg-red-500 text-white font-bold text-sm px-5 py-3 rounded-2xl transition shadow-lg flex-shrink-0 flex items-center justify-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                    Schedule Tote Return
-                </button>
+                <div class="flex items-center gap-2 w-full sm:w-auto flex-shrink-0">
+                    <button onclick="reactivateCancelingSubscription()" class="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-gray-950 font-extrabold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
+                        <span>✨ Keep My Subscription</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -4400,64 +4401,97 @@
                 const activeDashboard = document.getElementById('flow-active-dashboard');
                 const waitlistHub = document.getElementById('flow-waitlist-hub');
                 const cancBanner = document.getElementById('cancellation-alert-banner');
-
                 const dropdownActionContainer = document.getElementById('dropdown-sub-action-container');
 
-                if (sub && sub.status === 'active') {
-                    if (cancBanner) cancBanner.classList.add('hidden');
+                // Determine active/canceling state
+                const isSubActive = sub && sub.status === 'active';
+                const isSubCanceling = sub && sub.status === 'canceling';
+                const isProfileCanceling = profile && profile.subscription_status === 'canceling';
+                const isProfileActive = profile && profile.subscription_status === 'active';
+                const hasStoredTotes = (Array.isArray(currentInventory) && currentInventory.length > 0) || Number(profile?.active_totes_held || 0) > 0;
+                const hasPendingRequests = Array.isArray(currentRequests) && currentRequests.some(r => r.status !== 'completed' && r.status !== 'cancelled');
+
+                // If active or in cancellation with stored totes / scheduled delivery -> ROUTE TO ACTIVE DASHBOARD
+                if (isSubActive || isSubCanceling || isProfileCanceling || isProfileActive || hasStoredTotes || hasPendingRequests) {
                     currentSubscription = sub;
                     if (onboardingWizard) onboardingWizard.classList.add('hidden');
                     if (waitlistHub) waitlistHub.classList.add('hidden');
                     if (activeDashboard) activeDashboard.classList.remove('hidden');
 
-                    const headerPlan = document.getElementById('active-plan-header');
-                    if (headerPlan) {
-                        headerPlan.textContent = `${sub.total_totes} Totes Plan ($${Number(sub.tote_rate).toFixed(2)}/tote — $${Number(sub.recurring_storage).toFixed(2)}/mo)`;
-                    }
-
                     updateWelcomeGreeting(profile?.name);
                     renderInitialWelcomeJoke();
 
-                    if (dropdownActionContainer) {
-                        dropdownActionContainer.innerHTML = `
-                            <button id="dropdown-cancel-sub-btn" onclick="triggerCancelFlowUser()" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer" role="menuitem">
-                                <i data-lucide="x-circle" class="w-4 h-4 text-red-400"></i>
-                                <span>Cancel Subscription</span>
-                            </button>`;
-                        if (typeof lucide !== 'undefined') lucide.createIcons();
+                    const headerPlan = document.getElementById('active-plan-header');
+
+                    if (isSubCanceling || isProfileCanceling) {
+                        // Calculate end date
+                        let cancelAt = null;
+                        if (sub) {
+                            if (sub.cancel_at) cancelAt = new Date(sub.cancel_at);
+                            else if (sub.current_period_end) cancelAt = new Date(sub.current_period_end);
+                            else if (sub.last_billed_at) cancelAt = new Date(new Date(sub.last_billed_at).getTime() + 30 * 24 * 60 * 60 * 1000);
+                            else if (sub.created_at) cancelAt = new Date(new Date(sub.created_at).getTime() + 30 * 24 * 60 * 60 * 1000);
+                        }
+                        const cancelAtStr = cancelAt ? cancelAt.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'End of current cycle';
+
+                        if (headerPlan) {
+                            const totalTotes = sub ? (sub.total_totes || sub.tote_count || 1) : (profile?.active_totes_held || 1);
+                            headerPlan.textContent = `${totalTotes} Totes Plan (Canceling • Active through ${cancelAtStr})`;
+                        }
+
+                        if (cancBanner) {
+                            cancBanner.classList.remove('hidden');
+                            const totesHeldBadge = document.getElementById('canc-totes-held-badge');
+                            if (totesHeldBadge) {
+                                const count = (currentInventory || []).filter(t => t.status !== 'decommissioned' && t.status !== 'cancelled').length || (profile?.active_totes_held || 0);
+                                totesHeldBadge.textContent = `${count} Tote${count !== 1 ? 's' : ''} in Vault / Return Flow`;
+                            }
+                            const descEl = document.getElementById('canc-banner-desc');
+                            if (descEl) {
+                                descEl.textContent = `Your cancellation request is active through ${cancelAtStr}. Your exit retrieval and container return order is scheduled below.`;
+                            }
+                        }
+
+                        if (dropdownActionContainer) {
+                            dropdownActionContainer.innerHTML = `
+                                <button onclick="reactivateCancelingSubscription(); document.getElementById('user-dropdown')?.classList.add('hidden');" class="w-full text-left px-4 py-2.5 text-xs font-bold text-amber-600 hover:bg-amber-50 flex items-center gap-2 cursor-pointer" role="menuitem">
+                                    <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i>
+                                    <span>✨ Keep / Reactivate Plan</span>
+                                </button>`;
+                            if (typeof lucide !== 'undefined') lucide.createIcons();
+                        }
+                    } else {
+                        // Regular active sub
+                        if (cancBanner) cancBanner.classList.add('hidden');
+
+                        if (headerPlan && sub) {
+                            headerPlan.textContent = `${sub.total_totes || sub.tote_count || 1} Totes Plan ($${Number(sub.tote_rate || 5).toFixed(2)}/tote — $${Number(sub.recurring_storage || (sub.total_totes * sub.tote_rate) || 25).toFixed(2)}/mo)`;
+                        }
+
+                        if (dropdownActionContainer) {
+                            dropdownActionContainer.innerHTML = `
+                                <button id="dropdown-cancel-sub-btn" onclick="triggerCancelFlowUser()" class="w-full text-left px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer" role="menuitem">
+                                    <i data-lucide="x-circle" class="w-4 h-4 text-red-400"></i>
+                                    <span>Cancel Subscription</span>
+                                </button>`;
+                            if (typeof lucide !== 'undefined') lucide.createIcons();
+                        }
                     }
 
                     updateAddTotesPreview();
                     checkOverdueStatus();
+                    if (typeof renderFulfillmentFlows === 'function') renderFulfillmentFlows();
                     return;
                 }
 
+                // If user is truly canceled with 0 stored totes & no pending requests:
                 if (dropdownActionContainer) {
                     dropdownActionContainer.innerHTML = `
                         <button onclick="reactivatePlanFromBilling(); document.getElementById('user-dropdown')?.classList.add('hidden');" class="w-full text-left px-4 py-2.5 text-xs font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-2 cursor-pointer" role="menuitem">
                             <i data-lucide="sparkles" class="w-4 h-4 text-blue-500"></i>
-                            <span>🚀 Reactivate Plan</span>
+                            <span>🚀 Start New Plan</span>
                         </button>`;
                     if (typeof lucide !== 'undefined') lucide.createIcons();
-                }
-
-                // Check if user has pending cancellation tote return
-                if (currentUser) {
-                    supabase.from('cancellations')
-                        .select('*')
-                        .eq('uid', currentUser.id)
-                        .eq('account_status', 'pending_tote_return')
-                        .order('created_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle()
-                        .then(({ data: canc }) => {
-                            if (canc) {
-                                document.getElementById('canc-totes-held-badge').textContent = `${canc.active_totes_held || 0} Totes Physical Storage`;
-                                if (cancBanner) cancBanner.classList.remove('hidden');
-                            } else {
-                                if (cancBanner) cancBanner.classList.add('hidden');
-                            }
-                        }).catch(() => {});
                 }
 
                 // Check if user is a waitlist / unlaunched market lead
@@ -4481,12 +4515,45 @@
                     return;
                 }
 
-                // Default to onboarding wizard for active market new/lapsed customers
+                // Default to onboarding wizard for brand new customers without active or canceling storage
                 if (activeDashboard) activeDashboard.classList.add('hidden');
                 if (waitlistHub) waitlistHub.classList.add('hidden');
                 if (onboardingWizard) onboardingWizard.classList.remove('hidden');
                 currentSubscription = null;
                 initWizardState();
+            }
+
+            async function reactivateCancelingSubscription() {
+                if (!currentUser) return;
+                try {
+                    const { error: subErr } = await supabase
+                        .from('subscriptions')
+                        .update({ status: 'active', cancel_at: null, last_updated: new Date().toISOString() })
+                        .eq('uid', currentUser.id);
+                    if (subErr) throw subErr;
+
+                    const { error: userErr } = await supabase
+                        .from('users')
+                        .update({ subscription_status: 'active', unpaid_interest_rate: 0, interest_starts_at: null })
+                        .eq('id', currentUser.id);
+                    if (userErr) throw userErr;
+
+                    if (currentSubscription) {
+                        currentSubscription.status = 'active';
+                        currentSubscription.cancel_at = null;
+                    }
+                    if (currentUserProfile) {
+                        currentUserProfile.subscription_status = 'active';
+                    }
+
+                    showToast('✓ Subscription active! Cancellation has been reversed.');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 800);
+                } catch (err) {
+                    console.error('Reactivate failed:', err);
+                    alert('Failed to reactivate: ' + (err.message || 'Unknown error'));
+                }
             }
 
             function handleProfileUpdate(profileData) {
@@ -4785,7 +4852,7 @@
 
                 const initialUser = userRes?.data;
                 const subsList = subRes?.data || [];
-                const activeSub = subsList.find(s => s.status === 'active') || (subsList.length > 0 ? subsList[0] : null);
+                const activeSub = subsList.find(s => s.status === 'active') || subsList.find(s => s.status === 'canceling') || (subsList.length > 0 ? subsList[0] : null);
                 currentSubscription = activeSub;
 
                 if (addrRes?.data) {
@@ -5165,7 +5232,8 @@
             const cutoffBanner = document.getElementById('cutoff-banner');
             const actionBar = document.getElementById('action-bar');
             
-            const status = profile.onboarding_status || 'pending';
+            const isCanceling = (currentSubscription && currentSubscription.status === 'canceling') || (profile && profile.subscription_status === 'canceling');
+            const status = profile?.onboarding_status || (isCanceling ? 'active' : 'pending');
             
             if (status === 'waitlisted') {
                 renderUnlaunchedMarketPortal(profile);
@@ -5175,7 +5243,7 @@
                 if (unlaunchedPortal) unlaunchedPortal.classList.add('hidden');
             }
 
-            if (status === 'active') {
+            if (status === 'active' || isCanceling || (profile && profile.subscription_status === 'active')) {
                 tracker.classList.add('hidden');
                 grid.classList.remove('hidden');
                 attachInventoryListener(currentUser.id);
