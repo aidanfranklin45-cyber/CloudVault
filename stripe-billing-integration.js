@@ -439,7 +439,7 @@
       if (!invoice) return false;
       const status = (invoice.payment_status || invoice.status || '').toLowerCase();
       if (status === 'overdue') return true;
-      if (status === 'paid' || status === 'refunded' || status === 'deposit_received') return false;
+      if (status === 'paid' || status === 'refunded' || status === 'deposit_received' || status === 'voided' || status === 'void' || status === 'cancelled') return false;
 
       let rawDue = invoice.due_date || invoice.dueDate || invoice.due_at;
       if (!rawDue && invoice.created_at) {

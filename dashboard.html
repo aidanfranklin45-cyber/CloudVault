@@ -8452,12 +8452,17 @@
                     return Math.max(0, Math.round((netTaxable + totalTax) * 100) / 100);
                 }
 
-                // Display official invoice records
-                if (invoices && invoices.length > 0) {
-                    window.userLoadedInvoices = invoices;
-                    if (countEl) countEl.textContent = `${invoices.length} Record${invoices.length !== 1 ? 's' : ''}`;
+                // Display official invoice records (filter out voided/cancelled internal adjustment duplicates)
+                const displayInvoices = (invoices || []).filter(inv => {
+                    const st = (inv.payment_status || inv.status || '').toLowerCase();
+                    return st !== 'voided' && st !== 'void' && st !== 'cancelled';
+                });
 
-                    listEl.innerHTML = invoices.map(inv => {
+                if (displayInvoices.length > 0) {
+                    window.userLoadedInvoices = displayInvoices;
+                    if (countEl) countEl.textContent = `${displayInvoices.length} Record${displayInvoices.length !== 1 ? 's' : ''}`;
+
+                    listEl.innerHTML = displayInvoices.map(inv => {
                         const d = new Date(inv.created_at || Date.now());
                         const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
                         const rawStatus = (inv.payment_status || 'paid').toLowerCase();
@@ -8484,6 +8489,9 @@
                             statusText = 'UNPAID';
                         } else if (rawStatus === 'refunded') {
                             badgeClass = 'bg-rose-100 text-rose-800 border-rose-200';
+                        } else if (rawStatus === 'voided' || rawStatus === 'void' || rawStatus === 'cancelled') {
+                            badgeClass = 'bg-gray-100 text-gray-500 border-gray-200';
+                            statusText = 'VOIDED';
                         }
 
                         const payButtonHtml = (isOverdue || rawStatus === 'overdue' || rawStatus === 'pending' || rawStatus === 'unpaid')
