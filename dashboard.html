@@ -234,7 +234,7 @@
         <div id="cancellation-alert-banner" class="hidden mb-8 bg-gradient-to-r from-amber-950/95 via-gray-900 to-amber-950/95 border-2 border-amber-500 rounded-3xl p-6 text-white shadow-xl backdrop-blur-md fade-in">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div class="flex items-start space-x-4">
-                    <div class="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center flex-shrink-0 text-xl font-bold">
+                    <div id="canc-banner-icon" class="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center flex-shrink-0 text-xl font-bold">
                         ⏳
                     </div>
                     <div>
@@ -244,7 +244,7 @@
                         </div>
                         <h3 class="text-lg font-bold text-white mt-1" id="canc-banner-title">Subscription Cancellation &amp; Container Return in Progress</h3>
                         <p class="text-xs text-amber-200/90 mt-0.5 leading-relaxed" id="canc-banner-desc">
-                            Your cancellation request has been submitted. Your vault retrieval order is scheduled below. Once your items are delivered and physical totes returned, your account closure will finalize.
+                            Your cancellation request has been submitted. Your vault retrieval order is scheduled below.
                         </p>
                     </div>
                 </div>
@@ -252,8 +252,11 @@
                     <button id="canc-reschedule-btn" onclick="openExcessTotesModal(true)" class="hidden w-full sm:w-auto bg-amber-400 hover:bg-amber-300 text-gray-950 font-extrabold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
                         <span>📅 Schedule Tote Return</span>
                     </button>
-                    <button onclick="reactivateCancelingSubscription()" class="w-full sm:w-auto bg-white/15 hover:bg-white/25 border border-white/25 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
+                    <button id="canc-reactivate-btn" onclick="reactivateCancelingSubscription()" class="w-full sm:w-auto bg-white/15 hover:bg-white/25 border border-white/25 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
                         <span>✨ Keep My Subscription</span>
+                    </button>
+                    <button id="canc-new-plan-btn" onclick="reactivatePlanFromBilling()" class="hidden w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-extrabold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
+                        <span>🚀 Start New Plan</span>
                     </button>
                 </div>
             </div>
@@ -4438,10 +4441,8 @@
                         }
                         const cancelAtStr = cancelAt ? cancelAt.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'End of current cycle';
 
-                        if (headerPlan) {
-                            const totalTotes = sub ? (sub.total_totes || sub.tote_count || 1) : (profile?.active_totes_held || 1);
-                            headerPlan.textContent = `${totalTotes} Totes Plan (Canceling • Active through ${cancelAtStr})`;
-                        }
+                        const totalTotes = sub ? (sub.total_totes || sub.tote_count || 1) : (profile?.active_totes_held || 1);
+                        const count = (currentInventory || []).filter(t => t.status !== 'decommissioned' && t.status !== 'cancelled').length || (profile?.active_totes_held || 0);
 
                         const hasActiveExit = Array.isArray(currentRequests) && currentRequests.some(r => 
                             (r.request_type === 'exit_retrieval' || r.request_type === 'retrieval_exit' || r.request_type === 'cancellation_tote_return' || r.request_type === 'retrieval') && 
@@ -4450,20 +4451,60 @@
 
                         if (cancBanner) {
                             cancBanner.classList.remove('hidden');
-                            const totesHeldBadge = document.getElementById('canc-totes-held-badge');
-                            const count = (currentInventory || []).filter(t => t.status !== 'decommissioned' && t.status !== 'cancelled').length || (profile?.active_totes_held || 0);
-                            if (totesHeldBadge) {
-                                totesHeldBadge.textContent = `${count} Tote${count !== 1 ? 's' : ''} in Vault / Return Flow`;
-                            }
+                            const iconEl = document.getElementById('canc-banner-icon');
+                            const statusPill = document.getElementById('canc-status-pill');
+                            const titleEl = document.getElementById('canc-banner-title');
                             const descEl = document.getElementById('canc-banner-desc');
+                            const totesHeldBadge = document.getElementById('canc-totes-held-badge');
                             const rescheduleBtn = document.getElementById('canc-reschedule-btn');
+                            const reactivateBtn = document.getElementById('canc-reactivate-btn');
+                            const newPlanBtn = document.getElementById('canc-new-plan-btn');
 
-                            if (hasActiveExit) {
+                            if (count === 0) {
+                                // Clean closure: all totes returned to warehouse
+                                if (iconEl) iconEl.textContent = '✓';
+                                cancBanner.className = "mb-8 bg-gradient-to-r from-emerald-950/95 via-gray-900 to-emerald-950/95 border-2 border-emerald-500 rounded-3xl p-6 text-white shadow-xl backdrop-blur-md fade-in";
+                                if (statusPill) {
+                                    statusPill.textContent = "SUBSCRIPTION CONCLUDED";
+                                    statusPill.className = "text-xs font-mono font-extrabold uppercase tracking-widest text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 rounded-full";
+                                }
+                                if (totesHeldBadge) totesHeldBadge.textContent = "0 Totes • All Containers Returned";
+                                if (titleEl) titleEl.textContent = "All Containers Returned & Account Closed";
+                                if (descEl) descEl.textContent = `All physical containers have been returned and your vault storage is clear. Your subscription has concluded with zero outstanding balance (paid through ${cancelAtStr}).`;
+                                if (rescheduleBtn) rescheduleBtn.classList.add('hidden');
+                                if (reactivateBtn) reactivateBtn.classList.add('hidden');
+                                if (newPlanBtn) newPlanBtn.classList.remove('hidden');
+                                if (headerPlan) headerPlan.textContent = `Subscription Concluded (Clean Exit • 0 Totes)`;
+                            } else if (hasActiveExit) {
+                                // Exit retrieval in progress
+                                if (iconEl) iconEl.textContent = '⏳';
+                                cancBanner.className = "mb-8 bg-gradient-to-r from-amber-950/95 via-gray-900 to-amber-950/95 border-2 border-amber-500 rounded-3xl p-6 text-white shadow-xl backdrop-blur-md fade-in";
+                                if (statusPill) {
+                                    statusPill.textContent = "SUBSCRIPTION CANCELING";
+                                    statusPill.className = "text-xs font-mono font-extrabold uppercase tracking-widest text-amber-400 bg-amber-500/20 border border-amber-500/30 px-2.5 py-0.5 rounded-full";
+                                }
+                                if (totesHeldBadge) totesHeldBadge.textContent = `${count} Tote${count !== 1 ? 's' : ''} in Return Flow`;
+                                if (titleEl) titleEl.textContent = "Subscription Cancellation & Container Return in Progress";
                                 if (descEl) descEl.textContent = `Your cancellation is active through ${cancelAtStr}. Your exit retrieval and container return order is scheduled below.`;
                                 if (rescheduleBtn) rescheduleBtn.classList.add('hidden');
+                                if (reactivateBtn) reactivateBtn.classList.remove('hidden');
+                                if (newPlanBtn) newPlanBtn.classList.add('hidden');
+                                if (headerPlan) headerPlan.textContent = `${totalTotes} Totes Plan (Canceling • Active through ${cancelAtStr})`;
                             } else {
-                                if (descEl) descEl.textContent = `Your subscription is canceling and paid through ${cancelAtStr}. You do not currently have an active tote retrieval scheduled. You may reschedule your container return anytime on or before ${cancelAtStr}.`;
+                                // Canceling, holds totes, no retrieval currently scheduled
+                                if (iconEl) iconEl.textContent = '⏳';
+                                cancBanner.className = "mb-8 bg-gradient-to-r from-amber-950/95 via-gray-900 to-amber-950/95 border-2 border-amber-500 rounded-3xl p-6 text-white shadow-xl backdrop-blur-md fade-in";
+                                if (statusPill) {
+                                    statusPill.textContent = "SUBSCRIPTION CANCELING";
+                                    statusPill.className = "text-xs font-mono font-extrabold uppercase tracking-widest text-amber-400 bg-amber-500/20 border border-amber-500/30 px-2.5 py-0.5 rounded-full";
+                                }
+                                if (totesHeldBadge) totesHeldBadge.textContent = `${count} Tote${count !== 1 ? 's' : ''} in Storage`;
+                                if (titleEl) titleEl.textContent = "Subscription Cancellation in Progress";
+                                if (descEl) descEl.textContent = `Your subscription is canceling and paid through ${cancelAtStr}. You have ${count} tote${count !== 1 ? 's' : ''} remaining in storage. Please schedule your container return on or before ${cancelAtStr}.`;
                                 if (rescheduleBtn) rescheduleBtn.classList.remove('hidden');
+                                if (reactivateBtn) reactivateBtn.classList.remove('hidden');
+                                if (newPlanBtn) newPlanBtn.classList.add('hidden');
+                                if (headerPlan) headerPlan.textContent = `${totalTotes} Totes Plan (Canceling • Active through ${cancelAtStr})`;
                             }
                         }
 
