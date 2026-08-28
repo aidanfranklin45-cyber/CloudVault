@@ -8014,15 +8014,23 @@
                 selectedPrivacyCustomer = user;
 
                 // Query associated records footprint
-                const [invRes, reqRes, invoiceRes] = await Promise.all([
-                    supabase.from('inventory').select('id, tote_code, label').eq('uid', userId),
+                const [invRes, reqRes, invoiceRes, subRes] = await Promise.all([
+                    supabase.from('inventory').select('id, tote_code, label, status').eq('uid', userId),
                     supabase.from('access_requests').select('id, request_type, status').eq('uid', userId),
-                    supabase.from('invoices').select('id, invoice_number, total_amount, created_at').eq('uid', userId)
+                    supabase.from('invoices').select('id, invoice_number, total_amount, created_at').eq('uid', userId),
+                    supabase.from('subscriptions').select('id, status, current_tier, active_totes, price_per_tote').eq('uid', userId).eq('status', 'active').maybeSingle()
                 ]);
 
                 const totes = invRes.data || [];
                 const reqs = reqRes.data || [];
                 const invoices = invoiceRes.data || [];
+                const activeSub = subRes.data || null;
+
+                selectedPrivacyCustomer.totes = totes;
+                selectedPrivacyCustomer.activeSubscription = activeSub;
+
+                const hasActiveSubscription = !!activeSub || selectedPrivacyCustomer.subscription_status === 'active';
+                const activeTotesCount = totes.filter(t => t.status !== 'decommissioned' && t.status !== 'cancelled').length || selectedPrivacyCustomer.active_totes_held || 0;
 
                 dossier.innerHTML = `
                     <div class="space-y-4">
@@ -8032,16 +8040,21 @@
                                 <p class="text-xs text-blue-400 font-mono">${escapeHtml(user.email || user.id)}</p>
                                 <p class="text-[10px] text-gray-500 font-mono mt-0.5">UID: ${user.id}</p>
                             </div>
-                            <span class="px-2.5 py-1 rounded-full text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 uppercase">
-                                ${user.role || 'customer'}
-                            </span>
+                            <div class="flex flex-col items-end gap-1">
+                                <span class="px-2.5 py-1 rounded-full text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 uppercase">
+                                    ${user.role || 'customer'}
+                                </span>
+                                <span class="px-2.5 py-0.5 rounded-full text-[8.5px] font-mono font-bold ${hasActiveSubscription ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-gray-800 text-gray-400'} uppercase">
+                                    ${hasActiveSubscription ? '⚡ Active Sub' : 'No Active Sub'}
+                                </span>
+                            </div>
                         </div>
 
                         <!-- Data Footprint Overview Grid -->
                         <div class="grid grid-cols-3 gap-2 text-center">
                             <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800">
                                 <p class="text-[9px] text-gray-400 uppercase font-mono">Totes Held</p>
-                                <p class="text-base font-black text-white font-mono mt-0.5">${totes.length}</p>
+                                <p class="text-base font-black ${activeTotesCount > 0 ? 'text-amber-400' : 'text-white'} font-mono mt-0.5">${activeTotesCount}</p>
                             </div>
                             <div class="bg-gray-900/80 p-2.5 rounded-xl border border-gray-800">
                                 <p class="text-[9px] text-gray-400 uppercase font-mono">Active Jobs</p>
@@ -8053,14 +8066,22 @@
                             </div>
                         </div>
 
-                        <!-- Legal Action Notice -->
+                        <!-- Safety Status Notice -->
+                        ${(hasActiveSubscription || activeTotesCount > 0) ? `
+                        <div class="p-3 bg-amber-950/40 border border-amber-500/40 rounded-xl space-y-1 text-[11px] text-amber-200">
+                            <p class="font-bold flex items-center gap-1.5"><span class="text-base">⚠️</span> Active Subscription / Totes Detected:</p>
+                            <p class="text-[10px] text-amber-300/80 leading-relaxed">
+                                This customer has ${hasActiveSubscription ? 'an active recurring subscription' : ''}${hasActiveSubscription && activeTotesCount > 0 ? ' and ' : ''}${activeTotesCount > 0 ? `${activeTotesCount} active tote(s)` : ''}. 
+                                Erasure is blocked by safety policy until the subscription is cancelled and totes are returned to the facility pool.
+                            </p>
+                        </div>` : `
                         <div class="p-3 bg-red-950/30 border border-red-500/20 rounded-xl space-y-1 text-[11px] text-red-200">
                             <p class="font-bold">Permanent Erasure Protocol:</p>
                             <p class="text-[10px] text-red-300/80">
                                 Executing erasure will permanently wipe the auth credentials, name, email, phone, and inventory records. 
                                 ${invoices.length > 0 ? `The ${invoices.length} billing receipt(s) will be unlinked and preserved as anonymized ledger totals for 7-year statutory tax compliance.` : ''}
                             </p>
-                        </div>
+                        </div>`}
 
                         <div class="pt-1 flex justify-end gap-2">
                             <button type="button" onclick="openPrivacyErasureModal()" class="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-red-600/25 flex items-center gap-1.5 cursor-pointer">
@@ -8082,10 +8103,48 @@
                 showToast("Please select a customer first.", true);
                 return;
             }
-            document.getElementById('pem-target-uid').value = selectedPrivacyCustomer.id;
+            const uid = selectedPrivacyCustomer.id;
+            document.getElementById('pem-target-uid').value = uid;
             document.getElementById('pem-customer-name').textContent = selectedPrivacyCustomer.name || 'Unnamed Customer';
             document.getElementById('pem-customer-email').textContent = selectedPrivacyCustomer.email || selectedPrivacyCustomer.id;
-            document.getElementById('pem-customer-totes').textContent = `${selectedPrivacyCustomer.active_totes_held || 0} Totes`;
+            
+            const activeTotesCount = (selectedPrivacyCustomer.totes || []).filter(t => t.status !== 'decommissioned' && t.status !== 'cancelled').length || selectedPrivacyCustomer.active_totes_held || 0;
+            document.getElementById('pem-customer-totes').textContent = `${activeTotesCount} Totes`;
+            
+            const hasActiveSub = !!selectedPrivacyCustomer.activeSubscription || selectedPrivacyCustomer.subscription_status === 'active';
+            const blockerEl = document.getElementById('pem-blocker-banner');
+            const confirmBtn = document.getElementById('btn-confirm-privacy-erasure');
+            const verifyInput = document.getElementById('pem-verification-input');
+
+            if (hasActiveSub || activeTotesCount > 0) {
+                blockerEl.classList.remove('hidden');
+                let blockReasons = [];
+                if (hasActiveSub) blockReasons.push('an active recurring subscription');
+                if (activeTotesCount > 0) blockReasons.push(`${activeTotesCount} active tote(s) in warehouse inventory`);
+                
+                blockerEl.innerHTML = `
+                    <div class="flex items-start gap-2.5">
+                        <span class="text-base text-amber-400 flex-shrink-0">⚠️</span>
+                        <div class="space-y-1">
+                            <p class="font-bold text-amber-300">Erasure Blocked by Safety Policy</p>
+                            <p class="text-[11px] text-amber-200/90 leading-snug">
+                                Customer has ${blockReasons.join(' and ')}. You must cancel the active subscription and return any physical inventory before permanently erasing this customer's data.
+                            </p>
+                        </div>
+                    </div>
+                `;
+                confirmBtn.disabled = true;
+                confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                verifyInput.disabled = true;
+                verifyInput.placeholder = "Erasure blocked — active subscription or totes exist";
+            } else {
+                blockerEl.classList.add('hidden');
+                confirmBtn.disabled = false;
+                confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                verifyInput.disabled = false;
+                verifyInput.placeholder = "Type CONFIRM DELETE";
+            }
+
             document.getElementById('pem-verification-input').value = '';
             document.getElementById('privacy-erasure-modal').classList.remove('hidden');
         }
@@ -15364,6 +15423,9 @@
                         <li>Financial ledger amounts will be anonymized for 7-year statutory tax compliance.</li>
                     </ul>
                 </div>
+
+                <!-- Active Subscription / Tote Safety Guard Banner -->
+                <div id="pem-blocker-banner" class="hidden bg-amber-950/80 border border-amber-500/60 p-3.5 rounded-2xl text-amber-200"></div>
 
                 <div class="bg-gray-900/80 p-3.5 rounded-2xl border border-gray-800 space-y-1">
                     <div class="flex justify-between items-center">
