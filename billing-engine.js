@@ -1437,13 +1437,70 @@
           }
         }
 
-        // Ensure returned invoices have their authoritative grand totals calculated
-        (data || []).forEach(inv => {
+        // Ensure returned invoices have their authoritative grand totals calculated.
+        // If an invoice has tax=0 but a non-zero taxable subtotal and the customer is in a
+        // WA/taxable zone, dynamically resolve the correct tax and backfill both the
+        // in-memory object and the persisted DB row so this self-heals on first load.
+        const OREGON_ZIPS = new Set(['970', '971', '972', '973', '974', '975', '976', '977', '978', '979', '980']); // OR prefix = no sales tax
+        const isOregonZip = (zip) => {
+          if (!zip) return false;
+          const prefix = String(zip).trim().slice(0, 3);
+          return OREGON_ZIPS.has(prefix);
+        };
+
+        const taxBackfillPromises = (data || []).map(async (inv) => {
+          const storedTax = Number(inv.tax || 0);
+          const storedSubtotal = Number(inv.subtotal || 0);
+          const storedDelivery = Number(inv.delivery_fee || inv.deliveryFee || 0);
+          const storedDiscount = Number(inv.discount || 0);
+          const customerZip = inv.active_zone || inv.zip || null;
+
+          // Determine if this invoice is missing tax when it shouldn't be
+          const hasTaxableBase = (storedSubtotal + storedDelivery) > 0;
+          const isMissingTax = storedTax === 0 && hasTaxableBase && !isOregonZip(customerZip);
+
+          if (isMissingTax && inv.uid) {
+            try {
+              const taxInfo = await this.resolveCustomerTaxRate(inv.uid, inv.facility_id || null, customerZip);
+              const taxRate = Number(taxInfo?.taxRate || 0);
+              if (taxRate > 0) {
+                const taxableBase = Math.max(0, storedSubtotal + storedDelivery - storedDiscount);
+                const correctTax = Math.round(taxableBase * taxRate * 100) / 100;
+                const correctTotal = Math.round((taxableBase + correctTax) * 100) / 100;
+
+                // Patch in-memory object
+                inv.tax = correctTax;
+                inv.total_amount = correctTotal;
+
+                // Persist correction to DB so future loads are immediately correct
+                const taxLabel = taxInfo.label || `WA State & Local Sales Tax (${(taxRate * 100).toFixed(2)}%)`;
+                let lineItems = [];
+                try { lineItems = Array.isArray(inv.line_items) ? inv.line_items : (typeof inv.line_items === 'string' ? JSON.parse(inv.line_items) : []); } catch (_) {}
+                const nonTaxLines = lineItems.filter(li => !li.is_tax);
+                const taxLine = { qty: 1, unit_price: correctTax, amount: correctTax, is_tax: true, tax_rate: taxRate, description: taxLabel };
+
+                await sb.from('invoices').update({
+                  tax: correctTax,
+                  total_amount: correctTotal,
+                  line_items: [...nonTaxLines, taxLine]
+                }).eq('id', inv.id);
+
+                console.log(`[CloudVaultBilling] Backfilled tax for ${inv.invoice_number}: tax=$${correctTax}, total=$${correctTotal}`);
+              }
+            } catch (taxErr) {
+              console.warn('[CloudVaultBilling] Tax backfill skipped for', inv.invoice_number, taxErr.message);
+            }
+          }
+
+          // Always ensure in-memory total_amount reflects the authoritative grand total
           const grandTotal = this.extractInvoiceGrandTotal(inv);
           if (grandTotal > 0) {
             inv.total_amount = grandTotal;
           }
         });
+
+        // Await all backfill operations before caching
+        await Promise.allSettled(taxBackfillPromises);
 
         // 4. Update in-memory session cache
         const resultInvoices = data || [];
