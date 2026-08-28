@@ -2673,10 +2673,9 @@ BEGIN
   SELECT ar.fulfillment_type, ar.pin, ar.assigned_room INTO v_fulfillment_type, v_customer_pin, v_assigned_room
   FROM public.access_requests ar
   WHERE ar.uid = v_item.uid
+    AND ar.request_type IN ('retrieval', 'facility_transfer', 'exit_retrieval')
     AND (
-      ar.requested_items IS NULL 
-      OR cardinality(ar.requested_items) = 0
-      OR v_item.id = ANY(ar.requested_items)
+      v_item.id = ANY(ar.requested_items)
       OR (ar.requested_tote_codes IS NOT NULL AND v_item.tote_code = ANY(ar.requested_tote_codes))
     )
   ORDER BY ar.requested_at DESC
@@ -2690,7 +2689,7 @@ BEGIN
   ELSIF v_item.status = 'out-for-delivery' OR v_item.status = 'pending-dispatch' THEN
     v_target_status := 'stored'::public.inventory_status;
   ELSIF v_item.status = 'staged' THEN
-    v_target_status := 'stored'::public.inventory_status;
+    v_target_status := 'pending-stage'::public.inventory_status;
   ELSIF v_item.status = 'pending-stage' THEN
     v_target_status := 'stored'::public.inventory_status;
   ELSE
@@ -2716,11 +2715,11 @@ BEGIN
     v_target_location_code := 'VALET-LOADING-BAY-A';
     v_target_location_type := 'dispatch';
   ELSIF v_target_status = 'pending-stage' THEN
-    v_target_location_code := 'INTAKE-PROCESSING';
+    v_target_location_code := 'VAULT-PULL-QUEUE';
     v_target_location_type := 'intake';
   ELSE
     -- Stored in vault: preserve existing vault shelf if valid, or use authentic shelf location
-    IF v_item.location_code IS NOT NULL AND NOT (v_item.location_code ~* '^(ROOM-|VALET-|CUSTOMER-|INTAKE-)') THEN
+    IF v_item.location_code IS NOT NULL AND NOT (v_item.location_code ~* '^(ROOM-|VALET-|CUSTOMER-|INTAKE-|VAULT-PULL)') THEN
       v_target_location_code := v_item.location_code;
     ELSE
       v_target_location_code := COALESCE((SELECT identifier FROM public.warehouse_locations WHERE zone_type = 'VAULT' AND facility_id = v_item.facility_id LIMIT 1), 'A1-B01-S1');
@@ -2728,17 +2727,17 @@ BEGIN
     v_target_location_type := 'vault';
   END IF;
 
-  -- Reopen access request if it was completed prematurely
-  IF v_target_status IN ('staged', 'out-for-delivery', 'pending-dispatch', 'pending-stage', 'stored') THEN
+  -- Reopen ONLY active retrieval / transfer requests if they were prematurely completed (NEVER initial onboarding/dropoff)
+  IF v_target_status IN ('staged', 'out-for-delivery', 'pending-dispatch', 'pending-stage') THEN
     UPDATE public.access_requests
     SET status = 'pending'
     WHERE uid = v_item.uid
+      AND request_type IN ('retrieval', 'facility_transfer', 'exit_retrieval')
       AND (
-        requested_items IS NULL 
-        OR cardinality(requested_items) = 0 
-        OR v_item.id = ANY(requested_items) 
+        v_item.id = ANY(requested_items)
         OR (requested_tote_codes IS NOT NULL AND v_item.tote_code = ANY(requested_tote_codes))
-      );
+      )
+      AND status = 'completed';
   END IF;
 
   -- Update inventory table
