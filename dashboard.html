@@ -248,8 +248,11 @@
                         </p>
                     </div>
                 </div>
-                <div class="flex items-center gap-2 w-full sm:w-auto flex-shrink-0">
-                    <button onclick="reactivateCancelingSubscription()" class="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-gray-950 font-extrabold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
+                <div class="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto flex-shrink-0">
+                    <button id="canc-reschedule-btn" onclick="openExcessTotesModal(true)" class="hidden w-full sm:w-auto bg-amber-400 hover:bg-amber-300 text-gray-950 font-extrabold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
+                        <span>📅 Schedule Tote Return</span>
+                    </button>
+                    <button onclick="reactivateCancelingSubscription()" class="w-full sm:w-auto bg-white/15 hover:bg-white/25 border border-white/25 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
                         <span>✨ Keep My Subscription</span>
                     </button>
                 </div>
@@ -4440,16 +4443,27 @@
                             headerPlan.textContent = `${totalTotes} Totes Plan (Canceling • Active through ${cancelAtStr})`;
                         }
 
+                        const hasActiveExit = Array.isArray(currentRequests) && currentRequests.some(r => 
+                            (r.request_type === 'exit_retrieval' || r.request_type === 'retrieval_exit' || r.request_type === 'cancellation_tote_return' || r.request_type === 'retrieval') && 
+                            r.status !== 'completed' && r.status !== 'cancelled'
+                        );
+
                         if (cancBanner) {
                             cancBanner.classList.remove('hidden');
                             const totesHeldBadge = document.getElementById('canc-totes-held-badge');
+                            const count = (currentInventory || []).filter(t => t.status !== 'decommissioned' && t.status !== 'cancelled').length || (profile?.active_totes_held || 0);
                             if (totesHeldBadge) {
-                                const count = (currentInventory || []).filter(t => t.status !== 'decommissioned' && t.status !== 'cancelled').length || (profile?.active_totes_held || 0);
                                 totesHeldBadge.textContent = `${count} Tote${count !== 1 ? 's' : ''} in Vault / Return Flow`;
                             }
                             const descEl = document.getElementById('canc-banner-desc');
-                            if (descEl) {
-                                descEl.textContent = `Your cancellation request is active through ${cancelAtStr}. Your exit retrieval and container return order is scheduled below.`;
+                            const rescheduleBtn = document.getElementById('canc-reschedule-btn');
+
+                            if (hasActiveExit) {
+                                if (descEl) descEl.textContent = `Your cancellation is active through ${cancelAtStr}. Your exit retrieval and container return order is scheduled below.`;
+                                if (rescheduleBtn) rescheduleBtn.classList.add('hidden');
+                            } else {
+                                if (descEl) descEl.textContent = `Your subscription is canceling and paid through ${cancelAtStr}. You do not currently have an active tote retrieval scheduled. You may reschedule your container return anytime on or before ${cancelAtStr}.`;
+                                if (rescheduleBtn) rescheduleBtn.classList.remove('hidden');
                             }
                         }
 
@@ -8957,9 +8971,25 @@
                                 await supabase.from('inventory').delete().in('id', idsToDelete);
                             }
                         }
+                    } else {
+                        // 2. If it's a retrieval / exit retrieval, restore the requested totes from 'pending-dispatch' / 'pending-stage' back to 'stored'
+                        const rawItems = req ? (req.requested_items || req.requested_tote_codes || req.totes || []) : [];
+                        if (rawItems.length > 0) {
+                            await supabase
+                                .from('inventory')
+                                .update({ status: 'stored', last_scanned_at: new Date().toISOString() })
+                                .eq('uid', currentUser.id)
+                                .in('id', rawItems);
+                        } else {
+                            await supabase
+                                .from('inventory')
+                                .update({ status: 'stored', last_scanned_at: new Date().toISOString() })
+                                .eq('uid', currentUser.id)
+                                .in('status', ['pending-dispatch', 'pending-stage']);
+                        }
                     }
 
-                    // 2. Mark access request as cancelled
+                    // 3. Mark access request as cancelled
                     const { error: reqErr } = await supabase
                         .from('access_requests')
                         .update({ status: 'cancelled', updated_at: new Date().toISOString() })
@@ -8967,47 +8997,54 @@
 
                     if (reqErr) throw reqErr;
 
-                    // 3. Re-sync subscription count to actual active items
-                    const { data: activeInv } = await supabase
-                        .from('inventory')
-                        .select('id, status')
-                        .eq('uid', currentUser.id)
-                        .in('status', ['stored', 'with-customer', 'staged']);
+                    // 4. Re-sync subscription count if active
+                    const isCanceling = currentSubscription?.status === 'canceling' || currentUserProfile?.subscription_status === 'canceling';
+                    if (!isCanceling) {
+                        const { data: activeInv } = await supabase
+                            .from('inventory')
+                            .select('id, status')
+                            .eq('uid', currentUser.id)
+                            .in('status', ['stored', 'with-customer', 'staged']);
 
-                    const activeCount = activeInv ? activeInv.length : 0;
-                    if (currentSubscription && activeCount > 0 && currentSubscription.total_totes !== activeCount) {
-                        if (!activeFacilityPricing) {
-                            await loadAssignedFacilityPricing(currentUser.assigned_facility_id || currentSubscription.facility_id || 'facility_yakima');
-                        }
-                        const fac = activeFacilityPricing || {};
-                        let toteRate = 5.00;
-                        if (activeCount <= 3) toteRate = Number(fac.tier1_rate ?? 5.00);
-                        else if (activeCount <= 7) toteRate = Number(fac.tier2_rate ?? 4.50);
-                        else if (activeCount <= 15) toteRate = Number(fac.tier3_rate ?? 3.50);
-                        else toteRate = Number(fac.tier4_rate ?? 2.50);
+                        const activeCount = activeInv ? activeInv.length : 0;
+                        if (currentSubscription && activeCount > 0 && currentSubscription.total_totes !== activeCount) {
+                            if (!activeFacilityPricing) {
+                                await loadAssignedFacilityPricing(currentUser.assigned_facility_id || currentSubscription.facility_id || 'facility_yakima');
+                            }
+                            const fac = activeFacilityPricing || {};
+                            let toteRate = 5.00;
+                            if (activeCount <= 3) toteRate = Number(fac.tier1_rate ?? 5.00);
+                            else if (activeCount <= 7) toteRate = Number(fac.tier2_rate ?? 4.50);
+                            else if (activeCount <= 15) toteRate = Number(fac.tier3_rate ?? 3.50);
+                            else toteRate = Number(fac.tier4_rate ?? 2.50);
 
-                        const recurringStorage = Math.round(activeCount * toteRate * 100) / 100;
+                            const recurringStorage = Math.round(activeCount * toteRate * 100) / 100;
 
-                        await supabase.from('subscriptions').update({
-                            total_totes: activeCount,
-                            tote_rate: toteRate,
-                            recurring_storage: recurringStorage,
-                            updated_at: new Date().toISOString()
-                        }).eq('id', currentSubscription.id);
+                            await supabase.from('subscriptions').update({
+                                total_totes: activeCount,
+                                tote_rate: toteRate,
+                                recurring_storage: recurringStorage,
+                                updated_at: new Date().toISOString()
+                            }).eq('id', currentSubscription.id);
 
-                        currentSubscription.total_totes = activeCount;
-                        currentSubscription.tote_rate = toteRate;
-                        currentSubscription.recurring_storage = recurringStorage;
+                            currentSubscription.total_totes = activeCount;
+                            currentSubscription.tote_rate = toteRate;
+                            currentSubscription.recurring_storage = recurringStorage;
 
-                        const headerPlan = document.getElementById('active-plan-header');
-                        if (headerPlan) {
-                            headerPlan.textContent = `${activeCount} Totes Plan ($${toteRate.toFixed(2)}/tote — $${recurringStorage.toFixed(2)}/mo)`;
+                            const headerPlan = document.getElementById('active-plan-header');
+                            if (headerPlan) {
+                                headerPlan.textContent = `${activeCount} Totes Plan ($${toteRate.toFixed(2)}/tote — $${recurringStorage.toFixed(2)}/mo)`;
+                            }
                         }
                     }
 
-                    showToast('✓ Request cancelled and tote count synchronized.');
+                    showToast('✓ Request cancelled. Your totes remain stored in the vault.');
                     if (typeof globalFetchRequests === 'function') await globalFetchRequests();
                     if (typeof attachInventoryListener === 'function') attachInventoryListener(currentUser.id);
+                    if (typeof checkAndRouteUserFlow === 'function') {
+                        checkAndRouteUserFlow(currentSubscription, currentUserProfile || currentProfile);
+                    }
+                    if (typeof checkExcessTotesState === 'function') checkExcessTotesState();
                 } catch (err) {
                     console.error('[cancelFulfillmentRequest] Error:', err);
                     alert('Failed to cancel request: ' + (err.message || 'Please try again.'));
