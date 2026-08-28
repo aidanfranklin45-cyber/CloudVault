@@ -2006,6 +2006,7 @@
     <!-- Supabase JS SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=2.3"></script>
+    <script src="address-validator.js"></script>
     <script src="billing-engine.js?v=2.3"></script>
     <script src="stripe-billing-integration.js?v=2.3"></script>
 
@@ -10401,11 +10402,11 @@
                 } catch (e) {}
 
                 let res = [];
-                const { data, error } = await supabase.from('waitlist').select('city, zip_code, deposit_amount, created_at');
+                const { data, error } = await supabase.from('waitlist').select('city, state, zip_code, regional_market, deposit_amount, created_at');
                 if (!error && data) {
                     res = data;
                 } else {
-                    const { data: fallbackData } = await supabase.from('waitlist').select('city, zip_code, created_at');
+                    const { data: fallbackData } = await supabase.from('waitlist').select('city, state, zip_code, created_at');
                     res = (fallbackData || []).map(row => ({ ...row, deposit_amount: dynamicDeposit }));
                 }
 
@@ -10430,14 +10431,16 @@
                     countBadge.textContent = `${totalDeposits} Priority Deposit${totalDeposits !== 1 ? 's' : ''} ($${totalCapital.toLocaleString()})`;
                 }
 
-                // Group waitlist entries by City
+                // Group waitlist entries by City & Regional Market
                 const cityMap = {};
                 unlaunchedRes.forEach(row => {
-                    const city = (row.city && row.city.trim()) || (row.zip_code ? `ZIP: ${row.zip_code}` : 'Unknown');
+                    const z = (row.zip_code || '').trim();
+                    const market = row.regional_market || (window.AddressValidator ? window.AddressValidator.resolveRegionalMarket(row.city, row.state || 'WA', z) : 'Regional Market');
+                    const city = (row.city && row.city.trim()) || (z ? `ZIP: ${z}` : 'Unknown');
                     if (!cityMap[city]) {
-                        cityMap[city] = { zipCodes: new Set(), count: 0, capital: 0, latest: null };
+                        cityMap[city] = { zipCodes: new Set(), market: market, state: row.state || '', count: 0, capital: 0, latest: null };
                     }
-                    if (row.zip_code) cityMap[city].zipCodes.add(row.zip_code);
+                    if (z) cityMap[city].zipCodes.add(z);
                     cityMap[city].count++;
                     cityMap[city].capital += (Number(row.deposit_amount) || 20.00);
                     const date = new Date(row.created_at);
@@ -10456,7 +10459,12 @@
                     tr.className = 'border-b border-gray-800/50 hover:bg-gray-900/30 transition';
 
                     tr.innerHTML = `
-                        <td class="p-3 font-semibold text-white">${city}</td>
+                        <td class="p-3">
+                            <div class="font-semibold text-white flex items-center gap-1.5 flex-wrap">
+                                <span>${city}${info.state ? ', ' + info.state : ''}</span>
+                                <span class="text-[10px] font-mono text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded">${info.market}</span>
+                            </div>
+                        </td>
                         <td class="p-3 text-gray-400 font-mono text-[11px]">${zipList}</td>
                         <td class="p-3"><span class="text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg font-bold text-xs">${info.count.toLocaleString()} Deposits</span></td>
                         <td class="p-3 font-bold text-emerald-400">$${info.capital.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>

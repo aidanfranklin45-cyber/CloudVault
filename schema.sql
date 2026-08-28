@@ -304,6 +304,10 @@ ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT
 ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'deposit_paid';
 ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS price_lock_rates JSONB DEFAULT NULL;
 ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS state TEXT;
+ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS regional_market TEXT;
+ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS latitude NUMERIC;
+ALTER TABLE public.waitlist ADD COLUMN IF NOT EXISTS longitude NUMERIC;
 
 -- Access Requests (for Staging / Delivery & Slot Reservation)
 CREATE TABLE public.access_requests (

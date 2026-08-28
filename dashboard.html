@@ -2431,6 +2431,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://js.stripe.com/v3/"></script>
     <script src="supabase-config.js"></script>
+    <script src="address-validator.js"></script>
     <script src="billing-engine.js"></script>
     <script src="stripe-billing-integration.js?v=2.3"></script>
 
@@ -6558,6 +6559,16 @@
                     }
                     if (indicator) indicator.classList.add('hidden');
                 }
+
+                // Attach live AddressValidator to valet address inputs
+                if (window.AddressValidator && !window._valetValidatorAttached) {
+                    window._valetValidatorAttached = true;
+                    window.AddressValidator.attachAutofill({
+                        zipEl: document.getElementById('valet-addr-zip'),
+                        cityEl: document.getElementById('valet-addr-city'),
+                        stateEl: document.getElementById('valet-addr-state')
+                    });
+                }
             } catch (err) {
                 console.warn('Could not load saved address:', err);
             }
@@ -7574,6 +7585,26 @@
                         if (sz) sz.value = prof.zip;
                     }
                 }
+
+                // Attach live AddressValidator to settings address fields
+                if (window.AddressValidator && !window._settingsValidatorAttached) {
+                    window._settingsValidatorAttached = true;
+                    window.AddressValidator.attachAutofill({
+                        zipEl: document.getElementById('settings-bill-zip'),
+                        cityEl: document.getElementById('settings-bill-city'),
+                        stateEl: document.getElementById('settings-bill-state'),
+                        onResolved: (zipData) => {
+                            const isSame = document.getElementById('settings-same-as-billing-toggle')?.checked !== false;
+                            if (isSame) syncBillingToShippingSettings();
+                        }
+                    });
+                    window.AddressValidator.attachAutofill({
+                        zipEl: document.getElementById('settings-ship-zip'),
+                        cityEl: document.getElementById('settings-ship-city'),
+                        stateEl: document.getElementById('settings-ship-state')
+                    });
+                }
+
                 // Refresh Account Erasure Eligibility Status
                 await refreshAccountErasureStatus();
             } catch (e) {
@@ -7847,18 +7878,45 @@
 
                 const dNotes = document.getElementById('settings-delivery-notes')?.value.trim() || window.currentUserAddress?.delivery_instructions || null;
 
-                if (bLine1 && bCity && bState && bZip) {
+                // Resolve canonical postal data to prevent mismatches
+                let finalBCity = bCity;
+                let finalBState = bState;
+                let finalSCity = sCity;
+                let finalSState = sState;
+
+                if (window.AddressValidator) {
+                    if (bZip && bZip.length >= 5) {
+                        const bData = await window.AddressValidator.lookupZip(bZip);
+                        if (bData) {
+                            if (!finalBCity || finalBCity.toLowerCase() !== bData.city.toLowerCase()) {
+                                finalBCity = bData.city;
+                            }
+                            if (!finalBState) finalBState = bData.state;
+                        }
+                    }
+                    if (sZip && !isSame && sZip.length >= 5) {
+                        const sData = await window.AddressValidator.lookupZip(sZip);
+                        if (sData) {
+                            if (!finalSCity || finalSCity.toLowerCase() !== sData.city.toLowerCase()) {
+                                finalSCity = sData.city;
+                            }
+                            if (!finalSState) finalSState = sData.state;
+                        }
+                    }
+                }
+
+                if (bLine1 && finalBCity && finalBState && bZip) {
                     const { data: savedAddr } = await supabase.rpc('save_customer_addresses', {
                         p_billing_line1: bLine1,
                         p_billing_line2: bLine2 || null,
-                        p_billing_city: bCity,
-                        p_billing_state: bState,
+                        p_billing_city: finalBCity,
+                        p_billing_state: finalBState,
                         p_billing_zip: bZip,
                         p_shipping_same_as_billing: isSame,
                         p_shipping_line1: isSame ? bLine1 : (sLine1 || bLine1),
                         p_shipping_line2: isSame ? (bLine2 || null) : (sLine2 || null),
-                        p_shipping_city: isSame ? bCity : (sCity || bCity),
-                        p_shipping_state: isSame ? bState : (sState || bState),
+                        p_shipping_city: isSame ? finalBCity : (finalSCity || finalBCity),
+                        p_shipping_state: isSame ? finalBState : (finalSState || finalBState),
                         p_shipping_zip: isSame ? bZip : (sZip || bZip),
                         p_instructions: dNotes
                     });
