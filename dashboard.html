@@ -1569,6 +1569,15 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Default Delivery Notes & Drop-off Instructions -->
+                <div class="space-y-1.5 pt-2 border-t border-gray-150">
+                    <label for="settings-delivery-notes" class="block text-xs font-extrabold uppercase text-gray-800 tracking-wider flex items-center gap-1.5">
+                        <i data-lucide="file-text" class="w-3.5 h-3.5 text-blue-600"></i>
+                        <span>Delivery Notes &amp; Instructions</span>
+                    </label>
+                    <textarea id="settings-delivery-notes" rows="2" placeholder="Gate codes, porch drop-off instructions, etc." class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-medium text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500"></textarea>
+                </div>
             </div>
 
             <!-- Avatar Color Selector -->
@@ -6261,6 +6270,7 @@
                 selectRetrievalLogistics(retrievalLogisticsType || 'staging');
             }
 
+            await loadSavedCustomerAddress(true);
             await handleReservationDateChange();
             startQuoteLockTimer();
             document.getElementById('retrieval-modal').classList.remove('hidden');
@@ -6271,7 +6281,7 @@
             document.getElementById('retrieval-modal').classList.add('hidden');
         }
 
-        async function loadSavedCustomerAddress() {
+        async function loadSavedCustomerAddress(forceRefresh = true) {
             try {
                 if (!currentUser) return;
                 const { data, error } = await supabase
@@ -6281,31 +6291,69 @@
                     .maybeSingle();
 
                 if (data) window.currentUserAddress = data;
+                const addr = data || window.currentUserAddress;
                 const indicator = document.getElementById('saved-address-indicator');
-                if (data && (data.address_line1 || data.billing_address_line1)) {
+                
+                if (addr && (addr.address_line1 || addr.billing_address_line1 || addr.city || addr.billing_city)) {
                     const line1Input = document.getElementById('valet-addr-line1');
                     const line2Input = document.getElementById('valet-addr-line2');
                     const cityInput = document.getElementById('valet-addr-city');
                     const stateInput = document.getElementById('valet-addr-state');
                     const zipInput = document.getElementById('valet-addr-zip');
+                    const notesInput = document.getElementById('valet-delivery-notes');
 
-                    const effectiveLine1 = data.address_line1 || data.billing_address_line1 || '';
-                    const effectiveLine2 = data.address_line2 || data.billing_address_line2 || '';
-                    const effectiveCity = data.city || data.billing_city || '';
-                    const effectiveState = data.state || data.billing_state || '';
-                    const effectiveZip = data.zip || data.billing_zip || '';
+                    const isSame = (addr.shipping_same_as_billing !== false);
 
-                    if (line1Input && !line1Input.value) line1Input.value = effectiveLine1;
-                    if (line2Input && !line2Input.value) line2Input.value = effectiveLine2;
-                    if (cityInput && !cityInput.value) cityInput.value = effectiveCity;
-                    if (stateInput && !stateInput.value) stateInput.value = effectiveState;
-                    if (zipInput && !zipInput.value) zipInput.value = effectiveZip;
+                    const effectiveLine1 = isSame 
+                        ? (addr.billing_address_line1 || addr.address_line1 || '') 
+                        : (addr.address_line1 || addr.billing_address_line1 || '');
+                    const effectiveLine2 = isSame 
+                        ? (addr.billing_address_line2 || addr.address_line2 || '') 
+                        : (addr.address_line2 || addr.billing_address_line2 || '');
+                    let effectiveCity = isSame 
+                        ? (addr.billing_city || addr.city || '') 
+                        : (addr.city || addr.billing_city || '');
+                    let effectiveState = isSame 
+                        ? (addr.billing_state || addr.state || '') 
+                        : (addr.state || addr.billing_state || '');
+                    let effectiveZip = isSame 
+                        ? (addr.billing_zip || addr.zip || '') 
+                        : (addr.zip || addr.billing_zip || '');
 
-                    if (data.delivery_instructions && document.getElementById('valet-delivery-notes') && !document.getElementById('valet-delivery-notes').value) {
-                        document.getElementById('valet-delivery-notes').value = data.delivery_instructions;
+                    const prof = currentUserProfile || currentProfile;
+                    if (!effectiveZip && prof?.active_zone) {
+                        effectiveZip = prof.active_zone;
                     }
+                    if (!effectiveCity && prof?.assigned_facility_id) {
+                        if (prof.assigned_facility_id === 'facility_yakima') {
+                            effectiveCity = 'Yakima';
+                            effectiveState = 'WA';
+                        } else if (prof.assigned_facility_id === 'facility_seattle_north') {
+                            effectiveCity = 'Seattle';
+                            effectiveState = 'WA';
+                        } else if (prof.assigned_facility_id === 'facility_portland_central') {
+                            effectiveCity = 'Portland';
+                            effectiveState = 'OR';
+                        }
+                    }
+
+                    if (line1Input && (forceRefresh || !line1Input.value)) line1Input.value = effectiveLine1;
+                    if (line2Input && (forceRefresh || !line2Input.value)) line2Input.value = effectiveLine2;
+                    if (cityInput && (forceRefresh || !cityInput.value)) cityInput.value = effectiveCity;
+                    if (stateInput && (forceRefresh || !stateInput.value)) stateInput.value = effectiveState;
+                    if (zipInput && (forceRefresh || !zipInput.value)) zipInput.value = effectiveZip;
+
+                    if (notesInput && (forceRefresh || !notesInput.value)) {
+                        notesInput.value = addr.delivery_instructions || '';
+                    }
+
                     if (indicator) indicator.classList.remove('hidden');
                 } else {
+                    const prof = currentUserProfile || currentProfile;
+                    if (prof?.active_zone) {
+                        const zipInput = document.getElementById('valet-addr-zip');
+                        if (zipInput && (forceRefresh || !zipInput.value)) zipInput.value = prof.active_zone;
+                    }
                     if (indicator) indicator.classList.add('hidden');
                 }
             } catch (err) {
@@ -6391,7 +6439,7 @@
                 if (valetNotesContainer) valetNotesContainer.classList.remove('hidden');
                 if (valetAddressContainer) {
                     valetAddressContainer.classList.remove('hidden');
-                    loadSavedCustomerAddress();
+                    loadSavedCustomerAddress(true);
                 }
                 if (calTitle) calTitle.textContent = 'Schedule Valet Delivery';
                 if (dateLabel) dateLabel.textContent = 'Delivery Date';
@@ -7169,13 +7217,16 @@
                         if (bs) bs.value = addrData.billing_state || addrData.state || '';
                         if (bz) bz.value = addrData.billing_zip || addrData.zip || (prof?.zip || '');
 
-                        if (s1) s1.value = addrData.address_line1 || '';
-                        if (s2) s2.value = addrData.address_line2 || '';
-                        if (sc) sc.value = addrData.city || '';
-                        if (ss) ss.value = addrData.state || '';
-                        if (sz) sz.value = addrData.zip || (prof?.zip || '');
-
                         const isSame = addrData.shipping_same_as_billing !== false;
+                        if (s1) s1.value = isSame ? (addrData.billing_address_line1 || addrData.address_line1 || '') : (addrData.address_line1 || '');
+                        if (s2) s2.value = isSame ? (addrData.billing_address_line2 || addrData.address_line2 || '') : (addrData.address_line2 || '');
+                        if (sc) sc.value = isSame ? (addrData.billing_city || addrData.city || '') : (addrData.city || '');
+                        if (ss) ss.value = isSame ? (addrData.billing_state || addrData.state || '') : (addrData.state || '');
+                        if (sz) sz.value = isSame ? (addrData.billing_zip || addrData.zip || prof?.zip || '') : (addrData.zip || prof?.zip || '');
+
+                        const notesEl = document.getElementById('settings-delivery-notes');
+                        if (notesEl) notesEl.value = addrData.delivery_instructions || '';
+
                         if (sameToggle) sameToggle.checked = isSame;
                         toggleSettingsSameAsBilling();
                     } else if (prof && prof.zip) {
@@ -7454,6 +7505,8 @@
                 const sState = document.getElementById('settings-ship-state')?.value.trim().toUpperCase();
                 const sZip = document.getElementById('settings-ship-zip')?.value.trim();
 
+                const dNotes = document.getElementById('settings-delivery-notes')?.value.trim() || window.currentUserAddress?.delivery_instructions || null;
+
                 if (bLine1 && bCity && bState && bZip) {
                     const { data: savedAddr } = await supabase.rpc('save_customer_addresses', {
                         p_billing_line1: bLine1,
@@ -7467,7 +7520,7 @@
                         p_shipping_city: isSame ? bCity : (sCity || bCity),
                         p_shipping_state: isSame ? bState : (sState || bState),
                         p_shipping_zip: isSame ? bZip : (sZip || bZip),
-                        p_instructions: null
+                        p_instructions: dNotes
                     });
                     if (savedAddr) window.currentUserAddress = savedAddr;
                 }
