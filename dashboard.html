@@ -1255,74 +1255,173 @@
     </div>
 
     <!-- Cancellation Confirmation Modal -->
-    <div id="cancel-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center hidden">
-        <div class="bg-white rounded-3xl p-8 max-w-lg w-full mx-4 shadow-2xl space-y-5">
-            <div class="flex items-start gap-4">
-                <div class="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center flex-shrink-0">
-                    <span class="text-2xl">⚠️</span>
+    <div id="cancel-modal" class="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden overflow-y-auto">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-5 my-8 animate-in fade-in zoom-in-95 duration-200">
+            <div class="flex items-start gap-3.5 border-b border-gray-100 pb-4">
+                <div class="w-11 h-11 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-xl font-bold flex-shrink-0">
+                    ⚠️
                 </div>
+                <div class="flex-1 min-w-0">
+                    <h2 class="text-lg sm:text-xl font-extrabold text-gray-900 tracking-tight">Cancel Subscription</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Your plan stays active through the end of your billing cycle — no pro-rated refunds.</p>
+                </div>
+                <button onclick="closeCancelModal()" class="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition cursor-pointer">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Service End Date Banner -->
+            <div class="bg-blue-50/80 border border-blue-200 rounded-2xl p-4 space-y-1">
+                <div class="flex items-center justify-between">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-blue-600">✅ Service Active Through</p>
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                </div>
+                <p class="text-base sm:text-lg font-black text-blue-950" id="cancel-end-date">Calculating...</p>
+                <p class="text-[11px] text-blue-700/80">You have full vault access until your billing cycle ends.</p>
+            </div>
+
+            <!-- State A: 0 Totes in storage -->
+            <div id="cancel-zero-totes-box" class="hidden bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-1.5 text-emerald-900">
+                <div class="flex items-center gap-2">
+                    <span class="text-base">📦</span>
+                    <strong class="text-xs font-extrabold">0 Stored Totes — Clean Cancellation</strong>
+                </div>
+                <p class="text-[11px] text-emerald-800/90 leading-relaxed">
+                    You currently have 0 totes in storage. No physical tote retrieval or drop-off is required. Your subscription will cleanly conclude at the end of your billing period with zero remaining charges.
+                </p>
+            </div>
+
+            <!-- State B: >0 Totes in storage (Requires return address or staging slot) -->
+            <div id="cancel-active-totes-box" class="space-y-3.5">
+                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 space-y-1 text-amber-900">
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs font-extrabold flex items-center gap-1.5">
+                            <span>📦</span> Final Tote Return Required
+                        </p>
+                        <span class="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-bold text-[10px]" id="cancel-totes-count-badge">0 Totes</span>
+                    </div>
+                    <p class="text-[11px] text-amber-800 leading-snug">
+                        You have <strong id="cancel-totes-count-modal" class="font-black">0</strong> totes in vault storage. Please select how you want your items returned before your service end date.
+                    </p>
+                </div>
+
+                <!-- Return Method Selector -->
                 <div>
-                    <h2 class="text-xl font-bold text-gray-900">Cancel Subscription?</h2>
-                    <p class="text-sm text-gray-500 mt-1">Your plan stays active through the end of your current billing period — no pro-rated refunds.</p>
+                    <label class="block text-xs font-extrabold text-gray-700 mb-1.5">Select Final Return Method *</label>
+                    <div class="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-2xl">
+                        <button type="button" id="cancel-tab-valet" onclick="setCancelReturnMethod('valet')" class="py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 bg-white text-blue-600 shadow-sm cursor-pointer">
+                            <span>🚚</span> <span>Valet Door Return</span>
+                        </button>
+                        <button type="button" id="cancel-tab-staging" onclick="setCancelReturnMethod('staging')" class="py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 text-gray-600 hover:text-gray-900 cursor-pointer">
+                            <span>🏢</span> <span>Self-Serve Pickup</span>
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            <!-- Service End Date -->
-            <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-1">
-                <p class="text-xs font-bold uppercase tracking-wider text-blue-600">✅ Service Active Through</p>
-                <p class="text-lg font-bold text-blue-900" id="cancel-end-date">Calculating...</p>
-                <p class="text-xs text-blue-600">You have full access to all your totes until this date.</p>
-            </div>
+                <!-- Valet Address Fields -->
+                <div id="cancel-valet-address-section" class="space-y-3 bg-gray-50 border border-gray-200 rounded-2xl p-3.5 text-xs">
+                    <p class="font-extrabold text-gray-800 flex items-center gap-1.5">
+                        <span>📍</span> Delivery Address for Final Drop-off
+                    </p>
+                    <div class="space-y-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Street Address *</label>
+                            <input type="text" id="cancel-addr-line1" placeholder="123 Main St" class="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Apt/Suite</label>
+                                <input type="text" id="cancel-addr-line2" placeholder="Apt 4B" class="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">City *</label>
+                                <input type="text" id="cancel-addr-city" placeholder="City" class="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Zip Code *</label>
+                                <input type="text" id="cancel-addr-zip" placeholder="ZIP" class="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Delivery Notes / Gate Code</label>
+                            <input type="text" id="cancel-delivery-notes" placeholder="Gate code #1234, leave by front porch" class="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Preferred Time Window *</label>
+                            <select id="cancel-valet-slot" class="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none cursor-pointer">
+                                <option value="09:00 AM - 12:00 PM">Morning (09:00 AM - 12:00 PM)</option>
+                                <option value="01:00 PM - 05:00 PM">Afternoon (01:00 PM - 05:00 PM)</option>
+                                <option value="05:00 PM - 08:00 PM">Evening (05:00 PM - 08:00 PM)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
 
-            <!-- Tote Pickup Notice -->
-            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-1">
-                <p class="text-xs font-bold uppercase tracking-wider text-amber-700">📦 Tote Return &amp; Pickup</p>
-                <p class="text-sm font-semibold text-amber-900">You currently hold <span id="cancel-totes-count-modal" class="font-black">0</span> totes.</p>
-                <p class="text-xs text-amber-700">A final retrieval request will be automatically scheduled for your last service day. All totes must be returned by then.</p>
+                <!-- Self-Serve Staging Pickup Section -->
+                <div id="cancel-staging-section" class="hidden space-y-3 bg-gray-50 border border-gray-200 rounded-2xl p-3.5 text-xs">
+                    <p class="font-extrabold text-gray-800 flex items-center gap-1.5">
+                        <span>🏢</span> Warehouse Self-Serve Staging Room Pickup
+                    </p>
+                    <div class="space-y-2">
+                        <div class="p-2.5 bg-white border border-gray-200 rounded-xl text-[11px] text-gray-600">
+                            <span class="font-bold text-gray-800">Assigned Facility:</span>
+                            <p id="cancel-facility-name" class="font-medium text-gray-700 mt-0.5">Seattle North Fulfillment Center</p>
+                            <p class="text-[10px] text-gray-500 mt-1">Your PIN code will be unlocked and sent on your scheduled pickup date.</p>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Pickup Window *</label>
+                            <select id="cancel-staging-slot" class="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none cursor-pointer">
+                                <option value="09:00 AM - 12:00 PM">Morning (09:00 AM - 12:00 PM)</option>
+                                <option value="01:00 PM - 05:00 PM">Afternoon (01:00 PM - 05:00 PM)</option>
+                                <option value="05:00 PM - 08:00 PM">Evening (05:00 PM - 08:00 PM)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Policy Notices -->
             <div class="space-y-2">
-                <div class="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800">
-                    <strong>💳 Unreturned Tote Charge:</strong> Any tote not returned by the pickup date will be billed at <strong>$15.00 per tote</strong> to your card on file.
+                <div class="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-900">
+                    <strong>💳 Unreturned Tote Charge:</strong> Any physical tote not returned by your service end date will be billed at <strong>$15.00/tote</strong> to your card on file.
                 </div>
-                <div class="bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-800">
-                    <strong>📈 Interest on Unpaid Balances:</strong> Any outstanding balance after your service end date will accrue interest at <strong>10% per annum</strong> from that date.
+                <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900">
+                    <strong>📈 Outstanding Balances:</strong> Any unpaid balance after cancellation will accrue interest at <strong>10% per annum</strong>.
                 </div>
             </div>
 
             <div class="flex gap-3 pt-1">
-                <button onclick="closeCancelModal()" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-200 transition text-sm">Keep My Plan</button>
-                <button onclick="confirmCancelSubscriptionFlow()" id="confirm-cancel-btn" class="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 transition text-sm">Confirm Cancellation</button>
+                <button type="button" onclick="closeCancelModal()" class="flex-1 bg-gray-100 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-200 transition text-xs sm:text-sm cursor-pointer">Keep My Plan</button>
+                <button type="button" onclick="confirmCancelSubscriptionFlow()" id="confirm-cancel-btn" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-extrabold py-3 rounded-xl transition text-xs sm:text-sm shadow-md shadow-rose-600/20 cursor-pointer">Confirm Cancellation</button>
             </div>
         </div>
     </div>
 
     <!-- Post-Cancellation Confirmed Modal -->
-    <div id="cancel-confirmed-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center hidden">
-        <div class="bg-white rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl space-y-5 text-center">
-            <div class="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
-                <span class="text-3xl">✅</span>
+    <div id="cancel-confirmed-modal" class="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div class="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto text-2xl">
+                ✅
             </div>
             <div>
-                <h2 class="text-xl font-bold text-gray-900">Cancellation Confirmed</h2>
-                <p class="text-sm text-gray-500 mt-1">Your subscription has been scheduled for cancellation.</p>
+                <h2 class="text-xl font-extrabold text-gray-900 tracking-tight">Cancellation Confirmed</h2>
+                <p class="text-xs text-gray-500 mt-1">Your subscription cancellation has been successfully scheduled.</p>
             </div>
-            <div class="bg-gray-50 rounded-2xl p-4 space-y-3 text-left">
-                <div class="flex justify-between text-sm">
-                    <span class="text-gray-500 font-medium">Service ends:</span>
+            <div class="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-2.5 text-left text-xs">
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-500 font-medium">Service active through:</span>
                     <span class="font-bold text-gray-900" id="confirmed-end-date">—</span>
                 </div>
-                <div class="flex justify-between text-sm">
-                    <span class="text-gray-500 font-medium">Tote pickup scheduled:</span>
-                    <span class="font-bold text-gray-900" id="confirmed-pickup-date">—</span>
+                <div class="flex justify-between items-center" id="confirmed-return-row">
+                    <span class="text-gray-500 font-medium" id="confirmed-return-label">Tote return scheduled:</span>
+                    <span class="font-bold text-blue-600" id="confirmed-pickup-date">—</span>
                 </div>
-                <div class="flex justify-between text-sm">
+                <div class="flex justify-between items-center">
                     <span class="text-gray-500 font-medium">Interest rate (if unpaid):</span>
-                    <span class="font-bold text-orange-600">10% per annum</span>
+                    <span class="font-bold text-amber-600">10% p.a.</span>
                 </div>
             </div>
-            <button onclick="document.getElementById('cancel-confirmed-modal').classList.add('hidden')" class="w-full bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-gray-800 transition text-sm">Got it</button>
+            <button onclick="document.getElementById('cancel-confirmed-modal').classList.add('hidden')" class="w-full bg-gray-900 hover:bg-black text-white font-bold py-3 rounded-xl transition text-xs sm:text-sm cursor-pointer">Got it</button>
         </div>
     </div>
 
@@ -7016,20 +7115,82 @@
         }
 
         // ============================================================
-        // User Cancellation Flow Modal
+        // User Cancellation Flow Modal & Address Controller
         // ============================================================
-        function triggerCancelFlowUser() {
+        let currentCancelReturnMethod = 'valet';
+
+        function setCancelReturnMethod(method) {
+            currentCancelReturnMethod = method;
+            const tabValet = document.getElementById('cancel-tab-valet');
+            const tabStaging = document.getElementById('cancel-tab-staging');
+            const secValet = document.getElementById('cancel-valet-address-section');
+            const secStaging = document.getElementById('cancel-staging-section');
+
+            if (method === 'valet') {
+                if (tabValet) tabValet.className = 'py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 bg-white text-blue-600 shadow-sm cursor-pointer';
+                if (tabStaging) tabStaging.className = 'py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 text-gray-600 hover:text-gray-900 cursor-pointer';
+                if (secValet) secValet.classList.remove('hidden');
+                if (secStaging) secStaging.classList.add('hidden');
+            } else {
+                if (tabStaging) tabStaging.className = 'py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 bg-white text-blue-600 shadow-sm cursor-pointer';
+                if (tabValet) tabValet.className = 'py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 text-gray-600 hover:text-gray-900 cursor-pointer';
+                if (secStaging) secStaging.classList.remove('hidden');
+                if (secValet) secValet.classList.add('hidden');
+            }
+        }
+
+        async function triggerCancelFlowUser() {
             if (!currentUser) return;
             document.getElementById('user-dropdown')?.classList.add('hidden');
 
-            // Count totes
+            // Count totes accurately from currentInventory or profile
             let totesHeld = 0;
-            const cachedProfile = sessionStorage.getItem(`cv_user_${currentUser.id}`);
-            if (cachedProfile) {
-                const profile = JSON.parse(cachedProfile);
-                totesHeld = profile.active_totes_held || 0;
+            if (Array.isArray(currentInventory)) {
+                totesHeld = currentInventory.filter(t => t.status !== 'decommissioned' && t.status !== 'cancelled').length;
             }
-            document.getElementById('cancel-totes-count-modal').textContent = totesHeld;
+            if (totesHeld === 0 && currentUserProfile && currentUserProfile.active_totes_held !== undefined) {
+                totesHeld = Number(currentUserProfile.active_totes_held) || 0;
+            }
+            if (totesHeld === 0 && currentProfile && currentProfile.active_totes_held !== undefined) {
+                totesHeld = Number(currentProfile.active_totes_held) || 0;
+            }
+
+            const countModalEl = document.getElementById('cancel-totes-count-modal');
+            if (countModalEl) countModalEl.textContent = totesHeld;
+            const countBadgeEl = document.getElementById('cancel-totes-count-badge');
+            if (countBadgeEl) countBadgeEl.textContent = `${totesHeld} Tote${totesHeld !== 1 ? 's' : ''}`;
+
+            const zeroBox = document.getElementById('cancel-zero-totes-box');
+            const activeBox = document.getElementById('cancel-active-totes-box');
+
+            if (totesHeld === 0) {
+                zeroBox?.classList.remove('hidden');
+                activeBox?.classList.add('hidden');
+            } else {
+                zeroBox?.classList.add('hidden');
+                activeBox?.classList.remove('hidden');
+                setCancelReturnMethod('valet');
+
+                // Pre-fill delivery address if available
+                try {
+                    const { data: addr } = await supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle();
+                    if (addr) {
+                        if (document.getElementById('cancel-addr-line1')) document.getElementById('cancel-addr-line1').value = addr.address_line1 || '';
+                        if (document.getElementById('cancel-addr-line2')) document.getElementById('cancel-addr-line2').value = addr.address_line2 || '';
+                        if (document.getElementById('cancel-addr-city')) document.getElementById('cancel-addr-city').value = addr.city || '';
+                        if (document.getElementById('cancel-addr-zip')) document.getElementById('cancel-addr-zip').value = addr.zip || '';
+                        if (document.getElementById('cancel-delivery-notes')) document.getElementById('cancel-delivery-notes').value = addr.delivery_instructions || '';
+                    }
+                } catch (e) {
+                    console.warn("Could not pre-fill address:", e);
+                }
+
+                // Set facility name
+                const facName = window.currentActiveFacility?.name || 'Seattle North Fulfillment Center';
+                if (document.getElementById('cancel-facility-name')) {
+                    document.getElementById('cancel-facility-name').textContent = facName;
+                }
+            }
 
             // Compute service end date from subscription
             const sub = currentSubscription;
@@ -7060,6 +7221,15 @@
                 const sub = currentSubscription;
                 if (!sub) throw new Error('No active subscription found');
 
+                // Count totes
+                let totesHeld = 0;
+                if (Array.isArray(currentInventory)) {
+                    totesHeld = currentInventory.filter(t => t.status !== 'decommissioned' && t.status !== 'cancelled').length;
+                }
+                if (totesHeld === 0 && currentUserProfile && currentUserProfile.active_totes_held !== undefined) {
+                    totesHeld = Number(currentUserProfile.active_totes_held) || 0;
+                }
+
                 // 1. Compute cancel_at = last_billed_at+30d OR created_at+30d
                 const base = sub.last_billed_at || sub.created_at;
                 const cancelAt = base
@@ -7069,6 +7239,7 @@
                         : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
                 const cancelAtISO = cancelAt.toISOString();
                 const cancelAtDisplay = cancelAt.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+                const targetDateStr = cancelAt.toISOString().split('T')[0];
 
                 // 2. Mark subscription as canceling
                 await supabase
@@ -7086,23 +7257,76 @@
                     })
                     .eq('id', currentUser.id);
 
-                // 4. Auto-create final retrieval access request on the last day
-                const cancelFacId = (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
-                                    (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility)) ||
-                                    'facility_seattle_north';
-                const cancelPin = Math.floor(1000 + Math.random() * 9000).toString();
+                let finalFulfillmentType = 'none';
 
-                await supabase.from('access_requests').insert({
-                    uid: currentUser.id,
-                    facility_id: cancelFacId,
-                    request_type: 'retrieval',
-                    fulfillment_type: 'self_serve_pickup',
-                    pin: cancelPin,
-                    status: 'scheduled',
-                    target_date: cancelAt.toISOString().split('T')[0],
-                    time_slot: '09:00 AM - 12:00 PM',
-                    delivery_notes: 'FINAL PICKUP — Subscription ended. Customer must return all totes. Unreturned totes billed at $15/tote.'
-                });
+                // 4. If totes exist, create appropriate retrieval access request
+                if (totesHeld > 0) {
+                    const cancelFacId = (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
+                                        (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility)) ||
+                                        'facility_seattle_north';
+
+                    if (currentCancelReturnMethod === 'valet') {
+                        finalFulfillmentType = 'valet_delivery';
+                        const line1 = document.getElementById('cancel-addr-line1')?.value.trim();
+                        const line2 = document.getElementById('cancel-addr-line2')?.value.trim() || '';
+                        const city = document.getElementById('cancel-addr-city')?.value.trim();
+                        const zip = document.getElementById('cancel-addr-zip')?.value.trim();
+                        const notes = document.getElementById('cancel-delivery-notes')?.value.trim() || '';
+                        const slot = document.getElementById('cancel-valet-slot')?.value || '09:00 AM - 12:00 PM';
+
+                        if (!line1 || !city || !zip) {
+                            throw new Error('Please fill in your delivery street address, city, and zip code for the final tote return.');
+                        }
+
+                        // Save or update customer address
+                        try {
+                            await supabase.from('customer_addresses').upsert({
+                                uid: currentUser.id,
+                                address_line1: line1,
+                                address_line2: line2,
+                                city: city,
+                                state: 'WA',
+                                zip: zip,
+                                delivery_instructions: notes,
+                                updated_at: new Date().toISOString()
+                            }, { onConflict: 'uid' });
+                        } catch (e) {
+                            console.warn("Address upsert non-blocking error:", e);
+                        }
+
+                        await supabase.from('access_requests').insert({
+                            uid: currentUser.id,
+                            facility_id: cancelFacId,
+                            request_type: 'retrieval',
+                            fulfillment_type: 'valet_delivery',
+                            status: 'scheduled',
+                            target_date: targetDateStr,
+                            time_slot: slot,
+                            delivery_address_line1: line1,
+                            delivery_address_line2: line2,
+                            delivery_city: city,
+                            delivery_state: 'WA',
+                            delivery_zip: zip,
+                            delivery_notes: `FINAL VALET RETURN — Subscription ended. ${notes}`.trim()
+                        });
+                    } else {
+                        finalFulfillmentType = 'self_serve_pickup';
+                        const cancelPin = Math.floor(1000 + Math.random() * 9000).toString();
+                        const slot = document.getElementById('cancel-staging-slot')?.value || '09:00 AM - 12:00 PM';
+
+                        await supabase.from('access_requests').insert({
+                            uid: currentUser.id,
+                            facility_id: cancelFacId,
+                            request_type: 'retrieval',
+                            fulfillment_type: 'self_serve_pickup',
+                            pin: cancelPin,
+                            status: 'scheduled',
+                            target_date: targetDateStr,
+                            time_slot: slot,
+                            delivery_notes: 'FINAL SELF-SERVE STAGING PICKUP — Subscription ended. Customer must return all totes. Unreturned totes billed at $15/tote.'
+                        });
+                    }
+                }
 
                 // 5. Create cancellation_notice invoice ($0, informational)
                 if (window.CloudVaultBilling && typeof window.CloudVaultBilling.createInvoiceRecord === 'function') {
@@ -7114,7 +7338,7 @@
                         payment_status: 'paid',
                         subtotal: 0,
                         total_amount: 0,
-                        notes: `Service active through ${cancelAtDisplay}. Final tote pickup scheduled. 10% p.a. interest applies to any unpaid balance after cancellation date.`,
+                        notes: `Service active through ${cancelAtDisplay}. ${totesHeld > 0 ? 'Final tote return scheduled.' : '0 stored totes. Clean termination.'} 10% p.a. interest applies to any unpaid balance after cancellation date.`,
                         line_items: [{ description: `Subscription active through ${cancelAtDisplay} (no additional charge)`, qty: 1, unit_price: 0, amount: 0 }]
                     });
                 }
@@ -7135,8 +7359,21 @@
                 const confirmedModal = document.getElementById('cancel-confirmed-modal');
                 if (confirmedModal) {
                     document.getElementById('confirmed-end-date').textContent = cancelAtDisplay;
-                    document.getElementById('confirmed-pickup-date').textContent = cancelAtDisplay;
+                    const returnRow = document.getElementById('confirmed-return-row');
+                    if (totesHeld > 0) {
+                        if (returnRow) returnRow.classList.remove('hidden');
+                        const returnLabel = document.getElementById('confirmed-return-label');
+                        if (returnLabel) returnLabel.textContent = finalFulfillmentType === 'valet_delivery' ? 'Valet delivery scheduled:' : 'Warehouse pickup scheduled:';
+                        document.getElementById('confirmed-pickup-date').textContent = cancelAtDisplay;
+                    } else {
+                        if (returnRow) returnRow.classList.add('hidden');
+                    }
                     confirmedModal.classList.remove('hidden');
+                }
+
+                // Refresh fulfillment cards
+                if (typeof renderFulfillmentFlows === 'function') {
+                    renderFulfillmentFlows();
                 }
 
             } catch (err) {

@@ -8017,8 +8017,7 @@
                 const [invRes, reqRes, invoiceRes, subRes] = await Promise.all([
                     supabase.from('inventory').select('id, tote_code, label, status').eq('uid', userId),
                     supabase.from('access_requests').select('id, request_type, status').eq('uid', userId),
-                    supabase.from('invoices').select('id, invoice_number, total_amount, created_at').eq('uid', userId),
-                    supabase.from('subscriptions').select('id, status, current_tier, active_totes, price_per_tote').eq('uid', userId).eq('status', 'active').maybeSingle()
+                    supabase.from('subscriptions').select('id, status, plan_tier, tote_count, total_totes, tote_rate, monthly_total').eq('uid', userId).eq('status', 'active').maybeSingle()
                 ]);
 
                 const totes = invRes.data || [];
