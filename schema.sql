@@ -4655,20 +4655,29 @@ BEGIN
     RAISE EXCEPTION 'Exit Retrieval Error: At least one tote must be selected for return/exit';
   END IF;
 
-  -- Enforce 3-Day Grace Window Limit on scheduled retrieval target date
-  v_max_allowed_date := (current_date + interval '3 days')::DATE;
-  IF p_target_date > v_max_allowed_date THEN
-    RAISE EXCEPTION 'Schedule Error: Exit retrieval must be scheduled within your 3-day grace window (on or before %)', v_max_allowed_date;
-  END IF;
-
-  v_tote_count := cardinality(p_tote_ids);
-
   SELECT * INTO v_user FROM public.users WHERE id = v_uid;
   IF v_user IS NULL THEN
     RAISE EXCEPTION 'User profile not found';
   END IF;
 
-  SELECT * INTO v_sub FROM public.subscriptions WHERE uid = v_uid AND status = 'active' LIMIT 1;
+  SELECT * INTO v_sub FROM public.subscriptions 
+  WHERE uid = v_uid AND status IN ('active', 'canceling') 
+  ORDER BY created_at DESC LIMIT 1;
+
+  -- Allow scheduling through the end of the customer's paid period / cancellation date
+  IF v_sub IS NOT NULL AND v_sub.cancel_at IS NOT NULL THEN
+    v_max_allowed_date := GREATEST(v_sub.cancel_at::DATE, (current_date + interval '30 days')::DATE);
+  ELSIF v_sub IS NOT NULL AND v_sub.current_period_end IS NOT NULL THEN
+    v_max_allowed_date := GREATEST(v_sub.current_period_end::DATE, (current_date + interval '30 days')::DATE);
+  ELSIF v_sub IS NOT NULL AND v_sub.last_billed_at IS NOT NULL THEN
+    v_max_allowed_date := (v_sub.last_billed_at + interval '35 days')::DATE;
+  ELSE
+    v_max_allowed_date := (current_date + interval '35 days')::DATE;
+  END IF;
+
+  IF p_target_date > v_max_allowed_date THEN
+    RAISE EXCEPTION 'Schedule Error: Exit retrieval must be scheduled within your paid service window (on or before %)', v_max_allowed_date;
+  END IF;
 
   SELECT array_agg(tote_code) INTO v_tote_codes
   FROM public.inventory

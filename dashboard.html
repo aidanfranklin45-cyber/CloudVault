@@ -8653,30 +8653,46 @@
                 const sub = currentSubscription;
                 const isCanc = isCancellation === true || isCancellationExitMode === true || sub?.status === 'canceling';
                 
-                let baseDate = new Date();
-                if (!isCanc) {
-                    if (sub && sub.plan_reduced_at) {
-                        baseDate = new Date(sub.plan_reduced_at);
-                    } else if (sub && sub.status === 'canceling' && sub.cancellation_requested_at) {
-                        baseDate = new Date(sub.cancellation_requested_at);
-                    } else {
-                        baseDate = new Date();
+                if (isCanc) {
+                    // Customer already paid for storage through the end of their billing period / cancel_at
+                    let paidThrough = null;
+                    if (sub) {
+                        if (sub.cancel_at) paidThrough = new Date(sub.cancel_at);
+                        else if (sub.current_period_end) paidThrough = new Date(sub.current_period_end);
+                        else if (sub.last_billed_at) paidThrough = new Date(new Date(sub.last_billed_at).getTime() + 30 * 24 * 60 * 60 * 1000);
+                        else if (sub.created_at) paidThrough = new Date(new Date(sub.created_at).getTime() + 30 * 24 * 60 * 60 * 1000);
                     }
+                    if (!paidThrough || isNaN(paidThrough.getTime()) || paidThrough < new Date()) {
+                        paidThrough = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+                    }
+
+                    const formattedDate = paidThrough.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+                    const diffMs = paidThrough.getTime() - Date.now();
+                    const diffDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+                    
+                    return {
+                        graceEnd: paidThrough,
+                        formattedDate,
+                        formattedTime: '11:59 PM',
+                        remainingText: `⏳ ${diffDays} days active storage remaining`,
+                        isExpired: diffMs <= 0,
+                        fullDeadlineStr: `${formattedDate}`,
+                        isCancellation: true
+                    };
                 }
 
-                // Grace window is 3 days from the initiation/reduction date
+                // For active plan downsizing: 3-day grace window to pull excess totes
+                let baseDate = new Date();
+                if (sub && sub.plan_reduced_at) {
+                    baseDate = new Date(sub.plan_reduced_at);
+                }
                 let graceEnd = new Date(baseDate.getTime() + (3 * 24 * 60 * 60 * 1000));
-
-                // If cancellation is being initiated or graceEnd has lapsed into the past,
-                // ensure the user has 3 days from TODAY to schedule their tote exit retrieval
-                const minAllowedEnd = new Date(Date.now() + (3 * 24 * 60 * 60 * 1000));
-                if (isCanc || graceEnd < new Date()) {
-                    graceEnd = minAllowedEnd;
+                if (graceEnd < new Date()) {
+                    graceEnd = new Date(Date.now() + (3 * 24 * 60 * 60 * 1000));
                 }
                 
                 const formattedDate = graceEnd.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
                 const formattedTime = graceEnd.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-                
                 const diffMs = graceEnd.getTime() - Date.now();
                 let remainingText = '';
                 let isExpired = false;
@@ -8697,7 +8713,8 @@
                     formattedTime,
                     remainingText,
                     isExpired,
-                    fullDeadlineStr: `${formattedDate} at ${formattedTime}`
+                    fullDeadlineStr: `${formattedDate} at ${formattedTime}`,
+                    isCancellation: false
                 };
             }
 
@@ -8945,16 +8962,18 @@
                 const subTitle = document.getElementById('excess-modal-subtitle');
                 if (subTitle) {
                     subTitle.textContent = isCancellationExitMode 
-                        ? `Account Cancellation & Full Exit • Grace Deadline: ${grace.fullDeadlineStr} (${grace.remainingText})`
+                        ? `Account Cancellation • Storage Paid & Active Through ${grace.formattedDate} (${grace.remainingText})`
                         : `Downsizing Plan Adjustment • Grace Deadline: ${grace.fullDeadlineStr} (${grace.remainingText})`;
                 }
 
                 const agreementDeadline = document.getElementById('excess-agreement-deadline');
                 if (agreementDeadline) {
-                    agreementDeadline.textContent = grace.fullDeadlineStr;
+                    agreementDeadline.textContent = isCancellationExitMode
+                        ? `your paid-through subscription date (${grace.formattedDate})`
+                        : grace.fullDeadlineStr;
                 }
 
-                // Strictly enforce valid date range and 3-day grace period on date picker
+                // Strictly enforce valid date range based on grace or paid-through period
                 const toLocalYMD = (d) => {
                     const y = d.getFullYear();
                     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -8974,7 +8993,9 @@
 
                 const dateHint = document.getElementById('excess-date-limit-hint');
                 if (dateHint) {
-                    dateHint.textContent = `📅 Must be scheduled on or before ${grace.formattedDate} (3-day grace window limit).`;
+                    dateHint.textContent = isCancellationExitMode
+                        ? `📅 You may schedule final retrieval anytime on or before ${grace.formattedDate} (paid storage period).`
+                        : `📅 Must be scheduled on or before ${grace.formattedDate} (3-day grace window limit).`;
                 }
 
                 // Filter available time slots for the chosen date (disables past slots for today)
@@ -9209,7 +9230,10 @@
                 const grace = getGraceWindowDetails(isCancellationExitMode);
                 const chosenDate = new Date(targetDate + 'T23:59:59');
                 if (chosenDate > grace.graceEnd) {
-                    alert(`Exit retrieval must be scheduled within your 3-day grace window (on or before ${grace.formattedDate}).`);
+                    const limitMsg = isCancellationExitMode 
+                        ? `Exit retrieval must be scheduled on or before your paid-through date (${grace.formattedDate}).` 
+                        : `Exit retrieval must be scheduled within your 3-day grace window (on or before ${grace.formattedDate}).`;
+                    alert(limitMsg);
                     return;
                 }
 
