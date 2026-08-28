@@ -4405,19 +4405,20 @@ BEGIN
         RAISE EXCEPTION 'Customer account with ID % does not exist or has already been erased.', p_target_uid;
     END IF;
 
-    -- HARD SAFETY GUARD: Block erasure if active subscription exists
+    -- HARD SAFETY GUARD: Block erasure if active recurring subscription exists
     SELECT COUNT(*) INTO v_active_subs 
     FROM public.subscriptions 
-    WHERE uid = p_target_uid AND status = 'active';
+    WHERE uid = p_target_uid AND status IN ('active', 'trialing');
 
     IF v_active_subs > 0 OR v_target_user.subscription_status = 'active' THEN
         RAISE EXCEPTION 'Active Subscription Blocker: Cannot erase customer account with an active recurring subscription. You must cancel the active subscription first to prevent orphaned Stripe billing drift.';
     END IF;
 
-    -- HARD SAFETY GUARD: Block erasure if customer still has physical totes in storage
+    -- HARD SAFETY GUARD: Block erasure if customer still has physical active totes in storage or with them
     SELECT COUNT(*) INTO v_active_inventory 
     FROM public.inventory 
-    WHERE uid = p_target_uid AND status NOT IN ('decommissioned', 'returned-to-customer', 'cancelled');
+    WHERE uid = p_target_uid 
+      AND status::TEXT IN ('stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer', 'in-storage');
 
     IF v_active_inventory > 0 OR COALESCE(v_target_user.active_totes_held, 0) > 0 THEN
         RAISE EXCEPTION 'Active Inventory Blocker: Customer has % active tote(s) associated with their account. Totes must be checked out or returned to facility pool before erasing account data.', GREATEST(v_active_inventory, COALESCE(v_target_user.active_totes_held, 0));
@@ -4425,7 +4426,7 @@ BEGIN
 
     v_facility_id := v_target_user.assigned_facility_id;
     IF v_facility_id IS NULL THEN
-        v_facility_id := 'facility_seattle_north';
+        v_facility_id := 'facility_yakima';
     END IF;
 
     -- 1. Anonymize financial records for statutory tax/accounting record-keeping
@@ -4441,15 +4442,30 @@ BEGIN
     SET uid = NULL
     WHERE uid = p_target_uid;
 
-    -- 2. Clean up any remaining records
+    -- 2. Clear FK references that do not cascade
+    UPDATE public.inventory SET last_scanned_by = NULL WHERE last_scanned_by = p_target_uid;
+    UPDATE public.access_requests SET overridden_by = NULL WHERE overridden_by = p_target_uid;
+    UPDATE public.employee_badges SET created_by = NULL WHERE created_by = p_target_uid;
+    UPDATE public.waitlist SET user_id = NULL WHERE user_id = p_target_uid;
+
+    -- 3. Detach / anonymize any tote inventory records belonging to user
     SELECT COUNT(*) INTO v_totes_count FROM public.inventory WHERE uid = p_target_uid;
-    DELETE FROM public.inventory WHERE uid = p_target_uid;
+    UPDATE public.inventory 
+    SET uid = NULL,
+        label = 'Standard Tote',
+        category = 'General Storage',
+        image_url = NULL
+    WHERE uid = p_target_uid;
+
+    DELETE FROM public.customer_addresses WHERE uid = p_target_uid;
     DELETE FROM public.staging_reservations WHERE uid = p_target_uid;
     DELETE FROM public.access_requests WHERE uid = p_target_uid;
     DELETE FROM public.cancellations WHERE uid = p_target_uid;
     DELETE FROM public.subscriptions WHERE uid = p_target_uid;
+    DELETE FROM public.subscription_billing_segments WHERE uid = p_target_uid;
+    DELETE FROM public.feedback_reports WHERE user_uid = p_target_uid;
 
-    -- 3. Update facility active totes counter and metadata
+    -- 4. Update facility active totes counter and metadata
     UPDATE public.facilities
     SET active_totes = GREATEST(0, active_totes - COALESCE(v_target_user.active_totes_held, 0))
     WHERE id = v_facility_id;
@@ -4459,7 +4475,7 @@ BEGIN
         total_totes = GREATEST(0, total_totes - COALESCE(v_target_user.active_totes_held, 0))
     WHERE id = 'financials';
 
-    -- 4. Delete user profile from public.users
+    -- 5. Delete user profile from public.users
     DELETE FROM public.users WHERE id = p_target_uid;
 
     -- 6. Purge user from auth.users (No ghost accounts)
@@ -4467,6 +4483,7 @@ BEGIN
 
     -- 7. Write immutable privacy audit record
     INSERT INTO public.privacy_audit_logs (
+        id,
         executed_by,
         executed_by_email,
         target_uid,
@@ -4476,11 +4493,12 @@ BEGIN
         invoices_anonymized,
         executed_at
     ) VALUES (
+        gen_random_uuid(),
         v_executing_uid,
-        v_executing_email,
+        COALESCE(v_executing_email, 'ops.executive@cloudvault.internal'),
         p_target_uid,
-        COALESCE(p_reason, 'GDPR / CCPA Right to Erasure Request'),
-        'gdpr_ccpa_customer_erasure',
+        p_reason,
+        'executive_purge',
         v_totes_count,
         v_invoices_count,
         now()
@@ -4489,16 +4507,18 @@ BEGIN
     RETURN jsonb_build_object(
         'success', true,
         'audit_id', v_audit_id,
-        'deleted_uid', p_target_uid,
-        'totes_returned', v_totes_count,
+        'target_uid', p_target_uid,
         'invoices_anonymized', v_invoices_count,
+        'totes_cleared', v_totes_count,
         'message', 'Customer data and authentication records have been permanently erased in compliance with GDPR/CCPA standards.'
     );
 END;
 $$;
 
 -- Customer Self-Service Account Erasure RPC (Restricted to Deactivated / Zero-Tote Accounts)
-CREATE OR REPLACE FUNCTION public.customer_request_account_erasure()
+CREATE OR REPLACE FUNCTION public.request_self_erasure(
+    p_confirmation TEXT
+)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -4526,21 +4546,22 @@ BEGIN
     END IF;
 
     v_email := v_user.email;
-    v_facility_id := COALESCE(v_user.assigned_facility_id, 'facility_seattle_north');
+    v_facility_id := COALESCE(v_user.assigned_facility_id, 'facility_yakima');
 
     -- 1. Check Subscription Deactivation Status
     SELECT COUNT(*) INTO v_active_sub_count
     FROM public.subscriptions
-    WHERE uid = v_uid AND status IN ('active', 'past_due', 'trialing', 'incomplete');
+    WHERE uid = v_uid AND status IN ('active', 'trialing');
 
-    IF v_active_sub_count > 0 OR (v_user.subscription_status IS NOT NULL AND v_user.subscription_status NOT IN ('canceled', 'cancelled', 'inactive', 'terminated', '')) THEN
+    IF v_active_sub_count > 0 OR (v_user.subscription_status IS NOT NULL AND v_user.subscription_status IN ('active', 'trialing')) THEN
         RAISE EXCEPTION 'Active Subscription: Account erasure is only allowed for deactivated accounts. Please cancel your subscription first.';
     END IF;
 
     -- 2. Check Physical Totes Custody
     SELECT COUNT(*) INTO v_active_totes_count
     FROM public.inventory
-    WHERE uid = v_uid AND status NOT IN ('returned', 'discarded', 'released');
+    WHERE uid = v_uid 
+      AND status::TEXT IN ('stored', 'pending-stage', 'staged', 'pending-dispatch', 'out-for-delivery', 'with-customer', 'in-storage');
 
     IF v_active_totes_count > 0 OR COALESCE(v_user.active_totes_held, 0) > 0 THEN
         RAISE EXCEPTION 'Physical Custody Ongoing: You have active containers in custody. All physical totes must be retrieved and returned before permanent account erasure.';
@@ -4549,7 +4570,7 @@ BEGIN
     -- 3. Check Open Retrieval / Fulfillment Requests
     SELECT COUNT(*) INTO v_open_requests_count
     FROM public.access_requests
-    WHERE uid = v_uid AND status IN ('pending', 'accepted', 'in_transit', 'dispatched', 'retrieval_ready');
+    WHERE uid = v_uid AND status IN ('pending', 'accepted', 'in_transit', 'dispatched', 'retrieval_ready', 'scheduled');
 
     IF v_open_requests_count > 0 THEN
         RAISE EXCEPTION 'Pending Logistics: You have active retrieval requests in progress. Please allow deliveries to complete before account erasure.';
@@ -4568,27 +4589,47 @@ BEGIN
     SET uid = NULL
     WHERE uid = v_uid;
 
-    -- 5. Delete Customer Vault Data & Records
-    DELETE FROM public.inventory WHERE uid = v_uid;
+    -- 5. Clear non-cascading FK references
+    UPDATE public.inventory SET last_scanned_by = NULL WHERE last_scanned_by = v_uid;
+    UPDATE public.access_requests SET overridden_by = NULL WHERE overridden_by = v_uid;
+    UPDATE public.employee_badges SET created_by = NULL WHERE created_by = v_uid;
+    UPDATE public.waitlist SET user_id = NULL WHERE user_id = v_uid;
+
+    -- 6. Detach & anonymize inventory records
+    UPDATE public.inventory 
+    SET uid = NULL,
+        label = 'Standard Tote',
+        category = 'General Storage',
+        image_url = NULL
+    WHERE uid = v_uid;
+
+    DELETE FROM public.customer_addresses WHERE uid = v_uid;
     DELETE FROM public.staging_reservations WHERE uid = v_uid;
     DELETE FROM public.access_requests WHERE uid = v_uid;
     DELETE FROM public.cancellations WHERE uid = v_uid;
     DELETE FROM public.subscriptions WHERE uid = v_uid;
+    DELETE FROM public.subscription_billing_segments WHERE uid = v_uid;
     DELETE FROM public.feedback_reports WHERE user_uid = v_uid;
 
     -- Update metadata
     UPDATE public.metadata
-    SET total_users = GREATEST(0, total_users - 1)
+    SET total_users = GREATEST(0, total_users - 1),
+        total_totes = GREATEST(0, total_totes - COALESCE(v_user.active_totes_held, 0))
     WHERE id = 'financials';
 
-    -- Delete from public.users
+    UPDATE public.facilities
+    SET active_totes = GREATEST(0, active_totes - COALESCE(v_user.active_totes_held, 0))
+    WHERE id = v_facility_id;
+
+    -- 7. Delete Profile from public.users
     DELETE FROM public.users WHERE id = v_uid;
 
-    -- Purge from auth.users
+    -- 8. Delete Auth Record
     DELETE FROM auth.users WHERE id = v_uid;
 
-    -- 6. Log to Privacy Audit Logs
+    -- 9. Write immutable privacy audit record
     INSERT INTO public.privacy_audit_logs (
+        id,
         executed_by,
         executed_by_email,
         target_uid,
@@ -4598,11 +4639,12 @@ BEGIN
         invoices_anonymized,
         executed_at
     ) VALUES (
+        gen_random_uuid(),
         v_uid,
         v_email,
         v_uid,
-        'Customer Self-Service Account Erasure (Right to Erasure)',
-        'customer_self_service_erasure',
+        'Self-Service Account Erasure (Settings)',
+        'self_erasure',
         0,
         v_invoices_count,
         now()
@@ -4611,8 +4653,6 @@ BEGIN
     RETURN jsonb_build_object(
         'success', true,
         'audit_id', v_audit_id,
-        'deleted_uid', v_uid,
-        'invoices_anonymized', v_invoices_count,
         'message', 'Your CloudVault account and personal data have been permanently erased.'
     );
 END;
