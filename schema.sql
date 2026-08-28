@@ -4624,7 +4624,12 @@ CREATE OR REPLACE FUNCTION public.create_exit_retrieval_request(
     p_fulfillment_type TEXT DEFAULT 'staging',
     p_target_date DATE DEFAULT CURRENT_DATE + 1,
     p_time_slot TEXT DEFAULT '09:00 AM - 12:00 PM',
-    p_delivery_notes TEXT DEFAULT NULL
+    p_delivery_notes TEXT DEFAULT NULL,
+    p_address_line1 TEXT DEFAULT NULL,
+    p_address_line2 TEXT DEFAULT NULL,
+    p_city TEXT DEFAULT NULL,
+    p_state TEXT DEFAULT 'WA',
+    p_zip TEXT DEFAULT NULL
 ) RETURNS JSONB SECURITY DEFINER AS $$
 DECLARE
   v_uid UUID;
@@ -4678,8 +4683,8 @@ BEGIN
   -- Calculate Valet fee if valet delivery selected (Drop-off + Return leg)
   IF p_fulfillment_type = 'valet_delivery' THEN
     SELECT 
-      COALESCE(valet_base_rate, 15.00),
-      COALESCE(valet_tote_rate, 1.00)
+      COALESCE(valet_base, 15.00),
+      COALESCE(valet_tote_adder, 1.00)
     INTO v_valet_base, v_valet_adder
     FROM public.facilities WHERE id = v_user_facility LIMIT 1;
 
@@ -4708,7 +4713,12 @@ BEGIN
     status,
     target_date,
     time_slot,
-    delivery_notes
+    delivery_notes,
+    delivery_address_line1,
+    delivery_address_line2,
+    delivery_city,
+    delivery_state,
+    delivery_zip
   ) VALUES (
     v_uid,
     'exit_retrieval',
@@ -4722,7 +4732,12 @@ BEGIN
     'pending',
     p_target_date,
     p_time_slot,
-    p_delivery_notes
+    p_delivery_notes,
+    p_address_line1,
+    p_address_line2,
+    p_city,
+    COALESCE(p_state, 'WA'),
+    p_zip
   ) RETURNING id INTO v_req_id;
 
   RETURN jsonb_build_object(

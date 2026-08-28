@@ -2298,6 +2298,37 @@
                     </div>
                 </div>
 
+                <!-- Valet Delivery Address Form (shown when Valet is selected) -->
+                <div id="excess-valet-address-section" class="hidden space-y-3 bg-amber-50/50 border border-amber-200/70 rounded-2xl p-3.5 text-xs">
+                    <p class="font-extrabold text-gray-800 flex items-center gap-1.5">
+                        <span>📍</span> Drop-off Delivery Address:
+                    </p>
+                    <div class="space-y-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Street Address *</label>
+                            <input type="text" id="excess-addr-line1" placeholder="123 Main St" class="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none">
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Apt/Suite</label>
+                                <input type="text" id="excess-addr-line2" placeholder="Apt 4B" class="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">City *</label>
+                                <input type="text" id="excess-addr-city" placeholder="City" class="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Zip Code *</label>
+                                <input type="text" id="excess-addr-zip" placeholder="ZIP" class="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Delivery Notes / Gate Instructions</label>
+                            <input type="text" id="excess-delivery-notes" placeholder="Gate code #1234, leave by front porch" class="w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-semibold focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none">
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Schedule Date & Window -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                     <div>
@@ -8931,6 +8962,20 @@
                     (currentInventory || []).forEach(item => selectedExcessTotes.add(item.id));
                 }
 
+                // Pre-fill delivery address for valet delivery
+                try {
+                    const { data: addr } = await supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle();
+                    if (addr) {
+                        if (document.getElementById('excess-addr-line1')) document.getElementById('excess-addr-line1').value = addr.address_line1 || '';
+                        if (document.getElementById('excess-addr-line2')) document.getElementById('excess-addr-line2').value = addr.address_line2 || '';
+                        if (document.getElementById('excess-addr-city')) document.getElementById('excess-addr-city').value = addr.city || '';
+                        if (document.getElementById('excess-addr-zip')) document.getElementById('excess-addr-zip').value = addr.zip || '';
+                        if (document.getElementById('excess-delivery-notes')) document.getElementById('excess-delivery-notes').value = addr.delivery_instructions || '';
+                    }
+                } catch (e) {
+                    console.warn("Could not pre-fill exit address:", e);
+                }
+
                 renderExcessTotesList();
                 updateExcessSelectionUI();
 
@@ -8974,21 +9019,24 @@
                 const optValet = document.getElementById('excess-opt-valet');
                 const rStaging = document.getElementById('excess-radio-staging');
                 const rValet = document.getElementById('excess-radio-valet');
+                const addrSection = document.getElementById('excess-valet-address-section');
 
                 if (type === 'staging') {
-                    optStaging.className = 'p-3.5 rounded-2xl border-2 border-amber-600 bg-amber-50/60 cursor-pointer transition flex items-start gap-3';
-                    optValet.className = 'p-3.5 rounded-2xl border-2 border-gray-200 bg-white hover:border-gray-300 cursor-pointer transition flex items-start gap-3';
-                    rStaging.className = 'w-4 h-4 rounded-full border-[4px] border-amber-600 bg-white mt-0.5 flex-shrink-0';
-                    rValet.className = 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mt-0.5 flex-shrink-0';
+                    if (optStaging) optStaging.className = 'p-3.5 rounded-2xl border-2 border-amber-600 bg-amber-50/60 cursor-pointer transition flex items-start gap-3';
+                    if (optValet) optValet.className = 'p-3.5 rounded-2xl border-2 border-gray-200 bg-white hover:border-gray-300 cursor-pointer transition flex items-start gap-3';
+                    if (rStaging) rStaging.className = 'w-4 h-4 rounded-full border-[4px] border-amber-600 bg-white mt-0.5 flex-shrink-0';
+                    if (rValet) rValet.className = 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mt-0.5 flex-shrink-0';
+                    if (addrSection) addrSection.classList.add('hidden');
                 } else {
-                    optValet.className = 'p-3.5 rounded-2xl border-2 border-amber-600 bg-amber-50/60 cursor-pointer transition flex items-start gap-3';
-                    optStaging.className = !isStagingAvail 
+                    if (optValet) optValet.className = 'p-3.5 rounded-2xl border-2 border-amber-600 bg-amber-50/60 cursor-pointer transition flex items-start gap-3';
+                    if (optStaging) optStaging.className = !isStagingAvail 
                         ? 'p-3.5 rounded-2xl border-2 border-dashed border-gray-300 bg-gray-100/90 text-gray-400 opacity-60 cursor-not-allowed select-none transition flex items-start gap-3'
                         : 'p-3.5 rounded-2xl border-2 border-gray-200 bg-white hover:border-gray-300 cursor-pointer transition flex items-start gap-3';
-                    rValet.className = 'w-4 h-4 rounded-full border-[4px] border-amber-600 bg-white mt-0.5 flex-shrink-0';
-                    rStaging.className = !isStagingAvail
+                    if (rValet) rValet.className = 'w-4 h-4 rounded-full border-[4px] border-amber-600 bg-white mt-0.5 flex-shrink-0';
+                    if (rStaging) rStaging.className = !isStagingAvail
                         ? 'w-4 h-4 rounded-full border-2 border-gray-300 bg-gray-200 mt-0.5 flex-shrink-0'
                         : 'w-4 h-4 rounded-full border-2 border-gray-300 bg-white mt-0.5 flex-shrink-0';
+                    if (addrSection) addrSection.classList.remove('hidden');
                 }
             }
 
@@ -9102,18 +9150,61 @@
                     return;
                 }
 
+                let line1 = null;
+                let line2 = null;
+                let city = null;
+                let zip = null;
+                let userNotes = '';
+
+                if (excessFulfillmentType === 'valet_delivery') {
+                    line1 = document.getElementById('excess-addr-line1')?.value.trim();
+                    line2 = document.getElementById('excess-addr-line2')?.value.trim() || '';
+                    city = document.getElementById('excess-addr-city')?.value.trim();
+                    zip = document.getElementById('excess-addr-zip')?.value.trim();
+                    userNotes = document.getElementById('excess-delivery-notes')?.value.trim() || '';
+
+                    if (!line1 || !city || !zip) {
+                        alert('Please fill in your delivery street address, city, and zip code for the valet return.');
+                        return;
+                    }
+
+                    // Save or update customer address
+                    try {
+                        await supabase.from('customer_addresses').upsert({
+                            uid: currentUser.id,
+                            address_line1: line1,
+                            address_line2: line2,
+                            city: city,
+                            state: 'WA',
+                            zip: zip,
+                            delivery_instructions: userNotes,
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'uid' });
+                    } catch (e) {
+                        console.warn("Address upsert non-blocking error:", e);
+                    }
+                }
+
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '<span>Processing Retrieval Order...</span>';
 
                 try {
+                    const baseNotes = isCancellationExitMode 
+                        ? `Full Account Cancellation Exit Pull (${targetExcessQuota} totes)` 
+                        : `Excess Tote Plan Reduction Exit Pull (${targetExcessQuota} totes)`;
+                    const finalNotes = userNotes ? `${baseNotes} — ${userNotes}` : baseNotes;
+
                     const { data, error } = await supabase.rpc('create_exit_retrieval_request', {
                         p_tote_ids: Array.from(selectedExcessTotes),
                         p_fulfillment_type: excessFulfillmentType,
                         p_target_date: targetDate,
                         p_time_slot: timeSlot,
-                        p_delivery_notes: isCancellationExitMode 
-                            ? `Full Account Cancellation Exit Pull (${targetExcessQuota} totes)` 
-                            : `Excess Tote Plan Reduction Exit Pull (${targetExcessQuota} totes)`
+                        p_delivery_notes: finalNotes,
+                        p_address_line1: line1,
+                        p_address_line2: line2,
+                        p_city: city,
+                        p_state: 'WA',
+                        p_zip: zip
                     });
 
                     if (error) throw error;
