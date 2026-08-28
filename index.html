@@ -1626,8 +1626,8 @@
                             class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3 text-xl font-bold text-blue-600">
                             📍
                         </div>
-                        <h3 class="text-lg font-extrabold text-slate-900 mb-1">We're deciding which cities to launch next.</h3>
-                        <p class="text-slate-600 text-xs font-medium">Drop a small deposit to lock in your rate — or join the free waitlist and we'll email you if we open in your city. <strong id="waitlist-totes-summary" class="text-slate-900"></strong></p>
+                        <h3 id="waitlist-region-title" class="text-lg font-extrabold text-slate-900 mb-1">We're deciding which cities to launch next.</h3>
+                        <p id="waitlist-region-subtitle" class="text-slate-600 text-xs font-medium">Drop a small deposit to lock in your rate — or join the free waitlist and we'll email you if we open in your city. <strong id="waitlist-totes-summary" class="text-slate-900"></strong></p>
                     </div>
 
                     <!-- Step 1: Email & Password Capture -->
@@ -2294,6 +2294,7 @@
     <!-- External Scripts: Supabase SDK & Billing Engine (Loaded first for SSOT) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
+    <script src="address-validator.js"></script>
     <script src="billing-engine.js"></script>
     <script src="stripe-billing-integration.js"></script>
 
@@ -3663,8 +3664,40 @@
 
                 if (!area || !isMarketOperational) {
                     flowData.zip = zip;
-                    if (areaRecord?.city) flowData.city = areaRecord.city;
-                    logMilestone('zip_code_waitlist_trigger', { zip: zip, totes: flowData.totes, prelaunch: !isMarketOperational, areaFound: !!areaRecord });
+                    let zipData = null;
+                    if (window.AddressValidator && typeof window.AddressValidator.lookupZip === 'function') {
+                        zipData = await window.AddressValidator.lookupZip(zip);
+                    }
+
+                    if (zipData) {
+                        flowData.city = zipData.city;
+                        flowData.state = zipData.state;
+                        flowData.regionalMarket = zipData.regionalMarket;
+                        flowData.latitude = zipData.latitude;
+                        flowData.longitude = zipData.longitude;
+                    } else if (areaRecord?.city) {
+                        flowData.city = areaRecord.city;
+                        flowData.state = areaRecord.state || 'WA';
+                    }
+
+                    // Dynamically update Waitlist UI Banner with precise Regional Market and City
+                    const waitlistHeaderTitle = document.getElementById('waitlist-region-title');
+                    const waitlistHeaderSubtitle = document.getElementById('waitlist-region-subtitle');
+                    if (waitlistHeaderTitle && zipData) {
+                        waitlistHeaderTitle.innerHTML = `📍 We're planning our launch for <strong>${zipData.city}, ${zipData.state}</strong>!`;
+                    }
+                    if (waitlistHeaderSubtitle && zipData) {
+                        waitlistHeaderSubtitle.innerHTML = `You are joining the <strong class="text-slate-900">${zipData.regionalMarket}</strong> priority queue. Drop a deposit to lock in your rate — or join the free waitlist and we'll email you when this facility opens.`;
+                    }
+
+                    logMilestone('zip_code_waitlist_trigger', { 
+                        zip: zip, 
+                        city: flowData.city, 
+                        market: flowData.regionalMarket, 
+                        totes: flowData.totes, 
+                        prelaunch: !isMarketOperational, 
+                        areaFound: !!areaRecord 
+                    });
                     setTimeout(() => {
                         showStep('waitlist');
                     }, 200);
@@ -3687,12 +3720,21 @@
                 flowData.facilityId = area.facility_id;
                 flowData.taxRate = (area.tax_rate != null) ? Number(area.tax_rate) : 0.085;
 
+                // If city or state is missing, resolve canonical postal data from AddressValidator
+                if ((!flowData.city || !flowData.state) && window.AddressValidator) {
+                    const postalData = await window.AddressValidator.lookupZip(zip);
+                    if (postalData) {
+                        if (!flowData.city) flowData.city = postalData.city;
+                        if (!flowData.state) flowData.state = postalData.state;
+                    }
+                }
+
                 // Auto-fill Step 3 address inputs
                 const cityInput = document.getElementById('address-city-input');
                 const stateInput = document.getElementById('address-state-input');
                 const zipAddrInput = document.getElementById('address-zip-input');
-                if (cityInput && !cityInput.value && area.city) cityInput.value = area.city;
-                if (stateInput && !stateInput.value && area.state) stateInput.value = area.state;
+                if (cityInput && !cityInput.value && flowData.city) cityInput.value = flowData.city;
+                if (stateInput && !stateInput.value && flowData.state) stateInput.value = flowData.state;
                 if (zipAddrInput) zipAddrInput.value = zip;
 
                 calculateFlowTotal();
@@ -3702,13 +3744,13 @@
 
                 const banner = document.getElementById('zip-success-banner');
                 if (monthlySavings > 0) {
-                    banner.innerHTML = `✓ We service your area (${area.city || zip})! <span class="bg-emerald-100 text-emerald-800 font-extrabold px-2.5 py-1 rounded-lg ml-1 text-xs inline-block">🎉 Regional Savings: Your local rate is $${monthlySavings.toFixed(2)}/mo lower!</span>`;
+                    banner.innerHTML = `✓ We service your area (${flowData.city || zip})! <span class="bg-emerald-100 text-emerald-800 font-extrabold px-2.5 py-1 rounded-lg ml-1 text-xs inline-block">🎉 Regional Savings: Your local rate is $${monthlySavings.toFixed(2)}/mo lower!</span>`;
                 } else {
-                    banner.innerHTML = `✓ We service your area (${area.city || zip}).`;
+                    banner.innerHTML = `✓ We service your area (${flowData.city || zip}).`;
                 }
                 banner.classList.remove('hidden-section');
 
-                logMilestone('zip_code_check', { zip: zip, city: area.city, facility_id: area.facility_id, tax_rate: flowData.taxRate, savings: monthlySavings });
+                logMilestone('zip_code_check', { zip: zip, city: flowData.city, facility_id: area.facility_id, tax_rate: flowData.taxRate, savings: monthlySavings });
 
                 setTimeout(() => {
                     showStep(3);
@@ -3993,7 +4035,7 @@
                     console.warn('[Waitlist Auth Step 1]', authErr.message);
                 }
 
-                // 2. Upsert provisional users row with zip and active zone
+                // 2. Upsert provisional users row with zip, active zone, city, state
                 if (activeWaitlistUserId) {
                     await supabase.from('users').upsert({
                         id: activeWaitlistUserId,
@@ -4012,16 +4054,21 @@
                         uid: activeWaitlistUserId,
                         zip: zip,
                         billing_zip: zip,
-                        city: '',
-                        state: '',
+                        city: flowData.city || '',
+                        state: flowData.state || '',
                         address_line1: ''
                     }, { onConflict: 'uid' }).catch(() => {});
                 }
 
-                // 3. Insert waitlist row (type=deposit, payment still pending)
+                // 3. Insert waitlist row (type=deposit, payment still pending) with regional market data
                 const { data, error: wlErr } = await supabase.from('waitlist').insert({
                     email,
                     zip_code: zip,
+                    city: flowData.city || '',
+                    state: flowData.state || '',
+                    regional_market: flowData.regionalMarket || '',
+                    latitude: flowData.latitude || null,
+                    longitude: flowData.longitude || null,
                     requested_totes: flowData.totes || 5,
                     deposit_amount: reqDeposit,
                     price_lock_years: priceLockYears,
@@ -4050,7 +4097,13 @@
                     }
                 }, 100);
 
-                logMilestone('waitlist_email_captured', { email, zip, totes: flowData.totes });
+                logMilestone('waitlist_email_captured', { 
+                    email, 
+                    zip, 
+                    city: flowData.city, 
+                    market: flowData.regionalMarket, 
+                    totes: flowData.totes 
+                });
             } catch (err) {
                 console.error("Waitlist error:", err);
                 alert("Something went wrong joining the waitlist: " + (err.message || 'Please try again.'));
@@ -4134,16 +4187,21 @@
                         uid: createdUserId,
                         zip: zip,
                         billing_zip: zip,
-                        city: '',
-                        state: '',
+                        city: flowData.city || '',
+                        state: flowData.state || '',
                         address_line1: ''
                     }, { onConflict: 'uid' }).catch(() => {});
                 }
 
-                // 3. Insert waitlist row
+                // 3. Insert waitlist row with regional market data
                 await supabase.from('waitlist').insert({
                     email,
                     zip_code: zip,
+                    city: flowData.city || '',
+                    state: flowData.state || '',
+                    regional_market: flowData.regionalMarket || '',
+                    latitude: flowData.latitude || null,
+                    longitude: flowData.longitude || null,
                     requested_totes: flowData.totes || 5,
                     deposit_amount: 0,
                     type: 'free',
@@ -4155,7 +4213,13 @@
                 document.getElementById('waitlist-step-email').classList.add('hidden-section');
                 document.getElementById('waitlist-step-payment').classList.add('hidden-section');
                 document.getElementById('free-waitlist-success').classList.remove('hidden-section');
-                logMilestone('free_waitlist_joined', { email, zip, totes: flowData.totes });
+                logMilestone('free_waitlist_joined', { 
+                    email, 
+                    zip, 
+                    city: flowData.city, 
+                    market: flowData.regionalMarket, 
+                    totes: flowData.totes 
+                });
             } catch (err) {
                 console.error("Free waitlist error:", err);
                 alert("Something went wrong. Please try again.");
@@ -4236,6 +4300,11 @@
 
                 const updatePayload = {
                     user_id: createdUserId,
+                    city: flowData.city || '',
+                    state: flowData.state || '',
+                    regional_market: flowData.regionalMarket || '',
+                    latitude: flowData.latitude || null,
+                    longitude: flowData.longitude || null,
                     deposit_amount: grossDeposit,
                     deposit_status: 'paid',
                     payment_status: 'deposit_paid',
@@ -4962,6 +5031,13 @@
                 });
                 waitlistEmail.addEventListener('input', function () {
                     hideEmailCollisionWarning('waitlist');
+                });
+            // Live Address & ZIP Code Auto-population & Validation
+            if (window.AddressValidator && typeof window.AddressValidator.attachAutofill === 'function') {
+                window.AddressValidator.attachAutofill({
+                    zipEl: document.getElementById('address-zip-input'),
+                    cityEl: document.getElementById('address-city-input'),
+                    stateEl: document.getElementById('address-state-input')
                 });
             }
 

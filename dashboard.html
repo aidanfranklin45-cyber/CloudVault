@@ -764,7 +764,7 @@
                         <button id="btn-excess-upgrade-plan" onclick="upgradePlanToMatchInventory()" class="w-full sm:w-auto px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
                             <span>⚡ Upgrade Plan (<span id="excess-target-total">12</span> Totes)</span>
                         </button>
-                        <button onclick="openExcessTotesModal()" class="w-full sm:w-auto px-4 py-3 bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold text-xs rounded-2xl border border-amber-300 shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
+                        <button id="btn-excess-exit-retrieval" onclick="openExcessTotesModal()" class="w-full sm:w-auto px-4 py-3 bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold text-xs rounded-2xl border border-amber-300 shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
                             <span>📦 Exit Retrieval</span>
                         </button>
                     </div>
@@ -8720,40 +8720,62 @@
 
             function checkExcessTotesState() {
                 const banner = document.getElementById('excess-totes-banner');
+                const btnExit = document.getElementById('btn-excess-exit-retrieval');
+                const btnUpgrade = document.getElementById('btn-excess-upgrade-plan');
                 if (!banner) return;
 
-                const subTotal = currentSubscription ? Number(currentSubscription.total_totes || 0) : 0;
-                const activeStoredItems = (currentInventory || []).filter(item => item.status !== 'missing-tote' && item.status !== 'missing');
+                const sub = currentSubscription;
+                const isCanceling = sub?.status === 'canceling' || currentUserProfile?.subscription_status === 'canceling';
+                const subTotal = sub ? Number(sub.total_totes || 0) : 0;
+                const activeStoredItems = (currentInventory || []).filter(item => item.status !== 'missing-tote' && item.status !== 'missing' && item.status !== 'decommissioned' && item.status !== 'cancelled');
                 const storedCount = activeStoredItems.length;
                 const excess = Math.max(0, storedCount - subTotal);
 
                 const hasPendingExitReq = (currentRequests || []).some(r => 
-                    (r.request_type === 'exit_retrieval' || r.request_type === 'retrieval_exit' || r.request_type === 'cancellation_tote_return') && 
-                    (r.status === 'pending' || r.status === 'staged' || r.status === 'pending-dispatch' || r.status === 'out-for-delivery')
+                    (r.request_type === 'exit_retrieval' || r.request_type === 'retrieval_exit' || r.request_type === 'cancellation_tote_return' || r.request_type === 'retrieval') && 
+                    (r.status === 'pending' || r.status === 'staged' || r.status === 'pending-dispatch' || r.status === 'out-for-delivery' || r.status === 'scheduled')
                 );
+
+                // If user is in cancellation flow OR already has an active exit retrieval scheduled
+                if (isCanceling || hasPendingExitReq) {
+                    if (hasPendingExitReq && !isCanceling && excess > 0) {
+                        // Plan reduced, but already requested exit retrieval: show informational status without redundant Exit Retrieval button
+                        const badge = document.getElementById('excess-badge-count');
+                        const msg = document.getElementById('excess-banner-message');
+                        const graceMsg = document.getElementById('excess-grace-msg');
+                        if (badge) badge.textContent = `Exit Retrieval In Progress`;
+                        if (msg) msg.innerHTML = `An exit retrieval request is currently active. Warehouse staff are pulling your containers. See live status in Active Fulfillment above.`;
+                        if (graceMsg) graceMsg.classList.add('hidden');
+                        if (btnExit) btnExit.classList.add('hidden');
+                        if (btnUpgrade) btnUpgrade.classList.remove('hidden');
+                        banner.classList.remove('hidden');
+                    } else {
+                        // When canceling or request active, Active Fulfillment card / Cancellation banner handle everything
+                        banner.classList.add('hidden');
+                    }
+                    return;
+                }
 
                 const grace = getGraceWindowDetails();
 
-                if (excess > 0 && !hasPendingExitReq && subTotal > 0) {
+                if (excess > 0 && subTotal > 0) {
                     const badge = document.getElementById('excess-badge-count');
                     const msg = document.getElementById('excess-banner-message');
                     const targetTotalEl = document.getElementById('excess-target-total');
+                    const graceMsg = document.getElementById('excess-grace-msg');
 
                     if (badge) badge.textContent = `${excess} Excess`;
                     if (targetTotalEl) targetTotalEl.textContent = storedCount;
                     if (msg) msg.innerHTML = `Your current subscription covers <strong>${subTotal} totes</strong>, but you have <strong>${storedCount} totes</strong> in warehouse storage. Please select which containers to keep and schedule an exit retrieval for your <strong>${excess} excess totes</strong>.`;
                     
-                    const graceMsg = document.getElementById('excess-grace-msg');
                     if (graceMsg) {
+                        graceMsg.classList.remove('hidden');
                         graceMsg.innerHTML = `<span>⏳ <strong>3-Day Grace Window Deadline:</strong> ${grace.fullDeadlineStr} <span class="font-mono font-black ${grace.isExpired ? 'text-red-700 bg-red-100' : 'text-amber-900 bg-amber-200'} px-2 py-0.5 rounded-md ml-1">${grace.remainingText}</span>. Noncompliance daily storage surcharges ($1.50/tote/day) apply thereafter.</span>`;
                     }
 
-                    banner.classList.remove('hidden');
-                } else if (hasPendingExitReq) {
-                    const badge = document.getElementById('excess-badge-count');
-                    const msg = document.getElementById('excess-banner-message');
-                    if (badge) badge.textContent = `Exit Retrieval In Progress`;
-                    if (msg) msg.innerHTML = `An exit retrieval request is currently active. Warehouse staff are pulling your excess containers. ⏳ <strong>Return Deadline:</strong> ${grace.fullDeadlineStr} (${grace.remainingText}).`;
+                    if (btnExit) btnExit.classList.remove('hidden');
+                    if (btnUpgrade) btnUpgrade.classList.remove('hidden');
+
                     banner.classList.remove('hidden');
                 } else {
                     banner.classList.add('hidden');
