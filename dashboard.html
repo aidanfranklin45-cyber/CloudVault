@@ -4441,8 +4441,8 @@
                         }
                         const cancelAtStr = cancelAt ? cancelAt.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'End of current cycle';
 
-                        const totalTotes = sub ? (sub.total_totes || sub.tote_count || 1) : (profile?.active_totes_held || 1);
-                        const count = (currentInventory || []).filter(t => t.status !== 'decommissioned' && t.status !== 'cancelled').length || (profile?.active_totes_held || 0);
+                        const totalTotes = sub ? (sub.total_totes || sub.tote_count || 0) : (profile?.active_totes_held || 0);
+                        const count = (currentInventory || []).filter(t => t.status && !['missing-tote', 'missing', 'decommissioned', 'cancelled', 'returned', 'discarded', 'released'].includes(t.status)).length;
 
                         const hasActiveExit = Array.isArray(currentRequests) && currentRequests.some(r => 
                             (r.request_type === 'exit_retrieval' || r.request_type === 'retrieval_exit' || r.request_type === 'cancellation_tote_return' || r.request_type === 'retrieval') && 

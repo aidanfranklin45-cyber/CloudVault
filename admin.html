@@ -3514,43 +3514,92 @@
                     return;
                 }
 
-                tableBody.innerHTML = openMissing.map(tote => {
-                    const customerName = tote.users?.name || (tote.uid ? `Customer ${tote.uid.substring(0, 8)}` : 'Facility Stock');
-                    const reason = tote.missing_reason || 'Missing in Transit / Not Returned';
-                    const notes = tote.missing_notes || 'No staff notes provided.';
-                    const reportedDate = tote.missing_reported_at ? new Date(tote.missing_reported_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently Reported';
+                }
 
-                    return `
-                        <tr class="hover:bg-gray-900/40 border-b border-gray-850 transition">
-                            <td class="py-3.5 font-mono font-bold text-xs text-amber-400">
-                                ${tote.tote_code}
-                                <span class="block text-[9px] text-gray-500 font-sans">${tote.label ? escapeHtml(tote.label) : 'Standard 64L Tote'}</span>
-                            </td>
-                            <td class="py-3.5 text-xs text-white">
-                                <span class="font-bold">${customerName}</span>
-                                <span class="block text-[10px] text-gray-500 font-mono">${tote.users?.email || (tote.uid ? tote.uid.substring(0, 8) : 'Facility Stock')}</span>
-                            </td>
-                            <td class="py-3.5 text-xs text-rose-300 font-semibold">
-                                <span class="bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded text-[10px] uppercase font-bold">${reason}</span>
-                            </td>
-                            <td class="py-3.5 text-xs text-gray-400">
-                                <p class="line-clamp-2">${notes}</p>
-                                <span class="text-[10px] text-gray-500 font-mono">${reportedDate}</span>
-                            </td>
-                            <td class="py-3.5 text-right space-x-1.5 whitespace-nowrap">
-                                <button onclick="resolveMissingTote('${tote.id}', 'reshelve', '${tote.tote_code}')" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition cursor-pointer" title="Re-Shelve Tote to Vault Bay">
-                                    📦 Re-Shelve
-                                </button>
-                                <button onclick="resolveMissingTote('${tote.id}', 'charge', '${tote.tote_code}')" class="bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/30 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition cursor-pointer" title="Bill Replacement Fee & Adjust Subscription">
-                                    💳 Bill Fee &amp; Sync
-                                </button>
-                                <button onclick="resolveMissingTote('${tote.id}', 'decommission', '${tote.tote_code}')" class="bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition cursor-pointer" title="Write Off / Decommission Tote">
-                                    🗑️ Write Off
-                                </button>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
+                // Group missing items by customer
+                const customerGroups = {};
+                openMissing.forEach(tote => {
+                    const cKey = tote.uid || 'facility_stock';
+                    if (!customerGroups[cKey]) {
+                        customerGroups[cKey] = {
+                            uid: tote.uid,
+                            name: tote.users?.name || (tote.uid ? `Customer ${tote.uid.substring(0, 8)}` : 'Facility Stock'),
+                            email: tote.users?.email || (tote.uid ? tote.uid.substring(0, 8) : 'Facility Stock'),
+                            totes: []
+                        };
+                    }
+                    customerGroups[cKey].totes.push(tote);
+                });
+
+                window._openMissingCustomerGroups = customerGroups;
+
+                let html = '';
+                Object.values(customerGroups).forEach(group => {
+                    const hasBatch = group.totes.length >= 2 && group.uid;
+                    if (hasBatch) {
+                        html += `
+                            <tr class="bg-amber-950/40 border-t-2 border-b border-amber-500/40">
+                                <td colspan="3" class="py-2.5 px-3">
+                                    <div class="flex items-center gap-2">
+                                        <span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-black uppercase px-2 py-0.5 rounded-full">
+                                            ⚡ Multiple Missing Containers (${group.totes.length} Totes)
+                                        </span>
+                                        <span class="text-xs font-bold text-white">${escapeHtml(group.name)}</span>
+                                        <span class="text-[10px] text-gray-400 font-mono">(${escapeHtml(group.email)})</span>
+                                    </div>
+                                </td>
+                                <td colspan="2" class="py-2.5 px-3 text-right space-x-2">
+                                    <button onclick="resolveBatchMissingTotes('${group.uid}', 'charge')" class="bg-amber-500 hover:bg-amber-600 text-gray-950 font-black text-[11px] px-3 py-1.5 rounded-xl transition cursor-pointer shadow-lg shadow-amber-500/20 inline-flex items-center gap-1.5" title="Consolidate all ${group.totes.length} totes into 1 Stripe invoice & charge card">
+                                        💳 Batch Bill All (${group.totes.length}) Totes
+                                    </button>
+                                    <button onclick="resolveBatchMissingTotes('${group.uid}', 'decommission')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold text-[11px] px-2.5 py-1.5 rounded-xl border border-gray-700 transition cursor-pointer" title="Batch Write Off">
+                                        🗑️ Batch Write Off
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    }
+
+                    group.totes.forEach(tote => {
+                        const customerName = tote.users?.name || (tote.uid ? `Customer ${tote.uid.substring(0, 8)}` : 'Facility Stock');
+                        const reason = tote.missing_reason || 'Missing in Transit / Not Returned';
+                        const notes = tote.missing_notes || 'No staff notes provided.';
+                        const reportedDate = tote.missing_reported_at ? new Date(tote.missing_reported_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently Reported';
+
+                        html += `
+                            <tr class="hover:bg-gray-900/40 border-b border-gray-850 transition">
+                                <td class="py-3.5 font-mono font-bold text-xs text-amber-400">
+                                    ${tote.tote_code}
+                                    <span class="block text-[9px] text-gray-500 font-sans">${tote.label ? escapeHtml(tote.label) : 'Standard 64L Tote'}</span>
+                                </td>
+                                <td class="py-3.5 text-xs text-white">
+                                    <span class="font-bold">${customerName}</span>
+                                    <span class="block text-[10px] text-gray-500 font-mono">${tote.users?.email || (tote.uid ? tote.uid.substring(0, 8) : 'Facility Stock')}</span>
+                                </td>
+                                <td class="py-3.5 text-xs text-rose-300 font-semibold">
+                                    <span class="bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded text-[10px] uppercase font-bold">${reason}</span>
+                                </td>
+                                <td class="py-3.5 text-xs text-gray-400">
+                                    <p class="line-clamp-2">${notes}</p>
+                                    <span class="text-[10px] text-gray-500 font-mono">${reportedDate}</span>
+                                </td>
+                                <td class="py-3.5 text-right space-x-1.5 whitespace-nowrap">
+                                    <button onclick="resolveMissingTote('${tote.id}', 'reshelve', '${tote.tote_code}')" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition cursor-pointer" title="Re-Shelve Tote to Vault Bay">
+                                        📦 Re-Shelve
+                                    </button>
+                                    <button onclick="resolveMissingTote('${tote.id}', 'charge', '${tote.tote_code}')" class="bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/30 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition cursor-pointer" title="Bill Replacement Fee & Adjust Subscription">
+                                        💳 Bill Fee &amp; Sync
+                                    </button>
+                                    <button onclick="resolveMissingTote('${tote.id}', 'decommission', '${tote.tote_code}')" class="bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition cursor-pointer" title="Write Off / Decommission Tote">
+                                        🗑️ Write Off
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                });
+
+                tableBody.innerHTML = html;
                 if (typeof lucide !== 'undefined') lucide.createIcons();
             } catch (err) {
                 console.error("Failed to load missing totes:", err);
@@ -3606,6 +3655,73 @@
             } catch (err) {
                 console.error("Resolution failed:", err);
                 showToast(`Failed to resolve missing tote: ${err.message}`, true);
+            }
+        }
+
+        async function resolveBatchMissingTotes(userId, action) {
+            try {
+                const facId = window.currentSelectedFacilityId || localStorage.getItem('cloudvault_selected_facility');
+                const groups = window._openMissingCustomerGroups || {};
+                const group = groups[userId];
+                if (!group || !group.totes || group.totes.length === 0) {
+                    showToast("No active missing totes found for this customer.", true);
+                    return;
+                }
+
+                const toteList = group.totes;
+                const toteCodesStr = toteList.map(t => t.tote_code).join(', ');
+
+                if (action === 'charge') {
+                    let feeAmt = null;
+                    const cachedFac = await getCachedFacility(facId);
+                    if (cachedFac && cachedFac.missing_tote_fee != null) {
+                        feeAmt = Number(cachedFac.missing_tote_fee);
+                    } else if (window.CloudVaultBilling && typeof window.CloudVaultBilling.resolveFacilityMissingToteFee === 'function') {
+                        feeAmt = await window.CloudVaultBilling.resolveFacilityMissingToteFee(facId);
+                    } else {
+                        const { data: dbFac } = await supabase.from('facilities').select('missing_tote_fee').eq('id', facId).maybeSingle();
+                        if (dbFac && dbFac.missing_tote_fee != null) feeAmt = Number(dbFac.missing_tote_fee);
+                    }
+
+                    if (feeAmt === null || isNaN(feeAmt)) feeAmt = 15.00;
+
+                    const totalSubtotal = feeAmt * toteList.length;
+
+                    if (!confirm(`⚡ BATCH BILLING CONFIRMATION:\n\nCustomer: ${group.name} (${group.email})\nMissing Containers (${toteList.length}): ${toteCodesStr}\nPer-Tote Fee: $${feeAmt.toFixed(2)}\nEstimated Subtotal: $${totalSubtotal.toFixed(2)} (+ local sales tax)\n\nThis will create ONE consolidated Stripe invoice and charge the customer's card in a single transaction (saving card processing fees). Proceed?`)) {
+                        return;
+                    }
+
+                    if (window.CloudVaultBilling && typeof window.CloudVaultBilling.processBatchMissingTotesResolution === 'function') {
+                        const res = await window.CloudVaultBilling.processBatchMissingTotesResolution({
+                            userId: group.uid,
+                            totes: toteList.map(t => ({ id: t.id, tote_code: t.tote_code, fee: feeAmt })),
+                            action: 'charge',
+                            facilityId: facId,
+                            customFeePerTote: feeAmt
+                        });
+                        if (!res.success) throw new Error(res.error || 'Failed to process batch missing totes');
+                        showToast(res.message || `Successfully batch-billed ${toteList.length} missing totes.`);
+                    }
+                } else if (action === 'decommission') {
+                    if (!confirm(`Are you sure you want to batch write off and decommission all ${toteList.length} missing totes for ${group.name}?`)) return;
+
+                    if (window.CloudVaultBilling && typeof window.CloudVaultBilling.processBatchMissingTotesResolution === 'function') {
+                        const res = await window.CloudVaultBilling.processBatchMissingTotesResolution({
+                            userId: group.uid,
+                            totes: toteList.map(t => ({ id: t.id, tote_code: t.tote_code })),
+                            action: 'decommission',
+                            facilityId: facId
+                        });
+                        if (!res.success) throw new Error(res.error || 'Failed to decommission totes');
+                        showToast(res.message || `Batch decommissioned ${toteList.length} totes.`);
+                    }
+                }
+
+                loadMissingTotesTable(facId);
+                loadWorkerQueues();
+            } catch (err) {
+                console.error("Batch resolution failed:", err);
+                showToast(`Failed to process batch missing totes: ${err.message}`, true);
             }
         }
 

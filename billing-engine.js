@@ -533,26 +533,43 @@
             missing_notes: notes || `Assessed $${fee.toFixed(2)} replacement penalty fee.`
           }).eq('id', tote.id);
 
-          // F. Decrement Subscription & Recalculate Volume Tier
+          // F. Decrement Subscription & Recalculate Volume Tier based on actual remaining physical inventory
           let reductionResult = null;
           if (userId) {
             try {
-              // 1. Fetch current subscription to see starting count
               const { data: currentSub } = await sb.from('subscriptions').select('*').eq('uid', userId).maybeSingle();
-              const startingTotes = currentSub ? Number(currentSub.total_totes || currentSub.tote_count || user.active_totes_held || 1) : (user.active_totes_held || 1);
-              const targetTotes = Math.max(1, startingTotes - 1);
+              
+              // Query actual remaining active physical containers in inventory for this user
+              const { data: userInventory } = await sb.from('inventory')
+                .select('id, status')
+                .eq('uid', userId);
 
-              // 2. Resolve new dynamic pricing for reduced tote pool (evaluates price locks and volume tier brackets)
-              const newPricing = await this.resolveCustomerPricing(userId, facId, targetTotes);
+              const activeRemainingTotes = (userInventory || []).filter(i => 
+                i.status && !['missing-tote', 'missing', 'decommissioned', 'returned', 'discarded', 'released', 'cancelled'].includes(i.status)
+              ).length;
 
-              // 3. Update subscriptions table with new total, new tote_rate, and new recurring_storage
+              const isCanceling = (user.subscription_status === 'canceling' || user.subscription_status === 'canceled' || currentSub?.status === 'canceling' || currentSub?.status === 'canceled');
+
+              let targetTotes = activeRemainingTotes;
+              if (isCanceling && activeRemainingTotes === 0) {
+                targetTotes = 0;
+              } else if (!isCanceling) {
+                targetTotes = Math.max(1, activeRemainingTotes);
+              }
+
+              let newPricing = { toteRate: 5.00, recurringStorage: 0, tierName: 'Standard' };
+              if (targetTotes > 0) {
+                newPricing = await this.resolveCustomerPricing(userId, facId, targetTotes);
+              }
+
+              // Update subscriptions table with accurate totals
               const { error: subUpdErr } = await sb.from('subscriptions').update({
                 total_totes: targetTotes,
                 tote_count: targetTotes,
                 quantity: targetTotes,
-                tote_rate: newPricing.toteRate,
-                recurring_storage: newPricing.recurringStorage,
-                monthly_total: newPricing.recurringStorage,
+                tote_rate: targetTotes > 0 ? newPricing.toteRate : 0,
+                recurring_storage: targetTotes > 0 ? newPricing.recurringStorage : 0,
+                monthly_total: targetTotes > 0 ? newPricing.recurringStorage : 0,
                 last_updated: nowIso
               }).eq('uid', userId);
 
@@ -560,18 +577,18 @@
                 console.warn('[CloudVaultBilling] Notice updating subscription:', subUpdErr.message);
               }
 
-              // 4. Update users table active_totes_held
+              // Update users table active_totes_held
               await sb.from('users').update({
                 active_totes_held: targetTotes
               }).eq('id', userId);
 
-              // 5. Sync quantity and unit rate with Stripe Subscription
-              if (global.CloudVaultStripe && typeof global.CloudVaultStripe.syncSubscriptionQuantityWithStripe === 'function') {
+              // Sync quantity and unit rate with Stripe Subscription only for continuing active subscribers
+              if (!isCanceling && targetTotes > 0 && global.CloudVaultStripe && typeof global.CloudVaultStripe.syncSubscriptionQuantityWithStripe === 'function') {
                 await global.CloudVaultStripe.syncSubscriptionQuantityWithStripe(userId, targetTotes);
               }
 
               reductionResult = {
-                oldTotal: startingTotes,
+                oldTotal: currentSub ? Number(currentSub.total_totes || 1) : 1,
                 newTotal: targetTotes,
                 newRate: newPricing.toteRate,
                 newMonthly: newPricing.recurringStorage,
@@ -598,6 +615,206 @@
         return { success: false, error: `Invalid action: ${action}` };
       } catch (err) {
         console.error('[CloudVaultBilling] Exception in processMissingToteResolution:', err);
+        return { success: false, error: err.message };
+      }
+    },
+
+    /**
+     * Resolves multiple missing totes for a customer in a single batch.
+     * Consolidates all missing tote replacement fees into ONE single Stripe transaction/invoice to save credit card processing fees.
+     * @param {Object} params - { userId, customerId, totes: Array<{id, tote_code, fee}>, action, reason, notes, facilityId, customFeePerTote }
+     * @returns {Promise<{success: boolean, message?: string, totalSubtotal?: number, taxAmount?: number, totalAfterTax?: number, toteCount?: number, invoice?: Object, error?: string}>}
+     */
+    processBatchMissingTotesResolution: async function ({ userId, customerId, totes = [], action = 'charge', reason = 'Batch Missing Container Replacement Fee', notes = '', facilityId = null, customFeePerTote = null } = {}) {
+      const sb = global.supabase;
+      if (!sb) return { success: false, error: 'Supabase client unavailable' };
+      if (!userId && !customerId) return { success: false, error: 'User ID or Customer ID is required' };
+      if (!totes || totes.length === 0) return { success: false, error: 'No totes specified for batch resolution' };
+
+      try {
+        // 1. Fetch user record
+        let userQuery = sb.from('users').select('*');
+        if (userId) userQuery = userQuery.eq('id', userId);
+        else userQuery = userQuery.eq('stripe_customer_id', customerId);
+
+        const { data: user, error: uErr } = await userQuery.maybeSingle();
+        if (uErr || !user) throw new Error(uErr ? uErr.message : 'Customer not found');
+
+        const actualUid = user.id;
+        const facId = facilityId || user.assigned_facility_id || 'facility_yakima';
+
+        if (action === 'decommission') {
+          const toteIds = totes.map(t => t.id).filter(Boolean);
+          const toteCodes = totes.map(t => t.tote_code || t.toteCode).filter(Boolean);
+          let invDecomQuery = sb.from('inventory').update({
+            status: 'missing-tote',
+            missing_resolution: 'written_off'
+          });
+          if (toteIds.length > 0) invDecomQuery = invDecomQuery.in('id', toteIds);
+          else invDecomQuery = invDecomQuery.in('tote_code', toteCodes);
+          const { error: decErr } = await invDecomQuery;
+          if (decErr) throw decErr;
+          return { success: true, message: `Batch of ${totes.length} totes decommissioned and written off.` };
+        }
+
+        // 2. Resolve fee per tote
+        let unitFee = customFeePerTote != null ? Number(customFeePerTote) : await this.resolveFacilityMissingToteFee(facId);
+        if (isNaN(unitFee) || unitFee <= 0) unitFee = 15.00;
+
+        const toteCount = totes.length;
+        const totalSubtotal = Math.round(unitFee * toteCount * 100) / 100;
+
+        // 3. Calculate dynamic tax
+        const taxInfo = await this.resolveTaxRate({ facilityId: facId, uid: actualUid, zipCode: user.active_zone });
+        const taxRate = Number(taxInfo.taxRate || 0);
+        const taxAmount = Math.round(totalSubtotal * taxRate * 100) / 100;
+        const totalAfterTax = Math.round((totalSubtotal + taxAmount) * 100) / 100;
+
+        // 4. Create and Send ONE single consolidated Stripe invoice
+        let stripeRes = { success: true, stripeInvoiceId: null, hostedInvoiceUrl: null, pdfUrl: null, paymentIntentId: null };
+        const stripeHelper = global.StripeBillingIntegration || global.CloudVaultStripe;
+        if (stripeHelper && typeof stripeHelper.createAndSendBatchMissingTotesInvoice === 'function') {
+          stripeRes = await stripeHelper.createAndSendBatchMissingTotesInvoice({
+            customerId: user.stripe_customer_id,
+            totalAmount: totalSubtotal,
+            totes: totes.map(t => ({
+              toteCode: t.tote_code || t.toteCode,
+              fee: unitFee
+            })),
+            facilityId: facId,
+            userId: actualUid,
+            customerEmail: user.email,
+            customerName: user.name
+          });
+        }
+
+        const nowIso = new Date().toISOString();
+        const invNum = this.generateInvoiceNumber();
+        const stripeInvId = stripeRes.stripeInvoiceId || `in_${Date.now()}`;
+
+        // 5. Create official consolidated invoice in public.invoices
+        const lineItems = totes.map(t => {
+          const code = t.tote_code || t.toteCode || 'TOTE';
+          return {
+            id: 'li_missing_' + code + '_' + Date.now(),
+            description: `Missing Container Replacement Fee — ${code}`,
+            amount: unitFee,
+            quantity: 1,
+            unit_amount: unitFee
+          };
+        });
+
+        const invoiceRecord = {
+          invoice_number: invNum,
+          stripe_invoice_id: stripeInvId,
+          stripe_customer_id: user.stripe_customer_id || null,
+          stripe_payment_intent_id: stripeRes.paymentIntentId || null,
+          stripe_hosted_invoice_url: stripeRes.hostedInvoiceUrl || `https://invoice.stripe.com/i/${stripeInvId}`,
+          stripe_invoice_pdf: stripeRes.pdfUrl || null,
+          uid: actualUid,
+          customer_name: user.name || 'CloudVault Customer',
+          customer_email: user.email || '',
+          facility_id: facId,
+          invoice_type: 'missing_tote_fee',
+          payment_status: 'paid',
+          subtotal: totalSubtotal,
+          tax: taxAmount,
+          total_amount: totalAfterTax,
+          amount_due: 0.00,
+          amount_paid: totalAfterTax,
+          amount_remaining: 0.00,
+          payment_method: 'stripe',
+          transaction_reference: stripeRes.paymentIntentId || stripeInvId,
+          line_items: lineItems,
+          paid_at: nowIso,
+          created_at: nowIso
+        };
+
+        const { error: invErr } = await sb.from('invoices').insert([invoiceRecord]);
+        if (invErr) console.warn('[CloudVaultBilling] Batch invoice logging notice:', invErr.message);
+
+        // 6. Record consolidated entry in public.charges
+        const toteCodesStr = totes.map(t => t.tote_code || t.toteCode).join(', ');
+        await sb.from('charges').insert([{
+          uid: actualUid,
+          charge_type: `Batch Missing Containers Replacement Fee (${toteCount} Totes: ${toteCodesStr})`,
+          amount: totalSubtotal,
+          totes_charged: toteCount,
+          status: 'success',
+          stripe_payment_intent_id: stripeRes.paymentIntentId || null,
+          charged_at: nowIso
+        }]);
+
+        // 7. Update all tote inventory records in batch
+        const toteIds = totes.map(t => t.id).filter(Boolean);
+        const toteCodes = totes.map(t => t.tote_code || t.toteCode).filter(Boolean);
+        
+        let invUpdateQuery = sb.from('inventory').update({
+          status: 'missing-tote',
+          location_type: 'missing',
+          missing_resolution: 'billed_customer',
+          missing_reason: reason || 'Batch Missing Container Replacement Fee',
+          missing_notes: notes || `Batch billed $${totalSubtotal.toFixed(2)} replacement fee for ${toteCount} totes on ${new Date().toLocaleDateString()}.`
+        });
+
+        if (toteIds.length > 0) invUpdateQuery = invUpdateQuery.in('id', toteIds);
+        else invUpdateQuery = invUpdateQuery.in('tote_code', toteCodes);
+
+        const { error: batchInvErr } = await invUpdateQuery;
+        if (batchInvErr) console.warn('[CloudVaultBilling] Batch inventory update notice:', batchInvErr.message);
+
+        // 8. Re-evaluate remaining active inventory & subscription
+        const { data: userInventory } = await sb.from('inventory')
+          .select('id, status')
+          .eq('uid', actualUid);
+
+        const activeRemainingTotes = (userInventory || []).filter(i => 
+          i.status && !['missing-tote', 'missing', 'decommissioned', 'returned', 'discarded', 'released', 'cancelled'].includes(i.status)
+        ).length;
+
+        const isCanceling = (user.subscription_status === 'canceling' || user.subscription_status === 'canceled');
+
+        let targetTotes = activeRemainingTotes;
+        if (isCanceling && activeRemainingTotes === 0) {
+          targetTotes = 0;
+        } else if (!isCanceling) {
+          targetTotes = Math.max(1, activeRemainingTotes);
+        }
+
+        let newPricing = { toteRate: 5.00, recurringStorage: 0, tierName: 'Standard' };
+        if (targetTotes > 0) {
+          newPricing = await this.resolveCustomerPricing(actualUid, facId, targetTotes);
+        }
+
+        await sb.from('subscriptions').update({
+          total_totes: targetTotes,
+          tote_count: targetTotes,
+          quantity: targetTotes,
+          tote_rate: targetTotes > 0 ? newPricing.toteRate : 0,
+          recurring_storage: targetTotes > 0 ? newPricing.recurringStorage : 0,
+          monthly_total: targetTotes > 0 ? newPricing.recurringStorage : 0,
+          last_updated: nowIso
+        }).eq('uid', actualUid);
+
+        await sb.from('users').update({
+          active_totes_held: targetTotes
+        }).eq('id', actualUid);
+
+        if (!isCanceling && targetTotes > 0 && global.CloudVaultStripe && typeof global.CloudVaultStripe.syncSubscriptionQuantityWithStripe === 'function') {
+          await global.CloudVaultStripe.syncSubscriptionQuantityWithStripe(actualUid, targetTotes);
+        }
+
+        return {
+          success: true,
+          message: `✓ Successfully batch-billed $${totalAfterTax.toFixed(2)} ($${totalSubtotal.toFixed(2)} + $${taxAmount.toFixed(2)} tax) for ${toteCount} missing totes to ${user.name || 'customer'} in a single Stripe transaction. Remaining active totes: ${targetTotes}.`,
+          totalSubtotal,
+          taxAmount,
+          totalAfterTax,
+          toteCount,
+          invoice: invoiceRecord
+        };
+      } catch (err) {
+        console.error('[CloudVaultBilling] Exception in processBatchMissingTotesResolution:', err);
         return { success: false, error: err.message };
       }
     },

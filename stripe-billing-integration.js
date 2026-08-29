@@ -905,6 +905,56 @@
     },
 
     /**
+     * Creates and sends a single consolidated Stripe invoice for multiple missing totes belonging to the same customer.
+     * Consolidates line items to save fixed per-charge card processing fees.
+     * @param {Object} params - { customerId, totalAmount, totes, facilityId, userId, customerEmail, customerName }
+     * @returns {Promise<{success: boolean, stripeInvoiceId?: string, hostedInvoiceUrl?: string, pdfUrl?: string, paymentIntentId?: string, amount?: number, error?: string}>}
+     */
+    createAndSendBatchMissingTotesInvoice: async function ({ customerId, totalAmount, totes = [], facilityId, userId, customerEmail, customerName }) {
+      const grossAmount = Number(totalAmount);
+      if (isNaN(grossAmount) || grossAmount <= 0) {
+        throw new Error('[StripeBillingIntegration] Missing valid batch total amount.');
+      }
+
+      const lineItems = (totes || []).map(t => {
+        const tCode = t.tote_code || t.toteCode || 'N/A';
+        const fee = Number(t.fee || t.unit_amount || (grossAmount / (totes.length || 1)));
+        return {
+          description: `Missing Container Replacement Fee — Container #${tCode}`,
+          qty: 1,
+          unit_price: fee,
+          amount: fee
+        };
+      });
+
+      const res = await this.chargeServiceFeeViaStripe({
+        userId,
+        customerId,
+        facilityId,
+        chargeType: 'missing_tote_fee',
+        amount: grossAmount,
+        totalAmount: grossAmount,
+        lineItems: lineItems.length > 0 ? lineItems : [
+          {
+            description: `Missing Containers Replacement Fee (${totes.length} Totes)`,
+            qty: totes.length || 1,
+            unit_price: grossAmount / (totes.length || 1),
+            amount: grossAmount
+          }
+        ]
+      });
+
+      return {
+        success: true,
+        stripeInvoiceId: res.stripeInvoiceId,
+        hostedInvoiceUrl: res.stripeHostedInvoiceUrl,
+        pdfUrl: res.stripeInvoicePdf,
+        paymentIntentId: res.paymentIntentId,
+        amount: grossAmount
+      };
+    },
+
+    /**
      * Processes a direct Stripe charge for a specific customer/user.
      * @param {string} userId - CloudVault user ID or Stripe customer ID
      * @param {number} amount - Charge amount in USD
