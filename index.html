@@ -2985,14 +2985,11 @@
                 let userZip = '';
 
                 try {
-                    const { data: profile } = await supabase.from('users').select('name, phone, zip_code, address_line1, city, state').eq('id', sessionUser.id).maybeSingle();
+                    const { data: profile } = await supabase.from('users').select('name, phone, active_zone').eq('id', sessionUser.id).maybeSingle();
                     if (profile) {
                         if (profile.name) userName = profile.name;
                         if (profile.phone) userPhone = profile.phone;
-                        if (profile.zip_code) userZip = profile.zip_code;
-                        if (profile.address_line1 && document.getElementById('address-line1-input')) document.getElementById('address-line1-input').value = profile.address_line1;
-                        if (profile.city && document.getElementById('address-city-input')) document.getElementById('address-city-input').value = profile.city;
-                        if (profile.state && document.getElementById('address-state-input')) document.getElementById('address-state-input').value = profile.state;
+                        if (profile.active_zone) userZip = profile.active_zone;
                     }
                     const { data: savedAddr } = await supabase.from('customer_addresses').select('*').eq('uid', sessionUser.id).maybeSingle();
                     if (savedAddr) {
@@ -4035,14 +4032,13 @@
                     console.warn('[Waitlist Auth Step 1]', authErr.message);
                 }
 
-                // 2. Upsert provisional users row with zip, active zone, city, state
+                // 2. Upsert provisional users row with active zone, city, state
                 if (activeWaitlistUserId) {
                     await supabase.from('users').upsert({
                         id: activeWaitlistUserId,
                         email,
                         name: email.split('@')[0],
                         role: 'customer',
-                        zip: zip,
                         active_zone: zip,
                         assigned_facility_id: null,
                         onboarding_status: 'waitlisted',
@@ -4050,14 +4046,18 @@
                         is_active: false
                     }, { onConflict: 'id' });
 
-                    await supabase.from('customer_addresses').upsert({
-                        uid: activeWaitlistUserId,
-                        zip: zip,
-                        billing_zip: zip,
-                        city: flowData.city || '',
-                        state: flowData.state || '',
-                        address_line1: ''
-                    }, { onConflict: 'uid' }).catch(() => {});
+                    try {
+                        await supabase.from('customer_addresses').upsert({
+                            uid: activeWaitlistUserId,
+                            zip: zip,
+                            billing_zip: zip,
+                            city: flowData.city || '',
+                            state: flowData.state || '',
+                            address_line1: ''
+                        }, { onConflict: 'uid' });
+                    } catch (addrErr) {
+                        console.warn('[Address save notice]', addrErr);
+                    }
                 }
 
                 // 3. Insert waitlist row (type=deposit, payment still pending) with regional market data
@@ -4168,14 +4168,13 @@
                     console.warn('[Free Waitlist Auth]', authErr.message);
                 }
 
-                // 2. Upsert users row with zip and active zone
+                // 2. Upsert users row with active zone
                 if (createdUserId) {
                     await supabase.from('users').upsert({
                         id: createdUserId,
                         email,
                         name: email.split('@')[0],
                         role: 'customer',
-                        zip: zip,
                         active_zone: zip,
                         assigned_facility_id: null,
                         onboarding_status: 'free_waitlist',
@@ -4183,14 +4182,18 @@
                         is_active: false
                     }, { onConflict: 'id' });
 
-                    await supabase.from('customer_addresses').upsert({
-                        uid: createdUserId,
-                        zip: zip,
-                        billing_zip: zip,
-                        city: flowData.city || '',
-                        state: flowData.state || '',
-                        address_line1: ''
-                    }, { onConflict: 'uid' }).catch(() => {});
+                    try {
+                        await supabase.from('customer_addresses').upsert({
+                            uid: createdUserId,
+                            zip: zip,
+                            billing_zip: zip,
+                            city: flowData.city || '',
+                            state: flowData.state || '',
+                            address_line1: ''
+                        }, { onConflict: 'uid' });
+                    } catch (addrErr) {
+                        console.warn('[Address save notice]', addrErr);
+                    }
                 }
 
                 // 3. Insert waitlist row with regional market data
@@ -4282,7 +4285,6 @@
                             email: activeWaitlistEmail,
                             name: activeWaitlistEmail.split('@')[0],
                             role: 'customer',
-                            zip: zip,
                             active_zone: zip,
                             assigned_facility_id: null,
                             onboarding_status: 'waitlisted',

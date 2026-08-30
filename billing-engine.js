@@ -75,14 +75,12 @@
         try {
           if (zipCode) {
             const { data: zone } = await sb.from('operational_zones')
-              .select('required_deposit, price_lock_years, refund_guarantee_days')
+              .select('required_deposit')
               .contains('zip_codes', [zipCode])
               .maybeSingle();
 
             if (zone && zone.required_deposit != null) {
               deposit = Number(zone.required_deposit);
-              if (zone.price_lock_years) priceLockYears = Number(zone.price_lock_years);
-              if (zone.refund_guarantee_days) refundGuaranteeDays = Number(zone.refund_guarantee_days);
               return { depositAmount: deposit, priceLockYears, refundGuaranteeDays };
             }
           }
