@@ -8224,6 +8224,37 @@
             if (lastDateEl) lastDateEl.textContent = '...';
             if (nextDateEl) nextDateEl.textContent = 'Loading...';
 
+            // 1. Fetch Profile & Waitlist Row at top-level scope
+            const profile = (currentUserProfile || currentProfile || (currentUser ? await getCachedUserProfile(currentUser.id) : null));
+            let waitlistRow = activeHubWaitlistRow;
+            if (!waitlistRow && currentUser && typeof supabase !== 'undefined') {
+                try {
+                    const { data: wl } = await supabase.from('waitlist')
+                        .select('*')
+                        .or(`user_id.eq.${currentUser.id},email.eq.${currentUser.email}`)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                    if (wl) waitlistRow = wl;
+                } catch (e) {}
+            }
+
+            // Check for paid unlaunched_deposit invoices to ensure authoritative lock status
+            let hasPaidDepositInvoice = false;
+            if (currentUser && typeof supabase !== 'undefined') {
+                try {
+                    const { data: depInvs } = await supabase.from('invoices')
+                        .select('id, payment_status, total_amount, subtotal')
+                        .or(`uid.eq.${currentUser.id},customer_email.eq.${currentUser.email}`)
+                        .eq('invoice_type', 'unlaunched_deposit')
+                        .eq('payment_status', 'paid')
+                        .limit(1);
+                    if (depInvs && depInvs.length > 0) {
+                        hasPaidDepositInvoice = true;
+                    }
+                } catch (e) {}
+            }
+
             if (currentUser && typeof supabase !== 'undefined') {
                 try {
                     const { data: directSubs } = await supabase.from('subscriptions')
@@ -8255,8 +8286,7 @@
                 const toteRate = Number(sub.tote_rate) || 5.00;
                 const baseMonthly = Number(sub.recurring_storage) || (totalTotes * toteRate);
 
-                // 1. Resolve Active Customer Profile, Assigned Facility & Dynamic Tax Rate
-                const profile = (currentUserProfile || currentProfile || (currentUser ? await getCachedUserProfile(currentUser.id) : null));
+                // 2. Resolve Active Customer Facility & Dynamic Tax Rate
                 const userFac = profile?.assigned_facility_id || profile?.assigned_facility || sub?.facility_id || window.currentActiveFacility?.id || 'facility_seattle_north';
                 let userTaxRate = 0.1025;
                 if (window.currentActiveFacility && window.currentActiveFacility.id === userFac && window.currentActiveFacility.tax_rate != null) {
@@ -8401,10 +8431,10 @@
                 }
                 if (managePlanBtn) managePlanBtn.classList.add('hidden');
 
-            } else if (profile?.onboarding_status === 'waitlisted' || profile?.onboarding_status === 'free_waitlist' || !!(profile?.has_price_lock) || activeHubWaitlistRow != null) {
+            } else if (profile?.onboarding_status === 'waitlisted' || profile?.onboarding_status === 'free_waitlist' || profile?.has_price_lock === true || hasPaidDepositInvoice || waitlistRow != null || activeHubWaitlistRow != null) {
                 // Pre-Launch Waitlist Account (Priority Rate-Lock or Free Waitlist)
-                const hasDeposit = !!(profile?.has_price_lock || Number(profile?.deposit_paid_amount) > 0 || activeHubWaitlistRow?.payment_status === 'deposit_paid' || activeHubWaitlistRow?.deposit_status === 'paid');
-                const totesReserved = activeHubWaitlistRow?.requested_totes || 5;
+                const hasDeposit = !!(profile?.has_price_lock || Number(profile?.deposit_paid_amount) > 0 || hasPaidDepositInvoice || waitlistRow?.payment_status === 'deposit_paid' || waitlistRow?.deposit_status === 'paid' || activeHubWaitlistRow?.payment_status === 'deposit_paid' || activeHubWaitlistRow?.deposit_status === 'paid');
+                const totesReserved = waitlistRow?.requested_totes || activeHubWaitlistRow?.requested_totes || 5;
 
                 if (badgeEl) {
                     badgeEl.textContent = hasDeposit ? 'PRIORITY WAITLIST ACTIVE' : 'FREE WAITLIST MEMBER';
@@ -8417,7 +8447,7 @@
                 if (tierLabelEl) tierLabelEl.textContent = hasDeposit ? `3-Year Guaranteed Launch Rate Locked` : `Standard Queue (Free Waitlist)`;
                 
                 if (lastDateEl) {
-                    const depositDate = activeHubWaitlistRow?.created_at ? new Date(activeHubWaitlistRow.created_at) : (profile?.created_at ? new Date(profile.created_at) : null);
+                    const depositDate = waitlistRow?.created_at ? new Date(waitlistRow.created_at) : (profile?.created_at ? new Date(profile.created_at) : null);
                     lastDateEl.textContent = depositDate ? depositDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Deposit on File';
                 }
                 if (nextDateEl) nextDateEl.textContent = 'Auto-Activates Upon Local Facility Launch';
@@ -8428,7 +8458,7 @@
                 if (cancelBtnContainer) {
                     cancelBtnContainer.innerHTML = hasDeposit
                         ? `<span class="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl inline-flex items-center gap-1">✓ 3-Year Rate Lock Active (100% Refundable Deposit)</span>`
-                        : `<button onclick="closeBillingModal()" class="text-xs font-bold text-blue-600 hover:bg-blue-50 px-3.5 py-2 rounded-xl border border-blue-200 cursor-pointer">Upgrade to Priority Rate-Lock Deposit</button>`;
+                        : `<span class="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-3.5 py-2 rounded-xl inline-flex items-center gap-1">✉️ Free Waitlist Member</span>`;
                 }
                 if (managePlanBtn) managePlanBtn.classList.add('hidden');
 
