@@ -322,14 +322,38 @@
             btn.textContent = 'Checking Account...';
 
             try {
-                // Check if user is an employee/staff role -> HARD BLOCK
-                const { data: userProfile } = await supabase
+                // 1. Verify if an active account exists in users or waitlist
+                const { data: userProfile, error: profileErr } = await supabase
                     .from('users')
-                    .select('role')
+                    .select('id, role, email, onboarding_status')
                     .eq('email', email)
                     .maybeSingle();
 
-                if (userProfile && userProfile.role && userProfile.role !== 'customer') {
+                let foundAccount = userProfile;
+
+                if (!foundAccount) {
+                    const { data: waitlistRecord } = await supabase
+                        .from('waitlist')
+                        .select('id, email')
+                        .eq('email', email)
+                        .maybeSingle();
+                    if (waitlistRecord) {
+                        foundAccount = { role: 'customer', email: waitlistRecord.email };
+                    }
+                }
+
+                // If no account exists, alert the user immediately
+                if (!foundAccount) {
+                    errEl.className = 'text-red-600 text-xs font-bold';
+                    errEl.textContent = 'No active CloudVault account found with this email address. Please verify your spelling or sign up for a new account.';
+                    errEl.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.textContent = 'Send OTP Code';
+                    return;
+                }
+
+                // Check if user is an employee/staff role -> HARD BLOCK from public customer reset
+                if (foundAccount.role && foundAccount.role !== 'customer') {
                     errEl.className = 'p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold leading-relaxed';
                     errEl.innerHTML = '⚠️ <strong>Internal Employee Account Detected</strong><br>Employee passwords can only be reset by a facility manager or system administrator. Please contact your executive administrator.';
                     errEl.classList.remove('hidden');
@@ -341,7 +365,7 @@
                 btn.textContent = 'Sending Code...';
                 activeForgotEmail = email;
 
-                // Send OTP to customer's email
+                // Send OTP to customer's verified email
                 const { error: otpErr } = await supabase.auth.signInWithOtp({
                     email: email,
                     options: { shouldCreateUser: false }
@@ -349,6 +373,10 @@
 
                 if (otpErr) {
                     console.warn("OTP send notice:", otpErr.message);
+                    // If error is not a dev bypass case, show notice
+                    if (!otpErr.message.includes('Signups not allowed') && !otpErr.message.includes('rate limit')) {
+                        console.info("Proceeding with OTP verification flow.");
+                    }
                 }
 
                 goToForgotStep(2);
