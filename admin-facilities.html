@@ -4268,14 +4268,14 @@
                 }
 
                 // ===== SECTION 5: UNLAUNCHED MARKET WAITLIST & EXPANSION PORTAL =====
-                let currentGlobalDeposit = 20.00;
+                let currentGlobalDeposit = 10.00;
 
                 async function loadGlobalUnlaunchedDepositSetting() {
                     try {
                         const { data } = await supabase.from('metadata').select('value').eq('id', 'unlaunched_deposit').maybeSingle();
                         if (data && data.value) {
-                            const val = typeof data.value === 'object' ? (data.value.amount || data.value) : data.value;
-                            currentGlobalDeposit = Number(val) || 20.00;
+                            const val = typeof data.value === 'object' ? (data.value.amount != null ? data.value.amount : data.value) : data.value;
+                            currentGlobalDeposit = (val != null && !isNaN(Number(val))) ? Number(val) : 10.00;
                             const inputEl = document.getElementById('global-unlaunched-deposit-input');
                             if (inputEl) inputEl.value = currentGlobalDeposit;
                         }

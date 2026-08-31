@@ -67,7 +67,7 @@
      */
     resolveWaitlistDeposit: async function (zipCode) {
       const sb = global.supabase || (typeof window !== 'undefined' ? window.supabase : null);
-      let deposit = 20.00;
+      let deposit = 10.00;
       let priceLockYears = 3;
       let refundGuaranteeDays = 365;
 
@@ -79,7 +79,7 @@
               .contains('zip_codes', [zipCode])
               .maybeSingle();
 
-            if (zone && zone.required_deposit != null) {
+            if (zone && zone.required_deposit != null && !isNaN(Number(zone.required_deposit)) && Number(zone.required_deposit) > 0) {
               deposit = Number(zone.required_deposit);
               return { depositAmount: deposit, priceLockYears, refundGuaranteeDays };
             }

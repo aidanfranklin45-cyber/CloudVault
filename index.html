@@ -1681,15 +1681,15 @@
                             <div class="flex items-center justify-between font-extrabold text-amber-900">
                                 <span>📍 Priority Rate-Lock Deposit</span>
                                 <span class="text-base font-black text-amber-700"
-                                    id="waitlist-deposit-display">$20.00</span>
+                                    id="waitlist-deposit-display">$10.00</span>
                             </div>
                             <div id="waitlist-promo-discount-row" class="hidden-section flex items-center justify-between text-emerald-700 font-bold text-xs pt-1 border-t border-amber-200/60">
                                 <span>Creator Referral Discount (Deposit Benefit)</span>
-                                <span id="waitlist-promo-discount-amt">-$4.00</span>
+                                <span id="waitlist-promo-discount-amt">-$2.00</span>
                             </div>
                             <div id="waitlist-net-deposit-row" class="hidden-section flex items-center justify-between text-slate-900 font-black text-sm pt-1 border-t border-amber-200/80">
                                 <span>Total Deposit Today</span>
-                                <span id="waitlist-net-deposit-display" class="text-emerald-800 font-mono text-base">$16.00</span>
+                                <span id="waitlist-net-deposit-display" class="text-emerald-800 font-mono text-base">$10.00</span>
                             </div>
                             <p class="text-amber-800 leading-relaxed text-[11px]">
                                 Your deposit reserves your rate while we evaluate launching in your city. If we don't open near you, you receive a <strong>full refund — no questions asked.</strong>
@@ -3860,7 +3860,7 @@
             }
 
             try {
-                const grossDeposit = Number(activeWaitlistDeposit) || 20.00;
+                const grossDeposit = (activeWaitlistDeposit != null && !isNaN(Number(activeWaitlistDeposit))) ? Number(activeWaitlistDeposit) : 10.00;
                 const { data, error } = await supabase.rpc('validate_promo_code_for_waitlist', {
                     p_code: code,
                     p_deposit_amount: grossDeposit
@@ -3916,7 +3916,7 @@
         }
 
         function updateWaitlistDepositDisplay() {
-            const grossDeposit = Number(activeWaitlistDeposit) || 20.00;
+            const grossDeposit = (activeWaitlistDeposit != null && !isNaN(Number(activeWaitlistDeposit))) ? Number(activeWaitlistDeposit) : 10.00;
             const grossDisplay = document.getElementById('waitlist-deposit-display');
             const discountRow = document.getElementById('waitlist-promo-discount-row');
             const discountAmtEl = document.getElementById('waitlist-promo-discount-amt');
@@ -3987,13 +3987,13 @@
 
                 btn.textContent = "Processing...";
 
-                let reqDeposit = activeWaitlistDeposit || 10.00;
+                let reqDeposit = (activeWaitlistDeposit != null && !isNaN(Number(activeWaitlistDeposit))) ? Number(activeWaitlistDeposit) : 10.00;
                 let priceLockYears = 3;
                 let refundGuaranteeDays = 365;
 
                 if (typeof window !== 'undefined' && window.CloudVaultBilling && typeof window.CloudVaultBilling.resolveWaitlistDeposit === 'function') {
                     const depInfo = await window.CloudVaultBilling.resolveWaitlistDeposit(zip);
-                    reqDeposit = depInfo.depositAmount;
+                    reqDeposit = Number(depInfo.depositAmount);
                     priceLockYears = depInfo.priceLockYears;
                     refundGuaranteeDays = depInfo.refundGuaranteeDays;
                 } else {
@@ -4006,7 +4006,7 @@
                         }
 
                         const { data: zone } = await supabase.from('operational_zones').select('required_deposit').contains('zip_codes', [zip]).maybeSingle();
-                        if (zone && zone.required_deposit != null) reqDeposit = Number(zone.required_deposit);
+                        if (zone && zone.required_deposit != null && !isNaN(Number(zone.required_deposit)) && Number(zone.required_deposit) > 0) reqDeposit = Number(zone.required_deposit);
                     } catch (e) { console.warn('Dynamic deposit fetch notice:', e); }
                 }
 
@@ -4260,7 +4260,7 @@
                     return;
                 }
 
-                const grossDeposit = Number(activeWaitlistDeposit) || 10.00;
+                const grossDeposit = (activeWaitlistDeposit != null && !isNaN(Number(activeWaitlistDeposit))) ? Number(activeWaitlistDeposit) : 10.00;
                 const discountAmt = activeWaitlistPromo ? Number(activeWaitlistPromo.discount_amount) : 0;
                 const netDeposit = activeWaitlistPromo ? Number(activeWaitlistPromo.net_deposit_paid) : grossDeposit;
                 const zip = flowData.zip || (document.getElementById('zip-input') ? document.getElementById('zip-input').value.trim() : '');

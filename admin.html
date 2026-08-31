@@ -10507,11 +10507,11 @@
                     if (s.zip_code) activeZipSet.add(s.zip_code.trim());
                 });
 
-                let dynamicDeposit = 0;
+                let dynamicDeposit = 10.00;
                 try {
                     const { data: depMeta } = await supabase.from('metadata').select('value').eq('id', 'unlaunched_deposit').maybeSingle();
                     if (depMeta && depMeta.value) {
-                        dynamicDeposit = typeof depMeta.value === 'object' ? Number(depMeta.value.amount || 0) : Number(depMeta.value || 0);
+                        dynamicDeposit = typeof depMeta.value === 'object' ? Number(depMeta.value.amount || 10.00) : Number(depMeta.value || 10.00);
                     }
                 } catch (e) {}
 
@@ -10541,7 +10541,7 @@
 
                 if (countBadge) {
                     const totalDeposits = unlaunchedRes.length;
-                    const totalCapital = unlaunchedRes.reduce((sum, r) => sum + (Number(r.deposit_amount) || 20.00), 0);
+                    const totalCapital = unlaunchedRes.reduce((sum, r) => sum + (Number(r.deposit_amount) || dynamicDeposit), 0);
                     countBadge.textContent = `${totalDeposits} Priority Deposit${totalDeposits !== 1 ? 's' : ''} ($${totalCapital.toLocaleString()})`;
                 }
 
@@ -10556,7 +10556,7 @@
                     }
                     if (z) cityMap[city].zipCodes.add(z);
                     cityMap[city].count++;
-                    cityMap[city].capital += (Number(row.deposit_amount) || 20.00);
+                    cityMap[city].capital += (Number(row.deposit_amount) || dynamicDeposit);
                     const date = new Date(row.created_at);
                     if (!cityMap[city].latest || date > cityMap[city].latest) {
                         cityMap[city].latest = date;
