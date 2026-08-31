@@ -19,6 +19,8 @@
             disable_surveys: true
         });
     </script>
+    <!-- Cloudflare Turnstile SDK -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -92,7 +94,10 @@
 
                 <p id="auth-error" class="text-red-600 text-sm font-bold hidden"></p>
 
-                <button id="auth-submit" onclick="handleAuth()" class="w-full bg-blue-600 text-white px-4 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 shadow-md hover:shadow-lg transition mt-4">
+                <!-- Cloudflare Turnstile Bot Protection Widget -->
+                <div id="auth-turnstile-container" class="flex justify-center my-3 min-h-[65px]"></div>
+
+                <button id="auth-submit" onclick="handleAuth()" class="w-full bg-blue-600 text-white px-4 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 shadow-md hover:shadow-lg transition mt-2">
                     Sign In
                 </button>
             </div>
@@ -124,6 +129,8 @@
                     <input type="email" id="forgot-email" placeholder="jane@example.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl font-semibold text-gray-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-200">
                 </div>
                 <p id="forgot-error-1" class="text-red-600 text-xs font-bold hidden"></p>
+                <!-- Cloudflare Turnstile Bot Protection Widget for OTP -->
+                <div id="forgot-turnstile-container" class="flex justify-center my-2 min-h-[65px]"></div>
                 <div class="flex gap-3 pt-2">
                     <button type="button" onclick="closeForgotModal()" class="w-1/2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl text-sm transition">Cancel</button>
                     <button type="button" id="btn-send-otp" onclick="handleSendPasswordResetOTP()" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm transition shadow-md">
@@ -216,6 +223,56 @@
     <script>
         let isSignUp = false;
         let isPasswordRecoveryMode = false;
+        let authTurnstileWidgetId = null;
+        let forgotTurnstileWidgetId = null;
+
+        function renderAuthTurnstile() {
+            if (typeof turnstile === 'undefined') {
+                setTimeout(renderAuthTurnstile, 150);
+                return;
+            }
+            const container = document.getElementById('auth-turnstile-container');
+            if (!container) return;
+            if (authTurnstileWidgetId !== null) {
+                try { turnstile.reset(authTurnstileWidgetId); } catch (e) {}
+                return;
+            }
+            try {
+                const siteKey = window.CLOUDFLARE_TURNSTILE_SITE_KEY || "0x4AAAAAAEjEt23VSN7b2FPK";
+                authTurnstileWidgetId = turnstile.render(container, {
+                    sitekey: siteKey,
+                    action: isSignUp ? 'signup' : 'login',
+                    theme: 'light',
+                    'response-field-name': 'cf-turnstile-response'
+                });
+            } catch (e) {
+                console.warn('Turnstile render notice:', e);
+            }
+        }
+
+        function renderForgotTurnstile() {
+            if (typeof turnstile === 'undefined') {
+                setTimeout(renderForgotTurnstile, 150);
+                return;
+            }
+            const container = document.getElementById('forgot-turnstile-container');
+            if (!container) return;
+            if (forgotTurnstileWidgetId !== null) {
+                try { turnstile.reset(forgotTurnstileWidgetId); } catch (e) {}
+                return;
+            }
+            try {
+                const siteKey = window.CLOUDFLARE_TURNSTILE_SITE_KEY || "0x4AAAAAAEjEt23VSN7b2FPK";
+                forgotTurnstileWidgetId = turnstile.render(container, {
+                    sitekey: siteKey,
+                    action: 'password_reset',
+                    theme: 'light',
+                    'response-field-name': 'cf-turnstile-response'
+                });
+            } catch (e) {
+                console.warn('Turnstile OTP render notice:', e);
+            }
+        }
 
         // Check URL for recovery mode
         if (window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery') || window.location.search.includes('mode=reset_password')) {
@@ -298,6 +355,7 @@
             if (currentEmail) document.getElementById('forgot-email').value = currentEmail;
             goToForgotStep(1);
             document.getElementById('forgot-modal').classList.remove('hidden');
+            renderForgotTurnstile();
         }
 
         function closeForgotModal() {
@@ -349,6 +407,9 @@
                     errEl.classList.remove('hidden');
                     btn.disabled = false;
                     btn.textContent = 'Send OTP Code';
+                    if (typeof turnstile !== 'undefined' && forgotTurnstileWidgetId !== null) {
+                        try { turnstile.reset(forgotTurnstileWidgetId); } catch (e) {}
+                    }
                     return;
                 }
 
@@ -359,16 +420,28 @@
                     errEl.classList.remove('hidden');
                     btn.disabled = false;
                     btn.textContent = 'Send OTP Code';
+                    if (typeof turnstile !== 'undefined' && forgotTurnstileWidgetId !== null) {
+                        try { turnstile.reset(forgotTurnstileWidgetId); } catch (e) {}
+                    }
                     return;
                 }
 
                 btn.textContent = 'Sending Code...';
                 activeForgotEmail = email;
 
-                // Send OTP to customer's verified email
+                // Extract Cloudflare Turnstile token
+                let captchaToken = null;
+                if (typeof turnstile !== 'undefined' && forgotTurnstileWidgetId !== null) {
+                    try { captchaToken = turnstile.getResponse(forgotTurnstileWidgetId); } catch (e) {}
+                }
+
+                // Send OTP to customer's verified email with Turnstile CAPTCHA token
                 const { error: otpErr } = await supabase.auth.signInWithOtp({
                     email: email,
-                    options: { shouldCreateUser: false }
+                    options: {
+                        shouldCreateUser: false,
+                        captchaToken: captchaToken || undefined
+                    }
                 });
 
                 if (otpErr) {
@@ -385,6 +458,9 @@
                 errEl.className = 'text-red-600 text-xs font-bold';
                 errEl.textContent = err.message || 'Failed to send verification code. Please try again.';
                 errEl.classList.remove('hidden');
+                if (typeof turnstile !== 'undefined' && forgotTurnstileWidgetId !== null) {
+                    try { turnstile.reset(forgotTurnstileWidgetId); } catch (e) {}
+                }
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Send OTP Code';
@@ -547,6 +623,12 @@
             // Save Remember Me preference for customStorageEngine
             localStorage.setItem('cv_remember_me', isRemember ? 'true' : 'false');
 
+            // Extract Cloudflare Turnstile token
+            let captchaToken = null;
+            if (typeof turnstile !== 'undefined' && authTurnstileWidgetId !== null) {
+                try { captchaToken = turnstile.getResponse(authTurnstileWidgetId); } catch (e) {}
+            }
+
             try {
                 if (isSignUp) {
                     const name = document.getElementById('auth-name').value.trim();
@@ -555,11 +637,13 @@
                     if (!name) {
                         errEl.textContent = 'Please enter your name.';
                         errEl.classList.remove('hidden');
+                        if (typeof turnstile !== 'undefined' && authTurnstileWidgetId !== null) {
+                            try { turnstile.reset(authTurnstileWidgetId); } catch (e) {}
+                        }
                         return;
                     }
 
-                    // Create Supabase Auth account.
-                    // The trigger `on_auth_user_created` will create the user profile in public.users automatically.
+                    // Create Supabase Auth account with Turnstile CAPTCHA token
                     const { data, error } = await supabase.auth.signUp({
                         email: email,
                         password: password,
@@ -567,14 +651,19 @@
                             data: {
                                 name: name,
                                 phone: phone
-                            }
+                            },
+                            captchaToken: captchaToken || undefined
                         }
                     });
                     if (error) throw error;
                 } else {
+                    // Sign in with Turnstile CAPTCHA token
                     const { data, error } = await supabase.auth.signInWithPassword({
                         email: email,
-                        password: password
+                        password: password,
+                        options: {
+                            captchaToken: captchaToken || undefined
+                        }
                     });
                     if (error) throw error;
                 }
@@ -583,11 +672,15 @@
                 let msg = err.message || 'Something went wrong. Please try again.';
                 errEl.textContent = msg;
                 errEl.classList.remove('hidden');
+                if (typeof turnstile !== 'undefined' && authTurnstileWidgetId !== null) {
+                    try { turnstile.reset(authTurnstileWidgetId); } catch (e) {}
+                }
             }
         }
 
-        // Check URL params for inactivity auto-logout notice or prefilled email
+        // Check URL params for inactivity auto-logout notice or prefilled email & render Turnstile
         window.addEventListener('DOMContentLoaded', () => {
+            renderAuthTurnstile();
             const params = new URLSearchParams(window.location.search);
             if (params.get('reason') === 'inactivity') {
                 const noticeEl = document.getElementById('auth-notice');

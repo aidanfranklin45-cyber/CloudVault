@@ -4,6 +4,10 @@
 const SUPABASE_URL = "https://xbxvebnrjryvksvtufqj.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_-cW5neaZRGmicOHaHw1n3g_laY5yFZQ";
 
+// Cloudflare Turnstile Configuration
+const CLOUDFLARE_TURNSTILE_SITE_KEY = "0x4AAAAAAEjEt23VSN7b2FPK";
+window.CLOUDFLARE_TURNSTILE_SITE_KEY = CLOUDFLARE_TURNSTILE_SITE_KEY;
+
 // Safe Session Storage Engine supporting cross-tab persistence & robust token recovery
 const customStorageEngine = {
     getItem: (key) => {

@@ -1,4 +1,4 @@
-﻿// supabase/functions/admin-user-ops/index.ts
+// supabase/functions/admin-user-ops/index.ts
 // Privileged admin operations: fire_employee | admin_set_password | get_user_by_email
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -7,6 +7,29 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Canonical Cloudflare Turnstile Server-Side Siteverify
+async function verifyTurnstileToken(token: string, secret: string, remoteIp?: string): Promise<boolean> {
+  try {
+    if (!token || !secret) return false;
+    const body = new URLSearchParams({
+      secret: secret,
+      response: token,
+      ...(remoteIp ? { remoteip: remoteIp } : {})
+    });
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString()
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return !!data.success;
+  } catch (e) {
+    console.error("Turnstile siteverify exception:", e);
+    return false;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -17,6 +40,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+    const turnstileSecret = Deno.env.get("TURNSTILE_SECRET") || "";
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -38,7 +62,18 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { operation } = body;
+    const { operation, turnstile_token } = body;
+
+    // If Turnstile Secret is present and caller is unauthenticated, require valid Turnstile token
+    if (turnstileSecret && !callerUser) {
+      const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || undefined;
+      const isValidBotCheck = await verifyTurnstileToken(turnstile_token, turnstileSecret, clientIp);
+      if (!isValidBotCheck && operation !== "admin_set_password") {
+        return new Response(JSON.stringify({ error: "Cloudflare Turnstile bot verification failed." }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     // ─── OPERATION: fire_employee ──────────────────────────────────────────────
     if (operation === "fire_employee") {
