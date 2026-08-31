@@ -4795,14 +4795,9 @@
                     return;
                 }
 
-                // If user is truly canceled in an active operational market with 0 stored totes & no pending requests:
+                // For new users setting up their account in onboarding wizard:
                 if (dropdownActionContainer) {
-                    dropdownActionContainer.innerHTML = `
-                        <button onclick="reactivatePlanFromBilling(); document.getElementById('user-dropdown')?.classList.add('hidden');" class="w-full text-left px-4 py-2.5 text-xs font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-2 cursor-pointer" role="menuitem">
-                            <i data-lucide="sparkles" class="w-4 h-4 text-blue-500"></i>
-                            <span>🚀 Start New Plan</span>
-                        </button>`;
-                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                    dropdownActionContainer.innerHTML = '';
                 }
 
                 // Default to onboarding wizard for brand new customers without active or canceling storage
@@ -9179,7 +9174,12 @@
                 const waitlistHub = document.getElementById('flow-waitlist-hub');
                 if (activeDashboard) activeDashboard.classList.add('hidden');
                 if (waitlistHub) waitlistHub.classList.add('hidden');
-                if (onboardingWizard) onboardingWizard.classList.remove('hidden');
+                if (onboardingWizard) {
+                    onboardingWizard.classList.remove('hidden');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+                const dropdownActionContainer = document.getElementById('dropdown-sub-action-container');
+                if (dropdownActionContainer) dropdownActionContainer.innerHTML = '';
                 initWizardState();
             }
 
