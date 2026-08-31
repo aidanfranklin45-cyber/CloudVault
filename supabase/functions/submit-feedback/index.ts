@@ -48,11 +48,27 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown_ip";
+
+    // Rate limit check: max 5 feedback submissions per 60 seconds per IP
+    const { data: isAllowed } = await supabase.rpc("check_rate_limit", {
+      p_key: `feedback:${clientIp}`,
+      p_max_hits: 5,
+      p_window_seconds: 60,
+    });
+
+    if (isAllowed === false) {
+      return new Response(JSON.stringify({ error: "Too many feedback submissions. Please wait a minute." }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const reportType = payload.report_type === "enhancement" ? "enhancement" : "bug";
-    const flowArea = payload.flow_area || "general";
+    const flowArea = (payload.flow_area || "general").slice(0, 50);
     const severity = payload.severity || "medium";
-    const title = payload.title.trim();
-    const description = payload.description.trim();
+    const title = payload.title.trim().slice(0, 200);
+    const description = payload.description.trim().slice(0, 5000);
     const diagnostics = payload.diagnostics || {};
 
     // 1. Insert feedback report into database
