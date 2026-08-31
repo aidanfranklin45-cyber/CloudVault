@@ -1665,8 +1665,11 @@
                             <i data-lucide="building-2" class="w-4 h-4"></i>
                         </div>
                         <div>
-                            <span id="settings-facility-name" class="block font-extrabold text-gray-900 text-sm truncate">Yakima Fulfillment Center</span>
-                            <span id="settings-facility-subtext" class="block text-[10px] text-gray-500 font-normal font-mono">Active Primary Vault</span>
+                            <div class="flex items-center gap-2">
+                                <span id="settings-facility-name" class="block font-extrabold text-gray-900 text-sm truncate">Yakima Fulfillment Center</span>
+                                <span id="settings-facility-badge" class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-mono flex-shrink-0">Active Vault</span>
+                            </div>
+                            <span id="settings-facility-subtext" class="block text-[11px] text-gray-500 font-normal font-mono mt-0.5">Active Primary Storage Vault</span>
                         </div>
                     </div>
                     <button type="button" onclick="openCustomerRelocationModal()" class="text-xs font-extrabold bg-white hover:bg-blue-600 hover:text-white text-blue-600 border border-blue-200 px-3 py-1.5 rounded-xl shadow-sm transition flex items-center gap-1 cursor-pointer">
@@ -7797,139 +7800,173 @@
             }
         });
 
+        async function updateSettingsFacilityCard(city, state, zip) {
+            const facNameEl = document.getElementById('settings-facility-name');
+            const facSubtextEl = document.getElementById('settings-facility-subtext');
+            const facBadgeEl = document.getElementById('settings-facility-badge');
+            if (!facNameEl) return;
+
+            let prof = currentUserProfile || currentProfile;
+            const assignedFacId = prof?.assigned_facility_id || prof?.assigned_facility;
+
+            const cleanZip = String(zip || '').trim();
+            const cleanCity = String(city || '').trim();
+            const cleanState = String(state || 'WA').trim().toUpperCase();
+
+            // 1. Check operational_zones in Supabase
+            let oz = null;
+            let fac = null;
+
+            if (typeof supabase !== 'undefined') {
+                try {
+                    const { data: zones } = await supabase.from('operational_zones').select('*');
+                    if (zones && Array.isArray(zones)) {
+                        oz = zones.find(z => Array.isArray(z.zip_codes) && z.zip_codes.includes(cleanZip));
+                    }
+                } catch (e) {}
+            }
+
+            // 2. Fetch assigned facility or zone-mapped facility
+            const targetFacId = assignedFacId || oz?.facility_id;
+            if (targetFacId && typeof supabase !== 'undefined') {
+                try {
+                    const { data } = await supabase.from('facilities').select('*').eq('id', targetFacId).maybeSingle();
+                    if (data) fac = data;
+                } catch (e) {}
+            }
+
+            // 3. Fallback to geographic cluster facility if unassigned
+            if (!fac) {
+                if (cleanZip.startsWith('980') || cleanZip.startsWith('981') || cleanZip.startsWith('982') || cleanZip.startsWith('983') || cleanZip.startsWith('984') || cleanZip.startsWith('985') || cleanCity.toLowerCase().includes('seattle') || cleanCity.toLowerCase().includes('bellevue') || cleanCity.toLowerCase().includes('tacoma')) {
+                    fac = { id: 'facility_seattle_north', name: 'Seattle North Fulfillment Center', city: 'Seattle', state: 'WA', address: '4821 Aurora Ave N' };
+                } else if (cleanZip.startsWith('970') || cleanZip.startsWith('971') || cleanZip.startsWith('972') || cleanCity.toLowerCase().includes('portland')) {
+                    fac = { id: 'facility_portland_central', name: 'Portland Central Hub', city: 'Portland', state: 'OR', address: '1220 SE Morrison St' };
+                } else if (cleanZip.startsWith('990') || cleanZip.startsWith('991') || cleanZip.startsWith('992') || cleanZip.startsWith('994') || cleanCity.toLowerCase().includes('spokane')) {
+                    fac = { id: 'facility_spokane_hub', name: 'Spokane Regional Hub', city: 'Spokane', state: 'WA', address: '400 N Division St' };
+                } else {
+                    fac = { id: 'facility_yakima', name: 'Yakima Fulfillment Center', city: 'Selah', state: 'WA', address: '201 Riverview Ave Unit A' };
+                }
+            }
+
+            const isOperational = oz ? (oz.active === true) : (fac?.id === 'facility_yakima');
+
+            if (isOperational) {
+                facNameEl.textContent = fac.name;
+                if (facSubtextEl) {
+                    facSubtextEl.textContent = `Active Primary Storage Vault • ${fac.address || ''}, ${fac.city || ''}, ${fac.state || ''}`;
+                }
+                if (facBadgeEl) {
+                    facBadgeEl.textContent = 'Active Vault';
+                    facBadgeEl.className = 'text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-mono flex-shrink-0';
+                }
+            } else {
+                facNameEl.textContent = `${fac.name}`;
+                let marketLabel = '';
+                if (window.AddressValidator && typeof window.AddressValidator.resolveRegionalMarket === 'function' && cleanCity) {
+                    marketLabel = window.AddressValidator.resolveRegionalMarket(cleanCity, cleanState, cleanZip);
+                }
+                if (!marketLabel && oz?.city) {
+                    marketLabel = `${oz.city} Metro Hub`;
+                }
+                if (!marketLabel && cleanCity) {
+                    marketLabel = `${cleanCity} Expansion Market`;
+                }
+                if (!marketLabel) {
+                    marketLabel = 'Pacific Northwest Pre-Launch Hub';
+                }
+
+                if (facSubtextEl) {
+                    facSubtextEl.textContent = `${marketLabel} (ZIP ${cleanZip || 'Pending'}) • ${fac.address || ''} (Launch Preparation)`;
+                }
+                if (facBadgeEl) {
+                    facBadgeEl.textContent = 'Pre-Launch Hub';
+                    facBadgeEl.className = 'text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-mono flex-shrink-0';
+                }
+            }
+        }
+        window.updateSettingsFacilityCard = updateSettingsFacilityCard;
+
         async function openSettingsModal() {
             document.getElementById('user-dropdown').classList.add('hidden');
             document.getElementById('settings-modal').classList.remove('hidden');
             if (currentUserColor) selectColor(currentUserColor);
 
-            // Display current assigned Home Facility and Saved Delivery Address
             try {
-                const facNameEl = document.getElementById('settings-facility-name');
-                const facSubtextEl = document.getElementById('settings-facility-subtext');
-                const facBadgeEl = document.getElementById('settings-facility-badge');
                 let prof = currentUserProfile || currentProfile;
                 if (!prof && currentUser && typeof supabase !== 'undefined') {
                     const { data: dbUser } = await supabase.from('users').select('*').eq('id', currentUser.id).maybeSingle();
                     if (dbUser) { prof = dbUser; currentUserProfile = dbUser; currentProfile = dbUser; }
                 }
 
-                // Check customer address for city/zip if not on profile
+                // 1. Load saved billing and delivery addresses first
                 let userAddr = window.currentUserAddress;
-                if (!userAddr && currentUser && typeof supabase !== 'undefined') {
-                    const { data: addr } = await supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle();
-                    if (addr) { userAddr = addr; window.currentUserAddress = addr; }
+                if (currentUser && typeof supabase !== 'undefined') {
+                    const { data: addrData } = await supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle();
+                    if (addrData) {
+                        userAddr = addrData;
+                        window.currentUserAddress = addrData;
+                    }
                 }
 
-                // Fetch waitlist row if exists
+                // 2. Fetch waitlist row if exists
                 let wlRow = activeHubWaitlistRow;
                 if (!wlRow && currentUser && typeof supabase !== 'undefined') {
-                    const { data: wl } = await supabase.from('waitlist')
-                        .select('*')
-                        .or(`user_id.eq.${currentUser.id},email.eq.${currentUser.email}`)
-                        .order('created_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-                    if (wl) { wlRow = wl; activeHubWaitlistRow = wl; }
+                    try {
+                        const { data: wl } = await supabase.from('waitlist')
+                            .select('*')
+                            .or(`user_id.eq.${currentUser.id},email.eq.${currentUser.email}`)
+                            .order('created_at', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        if (wl) { wlRow = wl; activeHubWaitlistRow = wl; }
+                    } catch (e) {}
                 }
 
-                const userZip = userAddr?.billing_zip || userAddr?.zip || wlRow?.zip_code || prof?.active_zone || prof?.zip || '';
-                const userCity = userAddr?.billing_city || userAddr?.city || wlRow?.city || prof?.city || '';
-                const userState = userAddr?.billing_state || userAddr?.state || wlRow?.state || prof?.state || 'WA';
+                const b1 = document.getElementById('settings-bill-line1');
+                const b2 = document.getElementById('settings-bill-line2');
+                const bc = document.getElementById('settings-bill-city');
+                const bs = document.getElementById('settings-bill-state');
+                const bz = document.getElementById('settings-bill-zip');
 
-                // Check if user is in an unlaunched market in operational_zones
-                let isOperational = false;
-                let zoneRecord = null;
-                if (userZip && typeof supabase !== 'undefined') {
-                    const { data: z } = await supabase.from('operational_zones')
-                        .select('*')
-                        .contains('zip_codes', [userZip])
-                        .maybeSingle();
-                    if (z) {
-                        zoneRecord = z;
-                        isOperational = z.active === true;
-                    }
+                const s1 = document.getElementById('settings-ship-line1');
+                const s2 = document.getElementById('settings-ship-line2');
+                const sc = document.getElementById('settings-ship-city');
+                const ss = document.getElementById('settings-ship-state');
+                const sz = document.getElementById('settings-ship-zip');
+
+                const sameToggle = document.getElementById('settings-same-as-billing-toggle');
+
+                if (userAddr) {
+                    if (b1) b1.value = userAddr.billing_address_line1 || userAddr.address_line1 || '';
+                    if (b2) b2.value = userAddr.billing_address_line2 || userAddr.address_line2 || '';
+                    if (bc) bc.value = userAddr.billing_city || userAddr.city || wlRow?.city || prof?.city || '';
+                    if (bs) bs.value = userAddr.billing_state || userAddr.state || wlRow?.state || prof?.state || 'WA';
+                    if (bz) bz.value = userAddr.billing_zip || userAddr.zip || wlRow?.zip_code || prof?.active_zone || prof?.zip || '';
+
+                    const isSame = userAddr.shipping_same_as_billing !== false;
+                    if (s1) s1.value = isSame ? (userAddr.billing_address_line1 || userAddr.address_line1 || '') : (userAddr.address_line1 || '');
+                    if (s2) s2.value = isSame ? (userAddr.billing_address_line2 || userAddr.address_line2 || '') : (userAddr.address_line2 || '');
+                    if (sc) sc.value = isSame ? (userAddr.billing_city || userAddr.city || wlRow?.city || prof?.city || '') : (userAddr.city || wlRow?.city || prof?.city || '');
+                    if (ss) ss.value = isSame ? (userAddr.billing_state || userAddr.state || wlRow?.state || prof?.state || 'WA') : (userAddr.state || wlRow?.state || prof?.state || 'WA');
+                    if (sz) sz.value = isSame ? (userAddr.billing_zip || userAddr.zip || wlRow?.zip_code || prof?.active_zone || prof?.zip || '') : (userAddr.zip || wlRow?.zip_code || prof?.active_zone || prof?.zip || '');
+
+                    const notesEl = document.getElementById('settings-delivery-notes');
+                    if (notesEl) notesEl.value = userAddr.delivery_instructions || '';
+
+                    if (sameToggle) sameToggle.checked = isSame;
+                    toggleSettingsSameAsBilling();
+                } else {
+                    if (bc) bc.value = wlRow?.city || prof?.city || 'Seattle';
+                    if (bs) bs.value = wlRow?.state || prof?.state || 'WA';
+                    if (bz) bz.value = wlRow?.zip_code || prof?.active_zone || prof?.zip || '98101';
                 }
 
-                const userFacId = prof?.assigned_facility_id || prof?.assigned_facility;
-                const isWaitlist = (prof?.onboarding_status === 'waitlisted' || prof?.onboarding_status === 'free_waitlist' || !userFacId || !isOperational || wlRow != null);
+                // 3. Update Facility Card with loaded address
+                const activeCity = bc?.value || userAddr?.billing_city || userAddr?.city || wlRow?.city || prof?.city || 'Seattle';
+                const activeState = bs?.value || userAddr?.billing_state || userAddr?.state || wlRow?.state || prof?.state || 'WA';
+                const activeZip = bz?.value || userAddr?.billing_zip || userAddr?.zip || wlRow?.zip_code || prof?.active_zone || prof?.zip || '98101';
 
-                if (isWaitlist && (!isOperational || !userFacId)) {
-                    let resolvedMarket = wlRow?.regional_market;
-                    if (!resolvedMarket && window.AddressValidator && typeof window.AddressValidator.resolveRegionalMarket === 'function' && userCity) {
-                        resolvedMarket = window.AddressValidator.resolveRegionalMarket(userCity, userState, userZip);
-                    }
-                    if (!resolvedMarket && zoneRecord?.city) {
-                        resolvedMarket = `${zoneRecord.city} Regional Metro`;
-                    }
-                    if (!resolvedMarket && userCity) {
-                        resolvedMarket = `${userCity} Regional Market`;
-                    }
-                    if (!resolvedMarket) {
-                        resolvedMarket = 'Regional Expansion Market';
-                    }
-
-                    if (facNameEl) facNameEl.textContent = `${resolvedMarket}${userZip ? ` (ZIP ${userZip})` : ''}`;
-                    if (facSubtextEl) facSubtextEl.textContent = 'Pre-Launch Expansion Hub • Facility In Preparation';
-                    if (facBadgeEl) {
-                        facBadgeEl.textContent = 'Pending Launch';
-                        facBadgeEl.className = 'text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-mono flex-shrink-0';
-                    }
-                } else if (userFacId) {
-                    const { data: fac } = await supabase.from('facilities').select('name').eq('id', userFacId).maybeSingle();
-                    if (fac && facNameEl) facNameEl.textContent = fac.name;
-                    if (facSubtextEl) facSubtextEl.textContent = 'Active Primary Storage Vault';
-                    if (facBadgeEl) {
-                        facBadgeEl.textContent = 'Assigned';
-                        facBadgeEl.className = 'text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono flex-shrink-0';
-                    }
-                } else if (window.currentActiveFacility && window.currentActiveFacility.name) {
-                    if (facNameEl) facNameEl.textContent = window.currentActiveFacility.name;
-                    if (facSubtextEl) facSubtextEl.textContent = 'Active Primary Storage Vault';
-                }
-
-                // Load saved billing and delivery addresses
-                if (currentUser) {
-                    const { data: addrData } = await supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle();
-                    const b1 = document.getElementById('settings-bill-line1');
-                    const b2 = document.getElementById('settings-bill-line2');
-                    const bc = document.getElementById('settings-bill-city');
-                    const bs = document.getElementById('settings-bill-state');
-                    const bz = document.getElementById('settings-bill-zip');
-
-                    const s1 = document.getElementById('settings-ship-line1');
-                    const s2 = document.getElementById('settings-ship-line2');
-                    const sc = document.getElementById('settings-ship-city');
-                    const ss = document.getElementById('settings-ship-state');
-                    const sz = document.getElementById('settings-ship-zip');
-
-                    const sameToggle = document.getElementById('settings-same-as-billing-toggle');
-
-                    if (addrData) {
-                        window.currentUserAddress = addrData;
-
-                        if (b1) b1.value = addrData.billing_address_line1 || addrData.address_line1 || '';
-                        if (b2) b2.value = addrData.billing_address_line2 || addrData.address_line2 || '';
-                        if (bc) bc.value = addrData.billing_city || addrData.city || '';
-                        if (bs) bs.value = addrData.billing_state || addrData.state || '';
-                        if (bz) bz.value = addrData.billing_zip || addrData.zip || (prof?.zip || '');
-
-                        const isSame = addrData.shipping_same_as_billing !== false;
-                        if (s1) s1.value = isSame ? (addrData.billing_address_line1 || addrData.address_line1 || '') : (addrData.address_line1 || '');
-                        if (s2) s2.value = isSame ? (addrData.billing_address_line2 || addrData.address_line2 || '') : (addrData.address_line2 || '');
-                        if (sc) sc.value = isSame ? (addrData.billing_city || addrData.city || '') : (addrData.city || '');
-                        if (ss) ss.value = isSame ? (addrData.billing_state || addrData.state || '') : (addrData.state || '');
-                        if (sz) sz.value = isSame ? (addrData.billing_zip || addrData.zip || prof?.zip || '') : (addrData.zip || prof?.zip || '');
-
-                        const notesEl = document.getElementById('settings-delivery-notes');
-                        if (notesEl) notesEl.value = addrData.delivery_instructions || '';
-
-                        if (sameToggle) sameToggle.checked = isSame;
-                        toggleSettingsSameAsBilling();
-                    } else if (prof && prof.zip) {
-                        if (bz) bz.value = prof.zip;
-                        if (sz) sz.value = prof.zip;
-                    }
-                }
+                await updateSettingsFacilityCard(activeCity, activeState, activeZip);
 
                 // Attach live AddressValidator to settings address fields
                 if (window.AddressValidator && !window._settingsValidatorAttached) {
@@ -7941,6 +7978,7 @@
                         onResolved: (zipData) => {
                             const isSame = document.getElementById('settings-same-as-billing-toggle')?.checked !== false;
                             if (isSame) syncBillingToShippingSettings();
+                            updateSettingsFacilityCard(zipData.city, zipData.state, zipData.zip);
                         }
                     });
                     window.AddressValidator.attachAutofill({
@@ -7972,6 +8010,10 @@
             if (isSame) {
                 syncBillingToShippingSettings();
             }
+            const bc = document.getElementById('settings-bill-city')?.value;
+            const bs = document.getElementById('settings-bill-state')?.value;
+            const bz = document.getElementById('settings-bill-zip')?.value;
+            updateSettingsFacilityCard(bc, bs, bz);
         }
 
         function syncBillingToShippingSettings() {
@@ -8571,17 +8613,17 @@
             } else if (!isMarketOperational || !profile?.assigned_facility_id || profile?.onboarding_status === 'waitlisted' || profile?.onboarding_status === 'free_waitlist' || profile?.onboarding_status === 'pending' || profile?.has_price_lock === true || hasPaidDepositInvoice || waitlistRow != null || activeHubWaitlistRow != null) {
                 // Pre-Launch Waitlist Account (Priority Rate-Lock or Free Waitlist)
                 let resolvedMarket = waitlistRow?.regional_market;
-                if (!resolvedMarket && window.AddressValidator && typeof window.AddressValidator.resolveRegionalMarket === 'function' && userCity) {
-                    resolvedMarket = window.AddressValidator.resolveRegionalMarket(userCity, userState, userZip);
+                if (!resolvedMarket && window.AddressValidator && typeof window.AddressValidator.resolveRegionalMarket === 'function' && (userCity || userZip)) {
+                    resolvedMarket = window.AddressValidator.resolveRegionalMarket(userCity || (zoneRecord?.city || ''), userState || 'WA', userZip);
                 }
                 if (!resolvedMarket && zoneRecord?.city) {
-                    resolvedMarket = `${zoneRecord.city} Regional Metro`;
+                    resolvedMarket = `${zoneRecord.city} Metro Hub`;
                 }
                 if (!resolvedMarket && userCity) {
-                    resolvedMarket = `${userCity} Regional Market`;
+                    resolvedMarket = `${userCity} Metro Hub`;
                 }
                 if (!resolvedMarket) {
-                    resolvedMarket = 'Regional Expansion Market';
+                    resolvedMarket = 'Pacific Northwest Pre-Launch Hub';
                 }
 
                 const hasDeposit = !!(profile?.has_price_lock || Number(profile?.deposit_paid_amount) > 0 || hasPaidDepositInvoice || waitlistRow?.payment_status === 'deposit_paid' || waitlistRow?.deposit_status === 'paid' || activeHubWaitlistRow?.payment_status === 'deposit_paid' || activeHubWaitlistRow?.deposit_status === 'paid');
