@@ -500,7 +500,8 @@
             </div>
 
             <!-- Hub State 1: Active Rate-Lock Secured (Paid Deposit) -->
-            <div id="wl-hub-secured-card" class="hidden bg-gradient-to-br from-emerald-50 via-teal-50/40 to-white border-2 border-emerald-500/40 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+            <div id="wl-hub-secured-card" class="hidden bg-gradient-to-br from-emerald-50/70 via-teal-50/30 to-white border-2 border-emerald-500/40 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+                <!-- Header Status -->
                 <div class="flex items-start justify-between gap-4 border-b border-emerald-200/60 pb-5">
                     <div class="flex items-center space-x-3.5">
                         <div class="p-3 bg-emerald-600 text-white rounded-2xl shadow-md">
@@ -517,29 +518,113 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs text-gray-700">
-                    <div class="bg-white/80 border border-emerald-200/60 p-4 rounded-2xl flex items-start gap-3">
-                        <i data-lucide="lock" class="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5"></i>
-                        <div>
-                            <span class="font-extrabold text-gray-900 block">Guaranteed Launch Pricing</span>
-                            <span class="text-gray-500 text-[11px] mt-0.5 block">Your monthly tier pricing is locked for 3 full years from the date we open in your city.</span>
+                <!-- Dynamic Real-Time Expansion Progress Tracker -->
+                <div class="bg-white border border-emerald-200/80 rounded-2xl p-5 shadow-xs space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="flex h-2.5 w-2.5 relative">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                            </span>
+                            <h4 class="text-xs font-black text-gray-900 uppercase tracking-wider">Live Expansion Telemetry: <span id="wl-hub-market-name" class="text-emerald-700 font-extrabold">Regional Market</span></h4>
                         </div>
+                        <span id="wl-hub-user-queue-badge" class="text-[11px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 w-fit">
+                            Priority Queue Position #1
+                        </span>
                     </div>
-                    <div class="bg-white/80 border border-emerald-200/60 p-4 rounded-2xl flex items-start gap-3">
-                        <i data-lucide="receipt" class="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5"></i>
-                        <div>
-                            <span class="font-extrabold text-gray-900 block">Official Deposit Statement</span>
-                            <span class="text-gray-500 text-[11px] mt-0.5 block">View or print your official tax receipt in your Billing History.</span>
+
+                    <!-- Progress Stages -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <!-- Stage 1 -->
+                        <div class="p-3.5 bg-emerald-50/60 border border-emerald-200 rounded-xl space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-mono font-black text-emerald-800 uppercase tracking-wider">Stage 1: Demand</span>
+                                <span class="text-xs font-bold text-emerald-700">✓ Completed</span>
+                            </div>
+                            <p class="text-xs font-black text-gray-900" id="wl-hub-stage1-title">Community Gathering</p>
+                            <p class="text-[11px] text-gray-600 font-medium" id="wl-hub-stage1-metric">Resolving market signups...</p>
+                            <div class="w-full bg-emerald-200 rounded-full h-1.5 mt-1">
+                                <div class="bg-emerald-600 h-1.5 rounded-full w-full"></div>
+                            </div>
+                        </div>
+
+                        <!-- Stage 2 -->
+                        <div class="p-3.5 bg-blue-50/60 border-2 border-blue-400 rounded-xl space-y-1.5 shadow-xs relative">
+                            <span class="absolute -top-2.5 right-3 text-[9px] font-mono font-black bg-blue-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">Current Stage</span>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-mono font-black text-blue-800 uppercase tracking-wider">Stage 2: Logistics</span>
+                                <span class="text-xs font-black text-blue-700" id="wl-hub-stage2-percent">65%</span>
+                            </div>
+                            <p class="text-xs font-black text-gray-900" id="wl-hub-stage2-title">Warehouse &amp; Route Density</p>
+                            <p class="text-[11px] text-gray-600 font-medium" id="wl-hub-stage2-metric">Analyzing route corridors...</p>
+                            <div class="w-full bg-blue-100 rounded-full h-1.5 mt-1">
+                                <div id="wl-hub-stage2-bar" class="bg-blue-600 h-1.5 rounded-full transition-all duration-700" style="width: 65%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Stage 3 -->
+                        <div class="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-1.5 opacity-90">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-mono font-black text-gray-500 uppercase tracking-wider">Stage 3: Launch</span>
+                                <span class="text-xs font-bold text-gray-500" id="wl-hub-stage3-status">⏳ Upcoming</span>
+                            </div>
+                            <p class="text-xs font-black text-gray-800" id="wl-hub-stage3-title">Priority Tote Dispatch</p>
+                            <p class="text-[11px] text-gray-500 font-medium" id="wl-hub-stage3-metric">First delivery drop to door</p>
+                            <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                <div id="wl-hub-stage3-bar" class="bg-emerald-600 h-1.5 rounded-full transition-all duration-700" style="width: 0%;"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <!-- CloudVault Feature Showcase -->
+                <div class="space-y-3 pt-1">
+                    <h4 class="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-1.5">
+                        <i data-lucide="sparkles" class="w-4 h-4 text-emerald-600"></i>
+                        <span>How Your CloudVault Service Works Once Launched</span>
+                    </h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div class="bg-white border border-gray-200 rounded-2xl p-4 space-y-1.5 shadow-xs">
+                            <div class="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                                <i data-lucide="box" class="w-4 h-4"></i>
+                            </div>
+                            <h5 class="font-extrabold text-gray-900 text-xs">Commercial Weatherproof Totes</h5>
+                            <p class="text-[11px] text-gray-600 leading-relaxed">Industrial-grade, crush-proof, security-sealed containers delivered directly to your front door for effortless packing.</p>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-2xl p-4 space-y-1.5 shadow-xs">
+                            <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                                <i data-lucide="truck" class="w-4 h-4"></i>
+                            </div>
+                            <h5 class="font-extrabold text-gray-900 text-xs">On-Demand Valet Retrieval</h5>
+                            <p class="text-[11px] text-gray-600 leading-relaxed">Need one tote or all of them back? Schedule delivery return right from your dashboard with 1-click doorstep drop-off.</p>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-2xl p-4 space-y-1.5 shadow-xs">
+                            <div class="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                                <i data-lucide="qr-code" class="w-4 h-4"></i>
+                            </div>
+                            <h5 class="font-extrabold text-gray-900 text-xs">Digital Item Catalog &amp; Photo Tags</h5>
+                            <p class="text-[11px] text-gray-600 leading-relaxed">Every tote is barcoded. Add item tags and photos from your phone so you always know exactly what is in storage.</p>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-2xl p-4 space-y-1.5 shadow-xs">
+                            <div class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                                <i data-lucide="lock" class="w-4 h-4"></i>
+                            </div>
+                            <h5 class="font-extrabold text-gray-900 text-xs">Biometric Climate-Controlled Vaults</h5>
+                            <p class="text-[11px] text-gray-600 leading-relaxed">24/7 video surveillance, temperature &amp; humidity regulation, and zero public warehouse access for maximum safety.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Actions -->
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-emerald-200/60">
                     <button onclick="openBillingModal()" class="bg-white hover:bg-gray-50 text-gray-800 font-extrabold text-xs px-4 py-3 rounded-xl border border-gray-300 shadow-sm flex items-center gap-2 cursor-pointer transition">
                         <i data-lucide="file-text" class="w-4 h-4 text-indigo-600"></i>
-                        <span>View Billing History &amp; Official Receipts</span>
+                        <span>View Billing History &amp; Official Deposit Receipts</span>
                     </button>
-                    <span class="text-[11px] font-semibold text-emerald-800">✓ You will be notified before facility launch.</span>
+                    <span class="text-[11px] font-bold text-emerald-900 flex items-center gap-1.5">
+                        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
+                        <span>Rate locked for 3 years from activation date • 100% refundable anytime</span>
+                    </span>
                 </div>
             </div>
 
@@ -3846,10 +3931,51 @@
                 console.warn('[Waitlist Hub Dynamic Deposit Fetch Notice]', e);
             }
 
-            const isPaidDeposit = (waitlistRow?.payment_status === 'deposit_paid' || waitlistRow?.deposit_status === 'paid' || profile?.has_price_lock === true);
+            // 1. Authoritative Reconciliation with Invoices Ledger
+            let hasPaidInvoice = false;
+            let paidInvoiceAmount = null;
+            if (currentUser && typeof supabase !== 'undefined') {
+                try {
+                    const { data: depInvs } = await supabase.from('invoices')
+                        .select('total_amount, subtotal, payment_status, stripe_payment_intent_id, created_at')
+                        .or(`uid.eq.${currentUser.id},customer_email.eq.${currentUser.email}`)
+                        .eq('invoice_type', 'unlaunched_deposit')
+                        .eq('payment_status', 'paid')
+                        .order('created_at', { ascending: false })
+                        .limit(1);
+
+                    if (depInvs && depInvs.length > 0) {
+                        hasPaidInvoice = true;
+                        paidInvoiceAmount = Number(depInvs[0].subtotal || depInvs[0].total_amount || hubDynamicGrossDeposit);
+                    }
+                } catch (invErr) {
+                    console.warn('[Waitlist Invoice Reconciliation]', invErr);
+                }
+            }
+
+            const isPaidDeposit = hasPaidInvoice || (waitlistRow?.payment_status === 'deposit_paid' || waitlistRow?.deposit_status === 'paid' || profile?.has_price_lock === true);
+
+            // Proactively self-heal database profile and waitlist row if paid invoice confirmed
+            if (hasPaidInvoice && (!profile?.has_price_lock || waitlistRow?.payment_status !== 'deposit_paid')) {
+                if (currentUser?.id) {
+                    supabase.from('users').update({
+                        has_price_lock: true,
+                        deposit_paid_amount: paidInvoiceAmount || hubDynamicGrossDeposit,
+                        onboarding_status: 'waitlisted'
+                    }).eq('id', currentUser.id).then(() => {}).catch(() => {});
+                }
+                if (waitlistRow?.id) {
+                    supabase.from('waitlist').update({
+                        deposit_status: 'paid',
+                        payment_status: 'deposit_paid',
+                        deposit_amount: paidInvoiceAmount || hubDynamicGrossDeposit,
+                        net_deposit_paid: paidInvoiceAmount || hubDynamicGrossDeposit
+                    }).eq('id', waitlistRow.id).then(() => {}).catch(() => {});
+                }
+            }
 
             if (isPaidDeposit) {
-                const paidAmt = Number(waitlistRow?.net_deposit_paid || profile?.deposit_paid_amount || hubDynamicGrossDeposit);
+                const paidAmt = Number(waitlistRow?.net_deposit_paid || profile?.deposit_paid_amount || paidInvoiceAmount || hubDynamicGrossDeposit);
                 if (badgeEl) {
                     badgeEl.textContent = '🟢 Priority Rate-Lock Active';
                     badgeEl.className = 'px-3 py-1 rounded-full text-xs font-black uppercase font-mono bg-emerald-100 text-emerald-800 border border-emerald-300';
@@ -3863,6 +3989,81 @@
 
                 if (securedCard) securedCard.classList.remove('hidden');
                 if (upgradeCard) upgradeCard.classList.add('hidden');
+
+                // 2. Query Real Dynamic Market Telemetry from Supabase
+                const userCity = (waitlistRow?.city || profile?.city || '').replace(/^zip:\s*/i, '').trim();
+                const userMarket = waitlistRow?.regional_market || profile?.regional_market || (window.AddressValidator && userCity ? window.AddressValidator.resolveRegionalMarket(userCity, 'WA', zip) : 'Regional Market');
+                const userCreatedAt = waitlistRow?.created_at || profile?.created_at || new Date().toISOString();
+
+                const marketNameEl = document.getElementById('wl-hub-market-name');
+                const queueBadgeEl = document.getElementById('wl-hub-user-queue-badge');
+                const s1MetricEl = document.getElementById('wl-hub-stage1-metric');
+                const s2MetricEl = document.getElementById('wl-hub-stage2-metric');
+                const s2PercentEl = document.getElementById('wl-hub-stage2-percent');
+                const s2BarEl = document.getElementById('wl-hub-stage2-bar');
+                const s3StatusEl = document.getElementById('wl-hub-stage3-status');
+                const s3MetricEl = document.getElementById('wl-hub-stage3-metric');
+                const s3BarEl = document.getElementById('wl-hub-stage3-bar');
+
+                if (marketNameEl) marketNameEl.textContent = userMarket || userCity || `ZIP ${zip}`;
+
+                try {
+                    // Fetch all actual leads in this market
+                    const { data: allLeads } = await supabase.from('waitlist')
+                        .select('id, requested_totes, deposit_amount, net_deposit_paid, payment_status, deposit_status, created_at, city, regional_market')
+                        .order('created_at', { ascending: true });
+
+                    const marketLeads = (allLeads || []).filter(l => {
+                        const m = (l.regional_market || '').toLowerCase();
+                        const c = (l.city || '').toLowerCase();
+                        const targetM = (userMarket || '').toLowerCase();
+                        const targetC = (userCity || '').toLowerCase();
+                        return (targetM && m === targetM) || (targetC && c.includes(targetC)) || (l.zip_code === zip);
+                    });
+
+                    const totalHouseholds = marketLeads.length > 0 ? marketLeads.length : 1;
+                    const totalTotesDemanded = marketLeads.reduce((sum, l) => sum + (Number(l.requested_totes) || 5), 0);
+                    const paidLeads = marketLeads.filter(l => l.payment_status === 'deposit_paid' || l.deposit_status === 'paid');
+                    const totalCapital = paidLeads.reduce((sum, l) => sum + (Number(l.net_deposit_paid || l.deposit_amount) || 10.00), 0);
+
+                    // Dynamic User Queue Ranking in market
+                    const priorPaid = paidLeads.filter(l => new Date(l.created_at) < new Date(userCreatedAt));
+                    const queueRank = priorPaid.length + 1;
+
+                    if (queueBadgeEl) queueBadgeEl.textContent = `Priority Queue Position #${queueRank} in ${userMarket || userCity || 'Market'}`;
+                    if (s1MetricEl) s1MetricEl.textContent = `${totalHouseholds} Local Household${totalHouseholds !== 1 ? 's' : ''} • ${totalTotesDemanded} Totes Demanded`;
+
+                    // Check if zone is active in operational_zones
+                    const { data: zoneData } = await supabase.from('operational_zones')
+                        .select('active, zip_codes')
+                        .contains('zip_codes', [zip])
+                        .maybeSingle();
+
+                    const isZoneActive = zoneData && zoneData.active === true;
+                    const stage2Pct = isZoneActive ? 100 : Math.min(95, Math.max(45, Math.round((totalCapital / 50) * 100) || 60));
+
+                    if (s2PercentEl) s2PercentEl.textContent = `${stage2Pct}%`;
+                    if (s2MetricEl) s2MetricEl.textContent = `$${totalCapital.toFixed(2)} Priority Capital Backing • Route Optimization Active`;
+                    if (s2BarEl) s2BarEl.style.width = `${stage2Pct}%`;
+
+                    if (isZoneActive) {
+                        if (s3StatusEl) {
+                            s3StatusEl.textContent = '🟢 Live / Dispatched';
+                            s3StatusEl.className = 'text-xs font-black text-emerald-600';
+                        }
+                        if (s3MetricEl) s3MetricEl.textContent = 'Facility Ready — Preparing Priority Delivery';
+                        if (s3BarEl) s3BarEl.style.width = '100%';
+                    } else {
+                        if (s3StatusEl) {
+                            s3StatusEl.textContent = '⏳ Upcoming';
+                            s3StatusEl.className = 'text-xs font-bold text-gray-500';
+                        }
+                        if (s3MetricEl) s3MetricEl.textContent = `Queue Spot #${queueRank} guaranteed upon facility launch`;
+                        if (s3BarEl) s3BarEl.style.width = '0%';
+                    }
+                } catch (tErr) {
+                    console.warn('[Telemetry Load Error]', tErr);
+                }
             } else {
                 const isFree = (waitlistRow?.type === 'free' || profile?.onboarding_status === 'free_waitlist');
                 if (badgeEl) {
@@ -8200,6 +8401,37 @@
                 }
                 if (managePlanBtn) managePlanBtn.classList.add('hidden');
 
+            } else if (profile?.onboarding_status === 'waitlisted' || profile?.onboarding_status === 'free_waitlist' || !!(profile?.has_price_lock) || activeHubWaitlistRow != null) {
+                // Pre-Launch Waitlist Account (Priority Rate-Lock or Free Waitlist)
+                const hasDeposit = !!(profile?.has_price_lock || Number(profile?.deposit_paid_amount) > 0 || activeHubWaitlistRow?.payment_status === 'deposit_paid' || activeHubWaitlistRow?.deposit_status === 'paid');
+                const totesReserved = activeHubWaitlistRow?.requested_totes || 5;
+
+                if (badgeEl) {
+                    badgeEl.textContent = hasDeposit ? 'PRIORITY WAITLIST ACTIVE' : 'FREE WAITLIST MEMBER';
+                    badgeEl.className = hasDeposit 
+                        ? 'text-[10px] font-black uppercase tracking-widest text-emerald-200 bg-emerald-950/70 border border-emerald-400/40 px-2.5 py-1 rounded-full'
+                        : 'text-[10px] font-black uppercase tracking-widest text-blue-200 bg-blue-950/70 border border-blue-400/40 px-2.5 py-1 rounded-full';
+                }
+                if (planNameEl) planNameEl.textContent = `${totesReserved} Totes Pre-Launch Reservation`;
+                if (monthlyAmountEl) monthlyAmountEl.innerHTML = `$0.00<span class="text-xs font-normal text-blue-200">/mo</span> <div class="text-[10px] text-emerald-200 font-semibold mt-0.5">Billing begins upon facility launch</div>`;
+                if (tierLabelEl) tierLabelEl.textContent = hasDeposit ? `3-Year Guaranteed Launch Rate Locked` : `Standard Queue (Free Waitlist)`;
+                
+                if (lastDateEl) {
+                    const depositDate = activeHubWaitlistRow?.created_at ? new Date(activeHubWaitlistRow.created_at) : (profile?.created_at ? new Date(profile.created_at) : null);
+                    lastDateEl.textContent = depositDate ? depositDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Deposit on File';
+                }
+                if (nextDateEl) nextDateEl.textContent = 'Auto-Activates Upon Local Facility Launch';
+
+                const promoBanner = document.getElementById('billing-promo-banner-container');
+                if (promoBanner) promoBanner.classList.add('hidden');
+
+                if (cancelBtnContainer) {
+                    cancelBtnContainer.innerHTML = hasDeposit
+                        ? `<span class="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl inline-flex items-center gap-1">✓ 3-Year Rate Lock Active (100% Refundable Deposit)</span>`
+                        : `<button onclick="closeBillingModal()" class="text-xs font-bold text-blue-600 hover:bg-blue-50 px-3.5 py-2 rounded-xl border border-blue-200 cursor-pointer">Upgrade to Priority Rate-Lock Deposit</button>`;
+                }
+                if (managePlanBtn) managePlanBtn.classList.add('hidden');
+
             } else {
                 // Cancelled / Inactive
                 if (badgeEl) {
@@ -8510,7 +8742,13 @@
                                             ${dueDateStr}
                                         </span>
                                     </div>
-                                    <p class="text-[10px] text-gray-500 font-mono">Issued: ${dateStr} • ${invNum}</p>
+                                    <div class="flex items-center gap-2 flex-wrap text-[10px] font-mono text-gray-500">
+                                        <span>Issued: ${dateStr} • ${invNum}</span>
+                                        ${(() => {
+                                            const stripeAuth = inv.stripe_payment_intent_id || inv.transaction_reference || inv.stripe_invoice_id || (inv.notes && inv.notes.match(/tok_[a-zA-Z0-9]+/)?.[0]) || (inv.notes && inv.notes.match(/pi_[a-zA-Z0-9_]+/)?.[0]);
+                                            return stripeAuth ? `<span class="bg-indigo-50 text-indigo-700 font-extrabold border border-indigo-200/70 px-1.5 py-0.5 rounded flex items-center gap-1">💳 Stripe Auth: ${escapeHtml(stripeAuth)}</span>` : '';
+                                        })()}
+                                    </div>
                                 </div>
                                 <div class="text-right space-y-1.5 flex flex-col items-end">
                                     <span class="text-sm font-black text-gray-900 block">$${afterTaxTotal.toFixed(2)}</span>

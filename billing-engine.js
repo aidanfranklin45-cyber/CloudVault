@@ -2951,7 +2951,8 @@
       }
 
       const invNum = invoiceObj.invoice_number || invoiceObj.invoiceNumber || (invoiceObj.id ? String(invoiceObj.id).substring(0, 12) : 'INV-2026-0000');
-      const stripeId = invoiceObj.stripe_invoice_id || 'in_live_stripe_sync';
+      const stripeAuthId = invoiceObj.stripe_payment_intent_id || invoiceObj.transaction_reference || invoiceObj.stripe_invoice_id || (invoiceObj.notes && invoiceObj.notes.match(/tok_[a-zA-Z0-9]+/)?.[0]) || (invoiceObj.notes && invoiceObj.notes.match(/pi_[a-zA-Z0-9_]+/)?.[0]) || 'in_live_stripe_sync';
+      const stripeId = stripeAuthId;
       const pdfUrl = invoiceObj.stripe_invoice_pdf || invoiceObj.stripe_hosted_invoice_url;
       const createdAt = invoiceObj.created_at ? new Date(invoiceObj.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const dueDate = invoiceObj.due_date ? new Date(invoiceObj.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : createdAt;
@@ -3177,8 +3178,9 @@
                 <h2 class="text-lg font-black font-mono text-slate-900 tracking-wider">${invNum}</h2>
                 <p class="text-[11px] text-slate-500 font-mono">Issued: ${createdAt}</p>
                 <div class="pt-0.5">
-                  <span class="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded">
-                    💳 Stripe: ${stripeId}
+                  <span class="inline-flex items-center gap-1.5 text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg shadow-2xs">
+                    <svg class="w-3.5 h-3.5 text-indigo-600 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    <span>Stripe Auth: <strong>${stripeId}</strong></span>
                   </span>
                 </div>
               </div>
@@ -3196,6 +3198,7 @@
                 <span class="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Service &amp; Facility Hub</span>
                 <p class="font-semibold text-[11px] text-slate-800"><span class="text-slate-500">Facility:</span> ${facilityDisplay}</p>
                 <p class="font-semibold text-[11px] text-slate-800"><span class="text-slate-500">Service:</span> ${servicePlan}</p>
+                <p class="text-slate-600 font-mono text-[11px]"><span class="text-slate-500">Payment Auth:</span> ${stripeId}</p>
                 <p class="text-slate-600 font-mono text-[11px]"><span class="text-slate-500">Txn Ref:</span> ${txnRef}</p>
               </div>
             </div>
