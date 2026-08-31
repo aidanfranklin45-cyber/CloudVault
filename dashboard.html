@@ -4741,7 +4741,58 @@
                     return;
                 }
 
-                // If user is truly canceled with 0 stored totes & no pending requests:
+                // Check if user is a waitlist / unlaunched market lead
+                const isWaitlistStatus = (profile && (profile.onboarding_status === 'waitlisted' || profile.onboarding_status === 'free_waitlist' || profile.onboarding_status === 'pending' || profile.has_price_lock === true));
+                let waitlistRow = activeHubWaitlistRow;
+                if (!waitlistRow && currentUser && typeof supabase !== 'undefined') {
+                    try {
+                        const { data: wl } = await supabase.from('waitlist')
+                            .select('*')
+                            .or(`user_id.eq.${currentUser.id},email.eq.${currentUser.email}`)
+                            .order('created_at', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        if (wl) {
+                            waitlistRow = wl;
+                            activeHubWaitlistRow = wl;
+                        }
+                    } catch (e) { }
+                }
+
+                // Check if user's zone is unlaunched
+                const uZip = window.currentUserAddress?.billing_zip || window.currentUserAddress?.zip || waitlistRow?.zip_code || profile?.active_zone || profile?.zip || '';
+                let zoneIsActive = true;
+                if (uZip && typeof supabase !== 'undefined') {
+                    try {
+                        const { data: oz } = await supabase.from('operational_zones')
+                            .select('active')
+                            .contains('zip_codes', [uZip])
+                            .maybeSingle();
+                        if (oz && oz.active === false) {
+                            zoneIsActive = false;
+                        }
+                    } catch (e) {}
+                }
+
+                if (isWaitlistStatus || waitlistRow || !zoneIsActive) {
+                    if (activeDashboard) activeDashboard.classList.add('hidden');
+                    if (onboardingWizard) onboardingWizard.classList.add('hidden');
+                    if (waitlistHub) waitlistHub.classList.remove('hidden');
+
+                    if (dropdownActionContainer) {
+                        dropdownActionContainer.innerHTML = `
+                            <button onclick="openBillingModal(); document.getElementById('user-dropdown')?.classList.add('hidden');" class="w-full text-left px-4 py-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer" role="menuitem">
+                                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+                                <span>📋 View Waitlist Status</span>
+                            </button>`;
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
+                    }
+
+                    renderWaitlistHub(profile, waitlistRow);
+                    return;
+                }
+
+                // If user is truly canceled in an active operational market with 0 stored totes & no pending requests:
                 if (dropdownActionContainer) {
                     dropdownActionContainer.innerHTML = `
                         <button onclick="reactivatePlanFromBilling(); document.getElementById('user-dropdown')?.classList.add('hidden');" class="w-full text-left px-4 py-2.5 text-xs font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-2 cursor-pointer" role="menuitem">
@@ -4749,27 +4800,6 @@
                             <span>🚀 Start New Plan</span>
                         </button>`;
                     if (typeof lucide !== 'undefined') lucide.createIcons();
-                }
-
-                // Check if user is a waitlist / unlaunched market lead
-                const isWaitlistStatus = (profile && (profile.onboarding_status === 'waitlisted' || profile.onboarding_status === 'free_waitlist'));
-                let waitlistRow = null;
-                try {
-                    const { data: wl } = await supabase.from('waitlist')
-                        .select('*')
-                        .or(`user_id.eq.${currentUser.id},email.eq.${currentUser.email}`)
-                        .order('created_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-                    if (wl) waitlistRow = wl;
-                } catch (e) { }
-
-                if (isWaitlistStatus || waitlistRow) {
-                    if (activeDashboard) activeDashboard.classList.add('hidden');
-                    if (onboardingWizard) onboardingWizard.classList.add('hidden');
-                    if (waitlistHub) waitlistHub.classList.remove('hidden');
-                    renderWaitlistHub(profile, waitlistRow);
-                    return;
                 }
 
                 // Default to onboarding wizard for brand new customers without active or canceling storage
@@ -7775,14 +7805,71 @@
             // Display current assigned Home Facility and Saved Delivery Address
             try {
                 const facNameEl = document.getElementById('settings-facility-name');
+                const facSubtextEl = document.getElementById('settings-facility-subtext');
                 const facBadgeEl = document.getElementById('settings-facility-badge');
-                const prof = currentUserProfile || currentProfile;
-                const userFacId = prof?.assigned_facility_id || prof?.assigned_facility;
-                const isWaitlist = (prof?.onboarding_status === 'waitlisted' || prof?.onboarding_status === 'free_waitlist' || !userFacId);
+                let prof = currentUserProfile || currentProfile;
+                if (!prof && currentUser && typeof supabase !== 'undefined') {
+                    const { data: dbUser } = await supabase.from('users').select('*').eq('id', currentUser.id).maybeSingle();
+                    if (dbUser) { prof = dbUser; currentUserProfile = dbUser; currentProfile = dbUser; }
+                }
 
-                if (isWaitlist && !userFacId) {
-                    const zipLabel = prof?.zip || prof?.active_zone || 'Market Pending';
-                    if (facNameEl) facNameEl.textContent = `Market Expansion Pipeline (ZIP ${zipLabel})`;
+                // Check customer address for city/zip if not on profile
+                let userAddr = window.currentUserAddress;
+                if (!userAddr && currentUser && typeof supabase !== 'undefined') {
+                    const { data: addr } = await supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle();
+                    if (addr) { userAddr = addr; window.currentUserAddress = addr; }
+                }
+
+                // Fetch waitlist row if exists
+                let wlRow = activeHubWaitlistRow;
+                if (!wlRow && currentUser && typeof supabase !== 'undefined') {
+                    const { data: wl } = await supabase.from('waitlist')
+                        .select('*')
+                        .or(`user_id.eq.${currentUser.id},email.eq.${currentUser.email}`)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                    if (wl) { wlRow = wl; activeHubWaitlistRow = wl; }
+                }
+
+                const userZip = userAddr?.billing_zip || userAddr?.zip || wlRow?.zip_code || prof?.active_zone || prof?.zip || '';
+                const userCity = userAddr?.billing_city || userAddr?.city || wlRow?.city || prof?.city || '';
+                const userState = userAddr?.billing_state || userAddr?.state || wlRow?.state || prof?.state || 'WA';
+
+                // Check if user is in an unlaunched market in operational_zones
+                let isOperational = false;
+                let zoneRecord = null;
+                if (userZip && typeof supabase !== 'undefined') {
+                    const { data: z } = await supabase.from('operational_zones')
+                        .select('*')
+                        .contains('zip_codes', [userZip])
+                        .maybeSingle();
+                    if (z) {
+                        zoneRecord = z;
+                        isOperational = z.active === true;
+                    }
+                }
+
+                const userFacId = prof?.assigned_facility_id || prof?.assigned_facility;
+                const isWaitlist = (prof?.onboarding_status === 'waitlisted' || prof?.onboarding_status === 'free_waitlist' || !userFacId || !isOperational || wlRow != null);
+
+                if (isWaitlist && (!isOperational || !userFacId)) {
+                    let resolvedMarket = wlRow?.regional_market;
+                    if (!resolvedMarket && window.AddressValidator && typeof window.AddressValidator.resolveRegionalMarket === 'function' && userCity) {
+                        resolvedMarket = window.AddressValidator.resolveRegionalMarket(userCity, userState, userZip);
+                    }
+                    if (!resolvedMarket && zoneRecord?.city) {
+                        resolvedMarket = `${zoneRecord.city} Regional Metro`;
+                    }
+                    if (!resolvedMarket && userCity) {
+                        resolvedMarket = `${userCity} Regional Market`;
+                    }
+                    if (!resolvedMarket) {
+                        resolvedMarket = 'Regional Expansion Market';
+                    }
+
+                    if (facNameEl) facNameEl.textContent = `${resolvedMarket}${userZip ? ` (ZIP ${userZip})` : ''}`;
+                    if (facSubtextEl) facSubtextEl.textContent = 'Pre-Launch Expansion Hub • Facility In Preparation';
                     if (facBadgeEl) {
                         facBadgeEl.textContent = 'Pending Launch';
                         facBadgeEl.className = 'text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-mono flex-shrink-0';
@@ -7790,12 +7877,14 @@
                 } else if (userFacId) {
                     const { data: fac } = await supabase.from('facilities').select('name').eq('id', userFacId).maybeSingle();
                     if (fac && facNameEl) facNameEl.textContent = fac.name;
+                    if (facSubtextEl) facSubtextEl.textContent = 'Active Primary Storage Vault';
                     if (facBadgeEl) {
                         facBadgeEl.textContent = 'Assigned';
                         facBadgeEl.className = 'text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono flex-shrink-0';
                     }
                 } else if (window.currentActiveFacility && window.currentActiveFacility.name) {
                     if (facNameEl) facNameEl.textContent = window.currentActiveFacility.name;
+                    if (facSubtextEl) facSubtextEl.textContent = 'Active Primary Storage Vault';
                 }
 
                 // Load saved billing and delivery addresses
@@ -8224,8 +8313,32 @@
             if (lastDateEl) lastDateEl.textContent = '...';
             if (nextDateEl) nextDateEl.textContent = 'Loading...';
 
-            // 1. Fetch Profile & Waitlist Row at top-level scope
-            const profile = (currentUserProfile || currentProfile || (currentUser ? await getCachedUserProfile(currentUser.id) : null));
+            // 1. Fetch Profile, Customer Address & Waitlist Row safely
+            let profile = currentUserProfile || currentProfile;
+            if (!profile && currentUser && typeof supabase !== 'undefined') {
+                try {
+                    const { data: dbUser } = await supabase.from('users').select('*').eq('id', currentUser.id).maybeSingle();
+                    if (dbUser) {
+                        profile = dbUser;
+                        currentUserProfile = dbUser;
+                        currentProfile = dbUser;
+                    }
+                } catch (e) {
+                    console.warn('[Billing Modal User Fetch Notice]', e);
+                }
+            }
+
+            let userAddress = window.currentUserAddress;
+            if (!userAddress && currentUser && typeof supabase !== 'undefined') {
+                try {
+                    const { data: addr } = await supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle();
+                    if (addr) {
+                        userAddress = addr;
+                        window.currentUserAddress = addr;
+                    }
+                } catch (e) {}
+            }
+
             let waitlistRow = activeHubWaitlistRow;
             if (!waitlistRow && currentUser && typeof supabase !== 'undefined') {
                 try {
@@ -8235,22 +8348,47 @@
                         .order('created_at', { ascending: false })
                         .limit(1)
                         .maybeSingle();
-                    if (wl) waitlistRow = wl;
+                    if (wl) {
+                        waitlistRow = wl;
+                        activeHubWaitlistRow = wl;
+                    }
                 } catch (e) {}
             }
 
             // Check for paid unlaunched_deposit invoices to ensure authoritative lock status
             let hasPaidDepositInvoice = false;
+            let depositPaidDate = null;
             if (currentUser && typeof supabase !== 'undefined') {
                 try {
                     const { data: depInvs } = await supabase.from('invoices')
-                        .select('id, payment_status, total_amount, subtotal')
+                        .select('id, payment_status, total_amount, subtotal, created_at')
                         .or(`uid.eq.${currentUser.id},customer_email.eq.${currentUser.email}`)
                         .eq('invoice_type', 'unlaunched_deposit')
                         .eq('payment_status', 'paid')
+                        .order('created_at', { ascending: false })
                         .limit(1);
                     if (depInvs && depInvs.length > 0) {
                         hasPaidDepositInvoice = true;
+                        depositPaidDate = depInvs[0].created_at;
+                    }
+                } catch (e) {}
+            }
+
+            const userZip = userAddress?.billing_zip || userAddress?.zip || waitlistRow?.zip_code || profile?.active_zone || profile?.zip || '';
+            const userCity = userAddress?.billing_city || userAddress?.city || waitlistRow?.city || profile?.city || '';
+            const userState = userAddress?.billing_state || userAddress?.state || waitlistRow?.state || profile?.state || 'WA';
+
+            let isMarketOperational = false;
+            let zoneRecord = null;
+            if (userZip && typeof supabase !== 'undefined') {
+                try {
+                    const { data: z } = await supabase.from('operational_zones')
+                        .select('*')
+                        .contains('zip_codes', [userZip])
+                        .maybeSingle();
+                    if (z) {
+                        zoneRecord = z;
+                        isMarketOperational = z.active === true;
                     }
                 } catch (e) {}
             }
@@ -8273,7 +8411,6 @@
 
             const sub = currentSubscription;
             const subStatus = (sub?.status || 'inactive').toLowerCase();
-            const isCancelled = subStatus === 'cancelled' || subStatus === 'canceled' || subStatus === 'inactive' || !sub;
             const isCanceling = subStatus === 'canceling';
             const isActive = subStatus === 'active';
 
@@ -8431,8 +8568,22 @@
                 }
                 if (managePlanBtn) managePlanBtn.classList.add('hidden');
 
-            } else if (profile?.onboarding_status === 'waitlisted' || profile?.onboarding_status === 'free_waitlist' || profile?.has_price_lock === true || hasPaidDepositInvoice || waitlistRow != null || activeHubWaitlistRow != null) {
+            } else if (!isMarketOperational || !profile?.assigned_facility_id || profile?.onboarding_status === 'waitlisted' || profile?.onboarding_status === 'free_waitlist' || profile?.onboarding_status === 'pending' || profile?.has_price_lock === true || hasPaidDepositInvoice || waitlistRow != null || activeHubWaitlistRow != null) {
                 // Pre-Launch Waitlist Account (Priority Rate-Lock or Free Waitlist)
+                let resolvedMarket = waitlistRow?.regional_market;
+                if (!resolvedMarket && window.AddressValidator && typeof window.AddressValidator.resolveRegionalMarket === 'function' && userCity) {
+                    resolvedMarket = window.AddressValidator.resolveRegionalMarket(userCity, userState, userZip);
+                }
+                if (!resolvedMarket && zoneRecord?.city) {
+                    resolvedMarket = `${zoneRecord.city} Regional Metro`;
+                }
+                if (!resolvedMarket && userCity) {
+                    resolvedMarket = `${userCity} Regional Market`;
+                }
+                if (!resolvedMarket) {
+                    resolvedMarket = 'Regional Expansion Market';
+                }
+
                 const hasDeposit = !!(profile?.has_price_lock || Number(profile?.deposit_paid_amount) > 0 || hasPaidDepositInvoice || waitlistRow?.payment_status === 'deposit_paid' || waitlistRow?.deposit_status === 'paid' || activeHubWaitlistRow?.payment_status === 'deposit_paid' || activeHubWaitlistRow?.deposit_status === 'paid');
                 const totesReserved = waitlistRow?.requested_totes || activeHubWaitlistRow?.requested_totes || 5;
 
@@ -8444,10 +8595,10 @@
                 }
                 if (planNameEl) planNameEl.textContent = `${totesReserved} Totes Pre-Launch Reservation`;
                 if (monthlyAmountEl) monthlyAmountEl.innerHTML = `$0.00<span class="text-xs font-normal text-blue-200">/mo</span> <div class="text-[10px] text-emerald-200 font-semibold mt-0.5">Billing begins upon facility launch</div>`;
-                if (tierLabelEl) tierLabelEl.textContent = hasDeposit ? `3-Year Guaranteed Launch Rate Locked` : `Standard Queue (Free Waitlist)`;
+                if (tierLabelEl) tierLabelEl.textContent = hasDeposit ? `3-Year Guaranteed Launch Rate Locked` : `Standard Queue (${resolvedMarket})`;
                 
                 if (lastDateEl) {
-                    const depositDate = waitlistRow?.created_at ? new Date(waitlistRow.created_at) : (profile?.created_at ? new Date(profile.created_at) : null);
+                    const depositDate = depositPaidDate ? new Date(depositPaidDate) : (waitlistRow?.created_at ? new Date(waitlistRow.created_at) : (profile?.created_at ? new Date(profile.created_at) : null));
                     lastDateEl.textContent = depositDate ? depositDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Deposit on File';
                 }
                 if (nextDateEl) nextDateEl.textContent = 'Auto-Activates Upon Local Facility Launch';
@@ -8457,13 +8608,13 @@
 
                 if (cancelBtnContainer) {
                     cancelBtnContainer.innerHTML = hasDeposit
-                        ? `<span class="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl inline-flex items-center gap-1">✓ 3-Year Rate Lock Active (100% Refundable Deposit)</span>`
-                        : `<span class="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-3.5 py-2 rounded-xl inline-flex items-center gap-1">✉️ Free Waitlist Member</span>`;
+                        ? `<span class="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl inline-flex items-center gap-1">✓ 3-Year Rate Lock Active (${resolvedMarket})</span>`
+                        : `<span class="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-3.5 py-2 rounded-xl inline-flex items-center gap-1">✉️ Free Waitlist Member (${resolvedMarket})</span>`;
                 }
                 if (managePlanBtn) managePlanBtn.classList.add('hidden');
 
             } else {
-                // Cancelled / Inactive
+                // Cancelled / Inactive in an active operational market
                 if (badgeEl) {
                     badgeEl.textContent = 'CANCELLED';
                     badgeEl.className = 'text-[10px] font-black uppercase tracking-widest text-rose-200 bg-rose-950/70 border border-rose-400/40 px-2.5 py-1 rounded-full';
@@ -8483,7 +8634,11 @@
                 if (promoBanner) promoBanner.classList.add('hidden');
 
                 if (cancelBtnContainer) {
-                    cancelBtnContainer.innerHTML = `<button onclick="reactivatePlanFromBilling()" class="text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"><span>🚀 Reactivate / Start New Plan</span></button>`;
+                    if (isMarketOperational) {
+                        cancelBtnContainer.innerHTML = `<button onclick="reactivatePlanFromBilling()" class="text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"><span>🚀 Reactivate / Start New Plan</span></button>`;
+                    } else {
+                        cancelBtnContainer.innerHTML = `<span class="text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl">Market Pending Launch</span>`;
+                    }
                 }
                 if (managePlanBtn) managePlanBtn.classList.add('hidden');
             }
