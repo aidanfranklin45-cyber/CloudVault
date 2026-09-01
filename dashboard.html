@@ -1271,6 +1271,16 @@
                             <span id="ledger-slot-label">Time Window:</span>
                             <span id="ledger-slot-amount" class="font-bold text-gray-900">$0.00</span>
                         </div>
+                        <!-- Active Creator Promo Discount Row -->
+                        <div id="ledger-promo-row" class="hidden flex justify-between items-center text-emerald-600 font-bold">
+                            <span id="ledger-promo-label">Creator Promo Discount:</span>
+                            <span id="ledger-promo-amount">-$0.00</span>
+                        </div>
+                        <!-- Estimated Sales Tax Row -->
+                        <div id="ledger-tax-row" class="hidden flex justify-between items-center text-gray-600 font-medium">
+                            <span id="ledger-tax-label">Estimated Sales Tax:</span>
+                            <span id="ledger-tax-amount" class="font-bold text-gray-900">$0.00</span>
+                        </div>
                         <div class="flex justify-between items-center pt-2 border-t border-gray-200 font-extrabold text-sm text-gray-900">
                             <span>Total Due at Retrieval:</span>
                             <span id="ledger-total-amount" class="text-blue-600 font-black text-base">$0.00</span>
@@ -6366,6 +6376,30 @@
             const nextDayBase = nextDayFree ? 0.00 : (Number(p.next_day_surge_fee) || 0.00);
             const leadFee = diffDays <= 0 ? sameDayBase : (diffDays === 1 ? nextDayBase : 0.00);
 
+            // Gross Subtotal (before promo discount and sales tax)
+            const grossSubtotal = valetFee + leadFee + slotFee;
+
+            // Resolve and apply active creator promo discount
+            const retrievalPromo = window.retrievalActivePromo || null;
+            let promoDiscountAmt = 0;
+            let appliedPromoCode = null;
+
+            if (grossSubtotal > 0 && retrievalPromo && retrievalPromo.active) {
+                const discountPct = Number(retrievalPromo.discountPct || 0);
+                promoDiscountAmt = Math.round(grossSubtotal * (discountPct / 100) * 100) / 100;
+                appliedPromoCode = retrievalPromo.promoCode;
+            }
+
+            const netTaxable = Math.max(0, grossSubtotal - promoDiscountAmt);
+            let userTaxRate = 0.085;
+            if (window.currentActiveFacility && window.currentActiveFacility.tax_rate != null) {
+                userTaxRate = Number(window.currentActiveFacility.tax_rate);
+            } else if (p && p.tax_rate != null) {
+                userTaxRate = Number(p.tax_rate);
+            }
+            const taxAmt = grossSubtotal > 0 ? (Math.round(netTaxable * userTaxRate * 100) / 100) : 0;
+            const finalTotal = Math.max(0, Math.round((netTaxable + taxAmt) * 100) / 100);
+
             // Update Additive Ledger Elements
             const ledgerLogisticsLbl = document.getElementById('ledger-logistics-label');
             const ledgerLogisticsAmt = document.getElementById('ledger-logistics-amount');
@@ -6373,6 +6407,12 @@
             const ledgerLeadtimeAmt = document.getElementById('ledger-leadtime-amount');
             const ledgerSlotLbl = document.getElementById('ledger-slot-label');
             const ledgerSlotAmt = document.getElementById('ledger-slot-amount');
+            const ledgerPromoRow = document.getElementById('ledger-promo-row');
+            const ledgerPromoLbl = document.getElementById('ledger-promo-label');
+            const ledgerPromoAmt = document.getElementById('ledger-promo-amount');
+            const ledgerTaxRow = document.getElementById('ledger-tax-row');
+            const ledgerTaxLbl = document.getElementById('ledger-tax-label');
+            const ledgerTaxAmt = document.getElementById('ledger-tax-amount');
             const ledgerTotalAmt = document.getElementById('ledger-total-amount');
 
             if (ledgerLogisticsLbl && ledgerLogisticsAmt) {
@@ -6399,8 +6439,28 @@
                 ledgerSlotAmt.textContent = slotFee > 0 ? `+$${slotFee.toFixed(2)}` : 'Included ($0.00)';
             }
 
+            if (ledgerPromoRow && ledgerPromoLbl && ledgerPromoAmt) {
+                if (promoDiscountAmt > 0) {
+                    ledgerPromoLbl.textContent = `Creator Discount (${appliedPromoCode} — ${retrievalPromo.discountPct}% off):`;
+                    ledgerPromoAmt.textContent = `-$${promoDiscountAmt.toFixed(2)}`;
+                    ledgerPromoRow.classList.remove('hidden');
+                } else {
+                    ledgerPromoRow.classList.add('hidden');
+                }
+            }
+
+            if (ledgerTaxRow && ledgerTaxLbl && ledgerTaxAmt) {
+                if (taxAmt > 0) {
+                    ledgerTaxLbl.textContent = `Estimated Sales Tax (${(userTaxRate * 100).toFixed(2)}%):`;
+                    ledgerTaxAmt.textContent = `+$${taxAmt.toFixed(2)}`;
+                    ledgerTaxRow.classList.remove('hidden');
+                } else {
+                    ledgerTaxRow.classList.add('hidden');
+                }
+            }
+
             if (ledgerTotalAmt) {
-                ledgerTotalAmt.textContent = totalFee > 0 ? `$${totalFee.toFixed(2)}` : 'FREE ($0.00)';
+                ledgerTotalAmt.textContent = finalTotal > 0 ? `$${finalTotal.toFixed(2)}` : 'FREE ($0.00)';
             }
 
             const badge = document.getElementById('surge-badge');
@@ -6413,33 +6473,37 @@
                 if (calc.tier === 'next_day_promo') {
                     if (titleEl) titleEl.textContent = "Valet Doorstep Delivery (Next-Day Promo)";
                     if (descEl) descEl.textContent = `$${valetFee.toFixed(2)} Valet delivery fee. Next-day access fee waived courtesy of facility promo.`;
-                    if (amountEl) amountEl.textContent = `$${totalFee.toFixed(2)}`;
+                    if (amountEl) amountEl.textContent = `$${finalTotal.toFixed(2)}`;
                     if (badge) {
                         badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 uppercase";
-                        badge.textContent = `Valet Total: $${totalFee.toFixed(2)}`;
+                        badge.textContent = `Valet Total: $${finalTotal.toFixed(2)}`;
                     }
                 } else if (surgeFee > 0) {
                     if (titleEl) titleEl.textContent = `Valet Delivery + ${calc.title}`;
-                    if (descEl) descEl.textContent = `$${valetFee.toFixed(2)} Delivery + $${surgeFee.toFixed(2)} ${calc.desc.toLowerCase()}`;
-                    if (amountEl) amountEl.textContent = `$${totalFee.toFixed(2)}`;
+                    if (descEl) {
+                        descEl.textContent = promoDiscountAmt > 0 
+                            ? `$${valetFee.toFixed(2)} Delivery + $${surgeFee.toFixed(2)} ${calc.desc.toLowerCase()} (${retrievalPromo.discountPct}% coupon applied).`
+                            : `$${valetFee.toFixed(2)} Delivery + $${surgeFee.toFixed(2)} ${calc.desc.toLowerCase()}`;
+                    }
+                    if (amountEl) amountEl.textContent = `$${finalTotal.toFixed(2)}`;
                     if (badge) {
                         badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 uppercase";
-                        badge.textContent = `Total: $${totalFee.toFixed(2)}`;
+                        badge.textContent = `Total: $${finalTotal.toFixed(2)}`;
                     }
                 } else {
                     if (titleEl) titleEl.textContent = "Valet Doorstep Delivery";
                     if (descEl) descEl.textContent = `$${valetFee.toFixed(2)} Delivery fee. Scheduled in advance (No surge fees).`;
-                    if (amountEl) amountEl.textContent = `$${totalFee.toFixed(2)}`;
+                    if (amountEl) amountEl.textContent = `$${finalTotal.toFixed(2)}`;
                     if (badge) {
                         badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 uppercase";
-                        badge.textContent = `Valet Delivery ($${totalFee.toFixed(2)})`;
+                        badge.textContent = `Valet Delivery ($${finalTotal.toFixed(2)})`;
                     }
                 }
 
-                if (confirmBtn) confirmBtn.textContent = `Confirm Valet Delivery ($${totalFee.toFixed(2)})`;
+                if (confirmBtn) confirmBtn.textContent = `Confirm Valet Delivery ($${finalTotal.toFixed(2)})`;
             } else {
                 // Self-Service Pickup Staging
-                if (calc.tier === 'next_day_promo' || totalFee === 0) {
+                if (calc.tier === 'next_day_promo' || finalTotal === 0) {
                     if (titleEl) titleEl.textContent = "Next-Day Fast Access (Included Promo)";
                     if (descEl) descEl.textContent = "Next-day retrieval complimentary courtesy of facility promotion.";
                     if (amountEl) amountEl.textContent = "FREE ($0.00)";
@@ -6450,13 +6514,13 @@
                     if (confirmBtn) confirmBtn.textContent = "Confirm Self-Service Pickup (Included)";
                 } else if (surgeFee > 0) {
                     if (titleEl) titleEl.textContent = calc.title;
-                    if (descEl) descEl.textContent = calc.desc;
-                    if (amountEl) amountEl.textContent = `$${surgeFee.toFixed(2)}`;
+                    if (descEl) descEl.textContent = promoDiscountAmt > 0 ? `${calc.desc} (${retrievalPromo.discountPct}% coupon applied).` : calc.desc;
+                    if (amountEl) amountEl.textContent = `$${finalTotal.toFixed(2)}`;
                     if (badge) {
                         badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 uppercase";
-                        badge.textContent = `Surge +$${surgeFee.toFixed(2)}`;
+                        badge.textContent = `Total $${finalTotal.toFixed(2)}`;
                     }
-                    if (confirmBtn) confirmBtn.textContent = `Confirm Self-Service Pickup ($${surgeFee.toFixed(2)})`;
+                    if (confirmBtn) confirmBtn.textContent = `Confirm Self-Service Pickup ($${finalTotal.toFixed(2)})`;
                 } else {
                     if (titleEl) titleEl.textContent = "Standard Access Reserved";
                     if (descEl) descEl.textContent = "Scheduled in advance. Included with membership.";
@@ -6739,6 +6803,14 @@
             if (selectedItems.size === 0) return;
             
             await loadAssignedFacilityPricing();
+
+            if (currentUser && window.CloudVaultBilling && typeof window.CloudVaultBilling.getUserActivePromo === 'function') {
+                try {
+                    window.retrievalActivePromo = await window.CloudVaultBilling.getUserActivePromo(currentUser.id);
+                } catch (e) {
+                    console.warn('[Retrieval Promo Fetch]', e);
+                }
+            }
 
             // Populate modal counts and pricing
             const count = selectedItems.size;
