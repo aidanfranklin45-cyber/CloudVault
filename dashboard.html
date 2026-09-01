@@ -4744,8 +4744,18 @@
                     return;
                 }
 
-                // Check if user is a waitlist / unlaunched market lead
-                const isWaitlistStatus = (profile && (profile.onboarding_status === 'waitlisted' || profile.onboarding_status === 'free_waitlist' || profile.onboarding_status === 'pending' || profile.has_price_lock === true));
+                // 1. Resolve Customer Location (Address, Waitlist, Profile)
+                let userAddress = window.currentUserAddress;
+                if (!userAddress && currentUser && typeof supabase !== 'undefined') {
+                    try {
+                        const { data: addr } = await supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle();
+                        if (addr) {
+                            userAddress = addr;
+                            window.currentUserAddress = addr;
+                        }
+                    } catch (e) {}
+                }
+
                 let waitlistRow = activeHubWaitlistRow;
                 if (!waitlistRow && currentUser && typeof supabase !== 'undefined') {
                     try {
@@ -4759,53 +4769,62 @@
                             waitlistRow = wl;
                             activeHubWaitlistRow = wl;
                         }
-                    } catch (e) { }
-                }
-
-                // Check if user's zone is unlaunched
-                const uZip = window.currentUserAddress?.billing_zip || window.currentUserAddress?.zip || waitlistRow?.zip_code || profile?.active_zone || profile?.zip || '';
-                let zoneIsActive = true;
-                if (uZip && typeof supabase !== 'undefined') {
-                    try {
-                        const { data: oz } = await supabase.from('operational_zones')
-                            .select('active')
-                            .contains('zip_codes', [uZip])
-                            .maybeSingle();
-                        if (oz && oz.active === false) {
-                            zoneIsActive = false;
-                        }
                     } catch (e) {}
                 }
 
-                if (isWaitlistStatus || waitlistRow || !zoneIsActive) {
-                    if (activeDashboard) activeDashboard.classList.add('hidden');
-                    if (onboardingWizard) onboardingWizard.classList.add('hidden');
-                    if (waitlistHub) waitlistHub.classList.remove('hidden');
+                const uZip = String(userAddress?.billing_zip || userAddress?.zip || waitlistRow?.zip_code || profile?.active_zone || profile?.zip || '').trim();
+                const uCity = String(userAddress?.billing_city || userAddress?.city || waitlistRow?.city || profile?.city || '').trim().toLowerCase();
 
-                    if (dropdownActionContainer) {
-                        dropdownActionContainer.innerHTML = `
-                            <button onclick="openBillingModal(); document.getElementById('user-dropdown')?.classList.add('hidden');" class="w-full text-left px-4 py-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer" role="menuitem">
-                                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
-                                <span>📋 View Waitlist Status</span>
-                            </button>`;
-                        if (typeof lucide !== 'undefined') lucide.createIcons();
+                // 2. Check if user's local zone is actively operational
+                let zoneIsActive = false;
+                let userZoneRecord = null;
+
+                if (typeof supabase !== 'undefined') {
+                    try {
+                        const { data: allZones } = await supabase.from('operational_zones').select('*');
+                        if (allZones && Array.isArray(allZones)) {
+                            userZoneRecord = allZones.find(z => Array.isArray(z.zip_codes) && z.zip_codes.includes(uZip));
+                            if (userZoneRecord) {
+                                zoneIsActive = (userZoneRecord.active === true);
+                            } else if (uZip.startsWith('989') || uCity.includes('yakima') || uCity.includes('selah')) {
+                                zoneIsActive = true;
+                            }
+                        }
+                    } catch (e) {
+                        if (uZip.startsWith('989') || uCity.includes('yakima') || uCity.includes('selah')) {
+                            zoneIsActive = true;
+                        }
                     }
+                }
 
-                    renderWaitlistHub(profile, waitlistRow);
+                // If user is in an ACTIVE OPERATIONAL MARKET (e.g. Yakima), NEVER show the waitlist hub!
+                // Route directly to the onboarding setup wizard so they can start their plan!
+                if (zoneIsActive) {
+                    if (activeDashboard) activeDashboard.classList.add('hidden');
+                    if (waitlistHub) waitlistHub.classList.add('hidden');
+                    if (onboardingWizard) onboardingWizard.classList.remove('hidden');
+                    if (dropdownActionContainer) dropdownActionContainer.innerHTML = '';
+                    currentSubscription = null;
+                    initWizardState();
                     return;
                 }
 
-                // For new users setting up their account in onboarding wizard:
+                // If user is in an UNLAUNCHED EXPANSION MARKET (Seattle, Portland, Spokane, etc.):
+                if (activeDashboard) activeDashboard.classList.add('hidden');
+                if (onboardingWizard) onboardingWizard.classList.add('hidden');
+                if (waitlistHub) waitlistHub.classList.remove('hidden');
+
                 if (dropdownActionContainer) {
-                    dropdownActionContainer.innerHTML = '';
+                    dropdownActionContainer.innerHTML = `
+                        <button onclick="openBillingModal(); document.getElementById('user-dropdown')?.classList.add('hidden');" class="w-full text-left px-4 py-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer" role="menuitem">
+                            <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+                            <span>📋 View Waitlist Status</span>
+                        </button>`;
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
                 }
 
-                // Default to onboarding wizard for brand new customers without active or canceling storage
-                if (activeDashboard) activeDashboard.classList.add('hidden');
-                if (waitlistHub) waitlistHub.classList.add('hidden');
-                if (onboardingWizard) onboardingWizard.classList.remove('hidden');
-                currentSubscription = null;
-                initWizardState();
+                renderWaitlistHub(profile, waitlistRow);
+                return;
             }
 
             async function reactivateCancelingSubscription() {
@@ -8417,17 +8436,22 @@
 
             let isMarketOperational = false;
             let zoneRecord = null;
-            if (userZip && typeof supabase !== 'undefined') {
+            if (typeof supabase !== 'undefined') {
                 try {
-                    const { data: z } = await supabase.from('operational_zones')
-                        .select('*')
-                        .contains('zip_codes', [userZip])
-                        .maybeSingle();
-                    if (z) {
-                        zoneRecord = z;
-                        isMarketOperational = z.active === true;
+                    const { data: allZones } = await supabase.from('operational_zones').select('*');
+                    if (allZones && Array.isArray(allZones)) {
+                        zoneRecord = allZones.find(z => Array.isArray(z.zip_codes) && z.zip_codes.includes(String(userZip).trim()));
+                        if (zoneRecord) {
+                            isMarketOperational = (zoneRecord.active === true);
+                        } else if (String(userZip).trim().startsWith('989') || String(userCity).toLowerCase().includes('yakima') || String(userCity).toLowerCase().includes('selah')) {
+                            isMarketOperational = true;
+                        }
                     }
-                } catch (e) {}
+                } catch (e) {
+                    if (String(userZip).trim().startsWith('989') || String(userCity).toLowerCase().includes('yakima') || String(userCity).toLowerCase().includes('selah')) {
+                        isMarketOperational = true;
+                    }
+                }
             }
 
             if (currentUser && typeof supabase !== 'undefined') {
@@ -8605,8 +8629,8 @@
                 }
                 if (managePlanBtn) managePlanBtn.classList.add('hidden');
 
-            } else if (!isMarketOperational || !profile?.assigned_facility_id || profile?.onboarding_status === 'waitlisted' || profile?.onboarding_status === 'free_waitlist' || profile?.onboarding_status === 'pending' || profile?.has_price_lock === true || hasPaidDepositInvoice || waitlistRow != null || activeHubWaitlistRow != null) {
-                // Pre-Launch Waitlist Account (Priority Rate-Lock or Free Waitlist)
+            } else if (!isMarketOperational) {
+                // Pre-Launch Waitlist Account (Unlaunched markets: Seattle, Portland, Spokane, etc.)
                 let resolvedMarket = waitlistRow?.regional_market;
                 if (!resolvedMarket && window.AddressValidator && typeof window.AddressValidator.resolveRegionalMarket === 'function' && (userCity || userZip)) {
                     resolvedMarket = window.AddressValidator.resolveRegionalMarket(userCity || (zoneRecord?.city || ''), userState || 'WA', userZip);
@@ -8651,31 +8675,27 @@
                 if (managePlanBtn) managePlanBtn.classList.add('hidden');
 
             } else {
-                // Cancelled / Inactive in an active operational market
+                // Active Operational Market (e.g. Yakima) without active storage plan -> Prompt to start a plan!
                 if (badgeEl) {
-                    badgeEl.textContent = 'CANCELLED';
-                    badgeEl.className = 'text-[10px] font-black uppercase tracking-widest text-rose-200 bg-rose-950/70 border border-rose-400/40 px-2.5 py-1 rounded-full';
+                    badgeEl.textContent = 'ACTIVE MARKET — READY TO START';
+                    badgeEl.className = 'text-[10px] font-black uppercase tracking-widest text-emerald-200 bg-emerald-950/70 border border-emerald-400/40 px-2.5 py-1 rounded-full';
                 }
                 const totalTotes = sub ? (sub.total_totes || 0) : 0;
-                if (planNameEl) planNameEl.textContent = totalTotes ? `${totalTotes} Totes Plan (Cancelled)` : 'No Active Plan';
-                if (monthlyAmountEl) monthlyAmountEl.textContent = '$0.00';
-                if (tierLabelEl) tierLabelEl.textContent = 'Plan Terminated';
+                if (planNameEl) planNameEl.textContent = totalTotes ? `${totalTotes} Totes Plan (Inactive)` : 'No Active Storage Plan';
+                if (monthlyAmountEl) monthlyAmountEl.textContent = '$0.00/mo';
+                if (tierLabelEl) tierLabelEl.textContent = 'Yakima Fulfillment Center (Active Vault)';
                 
                 if (lastDateEl) {
                     const lastDate = sub?.canceled_at ? new Date(sub.canceled_at) : (sub?.created_at ? new Date(sub.created_at) : null);
-                    lastDateEl.textContent = lastDate ? lastDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+                    lastDateEl.textContent = lastDate ? lastDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Ready to Launch';
                 }
-                if (nextDateEl) nextDateEl.textContent = 'None — Account Inactive';
+                if (nextDateEl) nextDateEl.textContent = 'Select Plan in Setup Wizard';
 
                 const promoBanner = document.getElementById('billing-promo-banner-container');
                 if (promoBanner) promoBanner.classList.add('hidden');
 
                 if (cancelBtnContainer) {
-                    if (isMarketOperational) {
-                        cancelBtnContainer.innerHTML = `<button onclick="reactivatePlanFromBilling()" class="text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"><span>🚀 Reactivate / Start New Plan</span></button>`;
-                    } else {
-                        cancelBtnContainer.innerHTML = `<span class="text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl">Market Pending Launch</span>`;
-                    }
+                    cancelBtnContainer.innerHTML = `<button onclick="reactivatePlanFromBilling()" class="text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"><span>🚀 Set Up & Start Storage Plan</span></button>`;
                 }
                 if (managePlanBtn) managePlanBtn.classList.add('hidden');
             }
