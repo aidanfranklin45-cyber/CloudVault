@@ -1693,18 +1693,18 @@
                     
                     <div>
                         <span class="text-[11px] font-bold text-gray-500 block mb-1">Street Address</span>
-                        <input type="text" id="settings-bill-line1" autocomplete="billing street-address" oninput="onSettingsBillingInput()" placeholder="1234 Main St" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                        <input type="text" id="settings-bill-line1" autocomplete="billing street-address" oninput="onSettingsBillingInput()" placeholder="Street Address" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
                     </div>
 
                     <div>
                         <span class="text-[11px] font-bold text-gray-500 block mb-1">Apt, Suite, Unit <span class="text-gray-400 font-normal lowercase">(optional)</span></span>
-                        <input type="text" id="settings-bill-line2" autocomplete="billing address-line2" oninput="onSettingsBillingInput()" placeholder="Apt 4B" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                        <input type="text" id="settings-bill-line2" autocomplete="billing address-line2" oninput="onSettingsBillingInput()" placeholder="Apt, Suite, Unit" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
                     </div>
 
                     <div class="grid grid-cols-6 gap-2">
                         <div class="col-span-3">
                             <span class="text-[11px] font-bold text-gray-500 block mb-1">City</span>
-                            <input type="text" id="settings-bill-city" autocomplete="billing address-level2" oninput="onSettingsBillingInput()" placeholder="Seattle" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
+                            <input type="text" id="settings-bill-city" autocomplete="billing address-level2" oninput="onSettingsBillingInput()" placeholder="City" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500">
                         </div>
                         <div class="col-span-1">
                             <span class="text-[11px] font-bold text-gray-500 block mb-1">State</span>
@@ -1712,7 +1712,7 @@
                         </div>
                         <div class="col-span-2">
                             <span class="text-[11px] font-bold text-gray-500 block mb-1">ZIP</span>
-                            <input type="text" id="settings-bill-zip" autocomplete="billing postal-code" oninput="onSettingsBillingInput()" placeholder="98101" maxlength="10" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500 text-center">
+                            <input type="text" id="settings-bill-zip" autocomplete="billing postal-code" oninput="onSettingsBillingInput()" placeholder="ZIP Code" maxlength="10" class="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-gray-50 focus:outline-none focus:border-blue-500 text-center">
                         </div>
                     </div>
                 </div>
@@ -8012,37 +8012,73 @@
 
                 const sameToggle = document.getElementById('settings-same-as-billing-toggle');
 
-                if (userAddr) {
-                    if (b1) b1.value = userAddr.billing_address_line1 || userAddr.address_line1 || '';
-                    if (b2) b2.value = userAddr.billing_address_line2 || userAddr.address_line2 || '';
-                    if (bc) bc.value = userAddr.billing_city || userAddr.city || wlRow?.city || prof?.city || '';
-                    if (bs) bs.value = userAddr.billing_state || userAddr.state || wlRow?.state || prof?.state || 'WA';
-                    if (bz) bz.value = userAddr.billing_zip || userAddr.zip || wlRow?.zip_code || prof?.active_zone || prof?.zip || '';
+                // Determine active zip & facility context dynamically
+                let initialZip = userAddr?.billing_zip || userAddr?.zip || wlRow?.zip_code || prof?.active_zone || prof?.zip || '';
+                let initialCity = userAddr?.billing_city || userAddr?.city || wlRow?.city || prof?.city || '';
+                let initialState = userAddr?.billing_state || userAddr?.state || wlRow?.state || prof?.state || '';
 
-                    const isSame = userAddr.shipping_same_as_billing !== false;
-                    if (s1) s1.value = isSame ? (userAddr.billing_address_line1 || userAddr.address_line1 || '') : (userAddr.address_line1 || '');
-                    if (s2) s2.value = isSame ? (userAddr.billing_address_line2 || userAddr.address_line2 || '') : (userAddr.address_line2 || '');
-                    if (sc) sc.value = isSame ? (userAddr.billing_city || userAddr.city || wlRow?.city || prof?.city || '') : (userAddr.city || wlRow?.city || prof?.city || '');
-                    if (ss) ss.value = isSame ? (userAddr.billing_state || userAddr.state || wlRow?.state || prof?.state || 'WA') : (userAddr.state || wlRow?.state || prof?.state || 'WA');
-                    if (sz) sz.value = isSame ? (userAddr.billing_zip || userAddr.zip || wlRow?.zip_code || prof?.active_zone || prof?.zip || '') : (userAddr.zip || wlRow?.zip_code || prof?.active_zone || prof?.zip || '');
-
-                    const notesEl = document.getElementById('settings-delivery-notes');
-                    if (notesEl) notesEl.value = userAddr.delivery_instructions || '';
-
-                    if (sameToggle) sameToggle.checked = isSame;
-                    toggleSettingsSameAsBilling();
-                } else {
-                    if (bc) bc.value = wlRow?.city || prof?.city || 'Seattle';
-                    if (bs) bs.value = wlRow?.state || prof?.state || 'WA';
-                    if (bz) bz.value = wlRow?.zip_code || prof?.active_zone || prof?.zip || '98101';
+                // If user has an assigned facility, resolve facility city/state/zip defaults
+                const assignedFacId = prof?.assigned_facility_id || prof?.assigned_facility;
+                if (!initialCity || !initialZip) {
+                    if (assignedFacId === 'facility_yakima') {
+                        if (!initialCity) initialCity = 'Yakima';
+                        if (!initialState) initialState = 'WA';
+                        if (!initialZip) initialZip = '98901';
+                    } else if (assignedFacId === 'facility_seattle_north') {
+                        if (!initialCity) initialCity = 'Seattle';
+                        if (!initialState) initialState = 'WA';
+                        if (!initialZip) initialZip = '98103';
+                    } else if (assignedFacId === 'facility_portland_central') {
+                        if (!initialCity) initialCity = 'Portland';
+                        if (!initialState) initialState = 'OR';
+                        if (!initialZip) initialZip = '97214';
+                    } else if (assignedFacId === 'facility_spokane_hub') {
+                        if (!initialCity) initialCity = 'Spokane';
+                        if (!initialState) initialState = 'WA';
+                        if (!initialZip) initialZip = '99201';
+                    }
                 }
 
-                // 3. Update Facility Card with loaded address
-                const activeCity = bc?.value || userAddr?.billing_city || userAddr?.city || wlRow?.city || prof?.city || 'Seattle';
-                const activeState = bs?.value || userAddr?.billing_state || userAddr?.state || wlRow?.state || prof?.state || 'WA';
-                const activeZip = bz?.value || userAddr?.billing_zip || userAddr?.zip || wlRow?.zip_code || prof?.active_zone || prof?.zip || '98101';
+                // If ZIP is provided, validate / auto-resolve city and state if missing or if city is obviously mismatched from old default
+                if (initialZip && window.AddressValidator) {
+                    const cleanZ = String(initialZip).trim().replace(/\D/g, '').slice(0, 5);
+                    if (cleanZ.length === 5) {
+                        const zipData = await window.AddressValidator.lookupZip(cleanZ);
+                        if (zipData) {
+                            if (!initialCity || (cleanZ.startsWith('989') && initialCity.toLowerCase() === 'seattle')) {
+                                initialCity = zipData.city;
+                            }
+                            if (!initialState) {
+                                initialState = zipData.state;
+                            }
+                        }
+                    }
+                }
 
-                await updateSettingsFacilityCard(activeCity, activeState, activeZip);
+                if (!initialState) initialState = 'WA';
+
+                if (b1) b1.value = userAddr?.billing_address_line1 || userAddr?.address_line1 || '';
+                if (b2) b2.value = userAddr?.billing_address_line2 || userAddr?.address_line2 || '';
+                if (bc) bc.value = initialCity;
+                if (bs) bs.value = initialState;
+                if (bz) bz.value = initialZip;
+
+                const isSame = userAddr ? (userAddr.shipping_same_as_billing !== false) : true;
+                if (sameToggle) sameToggle.checked = isSame;
+
+                if (s1) s1.value = isSame ? (b1 ? b1.value : '') : (userAddr?.address_line1 || '');
+                if (s2) s2.value = isSame ? (b2 ? b2.value : '') : (userAddr?.address_line2 || '');
+                if (sc) sc.value = isSame ? initialCity : (userAddr?.city || initialCity);
+                if (ss) ss.value = isSame ? initialState : (userAddr?.state || initialState);
+                if (sz) sz.value = isSame ? initialZip : (userAddr?.zip || initialZip);
+
+                const notesEl = document.getElementById('settings-delivery-notes');
+                if (notesEl) notesEl.value = userAddr?.delivery_instructions || '';
+
+                toggleSettingsSameAsBilling();
+
+                // 3. Update Facility Card with loaded address
+                await updateSettingsFacilityCard(initialCity, initialState, initialZip);
 
                 // Attach live AddressValidator to settings address fields
                 if (window.AddressValidator && !window._settingsValidatorAttached) {
@@ -8052,15 +8088,20 @@
                         cityEl: document.getElementById('settings-bill-city'),
                         stateEl: document.getElementById('settings-bill-state'),
                         onResolved: (zipData) => {
-                            const isSame = document.getElementById('settings-same-as-billing-toggle')?.checked !== false;
-                            if (isSame) syncBillingToShippingSettings();
-                            updateSettingsFacilityCard(zipData.city, zipData.state, zipData.zip);
+                            if (zipData) {
+                                const isSame = document.getElementById('settings-same-as-billing-toggle')?.checked !== false;
+                                if (isSame) syncBillingToShippingSettings();
+                                updateSettingsFacilityCard(zipData.city, zipData.state, zipData.zip);
+                            }
                         }
                     });
                     window.AddressValidator.attachAutofill({
                         zipEl: document.getElementById('settings-ship-zip'),
                         cityEl: document.getElementById('settings-ship-city'),
-                        stateEl: document.getElementById('settings-ship-state')
+                        stateEl: document.getElementById('settings-ship-state'),
+                        onResolved: (zipData) => {
+                            // Shipping zip resolved
+                        }
                     });
                 }
 
@@ -8322,77 +8363,109 @@
             btn.disabled = true;
             btn.textContent = 'Saving...';
             try {
-                const { error } = await supabase.from('users').update({ avatar_color: tempColor }).eq('id', currentUser.id);
-                if (error) throw error;
+                if (currentUser && typeof supabase !== 'undefined') {
+                    const { error: colorErr } = await supabase.from('users').update({ avatar_color: tempColor }).eq('id', currentUser.id);
+                    if (colorErr) console.warn('Avatar color update notice:', colorErr);
+                }
 
                 // Save billing and shipping addresses
-                const bLine1 = document.getElementById('settings-bill-line1')?.value.trim();
-                const bLine2 = document.getElementById('settings-bill-line2')?.value.trim();
-                const bCity = document.getElementById('settings-bill-city')?.value.trim();
-                const bState = document.getElementById('settings-bill-state')?.value.trim().toUpperCase();
-                const bZip = document.getElementById('settings-bill-zip')?.value.trim();
+                const bLine1 = document.getElementById('settings-bill-line1')?.value.trim() || '';
+                const bLine2 = document.getElementById('settings-bill-line2')?.value.trim() || '';
+                let bCity = document.getElementById('settings-bill-city')?.value.trim() || '';
+                let bState = document.getElementById('settings-bill-state')?.value.trim().toUpperCase() || '';
+                const bZip = document.getElementById('settings-bill-zip')?.value.trim() || '';
                 const isSame = document.getElementById('settings-same-as-billing-toggle')?.checked !== false;
 
-                const sLine1 = document.getElementById('settings-ship-line1')?.value.trim();
-                const sLine2 = document.getElementById('settings-ship-line2')?.value.trim();
-                const sCity = document.getElementById('settings-ship-city')?.value.trim();
-                const sState = document.getElementById('settings-ship-state')?.value.trim().toUpperCase();
-                const sZip = document.getElementById('settings-ship-zip')?.value.trim();
+                const sLine1 = document.getElementById('settings-ship-line1')?.value.trim() || '';
+                const sLine2 = document.getElementById('settings-ship-line2')?.value.trim() || '';
+                let sCity = document.getElementById('settings-ship-city')?.value.trim() || '';
+                let sState = document.getElementById('settings-ship-state')?.value.trim().toUpperCase() || '';
+                const sZip = document.getElementById('settings-ship-zip')?.value.trim() || '';
 
                 const dNotes = document.getElementById('settings-delivery-notes')?.value.trim() || window.currentUserAddress?.delivery_instructions || null;
 
-                // Resolve canonical postal data to prevent mismatches
-                let finalBCity = bCity;
-                let finalBState = bState;
-                let finalSCity = sCity;
-                let finalSState = sState;
-
+                // Resolve canonical postal data from zip if city/state empty or mismatched
                 if (window.AddressValidator) {
                     if (bZip && bZip.length >= 5) {
                         const bData = await window.AddressValidator.lookupZip(bZip);
                         if (bData) {
-                            if (!finalBCity || finalBCity.toLowerCase() !== bData.city.toLowerCase()) {
-                                finalBCity = bData.city;
+                            if (!bCity || (bZip.startsWith('989') && bCity.toLowerCase() === 'seattle') || bCity.toLowerCase() !== bData.city.toLowerCase()) {
+                                bCity = bData.city;
+                                const bcEl = document.getElementById('settings-bill-city');
+                                if (bcEl) bcEl.value = bCity;
                             }
-                            if (!finalBState) finalBState = bData.state;
+                            if (!bState) {
+                                bState = bData.state;
+                                const bsEl = document.getElementById('settings-bill-state');
+                                if (bsEl) bsEl.value = bState;
+                            }
                         }
                     }
                     if (sZip && !isSame && sZip.length >= 5) {
                         const sData = await window.AddressValidator.lookupZip(sZip);
                         if (sData) {
-                            if (!finalSCity || finalSCity.toLowerCase() !== sData.city.toLowerCase()) {
-                                finalSCity = sData.city;
+                            if (!sCity || (sZip.startsWith('989') && sCity.toLowerCase() === 'seattle') || sCity.toLowerCase() !== sData.city.toLowerCase()) {
+                                sCity = sData.city;
+                                const scEl = document.getElementById('settings-ship-city');
+                                if (scEl) scEl.value = sCity;
                             }
-                            if (!finalSState) finalSState = sData.state;
+                            if (!sState) {
+                                sState = sData.state;
+                                const ssEl = document.getElementById('settings-ship-state');
+                                if (ssEl) ssEl.value = sState;
+                            }
                         }
                     }
                 }
 
-                if (bLine1 && finalBCity && finalBState && bZip) {
-                    const { data: savedAddr } = await supabase.rpc('save_customer_addresses', {
+                if (isSame) {
+                    syncBillingToShippingSettings();
+                }
+
+                const finalShipLine1 = isSame ? bLine1 : (sLine1 || bLine1);
+                const finalShipLine2 = isSame ? (bLine2 || null) : (sLine2 || null);
+                const finalShipCity = isSame ? bCity : (sCity || bCity);
+                const finalShipState = isSame ? (bState || 'WA') : (sState || bState || 'WA');
+                const finalShipZip = isSame ? bZip : (sZip || bZip);
+
+                if (currentUser && typeof supabase !== 'undefined' && (bLine1 || bCity || bZip)) {
+                    const { data: savedAddr, error: addrErr } = await supabase.rpc('save_customer_addresses', {
                         p_billing_line1: bLine1,
                         p_billing_line2: bLine2 || null,
-                        p_billing_city: finalBCity,
-                        p_billing_state: finalBState,
+                        p_billing_city: bCity,
+                        p_billing_state: bState || 'WA',
                         p_billing_zip: bZip,
                         p_shipping_same_as_billing: isSame,
-                        p_shipping_line1: isSame ? bLine1 : (sLine1 || bLine1),
-                        p_shipping_line2: isSame ? (bLine2 || null) : (sLine2 || null),
-                        p_shipping_city: isSame ? finalBCity : (finalSCity || finalBCity),
-                        p_shipping_state: isSame ? finalBState : (finalSState || finalBState),
-                        p_shipping_zip: isSame ? bZip : (sZip || bZip),
-                        p_instructions: dNotes
+                        p_shipping_line1: finalShipLine1,
+                        p_shipping_line2: finalShipLine2,
+                        p_shipping_city: finalShipCity,
+                        p_shipping_state: finalShipState,
+                        p_shipping_zip: finalShipZip,
+                        p_instructions: dNotes,
+                        p_uid: currentUser.id
                     });
-                    if (savedAddr) window.currentUserAddress = savedAddr;
+
+                    if (addrErr) {
+                        console.error('[save_customer_addresses] RPC Error:', addrErr);
+                        throw addrErr;
+                    }
+                    if (savedAddr) {
+                        window.currentUserAddress = savedAddr;
+                    }
+                    if (bZip) {
+                        if (currentUserProfile) currentUserProfile.active_zone = bZip;
+                        if (currentProfile) currentProfile.active_zone = bZip;
+                    }
                 }
 
                 currentUserColor = tempColor;
                 applyAvatarColor(currentUserColor);
+                await updateSettingsFacilityCard(bCity, bState, bZip);
                 closeSettingsModal();
                 showToast("Profile & address settings saved!");
             } catch (err) {
                 console.error("Failed to update settings", err);
-                alert("Failed to update settings: " + err.message);
+                alert("Failed to update settings: " + (err.message || err));
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Save Changes';

@@ -197,6 +197,29 @@
     },
 
     /**
+     * Resolves default warehouse facility ID for a given ZIP code
+     * @param {string|number} zip - 5-digit US ZIP code
+     * @returns {string} Facility identifier
+     */
+    resolveFacilityForZip(zip) {
+      const z = String(zip || '').trim().replace(/\D/g, '').slice(0, 5);
+      if (!z) return 'facility_yakima';
+      if (z.startsWith('980') || z.startsWith('981') || z.startsWith('982') || z.startsWith('983') || z.startsWith('984') || z.startsWith('985')) {
+        return 'facility_seattle_north';
+      }
+      if (z.startsWith('970') || z.startsWith('971') || z.startsWith('972') || z.startsWith('973') || z.startsWith('974') || z.startsWith('975') || z.startsWith('976') || z.startsWith('977') || z.startsWith('978')) {
+        return 'facility_portland_central';
+      }
+      if (z.startsWith('990') || z.startsWith('991') || z.startsWith('992') || z.startsWith('993') || z.startsWith('994')) {
+        return 'facility_spokane_hub';
+      }
+      if (z.startsWith('989')) {
+        return 'facility_yakima';
+      }
+      return 'facility_yakima';
+    },
+
+    /**
      * Validates if entered City and State match the postal registration for a ZIP
      * @returns {Object} Validation outcome with canonical recommendations
      */
