@@ -5146,8 +5146,19 @@
         window.updateTpmLedger = updateTpmLedger;
         window.submitTpmAction = submitTpmAction;
 
-            // Parallel load profile, active subscriptions, and addresses
+            // 1. Authoritative Server-Side User & Profile Verification
             try {
+                const { data: serverUserData, error: serverUserErr } = await supabase.auth.getUser();
+                if (serverUserErr || !serverUserData?.user) {
+                    console.warn('[Auth Check] User session invalid or purged from auth.users. Terminating session.');
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    await supabase.auth.signOut().catch(() => {});
+                    window.location.href = 'login.html?erased=1';
+                    return;
+                }
+
+                // Parallel load profile, active subscriptions, and addresses
                 const [userRes, subRes, addrRes] = await Promise.all([
                     supabase.from('users').select('*').eq('id', currentUser.id).maybeSingle(),
                     supabase.from('subscriptions').select('*').eq('uid', currentUser.id).order('created_at', { ascending: false }),
@@ -5155,6 +5166,17 @@
                 ]);
 
                 const initialUser = userRes?.data;
+
+                // If user has NO profile in public.users, the account was erased/purged
+                if (!initialUser) {
+                    console.warn('[Auth Check] User profile not found in database. Account has been erased.');
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    await supabase.auth.signOut().catch(() => {});
+                    window.location.href = 'login.html?erased=1';
+                    return;
+                }
+
                 const subsList = subRes?.data || [];
                 const activeSub = subsList.find(s => s.status === 'active') || subsList.find(s => s.status === 'canceling') || (subsList.length > 0 ? subsList[0] : null);
                 currentSubscription = activeSub;
@@ -5163,25 +5185,23 @@
                     window.currentUserAddress = addrRes.data;
                 }
 
-                if (initialUser) {
-                    currentProfile = initialUser;
-                    currentUserProfile = initialUser;
-                    sessionStorage.setItem(`cv_user_${currentUser.id}`, JSON.stringify(initialUser));
-                    
-                    if (initialUser.name) {
-                        const pi = initialUser.name.split(' ').map(s => s[0]).join('').toUpperCase().slice(0, 2);
-                        const userAvatar = document.getElementById('user-avatar');
-                        if (userAvatar) userAvatar.textContent = pi;
-                    }
-                    if (initialUser.avatar_color) {
-                        currentUserColor = initialUser.avatar_color;
-                        applyAvatarColor(currentUserColor);
-                    }
-                    
-                    const userFac = initialUser.assigned_facility_id || initialUser.assigned_facility || 'facility_yakima';
-                    await loadAssignedFacilityPricing(userFac);
-                    renderOnboardingTracker(initialUser);
+                currentProfile = initialUser;
+                currentUserProfile = initialUser;
+                sessionStorage.setItem(`cv_user_${currentUser.id}`, JSON.stringify(initialUser));
+                
+                if (initialUser.name) {
+                    const pi = initialUser.name.split(' ').map(s => s[0]).join('').toUpperCase().slice(0, 2);
+                    const userAvatar = document.getElementById('user-avatar');
+                    if (userAvatar) userAvatar.textContent = pi;
                 }
+                if (initialUser.avatar_color) {
+                    currentUserColor = initialUser.avatar_color;
+                    applyAvatarColor(currentUserColor);
+                }
+                
+                const userFac = initialUser.assigned_facility_id || initialUser.assigned_facility || 'facility_yakima';
+                await loadAssignedFacilityPricing(userFac);
+                renderOnboardingTracker(initialUser);
 
                 // Route dashboard flow with BOTH subscription and profile available
                 await checkAndRouteUserFlow(currentSubscription, currentProfile || currentUserProfile);
@@ -5203,6 +5223,14 @@
             if (unsubscribeUsers) supabase.removeChannel(unsubscribeUsers);
             unsubscribeUsers = supabase.channel(`users_changes_${currentUser.id}_${Date.now()}`)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `id=eq.${currentUser.id}` }, payload => {
+                    if (payload.eventType === 'DELETE' || !payload.new || Object.keys(payload.new).length === 0) {
+                        console.warn('[Realtime] Customer account was erased. Ending session immediately.');
+                        localStorage.clear();
+                        sessionStorage.clear();
+                        supabase.auth.signOut().catch(() => {});
+                        window.location.href = 'login.html?erased=1';
+                        return;
+                    }
                     handleProfileUpdate(payload.new);
                 })
                 .subscribe();

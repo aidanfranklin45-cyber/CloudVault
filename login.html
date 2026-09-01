@@ -726,7 +726,7 @@
 
         // Handle Account Erasure / Privacy Notification
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('erased')) {
+        if (urlParams.get('erased') || urlParams.get('reason') === 'account_erased') {
             const notice = document.getElementById('auth-notice');
             if (notice) {
                 notice.className = 'mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-400 text-emerald-900 text-xs font-bold text-center leading-relaxed';
