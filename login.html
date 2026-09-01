@@ -732,6 +732,16 @@
                 notice.className = 'mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-400 text-emerald-900 text-xs font-bold text-center leading-relaxed';
                 notice.innerHTML = '✓ Your CloudVault account and personal data have been permanently erased.';
                 notice.classList.remove('hidden');
+
+                // Clear the query parameter from the address bar so it does not persist across new logins
+                window.history.replaceState({}, document.title, window.location.pathname);
+
+                // Dismiss notice when user starts interacting with the login form
+                const clearNotice = () => {
+                    notice.classList.add('hidden');
+                    document.removeEventListener('input', clearNotice);
+                };
+                document.addEventListener('input', clearNotice, { once: true });
             }
         }
     </script>

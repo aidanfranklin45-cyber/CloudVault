@@ -5166,16 +5166,34 @@
                     supabase.from('customer_addresses').select('*').eq('uid', currentUser.id).maybeSingle()
                 ]);
 
-                const initialUser = userRes?.data;
+                let initialUser = userRes?.data;
 
-                // If user has NO profile in public.users, the account was erased/purged
+                // If user is freshly signed up or missing a profile row in public.users, provision default profile
                 if (!initialUser) {
-                    console.warn('[Auth Check] User profile not found in database. Account has been erased.');
-                    localStorage.clear();
-                    sessionStorage.clear();
-                    await supabase.auth.signOut().catch(() => {});
-                    window.location.href = 'login.html?erased=1';
-                    return;
+                    try {
+                        const newProfileData = {
+                            id: currentUser.id,
+                            email: currentUser.email,
+                            name: currentUser.user_metadata?.name || currentUser.email.split('@')[0],
+                            role: 'customer',
+                            onboarding_status: 'pending',
+                            avatar_color: 'blue'
+                        };
+                        const { data: createdUser } = await supabase.from('users')
+                            .upsert(newProfileData)
+                            .select('*')
+                            .maybeSingle();
+                        initialUser = createdUser || newProfileData;
+                    } catch (e) {
+                        initialUser = {
+                            id: currentUser.id,
+                            email: currentUser.email,
+                            name: currentUser.user_metadata?.name || currentUser.email.split('@')[0],
+                            role: 'customer',
+                            onboarding_status: 'pending',
+                            avatar_color: 'blue'
+                        };
+                    }
                 }
 
                 const subsList = subRes?.data || [];
