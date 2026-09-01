@@ -10193,11 +10193,24 @@
                 const body = document.getElementById('erasure-modal-body');
                 if (!modal || !body) return;
 
-                const subStatus = (currentProfile?.subscription_status || currentUserProfile?.subscription_status || currentSubscription?.status || 'active').toLowerCase();
-                const isSubCanceled = ['canceled', 'cancelled', 'inactive', 'terminated'].includes(subStatus);
-                const activeTotes = (currentInventory || []).filter(i => !['returned', 'discarded', 'released'].includes(i.status)).length || (currentProfile?.active_totes_held || 0);
-                const openRequests = (currentRequests || []).filter(r => ['pending', 'accepted', 'in_transit', 'dispatched', 'retrieval_ready'].includes(r.status)).length;
-                const isEligible = isSubCanceled && activeTotes === 0 && openRequests === 0;
+                const profileSubStatus = (currentProfile?.subscription_status || currentUserProfile?.subscription_status || '').toLowerCase();
+                const subStatus = (currentSubscription?.status || '').toLowerCase();
+                
+                const hasActiveSubscription = ['active', 'trialing'].includes(profileSubStatus) || ['active', 'trialing'].includes(subStatus);
+                
+                const activeTotes = (currentInventory || []).filter(i => !['returned', 'discarded', 'released', 'missing-tote', 'missing', 'decommissioned', 'cancelled'].includes(i.status)).length || (Number(currentProfile?.active_totes_held) || 0);
+                const openRequests = (currentRequests || []).filter(r => ['pending', 'accepted', 'in_transit', 'dispatched', 'retrieval_ready', 'scheduled'].includes(r.status)).length;
+                
+                const isEligible = !hasActiveSubscription && activeTotes === 0 && openRequests === 0;
+
+                let displaySubStatus = 'No Active Plan';
+                if (hasActiveSubscription) {
+                    displaySubStatus = `Active (${subStatus || profileSubStatus || 'active'})`;
+                } else if (['canceled', 'cancelled', 'terminated', 'inactive'].includes(subStatus) || ['canceled', 'cancelled', 'terminated', 'inactive'].includes(profileSubStatus)) {
+                    displaySubStatus = 'Canceled';
+                } else {
+                    displaySubStatus = 'No Active Plan (0 Totes)';
+                }
 
                 if (isEligible) {
                     body.innerHTML = `
@@ -10225,9 +10238,9 @@
                     `;
                 } else {
                     let blockingReason = '';
-                    if (!isSubCanceled && activeTotes > 0) {
+                    if (hasActiveSubscription && activeTotes > 0) {
                         blockingReason = 'Account erasure requires canceling your active subscription and retrieving/returning all physical containers first.';
-                    } else if (!isSubCanceled) {
+                    } else if (hasActiveSubscription) {
                         blockingReason = 'Account erasure is only permitted for deactivated accounts. Please cancel your active subscription first.';
                     } else {
                         blockingReason = 'You still have physical containers stored or in delivery. All totes must be returned to CloudVault custody before permanent data erasure.';
@@ -10244,7 +10257,7 @@
                         <div class="space-y-1.5 text-xs bg-gray-50 p-3 rounded-2xl border border-gray-200">
                             <div class="flex items-center justify-between text-[11px]">
                                 <span class="text-gray-600">Subscription Status:</span>
-                                <span class="font-bold ${isSubCanceled ? 'text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200' : 'text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200'}">${isSubCanceled ? '✓ Canceled' : `Active (${subStatus})`}</span>
+                                <span class="font-bold ${!hasActiveSubscription ? 'text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200' : 'text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200'}">${displaySubStatus}</span>
                             </div>
                             <div class="flex items-center justify-between text-[11px]">
                                 <span class="text-gray-600">Active Totes in Custody:</span>
@@ -10253,7 +10266,7 @@
                         </div>
 
                         <div class="flex gap-2 pt-2">
-                            ${!isSubCanceled ? `
+                            ${hasActiveSubscription ? `
                                 <button type="button" onclick="closeAccountErasureModal(); triggerCancelFlowUser();" class="flex-1 py-2.5 px-3 rounded-xl bg-gray-900 hover:bg-black text-white font-bold text-xs transition cursor-pointer">
                                     Cancel Subscription
                                 </button>
