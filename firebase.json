@@ -6,7 +6,20 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**",
-      "functions/**"
+      "functions/**",
+      "supabase/**",
+      "graphify-out/**",
+      "tests/**",
+      "test-results/**",
+      "playwright-report/**",
+      ".agents/**",
+      "*.md",
+      "package.json",
+      "package-lock.json",
+      "tailwind.config.js",
+      "input.css",
+      "deno.json",
+      "deno.lock"
     ],
     "headers": [
       {
