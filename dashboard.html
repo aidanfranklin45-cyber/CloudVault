@@ -2881,14 +2881,14 @@
                     const isPulledPrepped = isOutInTransit || req.status === 'dispatched' || (currentInventory || []).some(t => t.status === 'pending-dispatch');
 
                     // Resolve Origin and Destination Hub names
-                    let originName = 'Yakima Fulfillment Center';
+                    let originName = 'Origin Vault';
                     if (req.facility_id === 'facility_seattle_north') originName = 'Seattle North Fulfillment Center';
                     else if (req.facility_id === 'facility_portland_central') originName = 'Portland Central Hub';
                     else if (req.facility_id === 'facility_spokane_hub') originName = 'Spokane Regional Hub';
                     else if (req.facility_id === 'facility_yakima') originName = 'Yakima Fulfillment Center';
 
-                    const destFacId = currentUserProfile?.assigned_facility_id || currentProfile?.assigned_facility_id || 'facility_seattle_north';
-                    let destName = window.currentActiveFacility?.name || 'Seattle North Fulfillment Center';
+                    const destFacId = currentUserProfile?.assigned_facility_id || currentProfile?.assigned_facility_id || (window.currentUserAddress && (window.AddressValidator?.resolveFacilityForZip ? window.AddressValidator.resolveFacilityForZip(window.currentUserAddress.zip || window.currentUserAddress.billing_zip) : null)) || 'facility_yakima';
+                    let destName = window.currentActiveFacility?.name || 'Assigned Vault';
                     if (destFacId === 'facility_seattle_north') destName = 'Seattle North Fulfillment Center';
                     else if (destFacId === 'facility_portland_central') destName = 'Portland Central Hub';
                     else if (destFacId === 'facility_spokane_hub') destName = 'Spokane Regional Hub';
@@ -3795,7 +3795,7 @@
 
                 // ZIP is active -> fetch regional facility rates and proceed to subscription wizard
                 wizardZip = zip;
-                let activeFacId = area.facility_id || 'facility_seattle_north';
+                let activeFacId = area.facility_id || (window.AddressValidator?.resolveFacilityForZip ? window.AddressValidator.resolveFacilityForZip(zip) : null) || 'facility_yakima';
                 const { data: facData } = await supabase.from('facilities').select('*').eq('id', activeFacId).maybeSingle();
                 if (facData) {
                     window.currentActiveFacility = facData;
@@ -4471,7 +4471,7 @@
                             uid: currentUser.id,
                             customer_name: currentUser.user_metadata?.name || currentUser.email.split('@')[0],
                             customer_email: currentUser.email,
-                            facility_id: (data && data.assigned_facility) || 'facility_seattle_north',
+                            facility_id: (data && data.assigned_facility) || window.currentActiveFacility?.id || (window.AddressValidator?.resolveFacilityForZip ? window.AddressValidator.resolveFacilityForZip(wizardZip) : null) || 'facility_yakima',
                             invoice_type: 'initial_reservation',
                             payment_status: 'paid',
                             subtotal: monthly,
@@ -4585,7 +4585,8 @@
             try {
                 const userFac = (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
                                 (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility)) ||
-                                'facility_seattle_north';
+                                (window.currentUserAddress && (window.currentUserAddress.assigned_facility_id || (window.AddressValidator?.resolveFacilityForZip ? window.AddressValidator.resolveFacilityForZip(window.currentUserAddress.zip || window.currentUserAddress.billing_zip) : null))) ||
+                                'facility_yakima';
                 await loadAssignedFacilityPricing(userFac);
             } catch (err) {
                 console.warn('Could not fetch facility pricing, using defaults.', err);
@@ -4988,7 +4989,7 @@
             const curRate = currentSubscription ? (Number(currentSubscription.tote_rate) || 5.00) : 5.00;
             const curMonthly = currentSubscription ? (Number(currentSubscription.recurring_storage) || (curTotes * curRate)) : 0;
             const prof = currentProfile || currentUserProfile || {};
-            const userFac = prof.assigned_facility_id || prof.assigned_facility || 'facility_seattle_north';
+            const userFac = prof.assigned_facility_id || prof.assigned_facility || (window.currentUserAddress && (window.currentUserAddress.assigned_facility_id || (window.AddressValidator?.resolveFacilityForZip ? window.AddressValidator.resolveFacilityForZip(window.currentUserAddress.zip || window.currentUserAddress.billing_zip) : null))) || 'facility_yakima';
 
             const warningBanner = document.getElementById('tpm-warning-banner');
 
@@ -5072,7 +5073,7 @@
 
             try {
                 const prof = currentProfile || currentUserProfile || {};
-                const userFac = prof.assigned_facility_id || prof.assigned_facility || 'facility_seattle_north';
+                const userFac = prof.assigned_facility_id || prof.assigned_facility || (window.currentUserAddress && (window.currentUserAddress.assigned_facility_id || (window.AddressValidator?.resolveFacilityForZip ? window.AddressValidator.resolveFacilityForZip(window.currentUserAddress.zip || window.currentUserAddress.billing_zip) : null))) || 'facility_yakima';
 
                 if (tpmCurrentMode === 'reduce') {
                     if (window.CloudVaultBilling && typeof window.CloudVaultBilling.processToteReduction === 'function') {
@@ -6563,7 +6564,7 @@
                 normalizedDate = tomorrowStr;
             }
 
-            const targetFacId = facilityId || 'facility_seattle_north';
+            const targetFacId = facilityId || currentUserProfile?.assigned_facility_id || currentProfile?.assigned_facility_id || window.currentActiveFacility?.id || (window.currentUserAddress && (window.AddressValidator?.resolveFacilityForZip ? window.AddressValidator.resolveFacilityForZip(window.currentUserAddress.zip || window.currentUserAddress.billing_zip) : null)) || 'facility_yakima';
 
             // 1. Always evaluate local elapsed / currently active time FIRST so past and active slots are disabled immediately
             Array.from(selectEl.options).forEach(opt => {
@@ -7142,7 +7143,8 @@
                     // Direct table fallback into public.access_requests if RPC schema cache functions fail
                     const userFac = (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
                                     (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility)) ||
-                                    'facility_seattle_north';
+                                    (window.currentUserAddress && (window.currentUserAddress.assigned_facility_id || (window.AddressValidator?.resolveFacilityForZip ? window.AddressValidator.resolveFacilityForZip(window.currentUserAddress.zip || window.currentUserAddress.billing_zip) : null))) ||
+                                    'facility_yakima';
                     const genPin = Math.floor(1000 + Math.random() * 9000).toString();
                     const { data: directData, error: directErr } = await supabase.from('access_requests').insert({
                         uid: currentUser.id,
@@ -7248,7 +7250,13 @@
                         }
 
                         const netTaxable = Math.max(0, grossDeliveryAndSurge - promoDiscountAmt);
-                        const userTaxRate = (userFac === 'facility_seattle_north' ? 0.1025 : (userFac === 'facility_portland_central' ? 0.00 : 0.085));
+                        let userTaxRate = 0.085;
+                        if (window.currentActiveFacility && window.currentActiveFacility.tax_rate != null) {
+                            userTaxRate = Number(window.currentActiveFacility.tax_rate);
+                        } else if (userFac) {
+                            const { data: facRow } = await supabase.from('facilities').select('tax_rate').eq('id', userFac).maybeSingle();
+                            if (facRow && facRow.tax_rate != null) userTaxRate = Number(facRow.tax_rate);
+                        }
                         const taxAmt = Math.round(netTaxable * userTaxRate * 100) / 100;
                         const totalCharged = Math.max(0, Math.round((netTaxable + taxAmt) * 100) / 100);
 
@@ -7704,7 +7712,8 @@
                 if (totesHeld > 0) {
                     const cancelFacId = (currentUserProfile && (currentUserProfile.assigned_facility_id || currentUserProfile.assigned_facility)) ||
                                         (currentProfile && (currentProfile.assigned_facility_id || currentProfile.assigned_facility)) ||
-                                        'facility_seattle_north';
+                                        (window.currentUserAddress && (window.currentUserAddress.assigned_facility_id || (window.AddressValidator?.resolveFacilityForZip ? window.AddressValidator.resolveFacilityForZip(window.currentUserAddress.zip || window.currentUserAddress.billing_zip) : null))) ||
+                                        'facility_yakima';
 
                     if (currentCancelReturnMethod === 'valet') {
                         finalFulfillmentType = 'valet_delivery';
@@ -8513,16 +8522,13 @@
                 const baseMonthly = Number(sub.recurring_storage) || (totalTotes * toteRate);
 
                 // 2. Resolve Active Customer Facility & Dynamic Tax Rate
-                const userFac = profile?.assigned_facility_id || profile?.assigned_facility || sub?.facility_id || window.currentActiveFacility?.id || 'facility_seattle_north';
-                let userTaxRate = 0.1025;
+                const userFac = profile?.assigned_facility_id || profile?.assigned_facility || sub?.facility_id || window.currentActiveFacility?.id || (window.currentUserAddress && (window.AddressValidator?.resolveFacilityForZip ? window.AddressValidator.resolveFacilityForZip(window.currentUserAddress.zip || window.currentUserAddress.billing_zip) : null)) || 'facility_yakima';
+                let userTaxRate = 0.085;
                 if (window.currentActiveFacility && window.currentActiveFacility.id === userFac && window.currentActiveFacility.tax_rate != null) {
                     userTaxRate = Number(window.currentActiveFacility.tax_rate);
-                } else if (userFac === 'facility_seattle_north') {
-                    userTaxRate = 0.1025;
-                } else if (userFac === 'facility_portland_central') {
-                    userTaxRate = 0.00;
-                } else if (userFac === 'facility_yakima' || userFac === 'facility_spokane_hub') {
-                    userTaxRate = 0.085;
+                } else if (userFac) {
+                    const { data: facRow } = await supabase.from('facilities').select('tax_rate').eq('id', userFac).maybeSingle();
+                    if (facRow && facRow.tax_rate != null) userTaxRate = Number(facRow.tax_rate);
                 }
 
                 const monthlyTax = Math.round(baseMonthly * userTaxRate * 100) / 100;
@@ -9757,7 +9763,7 @@
             }
 
             async function onExcessDateChanged(dateStr) {
-                const facId = currentUserProfile?.assigned_facility_id || currentProfile?.assigned_facility_id || 'facility_seattle_north';
+                const facId = currentUserProfile?.assigned_facility_id || currentProfile?.assigned_facility_id || window.currentActiveFacility?.id || (window.currentUserAddress && (window.AddressValidator?.resolveFacilityForZip ? window.AddressValidator.resolveFacilityForZip(window.currentUserAddress.zip || window.currentUserAddress.billing_zip) : null)) || 'facility_yakima';
                 await checkSlotAvailability(facId, dateStr, 'excess-time-slot');
                 
                 const selectEl = document.getElementById('excess-time-slot');

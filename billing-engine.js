@@ -230,7 +230,7 @@
           }
 
           if (!isPriceLock) {
-            const facIdToQuery = assignedFacId || 'facility_seattle_north';
+            const facIdToQuery = assignedFacId || window.currentActiveFacility?.id || (window.currentUserAddress && (window.AddressValidator?.resolveFacilityForZip ? window.AddressValidator.resolveFacilityForZip(window.currentUserAddress.zip || window.currentUserAddress.billing_zip) : null)) || 'facility_yakima';
             const { data: fac } = await sb.from('facilities')
               .select('tier1_rate, tier2_rate, tier3_rate, tier4_rate')
               .eq('id', facIdToQuery)
@@ -837,7 +837,7 @@
      */
     validateFacilityId: async function (facilityId) {
       const sb = global.supabase;
-      const defaultFacility = 'facility_seattle_north';
+      const defaultFacility = window.currentActiveFacility?.id || 'facility_yakima';
       if (!sb) return facilityId || defaultFacility;
 
       if (facilityId) {
@@ -3031,12 +3031,22 @@
       }
 
       // Facility & Tax Resolution: strictly calculated on post-discount net taxable subtotal
-      const facilityId = invoiceObj.facility_id || window.currentUserProfile?.assigned_facility_id || 'facility_seattle_north';
-      const taxRatePct = facilityId === 'facility_seattle_north' ? 10.25 :
-                         facilityId === 'facility_portland_central' ? 0.00 : 8.50;
-      const taxRegionName = facilityId === 'facility_seattle_north' ? 'Seattle North Sales Tax (10.25%)' :
-                            facilityId === 'facility_portland_central' ? 'Oregon Sales Tax (0.00%)' :
-                            'Washington State & Local Sales Tax (8.50%)';
+      const facilityId = invoiceObj.facility_id || window.currentUserProfile?.assigned_facility_id || window.currentActiveFacility?.id || (window.currentUserAddress && (window.AddressValidator?.resolveFacilityForZip ? window.AddressValidator.resolveFacilityForZip(window.currentUserAddress.zip || window.currentUserAddress.billing_zip) : null)) || 'facility_yakima';
+      let taxRatePct = 8.50;
+      let taxRegionName = 'Washington State & Local Sales Tax (8.50%)';
+      if (window.currentActiveFacility && window.currentActiveFacility.id === facilityId && window.currentActiveFacility.tax_rate != null) {
+        taxRatePct = Number(window.currentActiveFacility.tax_rate) * 100;
+        taxRegionName = `${window.currentActiveFacility.name || 'Local'} Sales Tax (${taxRatePct.toFixed(2)}%)`;
+      } else if (facilityId === 'facility_seattle_north') {
+        taxRatePct = 10.25;
+        taxRegionName = 'Seattle North Sales Tax (10.25%)';
+      } else if (facilityId === 'facility_portland_central') {
+        taxRatePct = 0.00;
+        taxRegionName = 'Oregon Sales Tax (0.00%)';
+      } else if (facilityId === 'facility_yakima' || facilityId === 'facility_spokane_hub') {
+        taxRatePct = 8.50;
+        taxRegionName = 'Washington State & Local Sales Tax (8.50%)';
+      }
 
       this.ensurePrintStyles();
 
