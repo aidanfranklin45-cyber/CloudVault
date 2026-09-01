@@ -4775,8 +4775,9 @@
 
                 const uZip = String(userAddress?.billing_zip || userAddress?.zip || waitlistRow?.zip_code || profile?.active_zone || profile?.zip || '').trim();
                 const uCity = String(userAddress?.billing_city || userAddress?.city || waitlistRow?.city || profile?.city || '').trim().toLowerCase();
+                const uFacId = String(profile?.assigned_facility_id || profile?.assigned_facility || 'facility_yakima').trim();
 
-                // 2. Check if user's local zone is actively operational
+                // 2. Check if user's local zone or facility is actively operational
                 let zoneIsActive = false;
                 let userZoneRecord = null;
 
@@ -4784,15 +4785,20 @@
                     try {
                         const { data: allZones } = await supabase.from('operational_zones').select('*');
                         if (allZones && Array.isArray(allZones)) {
-                            userZoneRecord = allZones.find(z => Array.isArray(z.zip_codes) && z.zip_codes.includes(uZip));
+                            userZoneRecord = allZones.find(z => 
+                                (uFacId && z.facility_id === uFacId) ||
+                                (profile?.active_zone && (z.id === profile.active_zone || z.facility_id === profile.active_zone)) ||
+                                (uZip && Array.isArray(z.zip_codes) && z.zip_codes.includes(uZip)) ||
+                                (uCity && z.city && z.city.toLowerCase() === uCity)
+                            );
                             if (userZoneRecord) {
                                 zoneIsActive = (userZoneRecord.active === true);
-                            } else if (uZip.startsWith('989') || uCity.includes('yakima') || uCity.includes('selah')) {
+                            } else if (uFacId === 'facility_yakima' || uZip.startsWith('989') || uCity.includes('yakima') || uCity.includes('selah')) {
                                 zoneIsActive = true;
                             }
                         }
                     } catch (e) {
-                        if (uZip.startsWith('989') || uCity.includes('yakima') || uCity.includes('selah')) {
+                        if (uFacId === 'facility_yakima' || uZip.startsWith('989') || uCity.includes('yakima') || uCity.includes('selah')) {
                             zoneIsActive = true;
                         }
                     }
@@ -5219,6 +5225,7 @@
                 }
                 
                 const userFac = initialUser.assigned_facility_id || initialUser.assigned_facility || 'facility_yakima';
+                if (!initialUser.assigned_facility_id) initialUser.assigned_facility_id = userFac;
                 await loadAssignedFacilityPricing(userFac);
                 renderOnboardingTracker(initialUser);
 
@@ -8488,6 +8495,7 @@
             const userZip = userAddress?.billing_zip || userAddress?.zip || waitlistRow?.zip_code || profile?.active_zone || profile?.zip || '';
             const userCity = userAddress?.billing_city || userAddress?.city || waitlistRow?.city || profile?.city || '';
             const userState = userAddress?.billing_state || userAddress?.state || waitlistRow?.state || profile?.state || 'WA';
+            const userFacId = String(profile?.assigned_facility_id || profile?.assigned_facility || 'facility_yakima').trim();
 
             let isMarketOperational = false;
             let zoneRecord = null;
@@ -8495,15 +8503,20 @@
                 try {
                     const { data: allZones } = await supabase.from('operational_zones').select('*');
                     if (allZones && Array.isArray(allZones)) {
-                        zoneRecord = allZones.find(z => Array.isArray(z.zip_codes) && z.zip_codes.includes(String(userZip).trim()));
+                        zoneRecord = allZones.find(z => 
+                            (userFacId && z.facility_id === userFacId) ||
+                            (profile?.active_zone && (z.id === profile.active_zone || z.facility_id === profile.active_zone)) ||
+                            (userZip && Array.isArray(z.zip_codes) && z.zip_codes.includes(String(userZip).trim())) ||
+                            (userCity && z.city && z.city.toLowerCase() === String(userCity).toLowerCase())
+                        );
                         if (zoneRecord) {
                             isMarketOperational = (zoneRecord.active === true);
-                        } else if (String(userZip).trim().startsWith('989') || String(userCity).toLowerCase().includes('yakima') || String(userCity).toLowerCase().includes('selah')) {
+                        } else if (userFacId === 'facility_yakima' || String(userZip).trim().startsWith('989') || String(userCity).toLowerCase().includes('yakima') || String(userCity).toLowerCase().includes('selah')) {
                             isMarketOperational = true;
                         }
                     }
                 } catch (e) {
-                    if (String(userZip).trim().startsWith('989') || String(userCity).toLowerCase().includes('yakima') || String(userCity).toLowerCase().includes('selah')) {
+                    if (userFacId === 'facility_yakima' || String(userZip).trim().startsWith('989') || String(userCity).toLowerCase().includes('yakima') || String(userCity).toLowerCase().includes('selah')) {
                         isMarketOperational = true;
                     }
                 }
