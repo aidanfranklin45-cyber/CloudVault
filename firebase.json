@@ -13,13 +13,17 @@
       "test-results/**",
       "playwright-report/**",
       ".agents/**",
-      "*.md",
+      "**/*.md",
+      "**/*.sql",
+      "**/*.log",
       "package.json",
       "package-lock.json",
       "tailwind.config.js",
       "input.css",
       "deno.json",
-      "deno.lock"
+      "deno.lock",
+      "playwright.config.*",
+      "repomix.config.json"
     ],
     "headers": [
       {
