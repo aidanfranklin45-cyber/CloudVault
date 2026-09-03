@@ -2774,9 +2774,7 @@
                 city: z.city,
                 facility_id: z.facility_id,
                 active: z.active,
-                baseValetFee: Number(z.base_valet_fee),
-                requiredDeposit: Number(z.required_deposit) || 25.00,
-                serviceDays: z.service_days,
+                requiredDeposit: Number(z.required_deposit) || 10.00,
                 zipCodes: z.zip_codes || []
             }));
             renderMarketsList(markets);
@@ -2948,11 +2946,11 @@
                                 <span class="text-[9px] font-mono text-gray-500">ID: ${m.id}</span>
                             </h4>
                             <div class="flex items-center gap-3 mt-1 text-xs">
-                                <span class="text-gray-500">Service Days: ${m.serviceDays} | Base Valet: $${m.baseValetFee.toFixed(2)}</span>
+                                <span class="text-gray-500">Facility: ${m.facility_id || 'Unassigned'} • ZIPs: ${m.zipCodes ? m.zipCodes.length : 0}</span>
                                 <span class="text-gray-700">|</span>
                                 <div class="flex items-center space-x-1">
                                     <span class="text-amber-400 font-bold">Deposit: $</span>
-                                    <input type="number" value="${m.requiredDeposit || 25.00}" step="1.00" onchange="updateMarketDeposit('${m.id}', this.value)" class="w-14 bg-gray-950 border border-gray-800 rounded py-0.5 px-1.5 text-center text-xs font-bold text-amber-300 outline-none focus:border-amber-500">
+                                    <input type="number" value="${m.requiredDeposit || 10.00}" step="1.00" onchange="updateMarketDeposit('${m.id}', this.value)" class="w-14 bg-gray-950 border border-gray-800 rounded py-0.5 px-1.5 text-center text-xs font-bold text-amber-300 outline-none focus:border-amber-500">
                                 </div>
                             </div>
                         </div>
@@ -10310,9 +10308,9 @@
 
                 // Zones
                 const zones = [
-                    { id: "zone_sea", city: "Seattle Metropol", facility_id: "facility_seattle_north", active: true, base_valet_fee: 15.00, service_days: "Mondays and Thursdays", zip_codes: ["98101", "98102", "98103", "98105", "98109", "98121"] },
-                    { id: "zone_pdx", city: "Portland Metro", facility_id: "facility_portland_central", active: true, base_valet_fee: 15.00, service_days: "Tuesdays and Fridays", zip_codes: ["97201", "97202", "97205", "97209"] },
-                    { id: "zone_yakima", city: "Yakima", facility_id: "facility_yakima", active: true, base_valet_fee: 15.00, service_days: "Mondays and Thursdays", zip_codes: ["98908", "98942"] }
+                    { id: "zone_sea", city: "Seattle Metropol", facility_id: "facility_seattle_north", active: true, zip_codes: ["98101", "98102", "98103", "98105", "98109", "98121"] },
+                    { id: "zone_pdx", city: "Portland Metro", facility_id: "facility_portland_central", active: true, zip_codes: ["97201", "97202", "97205", "97209"] },
+                    { id: "zone_yakima", city: "Yakima", facility_id: "facility_yakima", active: true, zip_codes: ["98908", "98942"] }
                 ];
                 for (const z of zones) {
                     await supabase.from('operational_zones').upsert(z);
@@ -10450,8 +10448,6 @@
                     city: cityName,
                     facility_id: facilityId,
                     active: isActive,
-                    base_valet_fee: valetFee,
-                    service_days: serviceDays,
                     zip_codes: zipCodes
                 });
                 if (zErr) throw zErr;
@@ -10614,8 +10610,6 @@
                     id: zoneId,
                     city: cityName,
                     active: true,
-                    base_valet_fee: baseValet,
-                    service_days: serviceDays,
                     zip_codes: zipList
                 });
                 if (zErr) throw zErr;
