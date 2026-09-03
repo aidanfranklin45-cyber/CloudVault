@@ -310,6 +310,109 @@ async function processPromoRedemption(
   return insertedRedemption || redemptionInsert;
 }
 
+/**
+ * Asynchronously notify Discord channel for key Stripe business events
+ */
+async function dispatchDiscordStripeNotification(event: Stripe.Event): Promise<void> {
+  const webhookUrl = Deno.env.get("DISCORD_WEBHOOK_URL");
+  if (!webhookUrl) return;
+
+  try {
+    const obj = (event.data?.object as any) || {};
+    let embed: any = null;
+    const timestamp = new Date().toISOString();
+
+    if (event.type === "checkout.session.completed") {
+      const isWaitlist = obj.metadata?.type === "waitlist_deposit" ||
+        obj.metadata?.source === "waitlist" ||
+        (obj.client_reference_id && String(obj.client_reference_id).startsWith("waitlist_"));
+      const customerEmail = obj.customer_details?.email || obj.customer_email || "Customer";
+      const customerName = obj.customer_details?.name || "Customer";
+      const amountTotal = (obj.amount_total ? (obj.amount_total / 100).toFixed(2) : "0.00");
+
+      if (isWaitlist) {
+        embed = {
+          title: "🔒 New 3-Year Price-Lock Waitlist Deposit Paid!",
+          color: 0xf59e0b, // Amber
+          fields: [
+            { name: "👤 Customer", value: `${customerName} (${customerEmail})`, inline: true },
+            { name: "💵 Deposit Paid", value: `$${amountTotal}`, inline: true },
+            { name: "📍 Market / ZIP", value: `${obj.metadata?.city || "Expansion Market"} (${obj.metadata?.zip_code || "N/A"})`, inline: true },
+            { name: "🛡️ Lock Status", value: "Locked Launch Rate for 3 Years", inline: false },
+          ],
+          timestamp,
+          footer: { text: "CloudVault Stripe Live • Waitlist Hub" },
+        };
+      } else {
+        embed = {
+          title: "💳 New CloudVault Storage Subscription Checkout!",
+          color: 0x10b981, // Emerald
+          fields: [
+            { name: "👤 Customer", value: `${customerName} (${customerEmail})`, inline: true },
+            { name: "💵 Total Charged", value: `$${amountTotal}`, inline: true },
+            { name: "📦 Plan / Totes", value: `${obj.metadata?.plan_tier || obj.metadata?.tote_count || "Storage Plan"}`, inline: true },
+          ],
+          timestamp,
+          footer: { text: "CloudVault Stripe Live • Subscriptions" },
+        };
+      }
+    } else if (event.type === "invoice.paid") {
+      if (Number(obj.amount_paid) > 0) {
+        const amountStr = (obj.amount_paid / 100).toFixed(2);
+        embed = {
+          title: "💵 Stripe Invoice Paid Successfully",
+          color: 0x10b981, // Emerald
+          fields: [
+            { name: "👤 Customer", value: obj.customer_email || obj.customer_name || "Customer", inline: true },
+            { name: "💰 Paid Amount", value: `$${amountStr}`, inline: true },
+            { name: "🧾 Invoice", value: `\`${obj.id}\``, inline: true },
+          ],
+          timestamp,
+          footer: { text: "CloudVault Stripe Live • Invoicing" },
+        };
+      }
+    } else if (event.type === "invoice.payment_failed") {
+      const amountStr = (obj.amount_due / 100).toFixed(2);
+      embed = {
+        title: "⚠️ Stripe Payment Failed / Card Declined",
+        color: 0xef4444, // Red
+        fields: [
+          { name: "👤 Customer", value: obj.customer_email || "Unknown Customer", inline: true },
+          { name: "⚠️ Amount Due", value: `$${amountStr}`, inline: true },
+          { name: "🧾 Invoice", value: `\`${obj.id}\``, inline: true },
+        ],
+        timestamp,
+        footer: { text: "CloudVault Stripe Live • Billing Alert" },
+      };
+    } else if (event.type === "customer.subscription.deleted") {
+      embed = {
+        title: "🛑 Customer Subscription Cancelled",
+        color: 0x6b7280, // Gray
+        fields: [
+          { name: "Customer ID", value: `\`${obj.customer}\``, inline: true },
+          { name: "Subscription ID", value: `\`${obj.id}\``, inline: true },
+        ],
+        timestamp,
+        footer: { text: "CloudVault Stripe Live • Subscriptions" },
+      };
+    }
+
+    if (embed) {
+      await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: "CloudVault Stripe Bot",
+          avatar_url: "https://cloudvault-35a9b-6b3db.web.app/favicon.ico",
+          embeds: [embed],
+        }),
+      });
+    }
+  } catch (err: any) {
+    console.warn("[StripeWebhook] Failed to dispatch Discord notification:", err.message);
+  }
+}
+
 export async function handleWebhookRequest(
   req: Request,
   customSupabaseClient?: any
@@ -1362,7 +1465,10 @@ export async function handleWebhookRequest(
 
     console.log(`[StripeWebhook] Successfully processed & logged event ${event.id} [${event.type}]`);
 
-    // 4. Return Confirmation HTTP 200 { received: true } to Stripe
+    // 4. Dispatch Discord Real-Time Alert
+    await dispatchDiscordStripeNotification(event);
+
+    // 5. Return Confirmation HTTP 200 { received: true } to Stripe
     return new Response(JSON.stringify({ received: true }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
