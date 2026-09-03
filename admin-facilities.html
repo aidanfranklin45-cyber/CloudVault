@@ -4535,26 +4535,28 @@
                     lucide.createIcons();
 
                     try {
-                        // Dynamically fetch active facilities, operational zones, and service areas to build active exclusion set
+                        // Dynamically fetch active facilities, operational zones, and service areas
                         const [{ data: facs }, { data: zones }, { data: serviceAreas }] = await Promise.all([
                             supabase.from('facilities').select('id, name'),
-                            supabase.from('operational_zones').select('id, city, zip_codes'),
+                            supabase.from('operational_zones').select('id, city, zip_codes, active'),
                             supabase.from('service_areas').select('zip_code, city, active').eq('active', true)
                         ]);
 
+                        // Build active sets ONLY from active operational zones
                         const activeCitySet = new Set();
                         const activeZipSet = new Set();
 
-                        (facs || []).forEach(f => {
-                            if (f.name) activeCitySet.add(f.name.toLowerCase().replace(/ fulfillment center| hub| center/g, '').trim());
-                        });
                         (zones || []).forEach(z => {
-                            if (z.city) activeCitySet.add(z.city.toLowerCase().trim());
-                            (z.zip_codes || []).forEach(zip => activeZipSet.add(zip.trim()));
+                            if (z.active === true) {
+                                if (z.city) activeCitySet.add(z.city.toLowerCase().trim());
+                                (z.zip_codes || []).forEach(zip => activeZipSet.add(zip.trim()));
+                            }
                         });
+
                         (serviceAreas || []).forEach(s => {
-                            if (s.city) activeCitySet.add(s.city.toLowerCase().trim());
-                            if (s.zip_code) activeZipSet.add(s.zip_code.trim());
+                            if (s.active === true && s.zip_code && activeZipSet.has(s.zip_code.trim())) {
+                                if (s.city) activeCitySet.add(s.city.toLowerCase().trim());
+                            }
                         });
 
                         // Fetch real dynamic waitlist data from Supabase
@@ -4563,21 +4565,15 @@
 
                         // Exclude any waitlist entries that belong to active operational hubs/ZIPs
                         const unlaunchedWaitlists = (dbWaitlists || []).filter(w => {
-                            const rawCity = (w.city || '').trim();
                             const rawZip = (w.zip_code || '').trim();
-                            if (!rawCity && !rawZip) return false;
-
                             if (rawZip && activeZipSet.has(rawZip)) return false;
 
-                            const cLower = rawCity.toLowerCase().replace(/^zip:\s*/, '').trim();
-                            if (!cLower) return false;
+                            const rawCity = (w.city || '').toLowerCase().replace(/^zip:\s*/, '').trim();
+                            if (rawCity && activeCitySet.has(rawCity) && rawZip && activeZipSet.has(rawZip)) {
+                                return false;
+                            }
 
-                            const isCityActive = Array.from(activeCitySet).some(ac => {
-                                if (!ac) return false;
-                                return ac === cLower || (ac.length > 3 && cLower.length > 3 && (ac.includes(cLower) || cLower.includes(ac)));
-                            });
-
-                            return !isCityActive;
+                            return true;
                         });
 
                         window.allWaitlistRawData = unlaunchedWaitlists;
@@ -4594,28 +4590,64 @@
                             return 'US';
                         }
 
-                        // Group by normalized city
+                        // Group by market / city (pre-seeding paused operational zones)
                         const cityGroups = {};
+
+                        // Pre-seed all paused operational zones as waitlist markets
+                        (zones || []).filter(z => z.active !== true).forEach(pz => {
+                            const cName = pz.city || 'Paused Market';
+                            const primaryZip = (pz.zip_codes && pz.zip_codes[0]) || 'Expansion';
+                            cityGroups[cName] = {
+                                city: cName,
+                                state: inferState(cName, primaryZip),
+                                zip: primaryZip,
+                                count: 0,
+                                totesDemanded: 0,
+                                totalCapital: 0,
+                                leads: [],
+                                zoneId: pz.id,
+                                isPausedZone: true
+                            };
+                        });
+
                         unlaunchedWaitlists.forEach(w => {
-                            let cName = (w.city && w.city.replace(/^ZIP:\s*/i, '').trim()) || (w.zip_code ? `ZIP ${w.zip_code}` : 'Unmapped Market');
-                            if (!cName) cName = 'Unmapped Market';
+                            const wZip = (w.zip_code || '').trim();
+                            const rawCity = (w.city && w.city.replace(/^ZIP:\s*/i, '').trim()) || '';
+
+                            // Match to an existing paused zone by ZIP or fuzzy city name
+                            let matchedKey = null;
+                            for (const key of Object.keys(cityGroups)) {
+                                const group = cityGroups[key];
+                                const pz = (zones || []).find(z => z.id === group.zoneId);
+                                if (pz && pz.zip_codes && pz.zip_codes.includes(wZip)) {
+                                    matchedKey = key;
+                                    break;
+                                }
+                                if (rawCity && (key.toLowerCase().includes(rawCity.toLowerCase()) || rawCity.toLowerCase().includes(key.toLowerCase()))) {
+                                    matchedKey = key;
+                                    break;
+                                }
+                            }
+
+                            const cName = matchedKey || rawCity || (wZip ? `ZIP ${wZip}` : 'Unmapped Market');
 
                             if (!cityGroups[cName]) {
                                 cityGroups[cName] = {
                                     city: cName,
-                                    state: inferState(cName, w.zip_code),
-                                    zip: w.zip_code || 'Expansion',
+                                    state: w.state || inferState(cName, wZip),
+                                    zip: wZip || 'Expansion',
                                     count: 0,
                                     totesDemanded: 0,
                                     totalCapital: 0,
                                     leads: []
                                 };
                             }
+
                             const isPaid = w.payment_status === 'deposit_paid' || w.deposit_status === 'paid';
                             const capitalCollected = isPaid ? (Number(w.net_deposit_paid || w.deposit_amount) || 0) : 0;
 
                             cityGroups[cName].count++;
-                            cityGroups[cName].totesDemanded += (Number(w.requested_totes) || 4);
+                            cityGroups[cName].totesDemanded += (Number(w.requested_totes) || 5);
                             cityGroups[cName].totalCapital += capitalCollected;
                             cityGroups[cName].leads.push(w);
                         });
@@ -4704,8 +4736,10 @@
                                 badgeHtml = `<span class="text-[10px] font-extrabold font-mono text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded-xl flex items-center gap-1"><i data-lucide="flame" class="w-3 h-3 text-emerald-400"></i> HIGH DEMAND</span>`;
                             } else if (m.totesDemanded >= 20 || m.count >= 2) {
                                 badgeHtml = `<span class="text-[10px] font-extrabold font-mono text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-xl flex items-center gap-1"><i data-lucide="trending-up" class="w-3 h-3 text-amber-400"></i> MODERATE DEMAND</span>`;
-                            } else {
+                            } else if (m.count > 0) {
                                 badgeHtml = `<span class="text-[10px] font-extrabold font-mono text-blue-400 bg-blue-500/15 border border-blue-500/30 px-2.5 py-1 rounded-xl flex items-center gap-1"><i data-lucide="compass" class="w-3 h-3 text-blue-400"></i> EMERGING MARKET</span>`;
+                            } else {
+                                badgeHtml = `<span class="text-[10px] font-extrabold font-mono text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-xl flex items-center gap-1"><i data-lucide="pause-circle" class="w-3 h-3 text-amber-400"></i> PAUSED MARKET</span>`;
                             }
 
                             return `
@@ -4774,8 +4808,9 @@
                     if (!modal || !tbody) return;
 
                     const leads = (window.allWaitlistRawData || []).filter(w => {
-                        const c = (w.city || '').replace(/^ZIP:\s*/i, '').trim();
-                        return c.toLowerCase() === cityName.toLowerCase();
+                        const c = (w.city || '').replace(/^ZIP:\s*/i, '').trim().toLowerCase();
+                        const target = cityName.toLowerCase();
+                        return c === target || target.includes(c) || c.includes(target);
                     });
 
                     if (titleEl) titleEl.textContent = `${cityName} Market Prospect Roster`;
