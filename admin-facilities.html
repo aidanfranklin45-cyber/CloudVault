@@ -3234,7 +3234,9 @@
                                 locations.push({
                                     facility_id: facilityId,
                                     zone_type: 'VAULT',
+                                    location_type: 'VAULT',
                                     identifier: identifier,
+                                    location_code: identifier,
                                     capacity: 3,
                                     is_occupied: false
                                 });
@@ -3378,6 +3380,49 @@
                                 .from('warehouse_locations')
                                 .upsert(chunk, { onConflict: 'facility_id,identifier' });
                             if (error) throw error;
+                        }
+
+                        // Clean up excess unoccupied vault locations no longer part of the new layout
+                        try {
+                            const validIdentifiers = new Set(locations.map(l => l.identifier));
+                            const { data: existingVaultLocs, error: fetchErr } = await supabase
+                                .from('warehouse_locations')
+                                .select('id, identifier, is_occupied, assigned_tote_id')
+                                .eq('facility_id', currentLoadedFac.id)
+                                .eq('zone_type', 'VAULT');
+
+                            if (!fetchErr && existingVaultLocs && existingVaultLocs.length > 0) {
+                                const excessLocs = existingVaultLocs.filter(l => !validIdentifiers.has(l.identifier));
+                                if (excessLocs.length > 0) {
+                                    const occupiedExcess = excessLocs.filter(l => l.assigned_tote_id !== null);
+                                    if (occupiedExcess.length > 0) {
+                                        const sample = occupiedExcess.slice(0, 3).map(l => l.identifier).join(', ');
+                                        console.warn(`Preserved ${occupiedExcess.length} occupied location(s) (${sample}) during downscaling.`);
+                                        if (typeof showToast === 'function') {
+                                            showToast(`⚠️ Preserved ${occupiedExcess.length} occupied location(s) (${sample}) during downscaling.`, 'warning');
+                                        }
+                                    }
+
+                                    const idsToDelete = excessLocs.filter(l => l.assigned_tote_id === null).map(l => l.id);
+                                    if (idsToDelete.length > 0) {
+                                        for (let d = 0; d < idsToDelete.length; d += batchSize) {
+                                            const delChunk = idsToDelete.slice(d, d + batchSize);
+                                            await supabase.from('warehouse_locations').delete().in('id', delChunk);
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Update facility tote capacity
+                            const newCapacity = total * 3;
+                            await supabase.from('facilities').update({
+                                tote_capacity: newCapacity
+                            }).eq('id', currentLoadedFac.id);
+                            if (currentLoadedFac) {
+                                currentLoadedFac.tote_capacity = newCapacity;
+                            }
+                        } catch (cleanErr) {
+                            console.warn("Notice during vault location pruning:", cleanErr);
                         }
 
                         if (typeof showToast === 'function') {
