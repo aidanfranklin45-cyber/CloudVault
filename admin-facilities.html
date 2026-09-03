@@ -809,12 +809,26 @@
                             </div>
                             </div>
 
-                            <!-- Waitlist Intelligence Panel -->
-                            <div class="pt-4 border-t border-gray-800">
+                            <!-- Active Market Operations Banner (Shown when Market is Active) -->
+                            <div id="conf-active-market-banner" class="pt-4 border-t border-gray-800">
+                                <div class="bg-emerald-950/20 border border-emerald-500/30 rounded-2xl p-4 text-center space-y-1.5 shadow-sm">
+                                    <div class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        <span>Fully Operational Service Zone</span>
+                                    </div>
+                                    <p class="text-[11px] text-gray-400 leading-relaxed">Direct customer orders, tote drop-offs, and retrievals are live. Waitlist intake is disabled in active delivery zones.</p>
+                                </div>
+                            </div>
+
+                            <!-- Waitlist Intelligence Panel (Shown only when Market is Deactivated / Paused) -->
+                            <div id="conf-waitlist-intelligence-container" class="hidden pt-4 border-t border-gray-800">
                                 <div class="flex items-center justify-between mb-3">
-                                    <label class="block text-[10px] font-bold uppercase text-gray-400 tracking-wider flex items-center gap-1.5">
-                                        <i data-lucide="users" class="w-3 h-3 text-indigo-400"></i> Waitlist Intelligence
-                                    </label>
+                                    <div>
+                                        <label class="block text-[10px] font-bold uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">
+                                            <i data-lucide="users" class="w-3 h-3 text-indigo-400"></i> Expansion Waitlist Intelligence
+                                        </label>
+                                        <p class="text-[9px] text-gray-500">Market is paused — collecting waitlist signups &amp; deposits</p>
+                                    </div>
                                     <button onclick="loadWaitlistStats(currentLoadedZone)" class="text-[10px] text-gray-500 hover:text-blue-400 font-bold transition flex items-center gap-1">
                                         <i data-lucide="refresh-cw" class="w-3 h-3"></i> Refresh
                                     </button>
@@ -846,7 +860,7 @@
                                         <i data-lucide="git-fork" class="w-3 h-3 text-indigo-400"></i> Nearby ZIP Clusters
                                     </label>
                                     <div id="wl-zip-clusters" class="space-y-2 text-xs text-gray-500">
-                                        <span class="text-[10px] text-gray-600">Load a market to see clusters.</span>
+                                        <span class="text-[10px] text-gray-600">Load an inactive market to see clusters.</span>
                                     </div>
                                 </div>
                             </div>
@@ -3779,22 +3793,42 @@
                         document.getElementById('conf-market-zone-id').textContent = zone.id;
                         const depEl = document.getElementById('conf-deposit-amount');
                         if (depEl) depEl.value = (zone.required_deposit !== null && zone.required_deposit !== undefined) ? zone.required_deposit : 25.00;
-                        document.getElementById('conf-market-active-select').value = zone.active !== false ? "true" : "false";
+                        const isZoneActive = zone.active !== false;
+                        document.getElementById('conf-market-active-select').value = isZoneActive ? "true" : "false";
 
                         renderZipCodes(zone.zip_codes || []);
-                        loadWaitlistStats(zone);
+                        renderWaitlistIntelligenceVisibility(isZoneActive);
+                        if (!isZoneActive) {
+                            loadWaitlistStats(zone);
+                        }
                     } catch (e) {
                         console.error("Failed to load zone data:", e);
                         throw e;
                     }
                 }
 
+                function renderWaitlistIntelligenceVisibility(isMarketActive) {
+                    const wlContainer = document.getElementById('conf-waitlist-intelligence-container');
+                    const activeBanner = document.getElementById('conf-active-market-banner');
+                    if (isMarketActive) {
+                        if (wlContainer) wlContainer.classList.add('hidden');
+                        if (activeBanner) activeBanner.classList.remove('hidden');
+                    } else {
+                        if (wlContainer) wlContainer.classList.remove('hidden');
+                        if (activeBanner) activeBanner.classList.add('hidden');
+                    }
+                }
+
                 function onMarketActiveStatusChange(val) {
                     const isAct = val === "true";
                     if (currentLoadedZone) currentLoadedZone.active = isAct;
+                    renderWaitlistIntelligenceVisibility(isAct);
                     loadFacilityTelemetry(activeFacilityId);
                     loadStagingRoomSchedule(activeFacilityId, selectedStagingDate);
                     loadTaxZipConfig(activeFacilityId);
+                    if (!isAct && currentLoadedZone) {
+                        loadWaitlistStats(currentLoadedZone);
+                    }
                 }
 
                 function renderZipCodes(zips) {
