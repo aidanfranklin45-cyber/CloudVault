@@ -185,6 +185,93 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // 3. Automatically dispatch real-time alert to Discord Webhook
+    const discordWebhookUrl = Deno.env.get("DISCORD_WEBHOOK_URL");
+    if (discordWebhookUrl) {
+      try {
+        const isBug = reportType === "bug";
+        const embedTitle = isBug 
+          ? `🐛 New Bug Report [${severity.toUpperCase()}]` 
+          : `💡 New Feature Idea / Enhancement`;
+        const embedColor = isBug 
+          ? (severity === "critical" ? 0x991b1b : severity === "high" ? 0xef4444 : 0xf59e0b)
+          : 0x8b5cf6;
+
+        const fields: any[] = [
+          {
+            name: "📌 Title",
+            value: title,
+            inline: false,
+          },
+          {
+            name: "👤 Submitter",
+            value: payload.user_email 
+              ? `${payload.user_name || "Customer"} (\`${payload.user_email}\`)` 
+              : "Anonymous / Guest",
+            inline: true,
+          },
+          {
+            name: "🧭 Flow Area",
+            value: `\`${flowArea}\``,
+            inline: true,
+          },
+          {
+            name: "⚡ Severity",
+            value: `\`${severity.toUpperCase()}\``,
+            inline: true,
+          },
+          {
+            name: "📝 Description",
+            value: description.length > 1000 ? description.slice(0, 997) + "..." : description,
+            inline: false,
+          },
+        ];
+
+        if (githubIssueUrl) {
+          fields.push({
+            name: "🐙 GitHub Issue",
+            value: `[#${githubIssueNumber}](${githubIssueUrl})`,
+            inline: true,
+          });
+        }
+
+        if (diagnostics && typeof diagnostics === "object" && Object.keys(diagnostics).length > 0) {
+          const diagEntries = Object.entries(diagnostics)
+            .filter(([_, v]) => v != null && typeof v !== "object")
+            .slice(0, 4)
+            .map(([k, v]) => `• **${k}**: \`${v}\``)
+            .join("\n");
+          if (diagEntries) {
+            fields.push({
+              name: "🔍 Diagnostic Telemetry",
+              value: diagEntries,
+              inline: false,
+            });
+          }
+        }
+
+        await fetch(discordWebhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: "CloudVault Feedback Bot",
+            avatar_url: "https://cloudvault-35a9b-6b3db.web.app/favicon.ico",
+            embeds: [
+              {
+                title: embedTitle,
+                color: embedColor,
+                fields: fields,
+                timestamp: new Date().toISOString(),
+                footer: { text: `Report ID: ${reportId} • CloudVault Feedback Hub` },
+              },
+            ],
+          }),
+        });
+      } catch (discordErr) {
+        console.warn("[Feedback] Discord webhook dispatch warning:", discordErr);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
