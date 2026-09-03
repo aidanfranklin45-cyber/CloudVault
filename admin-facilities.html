@@ -1749,13 +1749,15 @@
                             ]);
 
                             const session = sessionData?.session;
-                            if (session?.user) {
-                                const { data: profile } = await supabase.from('users').select('*').eq('id', session.user.id).maybeSingle();
-                                if (profile && profile.role !== 'executive') {
-                                    alert("Executive clearance required to access Facility Configuration.");
-                                    window.location.href = 'admin.html';
-                                    return;
-                                }
+                            if (!session?.user) {
+                                window.location.replace('login.html?redirect=admin-facilities.html');
+                                return;
+                            }
+                            const { data: profile } = await supabase.from('users').select('role').eq('id', session.user.id).maybeSingle();
+                            if (!profile || profile.role !== 'executive') {
+                                alert("Executive clearance required to access Facility Configuration.");
+                                window.location.replace(profile?.role === 'customer' ? 'dashboard.html' : 'admin.html');
+                                return;
                             }
 
                             await Promise.all([

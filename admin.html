@@ -2124,6 +2124,10 @@
                             const user = session.user;
                             const profile = await getCachedUserProfile(user.id);
                             if (profile && profile.role) {
+                                if (profile.role === 'customer') {
+                                    window.location.replace("dashboard.html");
+                                    return;
+                                }
                                 applyActiveEmployeeContext(profile);
                             }
                             loadLiveData();
