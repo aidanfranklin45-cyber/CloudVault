@@ -1868,6 +1868,10 @@
                             class="w-full bg-slate-900 text-white px-4 py-3.5 rounded-xl font-extrabold text-base hover:bg-black transition shadow-lg cursor-pointer">
                             Reserve My Rate with a Deposit
                         </button>
+                        <button type="button" onclick="switchToFreeWaitlistFromPayment()"
+                            class="w-full text-slate-500 hover:text-slate-800 text-xs font-semibold py-2 transition flex items-center justify-center gap-1 cursor-pointer">
+                            <span>← Or join the free waitlist without a deposit</span>
+                        </button>
                     </div>
 
                     <div id="waitlist-success"
@@ -3215,6 +3219,16 @@
 
         function goBack() {
             if (currentStep === 'waitlist') {
+                const paymentStep = document.getElementById('waitlist-step-payment');
+                const emailStep = document.getElementById('waitlist-step-email');
+                if (paymentStep && !paymentStep.classList.contains('hidden-section')) {
+                    // Back from Stripe payment form to Email & Plan choice
+                    paymentStep.classList.add('hidden-section');
+                    if (emailStep) emailStep.classList.remove('hidden-section');
+                    const errEl = document.getElementById('w-payment-error');
+                    if (errEl) errEl.classList.add('hidden-section');
+                    return;
+                }
                 showStep(2);
             } else if (typeof currentStep === 'number' && currentStep > 1) {
                 showStep(currentStep - 1);
@@ -3223,6 +3237,16 @@
                 document.getElementById('view-landing').classList.remove('hidden-section');
             }
         }
+
+        function switchToFreeWaitlistFromPayment() {
+            const paymentStep = document.getElementById('waitlist-step-payment');
+            const emailStep = document.getElementById('waitlist-step-email');
+            if (paymentStep) paymentStep.classList.add('hidden-section');
+            if (emailStep) emailStep.classList.remove('hidden-section');
+            const errEl = document.getElementById('w-payment-error');
+            if (errEl) errEl.classList.add('hidden-section');
+        }
+        window.switchToFreeWaitlistFromPayment = switchToFreeWaitlistFromPayment;
 
         let waitlistTurnstileWidgetId = null;
         let checkoutTurnstileWidgetId = null;
@@ -3284,6 +3308,10 @@
 
             if (step === 'waitlist') {
                 document.getElementById('step-waitlist').classList.remove('hidden-section');
+                document.getElementById('waitlist-step-email')?.classList.remove('hidden-section');
+                document.getElementById('waitlist-step-payment')?.classList.add('hidden-section');
+                document.getElementById('waitlist-success')?.classList.add('hidden-section');
+                document.getElementById('free-waitlist-success')?.classList.add('hidden-section');
                 document.getElementById('step-indicator').textContent = 'Waitlist';
                 renderWaitlistTurnstile();
                 const waitlistSummary = document.getElementById('waitlist-totes-summary');
