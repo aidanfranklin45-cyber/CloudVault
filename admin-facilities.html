@@ -4333,34 +4333,53 @@
                     const totalOpEx = rent + labor + util + ins;
 
                     const sqft = Number(document.getElementById('conf-sqft').value) || 0;
-                    const capacity = Number(document.getElementById('conf-tote-capacity').value) || 0;
-                    const tier1 = Number(document.getElementById('conf-tier1').value) || (currentLoadedFac ? Number(currentLoadedFac.tier1_rate || 0) : 0);
-                    const valetBase = Number(document.getElementById('conf-valet-base').value) || (currentLoadedFac ? Number(currentLoadedFac.valet_base || 0) : 0);
+                    const capacity = Number(document.getElementById('conf-tote-capacity').value) || (currentLoadedFac ? Number(currentLoadedFac.tote_capacity || 0) : 0);
 
-                    // Projected Monthly Revenue based on 70% average occupancy
+                    // Dynamic volume tier rates from active facility context
+                    const tier1 = Number(document.getElementById('conf-tier1')?.value) || (currentLoadedFac ? Number(currentLoadedFac.tier1_rate || 0) : 0);
+                    const tier2 = Number(document.getElementById('conf-tier2')?.value) || (currentLoadedFac ? Number(currentLoadedFac.tier2_rate || 0) : tier1);
+                    const tier3 = Number(document.getElementById('conf-tier3')?.value) || (currentLoadedFac ? Number(currentLoadedFac.tier3_rate || 0) : tier2);
+                    const tier4 = Number(document.getElementById('conf-tier4')?.value) || (currentLoadedFac ? Number(currentLoadedFac.tier4_rate || 0) : tier3);
+                    const valetBase = Number(document.getElementById('conf-valet-base')?.value) || (currentLoadedFac ? Number(currentLoadedFac.valet_base || 0) : 0);
+
+                    // Realistic storage customer volume mix across tiers:
+                    // 25% Tier 1 (1–9 totes), 45% Tier 2 (10–24 totes), 20% Tier 3 (25–49 totes), 10% Tier 4 (50+ totes)
+                    const tierMix = [
+                        { weight: 0.25, rate: tier1 },
+                        { weight: 0.45, rate: tier2 },
+                        { weight: 0.20, rate: tier3 },
+                        { weight: 0.10, rate: tier4 }
+                    ];
+                    const blendedStorageRate = tierMix.reduce((sum, t) => sum + (t.weight * t.rate), 0);
+
+                    // Projected Monthly Revenue based on 70% average physical occupancy
                     const projectedTotes = Math.round(capacity * 0.7);
-                    const grossRev = (projectedTotes * tier1) + (Math.round(projectedTotes * 0.15) * valetBase);
+                    const storageRev = projectedTotes * blendedStorageRate;
+                    const valetRev = Math.round(projectedTotes * 0.15) * valetBase;
+                    const grossRev = storageRev + valetRev;
                     const noi = grossRev - totalOpEx;
                     const margin = grossRev > 0 ? Math.round((noi / grossRev) * 100) : 0;
                     const sqftEff = sqft > 0 ? (grossRev / sqft).toFixed(2) : '0.00';
 
-                    document.getElementById('pnl-gross-revenue').textContent = `${grossRev.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-                    document.getElementById('pnl-total-opex').textContent = `${totalOpEx.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+                    document.getElementById('pnl-gross-revenue').textContent = `${grossRev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    document.getElementById('pnl-total-opex').textContent = `${totalOpEx.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
                     const noiEl = document.getElementById('pnl-noi');
-                    noiEl.textContent = `${noi.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+                    noiEl.textContent = `${noi.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                     noiEl.className = `text-xl font-black font-mono ${noi >= 0 ? 'text-blue-400' : 'text-rose-400'}`;
 
                     document.getElementById('pnl-margin-percent').textContent = `Gross Margin: ${margin}%`;
                     document.getElementById('pnl-sqft-efficiency').textContent = `${sqftEff} / sqft`;
 
                     const subEl = document.getElementById('pnl-gross-subtitle');
-                    if (subEl) subEl.textContent = `Modeled: ${projectedTotes.toLocaleString()} Totes @ ${tier1.toFixed(2)} + Valet`;
+                    if (subEl) subEl.textContent = `Modeled: ${projectedTotes.toLocaleString()} Totes @ $${blendedStorageRate.toFixed(2)} Blended Avg + Valet`;
 
                     const fnTotes = document.getElementById('pnl-fn-totes');
                     if (fnTotes) fnTotes.textContent = projectedTotes.toLocaleString();
+                    const fnMaxTotes = document.getElementById('pnl-fn-max-totes');
+                    if (fnMaxTotes) fnMaxTotes.textContent = capacity.toLocaleString();
                     const fnRate = document.getElementById('pnl-fn-rate');
-                    if (fnRate) fnRate.textContent = tier1.toFixed(2);
+                    if (fnRate) fnRate.textContent = blendedStorageRate.toFixed(2);
                     const fnValet = document.getElementById('pnl-fn-valet');
                     if (fnValet) fnValet.textContent = valetBase.toFixed(2);
 
