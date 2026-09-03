@@ -3929,7 +3929,11 @@
                 async function addZipToActiveMarket() {
                     const newZip = prompt("Enter new ZIP code to add to this active market zone:");
                     if (!newZip || !newZip.trim()) return;
-                    const cleanZip = newZip.trim();
+                    const cleanZip = newZip.trim().replace(/\D/g, '').slice(0, 5);
+                    if (cleanZip.length !== 5) {
+                        alert('Please enter a valid 5-digit US ZIP code.');
+                        return;
+                    }
 
                     if (!currentLoadedZone) return;
                     let zips = currentLoadedZone.zip_codes || [];
@@ -3938,18 +3942,50 @@
                     currentLoadedZone.zip_codes = zips;
                     renderZipCodes(zips);
 
+                    const facId = currentLoadedFac ? currentLoadedFac.id : (localStorage.getItem('cloudvault_selected_facility') || 'facility_yakima');
+                    const zoneCity = currentLoadedZone.city || (currentLoadedFac ? (currentLoadedFac.city || currentLoadedFac.name) : 'Active Market');
+
                     try {
-                        const zoneCity = currentLoadedZone.city || (currentLoadedFac ? (currentLoadedFac.city || currentLoadedFac.name) : 'Active Market');
+                        // 1. Update operational zone
                         await supabase.from('operational_zones').upsert({
                             id: currentLoadedZone.id,
-                            facility_id: currentLoadedFac ? currentLoadedFac.id : null,
+                            facility_id: facId,
                             city: zoneCity,
                             zip_codes: zips,
                             active: currentLoadedZone.active !== false,
-                            required_deposit: currentLoadedZone.required_deposit || 25.00
+                            required_deposit: currentLoadedZone.required_deposit || 10.00
                         }, { onConflict: 'id' });
+
+                        // 2. Resolve city and activate in service_areas
+                        let resolvedCity = '';
+                        let resolvedState = 'WA';
+                        try {
+                            if (window.AddressValidator && typeof window.AddressValidator.lookupZip === 'function') {
+                                const geo = await window.AddressValidator.lookupZip(cleanZip);
+                                if (geo) {
+                                    resolvedCity = geo.city || '';
+                                    resolvedState = geo.state || 'WA';
+                                }
+                            }
+                        } catch (e) {}
+
+                        const defaultRate = currentLoadedFac?.tax_rate != null ? currentLoadedFac.tax_rate : 0.085;
+                        const defaultLabel = resolvedCity ? `${resolvedCity}, ${resolvedState}` : (currentLoadedFac?.city ? `${currentLoadedFac.city}, ${currentLoadedFac.state || 'WA'}` : 'Yakima, WA');
+
+                        await supabase.from('service_areas').upsert({
+                            zip_code: cleanZip,
+                            facility_id: facId,
+                            city: resolvedCity || zoneCity,
+                            state: resolvedState,
+                            tax_rate: defaultRate,
+                            tax_label: defaultLabel,
+                            active: true
+                        }, { onConflict: 'zip_code' });
+
+                        // 3. Immediately refresh tax configuration table
+                        loadTaxZipConfig(facId);
                     } catch (e) {
-                        console.error("ZIP update failed:", e);
+                        console.error("ZIP add failed:", e);
                     }
                 }
 
@@ -3959,16 +3995,25 @@
                     currentLoadedZone.zip_codes = zips;
                     renderZipCodes(zips);
 
+                    const facId = currentLoadedFac ? currentLoadedFac.id : (localStorage.getItem('cloudvault_selected_facility') || 'facility_yakima');
+                    const zoneCity = currentLoadedZone.city || (currentLoadedFac ? (currentLoadedFac.city || currentLoadedFac.name) : 'Active Market');
+
                     try {
-                        const zoneCity = currentLoadedZone.city || (currentLoadedFac ? (currentLoadedFac.city || currentLoadedFac.name) : 'Active Market');
+                        // 1. Update operational zone
                         await supabase.from('operational_zones').upsert({
                             id: currentLoadedZone.id,
-                            facility_id: currentLoadedFac ? currentLoadedFac.id : null,
+                            facility_id: facId,
                             city: zoneCity,
                             zip_codes: zips,
                             active: currentLoadedZone.active !== false,
-                            required_deposit: currentLoadedZone.required_deposit || 25.00
+                            required_deposit: currentLoadedZone.required_deposit || 10.00
                         }, { onConflict: 'id' });
+
+                        // 2. Deactivate in service_areas
+                        await supabase.from('service_areas').update({ active: false }).eq('facility_id', facId).eq('zip_code', zipToRemove);
+
+                        // 3. Immediately refresh tax configuration table
+                        loadTaxZipConfig(facId);
                     } catch (e) {
                         console.error("ZIP remove failed:", e);
                     }
@@ -5074,7 +5119,12 @@
                             .order('zip_code', { ascending: true });
                         if (error) throw error;
 
-                        loadedTaxZips = (zips || []).filter(z => z.active === true);
+                        // Strictly filter by operational zone active zip codes
+                        const activeZoneZips = (currentLoadedZone && Array.isArray(currentLoadedZone.zip_codes) && currentLoadedZone.zip_codes.length > 0)
+                            ? currentLoadedZone.zip_codes
+                            : null;
+
+                        loadedTaxZips = (zips || []).filter(z => z.active === true && (!activeZoneZips || activeZoneZips.includes(z.zip_code)));
                         renderTaxZipRows(false);
                     } catch (err) {
                         console.error('[Tax] Failed to load active ZIP tax config:', err.message);
@@ -5264,6 +5314,25 @@
                         active: true
                     });
                     renderTaxZipRows();
+
+                    if (currentLoadedZone) {
+                        let zoneZips = currentLoadedZone.zip_codes || [];
+                        if (!zoneZips.includes(zipTrimmed)) {
+                            zoneZips.push(zipTrimmed);
+                            currentLoadedZone.zip_codes = zoneZips;
+                            renderZipCodes(zoneZips);
+                            const facId = currentLoadedFac ? currentLoadedFac.id : (localStorage.getItem('cloudvault_selected_facility') || 'facility_yakima');
+                            supabase.from('operational_zones').upsert({
+                                id: currentLoadedZone.id,
+                                facility_id: facId,
+                                city: currentLoadedZone.city || 'Active Market',
+                                zip_codes: zoneZips,
+                                active: currentLoadedZone.active !== false,
+                                required_deposit: currentLoadedZone.required_deposit || 10.00
+                            }, { onConflict: 'id' }).then(() => {});
+                        }
+                    }
+
                     await saveTaxZipRow(newIdx);
                 }
 
