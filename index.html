@@ -1802,6 +1802,7 @@
                             class="w-full bg-white border border-slate-300 text-slate-700 px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-slate-50 transition flex items-center justify-center gap-2">
                             <span>Just join the free waitlist</span>
                         </button>
+                        <p class="text-[10px] text-slate-500 text-center leading-relaxed pt-0.5">By continuing, you certify that you are <strong>at least 18 years old</strong> and agree to our <a href="terms.html" target="_blank" class="underline font-bold text-slate-700 hover:text-blue-600">Terms of Service</a> &amp; <a href="privacy.html" target="_blank" class="underline font-bold text-slate-700 hover:text-blue-600">Privacy Policy</a>.</p>
                         <div class="p-2.5 rounded-xl bg-blue-50 border border-blue-200/70 text-[11px] text-blue-900 leading-relaxed text-center mt-1">
                             ℹ️ <strong>Expansion Disclosure:</strong> Creating an account automatically puts you on our regional waitlist if your ZIP code isn't yet active. You will never be charged unless you choose to place a priority rate-lock deposit.
                         </div>
@@ -1870,6 +1871,7 @@
                         </div>
 
                         <p id="w-payment-error" class="text-red-500 text-xs hidden-section font-bold"></p>
+                        <p class="text-[10px] text-slate-500 text-center leading-relaxed">By placing a deposit, you certify you are <strong>at least 18 years old</strong> and agree to our <a href="terms.html" target="_blank" class="underline font-bold text-slate-700 hover:text-blue-600">Terms of Service</a> &amp; <a href="privacy.html" target="_blank" class="underline font-bold text-slate-700 hover:text-blue-600">Privacy Policy</a>.</p>
                         <button id="btn-deposit-submit" onclick="submitWaitlistDeposit()"
                             class="w-full bg-slate-900 text-white px-4 py-3.5 rounded-xl font-extrabold text-base hover:bg-black transition shadow-lg cursor-pointer">
                             Reserve My Rate with a Deposit
@@ -2187,17 +2189,17 @@
                             CloudVault never stores raw card data.</p>
                     </div>
 
-                    <!-- TOS Checkbox -->
-                    <div class="flex items-start space-x-2.5 mb-3 mt-2">
+                    <!-- TOS & Privacy 18+ Checkbox -->
+                    <div class="flex items-start space-x-2.5 mb-3 mt-2 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
                         <input type="checkbox" id="tos-checkbox"
-                            class="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5 cursor-pointer">
+                            class="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5 cursor-pointer flex-shrink-0">
                         <label for="tos-checkbox"
-                            class="text-xs text-slate-600 leading-relaxed cursor-pointer select-none">
-                            I agree to the <a href="terms.html" target="_blank"
-                                class="font-bold text-slate-900 underline hover:text-blue-600">CloudVault Terms of
-                                Service &amp; Bailment Agreement</a>. I authorize CloudVault to charge a replacement fee
+                            class="text-xs text-slate-700 leading-relaxed cursor-pointer select-none">
+                            I certify that I am <strong>at least 18 years of age</strong>, and I agree to the <a href="terms.html" target="_blank"
+                                class="font-bold text-blue-600 underline hover:text-blue-800">Terms of Service &amp; Bailment Agreement</a> and <a href="privacy.html" target="_blank"
+                                class="font-bold text-blue-600 underline hover:text-blue-800">Privacy Policy</a>. I authorize CloudVault to charge a replacement fee
                             of <span class="font-bold text-slate-900" id="tos-missing-fee">$15.00 per tote</span> for
-                            any physical totes not staging-returned within 14 days of cancellation.
+                            any physical totes not returned within 14 days of subscription cancellation.
                         </label>
                     </div>
 
@@ -2322,7 +2324,7 @@
                 <ul class="space-y-2 text-xs">
                     <li><a href="login.html" class="hover:text-white transition">Customer Portal</a></li>
                     <li><a href="terms.html" class="hover:text-white transition">Terms of Service</a></li>
-                    <li><a href="terms.html#privacy" class="hover:text-white transition">Privacy Policy</a></li>
+                    <li><a href="privacy.html" class="hover:text-white transition">Privacy Policy</a></li>
                     <li><a href="#faq" class="hover:text-white transition">Support FAQ</a></li>
                     <li><a href="javascript:void(0)" onclick="openLandingFeedbackModal('bug')" class="text-blue-400 hover:text-blue-300 font-bold transition flex items-center gap-1.5">💬 <span>Report Bug / Idea</span></a></li>
                 </ul>
@@ -4774,7 +4776,7 @@
         async function submitForm() {
             const tosCheckbox = document.getElementById('tos-checkbox');
             if (!tosCheckbox.checked) {
-                document.getElementById('payment-error').textContent = 'You must agree to the Terms of Service & Bailment Agreement.';
+                document.getElementById('payment-error').textContent = 'You must certify that you are at least 18 years old and agree to the Terms of Service & Privacy Policy.';
                 document.getElementById('payment-error').classList.remove('hidden-section');
                 return;
             }
