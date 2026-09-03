@@ -524,9 +524,9 @@
 
                     <!-- Regional Context Tag -->
                     <div
-                        class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200/80 text-blue-700 text-xs sm:text-sm font-bold tracking-wide shadow-sm">
-                        <span class="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-                        <span id="hero-region-badge">Complimentary Next-Day Staging Room Access</span>
+                        class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm font-bold tracking-wide shadow-sm">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span id="hero-region-badge">🟢 Active Delivery in Yakima &amp; Selah, WA • Waitlists Open in Other Cities</span>
                     </div>
 
                     <!-- Main Headline -->
@@ -716,6 +716,104 @@
                 </div>
             </section>
 
+            <!-- Section: Regional Service Coverage & Market Status -->
+            <section id="service-coverage" class="py-12 sm:py-16 px-4 sm:px-6 bg-gradient-to-b from-white to-slate-50 border-y border-slate-200/80">
+                <div class="max-w-5xl mx-auto space-y-8">
+                    <div class="text-center space-y-2 max-w-2xl mx-auto">
+                        <span class="inline-block text-emerald-600 text-xs font-black uppercase tracking-[0.25em]">Regional Operational Status</span>
+                        <h2 class="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">Active Delivery Markets &amp; Expansion Waitlists</h2>
+                        <p class="text-slate-600 text-xs sm:text-sm">We are expanding city-by-city across the Pacific Northwest. Check our active fulfillment status below.</p>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-6 items-stretch">
+                        <!-- Card 1: Active Market (Yakima / Selah) -->
+                        <div class="bg-white border-2 border-emerald-500/40 rounded-3xl p-6 sm:p-7 shadow-lg shadow-emerald-500/5 relative overflow-hidden flex flex-col justify-between">
+                            <div class="absolute top-0 right-0 bg-emerald-500 text-white font-black text-[10px] uppercase tracking-widest px-3 py-1 rounded-bl-xl shadow-sm">
+                                🟢 Active &amp; Operational
+                            </div>
+                            <div class="space-y-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-black">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-xl font-extrabold text-slate-900">Yakima &amp; Selah, WA</h3>
+                                        <p class="text-xs text-slate-500 font-semibold">Yakima Fulfillment Center (Live Hub)</p>
+                                    </div>
+                                </div>
+                                <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                                    Full door-to-door valet delivery and self-service staging access are <strong>100% active</strong>. Request heavy-duty totes online and schedule delivery or pickup immediately.
+                                </p>
+                                <ul class="space-y-2 text-xs text-slate-700 font-semibold pt-1">
+                                    <li class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                                        <span>Doorstep Valet Delivery &amp; Pickup Available</span>
+                                    </li>
+                                    <li class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                                        <span>Complimentary 27-Gal Heavy-Duty Totes Included</span>
+                                    </li>
+                                    <li class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                                        <span>Zero wait times — Start storing today</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="pt-6">
+                                <button onclick="startCheckoutFlow({ source: 'market_active_yakima' })" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 px-4 rounded-xl text-sm shadow-md shadow-emerald-600/20 transition transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2">
+                                    <span>Order Totes in Yakima / Selah</span>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Expansion Markets (Seattle, Spokane, Portland, Tri-Cities) -->
+                        <div class="bg-white border-2 border-slate-200 rounded-3xl p-6 sm:p-7 shadow-sm flex flex-col justify-between">
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-black">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                        </div>
+                                        <div>
+                                            <h3 class="text-xl font-extrabold text-slate-900">Upcoming Expansion Cities</h3>
+                                            <p class="text-xs text-slate-500 font-semibold">Priority Route Waitlists</p>
+                                        </div>
+                                    </div>
+                                    <span class="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 uppercase">Waitlist Open</span>
+                                </div>
+                                <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                                    We are opening new routes in <strong>Seattle Metro, Spokane, Portland, and Tri-Cities</strong> based on route density. Join the waitlist with a $10 deposit to lock in grandfathered 3-year pricing.
+                                </p>
+                                <div class="grid grid-cols-2 gap-2 pt-1">
+                                    <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-xs">
+                                        <span class="font-bold text-slate-800 block">Seattle &amp; Bellevue</span>
+                                        <span class="text-[11px] text-indigo-600 font-semibold">Expansion Route</span>
+                                    </div>
+                                    <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-xs">
+                                        <span class="font-bold text-slate-800 block">Spokane Metro</span>
+                                        <span class="text-[11px] text-indigo-600 font-semibold">Expansion Route</span>
+                                    </div>
+                                    <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-xs">
+                                        <span class="font-bold text-slate-800 block">Portland Metro</span>
+                                        <span class="text-[11px] text-indigo-600 font-semibold">Expansion Route</span>
+                                    </div>
+                                    <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-xs">
+                                        <span class="font-bold text-slate-800 block">Tri-Cities &amp; Ellensburg</span>
+                                        <span class="text-[11px] text-indigo-600 font-semibold">Expansion Route</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="pt-6">
+                                <button onclick="startCheckoutFlow({ source: 'market_waitlist_btn', step: 1 })" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-extrabold py-3.5 px-4 rounded-xl text-sm shadow-sm transition transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2">
+                                    <span>Check Your ZIP / Join Waitlist</span>
+                                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
             <!-- Section: Why CloudVault Costs Less -->
             <section id="why-cloudvault" class="py-14 sm:py-16 px-4 sm:px-6 bg-slate-50">
@@ -1485,8 +1583,8 @@
                             Check ZIP Availability
                         </button>
                     </div>
-                    <div class="pt-3 text-xs text-slate-500">
-                        📍 Currently servicing Seattle Metro, Yakima Valley &amp; Pacific Northwest service zones
+                    <div class="pt-3 text-xs text-slate-400">
+                        📍 <strong>Active for Delivery:</strong> Yakima Valley &amp; Selah, WA • <strong>Expansion Waitlists:</strong> Seattle, Spokane, Portland &amp; Tri-Cities
                     </div>
                 </div>
             </section>
@@ -4308,6 +4406,26 @@
                     market: flowData.regionalMarket, 
                     totes: flowData.totes 
                 });
+
+                // Real-time Discord Ops Notification
+                try {
+                    if (supabase && typeof supabase.functions?.invoke === 'function') {
+                        supabase.functions.invoke('discord-ops-notify', {
+                            body: {
+                                event: 'waitlist_joined',
+                                customerName: email.split('@')[0],
+                                customerEmail: email,
+                                city: flowData.city || 'Expansion City',
+                                zipCode: zip,
+                                toteCount: flowData.totes || 5,
+                                depositStatus: 'free_waitlist',
+                                depositAmount: 0
+                            }
+                        }).catch(e => console.warn('[Discord Notify]', e));
+                    }
+                } catch (dErr) {
+                    console.warn('[Discord Webhook Dispatch]', dErr);
+                }
             } catch (err) {
                 console.error("Free waitlist error:", err);
                 alert("Something went wrong. Please try again.");
@@ -4490,6 +4608,26 @@
                 document.getElementById('waitlist-step-payment').classList.add('hidden-section');
                 document.getElementById('waitlist-success').classList.remove('hidden-section');
                 logMilestone('waitlist_deposit_paid', { email: activeWaitlistEmail, deposit: netDeposit, promo: activeWaitlistPromo?.code || null });
+
+                // Real-time Discord Ops Notification for Paid Deposit
+                try {
+                    if (supabase && typeof supabase.functions?.invoke === 'function') {
+                        supabase.functions.invoke('discord-ops-notify', {
+                            body: {
+                                event: 'waitlist_joined',
+                                customerName: activeWaitlistEmail ? activeWaitlistEmail.split('@')[0] : 'Waitlist Lead',
+                                customerEmail: activeWaitlistEmail,
+                                city: flowData.city || 'Expansion City',
+                                zipCode: flowData.zip || '',
+                                toteCount: flowData.totes || 5,
+                                depositStatus: 'paid',
+                                depositAmount: netDeposit
+                            }
+                        }).catch(e => console.warn('[Discord Notify]', e));
+                    }
+                } catch (dErr) {
+                    console.warn('[Discord Webhook Dispatch]', dErr);
+                }
             } catch (err) {
                 console.error('Deposit submission error:', err);
                 errEl.textContent = err.message || 'Payment processing failed. Please try again.';
@@ -4820,6 +4958,34 @@
                 }
 
                 await logMilestone('completed', { uid: activeUserId, totes: flowData.totes, stripe_pm: paymentMethod.id });
+
+                // Asynchronous real-time Discord Ops Notification for Totes Rented
+                try {
+                    const fullAddr = line1 ? `${line1}${line2 ? `, ${line2}` : ''}, ${city}, ${state} ${serviceZip}` : '';
+                    const facName = regionalRates?.facility_name || (regionalRates?.facility_id === 'facility_yakima' ? 'Yakima Fulfillment Center (Selah, WA)' : (regionalRates?.facility_id || 'Yakima Hub'));
+                    
+                    if (supabase && typeof supabase.functions?.invoke === 'function') {
+                        supabase.functions.invoke('discord-ops-notify', {
+                            body: {
+                                event: 'totes_rented',
+                                customerName: name,
+                                customerEmail: email,
+                                userId: activeUserId,
+                                facilityId: regionalRates?.facility_id || 'facility_yakima',
+                                facilityName: facName,
+                                fulfillmentType: flowData.logisticsType || 'self_service',
+                                toteCount: flowData.totes || 5,
+                                planName: `${flowData.totes || 5} Totes Storage Plan`,
+                                monthlyAmount: (flowData.totes || 5) * (flowData.rate || 5),
+                                promoCode: flowData.appliedPromo?.code || null,
+                                deliveryAddress: fullAddr,
+                                targetDate: `${resolvedDate} (${resolvedSlot})`
+                            }
+                        }).catch(e => console.warn('[Discord Notify]', e));
+                    }
+                } catch (dErr) {
+                    console.warn('[Discord Webhook Dispatch]', dErr);
+                }
 
                 // 4. Render Verified Success Screen
                 const successTextEl = document.getElementById('success-dynamic-text');

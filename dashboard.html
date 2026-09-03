@@ -7444,6 +7444,43 @@
                     }
                 }
 
+                // Asynchronous real-time Discord notification for tote retrieval
+                try {
+                    const reqToteCodes = Array.from(selectedItems).map(id => {
+                        const item = (currentInventory || []).find(i => i.id === id);
+                        return item ? (item.tote_code || item.name || id) : id;
+                    });
+                    const fullDeliveryAddr = addrLine1 ? `${addrLine1}${addrLine2 ? `, ${addrLine2}` : ''}, ${addrCity}, ${addrState} ${addrZip}` : '';
+                    const facName = activeFacilityPricing?.name || (userFac === 'facility_yakima' ? 'Yakima Fulfillment Center (Selah, WA)' : userFac);
+                    
+                    if (supabase && typeof supabase.functions?.invoke === 'function') {
+                        supabase.functions.invoke('discord-ops-notify', {
+                            body: {
+                                event: 'tote_retrieval',
+                                customerName: currentUser?.user_metadata?.name || currentProfile?.name || currentUser?.email?.split('@')[0],
+                                customerEmail: currentUser?.email,
+                                userId: currentUser?.id,
+                                facilityId: userFac,
+                                facilityName: facName,
+                                fulfillmentType: retrievalLogisticsType,
+                                toteCount: selectedItems.size,
+                                toteCodes: reqToteCodes,
+                                targetDate: targetDate,
+                                timeSlot: timeSlot,
+                                deliveryAddress: fullDeliveryAddr,
+                                deliveryNotes: deliveryNotes,
+                                totalCharged: (typeof totalCharged !== 'undefined' ? totalCharged : 0),
+                                surgeFee: (selectedReservationSurge?.fee || 0),
+                                surgeTier: selectedReservationSurge?.title || selectedReservationSurge?.tier,
+                                promoCode: (typeof appliedPromoCode !== 'undefined' ? appliedPromoCode : null),
+                                discountAmount: (typeof promoDiscountAmt !== 'undefined' ? promoDiscountAmt : 0)
+                            }
+                        }).catch(e => console.warn('[Discord Notify Notice]', e));
+                    }
+                } catch (dErr) {
+                    console.warn('[Discord Webhook Dispatch Error]', dErr);
+                }
+
                 closeRetrievalModal();
                 const notesInput = document.getElementById('valet-delivery-notes');
                 if (notesInput) notesInput.value = '';
