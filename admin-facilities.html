@@ -903,7 +903,7 @@
                             <div id="tax-zip-headers" class="hidden grid grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1 mb-1.5">
                                 <span class="col-span-3">ZIP Code</span>
                                 <span class="col-span-4">Tax Rate (%)</span>
-                                <span class="col-span-5">Jurisdiction Label</span>
+                                <span class="col-span-5">Jurisdiction City</span>
                             </div>
                             <div id="tax-zip-rows" class="space-y-2 text-xs">
                                 <div class="text-xs text-gray-500 text-center py-3" id="tax-zip-empty">No ZIP tax rates loaded. Click "+ Add ZIP" to add one.</div>
@@ -5130,9 +5130,9 @@
                                 onchange="saveTaxZipRow(${idx})"
                             />
                             <input type="text"
-                                value="${z.tax_label || currentLoadedFac?.tax_label || 'WA State & Local Sales Tax (8.50%)'}"
-                                placeholder="e.g. WA + Yakima County (8.50%)"
-                                class="col-span-5 fspec-input py-1.5 text-xs text-gray-300"
+                                value="${z.tax_label || (z.city ? `${z.city}, ${z.state || 'WA'}` : (currentLoadedFac?.city ? `${currentLoadedFac.city}, ${currentLoadedFac.state || 'WA'}` : 'Yakima, WA'))}"
+                                placeholder="${z.city ? `${z.city}, ${z.state || 'WA'}` : 'City, State'}"
+                                class="col-span-5 fspec-input py-1.5 text-xs text-gray-200 font-medium"
                                 oninput="onTaxLabelInput(${idx}, this.value)"
                                 onchange="saveTaxZipRow(${idx})"
                             />
@@ -5176,7 +5176,9 @@
                     const rateStr = z._pendingRate !== undefined
                         ? z._pendingRate
                         : (z.tax_rate != null ? (z.tax_rate * 100).toFixed(2) : '');
-                    const label = z._pendingLabel !== undefined ? z._pendingLabel : (z.tax_label || null);
+                    const label = z._pendingLabel !== undefined
+                        ? z._pendingLabel
+                        : (z.tax_label || (z.city ? `${z.city}, ${z.state || 'WA'}` : null));
 
                     let rateDecimal = null;
                     if (rateStr !== '' && rateStr !== null && !isNaN(parseFloat(rateStr))) {
@@ -5194,6 +5196,8 @@
                             .upsert({
                                 zip_code: z.zip_code,
                                 facility_id: facId,
+                                city: z.city || (label ? label.split(',')[0].trim() : null),
+                                state: z.state || (label && label.includes(',') ? label.split(',')[1].trim().slice(0, 2) : 'WA'),
                                 tax_rate: rateDecimal,
                                 tax_label: label || null,
                                 active: isMarketActive
@@ -5224,13 +5228,41 @@
                 async function addTaxZipRow() {
                     const zip = prompt('Enter ZIP code to configure tax rate:');
                     if (!zip || !zip.trim()) return;
-                    const zipTrimmed = zip.trim();
+                    const zipTrimmed = zip.trim().replace(/\D/g, '').slice(0, 5);
+                    if (zipTrimmed.length !== 5) {
+                        alert('Please enter a valid 5-digit US ZIP code.');
+                        return;
+                    }
                     if (loadedTaxZips.some(z => z.zip_code === zipTrimmed)) {
                         alert(`ZIP ${zipTrimmed} is already in the list.`);
                         return;
                     }
+
+                    // Auto-resolve city associated with this ZIP code
+                    let resolvedCity = '';
+                    let resolvedState = 'WA';
+                    try {
+                        if (window.AddressValidator && typeof window.AddressValidator.lookupZip === 'function') {
+                            const geo = await window.AddressValidator.lookupZip(zipTrimmed);
+                            if (geo) {
+                                resolvedCity = geo.city || '';
+                                resolvedState = geo.state || 'WA';
+                            }
+                        }
+                    } catch (e) {}
+
+                    const autoLabel = resolvedCity ? `${resolvedCity}, ${resolvedState}` : (currentLoadedFac?.city ? `${currentLoadedFac.city}, ${currentLoadedFac.state || 'WA'}` : 'Yakima, WA');
+                    const defaultRate = currentLoadedFac?.tax_rate != null ? currentLoadedFac.tax_rate : 0.085;
+
                     const newIdx = loadedTaxZips.length;
-                    loadedTaxZips.push({ zip_code: zipTrimmed, tax_rate: null, tax_label: null });
+                    loadedTaxZips.push({
+                        zip_code: zipTrimmed,
+                        city: resolvedCity || null,
+                        state: resolvedState || null,
+                        tax_rate: defaultRate,
+                        tax_label: autoLabel,
+                        active: true
+                    });
                     renderTaxZipRows();
                     await saveTaxZipRow(newIdx);
                 }
