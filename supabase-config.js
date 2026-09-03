@@ -8,6 +8,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_-cW5neaZRGmicOHaHw1n3g_laY5yFZQ";
 const CLOUDFLARE_TURNSTILE_SITE_KEY = "0x4AAAAAAEjEt23VSN7b2FPK";
 window.CLOUDFLARE_TURNSTILE_SITE_KEY = CLOUDFLARE_TURNSTILE_SITE_KEY;
 
+// Live Stripe Configuration
+const STRIPE_PUBLISHABLE_KEY = "pk_live_51U5wFXAgLJ8regmNxzByA2Q0tnSOemjzH7igGv1q18mcwMVphNeaZmloBm8uYcDnahgcWMajgbGtIEWOlvfQbihj00AP7S1KBj";
+window.STRIPE_PUBLISHABLE_KEY = STRIPE_PUBLISHABLE_KEY;
+
 // Safe Session Storage Engine supporting cross-tab persistence & robust token recovery
 const customStorageEngine = {
     getItem: (key) => {

@@ -3846,7 +3846,7 @@
 
         function initWaitlistHubStripe() {
             if (hubWaitlistCardNumber) return; // already initialized
-            const pubKey = 'pk_test_51U5wFeAlEAaqjcFpgDerMMeeuUqacailYJDOBIfx0nq1B0YlCh5nqMIpkOkDmgIJO2q9XpdRTYUcr9JDMOR3ZSQm00ycqCdc2d';
+            const pubKey = window.STRIPE_PUBLISHABLE_KEY || 'pk_live_51U5wFXAgLJ8regmNxzByA2Q0tnSOemjzH7igGv1q18mcwMVphNeaZmloBm8uYcDnahgcWMajgbGtIEWOlvfQbihj00AP7S1KBj';
             if (typeof window.Stripe !== 'function') {
                 console.warn('[Stripe] Stripe.js not loaded yet for waitlist hub.');
                 return;
@@ -5385,7 +5385,7 @@
                 }
 
                 currentClientSecret = data.clientSecret;
-                const pubKey = data.publishableKey || 'pk_test_51U5wFeAlEAaqjcFpgDerMMeeuUqacailYJDOBIfx0nq1B0YlCh5nqMIpkOkDmgIJO2q9XpdRTYUcr9JDMOR3ZSQm00ycqCdc2d';
+                const pubKey = data.publishableKey || window.STRIPE_PUBLISHABLE_KEY || 'pk_live_51U5wFXAgLJ8regmNxzByA2Q0tnSOemjzH7igGv1q18mcwMVphNeaZmloBm8uYcDnahgcWMajgbGtIEWOlvfQbihj00AP7S1KBj';
                 
                 if (typeof window.Stripe !== 'function') {
                     throw new Error('Stripe.js library could not be loaded. Please check your network connection.');
