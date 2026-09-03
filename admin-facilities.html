@@ -3867,9 +3867,9 @@
                         const { data, error } = await query;
                         if (error) throw error;
 
-                        const deposits = (data || []).filter(r => r.type === 'deposit' && (r.payment_status === 'deposit_paid' || r.deposit_amount > 0));
-                        const free = (data || []).filter(r => r.type === 'free');
-                        const totalDeposits = deposits.reduce((sum, r) => sum + (Number(r.net_deposit_paid) || Number(r.deposit_amount) || 0), 0);
+                        const deposits = (data || []).filter(r => r.type === 'deposit' && (r.payment_status === 'deposit_paid' || r.deposit_status === 'paid'));
+                        const free = (data || []).filter(r => r.type === 'free' || r.payment_status === 'free_waitlist' || r.payment_status === 'pending_deposit' || r.deposit_status === 'pending_deposit');
+                        const totalDeposits = deposits.reduce((sum, r) => sum + (Number(r.net_deposit_paid || r.deposit_amount) || 0), 0);
 
                         depositEl.textContent = deposits.length;
                         freeEl.textContent = free.length;
@@ -4821,14 +4821,27 @@
                     } else {
                         tbody.innerHTML = leads.map(l => {
                             const dateStr = l.created_at ? new Date(l.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
-                            const depAmt = Number(l.deposit_amount) || Number(currentGlobalDeposit) || 0;
+                            const isPaid = l.payment_status === 'deposit_paid' || l.deposit_status === 'paid';
+                            const isPending = l.payment_status === 'pending_deposit' || l.deposit_status === 'pending_deposit';
+                            const paidAmt = Number(l.net_deposit_paid || l.deposit_amount || 0);
+
+                            let depositBadgeHtml = '';
+                            if (isPaid) {
+                                depositBadgeHtml = `<span class="inline-flex items-center gap-1 text-emerald-400 font-black"><i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-400"></i> $${paidAmt.toFixed(2)} Paid</span>`;
+                            } else if (isPending) {
+                                const pledgedAmt = Number(l.deposit_amount || 10.00);
+                                depositBadgeHtml = `<span class="inline-flex items-center gap-1 font-mono"><span class="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-[10px] text-amber-300 font-bold">$0.00 <span class="text-amber-400/80 font-normal">(Pending $${pledgedAmt.toFixed(2)})</span></span></span>`;
+                            } else {
+                                depositBadgeHtml = `<span class="inline-flex items-center gap-1 font-mono"><span class="px-2 py-0.5 rounded-md bg-gray-800 border border-gray-700 text-[10px] text-gray-400 font-bold">$0.00 <span class="text-gray-500 font-normal">(Free Waitlist)</span></span></span>`;
+                            }
+
                             return `
                     <tr class="border-b border-gray-850 hover:bg-gray-900/40 transition">
                         <td class="py-3 text-white font-bold">${escapeHtml(l.email || 'Anonymous Lead')}</td>
                         <td class="py-3 text-blue-300">${escapeHtml(l.zip_code || '—')}</td>
                         <td class="py-3 text-gray-400">${dateStr}</td>
-                        <td class="py-3 text-amber-300 font-bold">${l.requested_totes || 4} Totes</td>
-                        <td class="py-3 text-emerald-400 font-bold">$${depAmt.toFixed(2)}</td>
+                        <td class="py-3 text-amber-300 font-bold">${l.requested_totes || 5} Totes</td>
+                        <td class="py-3">${depositBadgeHtml}</td>
                         <td class="py-3 text-right">
                             <button onclick="deleteWaitlistLead('${l.id}', '${escapeHtml(cityName).replace(/'/g, "\\'")}')" class="text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 rounded-lg border border-red-500/20 text-[10px] font-bold transition flex items-center gap-1 ml-auto">
                                 <i data-lucide="trash-2" class="w-3 h-3"></i> Delete Lead

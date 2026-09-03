@@ -10481,26 +10481,25 @@
             const countBadge = document.getElementById('waitlist-total-count');
             if (!tbody) return;
             try {
-                // Dynamically fetch active facilities, operational zones, and service areas to build active exclusion set
-                const [{ data: facs }, { data: zones }, { data: serviceAreas }] = await Promise.all([
-                    supabase.from('facilities').select('id, name'),
-                    supabase.from('operational_zones').select('id, city, zip_codes'),
+                // Dynamically fetch active operational zones and service areas
+                const [{ data: zones }, { data: serviceAreas }] = await Promise.all([
+                    supabase.from('operational_zones').select('id, city, zip_codes, active'),
                     supabase.from('service_areas').select('zip_code, city, active').eq('active', true)
                 ]);
 
                 const activeCitySet = new Set();
                 const activeZipSet = new Set();
 
-                (facs || []).forEach(f => {
-                    if (f.name) activeCitySet.add(f.name.toLowerCase().replace(/ fulfillment center| hub| center/g, '').trim());
-                });
                 (zones || []).forEach(z => {
-                    if (z.city) activeCitySet.add(z.city.toLowerCase().trim());
-                    (z.zip_codes || []).forEach(zip => activeZipSet.add(zip.trim()));
+                    if (z.active === true) {
+                        if (z.city) activeCitySet.add(z.city.toLowerCase().trim());
+                        (z.zip_codes || []).forEach(zip => activeZipSet.add(zip.trim()));
+                    }
                 });
                 (serviceAreas || []).forEach(s => {
-                    if (s.city) activeCitySet.add(s.city.toLowerCase().trim());
-                    if (s.zip_code) activeZipSet.add(s.zip_code.trim());
+                    if (s.active === true && s.zip_code && activeZipSet.has(s.zip_code.trim())) {
+                        if (s.city) activeCitySet.add(s.city.toLowerCase().trim());
+                    }
                 });
 
                 let dynamicDeposit = 10.00;
@@ -10512,7 +10511,7 @@
                 } catch (e) {}
 
                 let res = [];
-                const { data, error } = await supabase.from('waitlist').select('city, state, zip_code, regional_market, deposit_amount, created_at');
+                const { data, error } = await supabase.from('waitlist').select('city, state, zip_code, regional_market, deposit_amount, net_deposit_paid, payment_status, deposit_status, type, created_at');
                 if (!error && data) {
                     res = data;
                 } else {
@@ -10522,11 +10521,11 @@
 
                 // Exclude any waitlist entries that belong to active operational hubs/ZIPs
                 const unlaunchedRes = (res || []).filter(row => {
-                    const c = (row.city || '').toLowerCase().trim();
                     const z = (row.zip_code || '').trim();
-                    const isCityActive = Array.from(activeCitySet).some(ac => c.includes(ac) || ac.includes(c));
-                    const isZipActive = activeZipSet.has(z);
-                    return !isCityActive && !isZipActive;
+                    if (z && activeZipSet.has(z)) return false;
+                    const c = (row.city || '').toLowerCase().replace(/^zip:\s*/, '').trim();
+                    if (c && activeCitySet.has(c) && z && activeZipSet.has(z)) return false;
+                    return true;
                 });
 
                 if (!unlaunchedRes || unlaunchedRes.length === 0) {
@@ -10537,8 +10536,11 @@
 
                 if (countBadge) {
                     const totalDeposits = unlaunchedRes.length;
-                    const totalCapital = unlaunchedRes.reduce((sum, r) => sum + (Number(r.deposit_amount) || dynamicDeposit), 0);
-                    countBadge.textContent = `${totalDeposits} Priority Deposit${totalDeposits !== 1 ? 's' : ''} ($${totalCapital.toLocaleString()})`;
+                    const totalCapital = unlaunchedRes.reduce((sum, r) => {
+                        const isPaid = r.payment_status === 'deposit_paid' || r.deposit_status === 'paid';
+                        return sum + (isPaid ? (Number(r.net_deposit_paid || r.deposit_amount) || 0) : 0);
+                    }, 0);
+                    countBadge.textContent = `${totalDeposits} Waitlist Signups ($${totalCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })})`;
                 }
 
                 // Group waitlist entries by City & Regional Market
@@ -10552,7 +10554,8 @@
                     }
                     if (z) cityMap[city].zipCodes.add(z);
                     cityMap[city].count++;
-                    cityMap[city].capital += (Number(row.deposit_amount) || dynamicDeposit);
+                    const isPaid = row.payment_status === 'deposit_paid' || row.deposit_status === 'paid';
+                    cityMap[city].capital += isPaid ? (Number(row.net_deposit_paid || row.deposit_amount) || 0) : 0;
                     const date = new Date(row.created_at);
                     if (!cityMap[city].latest || date > cityMap[city].latest) {
                         cityMap[city].latest = date;
