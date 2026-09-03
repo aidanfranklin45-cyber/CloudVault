@@ -353,8 +353,8 @@
                                 <span>Pro Forma Capacity Model Assumptions:</span>
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] font-mono text-gray-400 pt-1">
-                                <div>&bull; <strong class="text-gray-300">Target Occupancy:</strong> 70% physical capacity (<span id="pnl-fn-totes" class="text-cyan-300 font-bold">1,750</span> totes)</div>
-                                <div>&bull; <strong class="text-gray-300">Storage Rate:</strong> $<span id="pnl-fn-rate" class="text-emerald-300 font-bold">5.00</span>/tote regional tier rate</div>
+                                <div>&bull; <strong class="text-gray-300">Target Occupancy:</strong> 70% physical capacity (<span id="pnl-fn-totes" class="text-cyan-300 font-bold">1,750</span> of <span id="pnl-fn-max-totes" class="text-white font-bold">2,500</span> max totes)</div>
+                                <div>&bull; <strong class="text-gray-300">Storage Rate:</strong> $<span id="pnl-fn-rate" class="text-emerald-300 font-bold">3.37</span>/tote blended rate (Tiers 1–4 mix)</div>
                                 <div>&bull; <strong class="text-gray-300">Valet Demand:</strong> 15% monthly valet velocity ($<span id="pnl-fn-valet" class="text-amber-300 font-bold">15.00</span>/order)</div>
                                 <div>&bull; <strong class="text-gray-300">Fixed Overhead:</strong> 100% facility lease, labor, utilities &amp; insurance</div>
                             </div>
@@ -1853,7 +1853,24 @@
                     document.getElementById('conf-zip').value = fac.zip || '';
                     document.getElementById('conf-sqft').value = (fac.usable_warehouse_sqft !== null && fac.usable_warehouse_sqft !== undefined) ? fac.usable_warehouse_sqft : 20000;
                     document.getElementById('conf-sqft-per-tote').value = (fac.sqft_per_tote !== null && fac.sqft_per_tote !== undefined) ? fac.sqft_per_tote : 1.0;
-                    document.getElementById('conf-tote-capacity').value = (fac.tote_capacity !== null && fac.tote_capacity !== undefined) ? fac.tote_capacity : 2000;
+                    let actualToteCap = (fac.tote_capacity !== null && fac.tote_capacity !== undefined) ? fac.tote_capacity : 2000;
+                    if (typeof supabase !== 'undefined' && fac.id) {
+                        try {
+                            const { data: dbVaultLocs } = await supabase
+                                .from('warehouse_locations')
+                                .select('identifier')
+                                .eq('facility_id', fac.id)
+                                .eq('zone_type', 'VAULT');
+                            if (dbVaultLocs && dbVaultLocs.length > 0) {
+                                actualToteCap = dbVaultLocs.length * 3;
+                            }
+                        } catch (err) {
+                            console.warn("Error fetching Supabase vault locations:", err);
+                        }
+                    }
+                    document.getElementById('conf-tote-capacity').value = actualToteCap;
+                    if (fac) fac.tote_capacity = actualToteCap;
+
                     let actualStgRooms = (fac.num_staging_rooms !== null && fac.num_staging_rooms !== undefined) ? fac.num_staging_rooms : null;
                     if (actualStgRooms === null) {
                         actualStgRooms = (fac.staging_rooms !== null && fac.staging_rooms !== undefined) ? fac.staging_rooms : null;
@@ -3373,6 +3390,12 @@
                                 if (bayInput) bayInput.value = maxBay;
                                 if (shelfInput) shelfInput.value = maxShelf;
                             }
+
+                            const actualMaxCap = vaultList.length * 3;
+                            const capInput = document.getElementById('conf-tote-capacity');
+                            if (capInput) capInput.value = actualMaxCap;
+                            if (currentLoadedFac) currentLoadedFac.tote_capacity = actualMaxCap;
+                            calculatePnL();
                         }
 
                         // Dynamically extract staging room prefix and room count
@@ -3474,6 +3497,8 @@
                             if (currentLoadedFac) {
                                 currentLoadedFac.tote_capacity = newCapacity;
                             }
+                            const capInput = document.getElementById('conf-tote-capacity');
+                            if (capInput) capInput.value = newCapacity;
                         } catch (cleanErr) {
                             console.warn("Notice during vault location pruning:", cleanErr);
                         }
@@ -3485,6 +3510,7 @@
                         }
                         await loadWarehouseLocationCount(currentLoadedFac.id);
                         await loadFacilityTelemetry(currentLoadedFac.id);
+                        calculatePnL();
                     } catch (err) {
                         console.error("Failed to generate vault locations:", err);
                         alert(`Error syncing locations: ${err.message || err}`);
@@ -3768,6 +3794,7 @@
                     if (currentLoadedZone) currentLoadedZone.active = isAct;
                     loadFacilityTelemetry(activeFacilityId);
                     loadStagingRoomSchedule(activeFacilityId, selectedStagingDate);
+                    loadTaxZipConfig(activeFacilityId);
                 }
 
                 function renderZipCodes(zips) {
@@ -4975,52 +5002,55 @@
                     const facId = facilityId || currentLoadedFac?.id || localStorage.getItem('cloudvault_selected_facility');
                     if (!facId) return;
                     try {
+                        const isMarketActive = (currentLoadedZone && currentLoadedZone.active !== false) &&
+                            (document.getElementById('conf-market-active-select')?.value !== "false");
+
+                        // If the entire market is deactivated, do not populate active tax rules
+                        if (!isMarketActive) {
+                            loadedTaxZips = [];
+                            renderTaxZipRows(true);
+                            return;
+                        }
+
+                        // Strictly retrieve ONLY ACTIVE ZIP codes assigned to this facility
                         const { data: zips, error } = await supabase
                             .from('service_areas')
-                            .select('zip_code, city, state, tax_rate, tax_label')
-                            .eq('facility_id', facId);
+                            .select('zip_code, city, state, tax_rate, tax_label, active')
+                            .eq('facility_id', facId)
+                            .eq('active', true)
+                            .order('zip_code', { ascending: true });
                         if (error) throw error;
 
-                        let zoneZips = [];
-                        try {
-                            const { data: zones } = await supabase
-                                .from('operational_zones')
-                                .select('zip_codes')
-                                .eq('facility_id', facId);
-                            if (zones) {
-                                zones.forEach(z => {
-                                    if (z.zip_codes && Array.isArray(z.zip_codes)) {
-                                        zoneZips.push(...z.zip_codes);
-                                    }
-                                });
-                            }
-                        } catch (e) {}
-
-                        const existingMap = new Map();
-                        (zips || []).forEach(z => existingMap.set(z.zip_code, z));
-                        zoneZips.forEach(zCode => {
-                            if (!existingMap.has(zCode)) {
-                                existingMap.set(zCode, { zip_code: zCode, tax_rate: null, tax_label: null });
-                            }
-                        });
-
-                        loadedTaxZips = Array.from(existingMap.values());
-                        renderTaxZipRows();
+                        loadedTaxZips = (zips || []).filter(z => z.active === true);
+                        renderTaxZipRows(false);
                     } catch (err) {
-                        console.error('[Tax] Failed to load ZIP tax config:', err.message);
+                        console.error('[Tax] Failed to load active ZIP tax config:', err.message);
                     }
                 }
 
-                function renderTaxZipRows() {
+                function renderTaxZipRows(isMarketDeactivated) {
                     const container = document.getElementById('tax-zip-rows');
                     const emptyMsg = document.getElementById('tax-zip-empty');
                     const headers = document.getElementById('tax-zip-headers');
                     if (!container) return;
 
-                    if (!loadedTaxZips || loadedTaxZips.length === 0) {
-                        if (emptyMsg) emptyMsg.classList.remove('hidden');
+                    if (isMarketDeactivated) {
+                        if (emptyMsg) {
+                            emptyMsg.classList.remove('hidden');
+                            emptyMsg.innerHTML = '<span class="text-amber-400 font-semibold">⚠️ Market is currently deactivated.</span> Set Market Active Status to "Active Service Zone" to enable active tax coverage.';
+                        }
                         if (headers) headers.classList.add('hidden');
-                        container.innerHTML = '<div class="text-xs text-gray-500 text-center py-3">No ZIP tax rates configured. Click "+ Add ZIP" to add one.</div>';
+                        container.innerHTML = '<div class="text-xs text-amber-500/80 text-center py-4 bg-amber-950/20 rounded-2xl border border-amber-500/20">Market is paused. No active ZIP tax rates apply.</div>';
+                        return;
+                    }
+
+                    if (!loadedTaxZips || loadedTaxZips.length === 0) {
+                        if (emptyMsg) {
+                            emptyMsg.classList.remove('hidden');
+                            emptyMsg.textContent = 'No active ZIP codes currently serviced by this facility. Add or activate ZIP codes in Market Control above.';
+                        }
+                        if (headers) headers.classList.add('hidden');
+                        container.innerHTML = '<div class="text-xs text-gray-500 text-center py-4 bg-gray-950/40 rounded-2xl border border-gray-800">No active ZIP codes currently serviced by this facility. Add or activate ZIP codes in Market Control above.</div>';
                         return;
                     }
 
@@ -5029,22 +5059,25 @@
 
                     container.innerHTML = loadedTaxZips.map((z, idx) => `
                         <div class="grid grid-cols-12 gap-2 items-center" data-zip-idx="${idx}">
-                            <input type="text"
-                                value="${z.zip_code || ''}"
-                                placeholder="ZIP"
-                                readonly
-                                class="col-span-3 fspec-input py-1.5 text-xs font-mono bg-gray-900/50 text-gray-400 cursor-not-allowed"
-                            />
+                            <div class="col-span-3 flex items-center gap-1.5 bg-gray-900/50 border border-gray-800 rounded-xl px-2.5 py-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
+                                <input type="text"
+                                    value="${z.zip_code || ''}"
+                                    placeholder="ZIP"
+                                    readonly
+                                    class="w-full text-xs font-mono bg-transparent text-emerald-300 font-bold cursor-not-allowed outline-none"
+                                />
+                            </div>
                             <input type="number"
                                 step="0.01" min="0" max="30"
-                                value="${z.tax_rate != null ? (z.tax_rate * 100).toFixed(2) : ''}"
+                                value="${z.tax_rate != null ? (z.tax_rate * 100).toFixed(2) : (currentLoadedFac?.tax_rate_pct != null ? Number(currentLoadedFac.tax_rate_pct).toFixed(2) : '8.50')}"
                                 placeholder="e.g. 8.50"
                                 class="col-span-4 fspec-input py-1.5 text-xs font-mono text-emerald-400"
                                 oninput="onTaxRateInput(${idx}, this.value)"
                                 onchange="saveTaxZipRow(${idx})"
                             />
                             <input type="text"
-                                value="${z.tax_label || ''}"
+                                value="${z.tax_label || currentLoadedFac?.tax_label || 'WA State & Local Sales Tax (8.50%)'}"
                                 placeholder="e.g. WA + Yakima County (8.50%)"
                                 class="col-span-5 fspec-input py-1.5 text-xs text-gray-300"
                                 oninput="onTaxLabelInput(${idx}, this.value)"
