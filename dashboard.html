@@ -630,6 +630,26 @@
 
             <!-- Hub State 2: Deposit Pending / Free Waitlist (Stripe Checkout & Promo Upgrade Module) -->
             <div id="wl-hub-upgrade-card" class="hidden bg-white border-2 border-blue-600/30 rounded-3xl p-6 sm:p-8 shadow-md space-y-6">
+                <!-- Colorful Waitlist Status Banner -->
+                <div class="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-2xl p-4 sm:p-5 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="flex items-start sm:items-center gap-3.5">
+                        <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center flex-shrink-0 text-xl shadow-inner">
+                            🎉
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="bg-white/25 text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/20">Waitlist Active</span>
+                                <span class="text-xs text-blue-100 font-medium">Free Queue</span>
+                            </div>
+                            <h4 class="text-base sm:text-lg font-black text-white mt-1 tracking-tight">You're on the waitlist!</h4>
+                            <p class="text-xs text-blue-100/90 mt-0.5 leading-relaxed">If you want to lock in your rate, fill out this form here to reserve your launch pricing for 3 years.</p>
+                        </div>
+                    </div>
+                    <div class="hidden sm:flex items-center gap-1.5 text-xs font-black bg-white text-blue-900 px-3.5 py-2 rounded-xl shadow-sm whitespace-nowrap self-start sm:self-center">
+                        <span>Fill Out Below ↓</span>
+                    </div>
+                </div>
+
                 <div class="flex items-start justify-between gap-4 border-b border-gray-100 pb-5">
                     <div class="flex items-center space-x-3.5">
                         <div class="p-3 bg-blue-600 text-white rounded-2xl shadow-md">
