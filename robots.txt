@@ -1,0 +1,16 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Allow: /index.html
+Allow: /terms.html
+Allow: /privacy.html
+Allow: /login.html
+
+# Disallow internal administrative and staging portals
+Disallow: /admin.html
+Disallow: /admin-facilities.html
+Disallow: /dashboard.html
+
+# Sitemap location
+Sitemap: https://cloudvault-35a9b-6b3db.web.app/sitemap.xml
+Sitemap: https://cloudvaultstorage.com/sitemap.xml
