@@ -2405,6 +2405,12 @@
             </div>
 
             <form id="contact-form" onsubmit="handleContactSubmit(event)" class="space-y-3.5">
+                <!-- Anti-Bot Honeypot Trap (Invisible to humans, trapped bots auto-fill it) -->
+                <div style="position: absolute; left: -9999px; top: -9999px; opacity: 0; height: 0; width: 0; pointer-events: none;" aria-hidden="true">
+                    <label for="contact-website-field">Leave this field blank</label>
+                    <input type="text" id="contact-website-field" name="contact_hp_website" tabindex="-1" autocomplete="off">
+                </div>
+
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-extrabold text-slate-700 mb-1">Your Name <span class="text-rose-500">*</span></label>
@@ -5275,8 +5281,10 @@
 
         // Contact & Dispatch Modal Controller
         let currentContactType = 'contact_inquiry';
+        let contactModalOpenedAt = 0;
 
         function openContactModal(type = 'contact_inquiry') {
+            contactModalOpenedAt = Date.now();
             const modal = document.getElementById('contact-modal');
             const successBanner = document.getElementById('contact-success-banner');
             const form = document.getElementById('contact-form');
@@ -5359,6 +5367,54 @@
             }
         }
 
+        // Client-side anti-bot quota & cooldown tracker
+        function checkClientContactRateLimit() {
+            try {
+                const key = 'cloudvault_contact_ts_list';
+                const now = Date.now();
+                const raw = localStorage.getItem(key);
+                const list = raw ? JSON.parse(raw) : [];
+                // Rolling 60-minute window (3600000 ms)
+                const recent = list.filter(ts => (now - ts) < 3600000);
+
+                // 1. Mandatory 45-second cooldown between consecutive inquiries
+                if (recent.length > 0) {
+                    const lastAttempt = recent[recent.length - 1];
+                    const elapsedSec = Math.floor((now - lastAttempt) / 1000);
+                    if (elapsedSec < 45) {
+                        return {
+                            allowed: false,
+                            error: `Please wait ${45 - elapsedSec} seconds before submitting another message.`
+                        };
+                    }
+                }
+
+                // 2. Maximum 3 submissions per hour per browser
+                if (recent.length >= 3) {
+                    return {
+                        allowed: false,
+                        error: 'Submission quota reached for this browser (maximum 3 inquiries per hour). Please try again later.'
+                    };
+                }
+
+                return { allowed: true };
+            } catch (e) {
+                return { allowed: true };
+            }
+        }
+
+        function recordClientContactSubmission() {
+            try {
+                const key = 'cloudvault_contact_ts_list';
+                const now = Date.now();
+                const raw = localStorage.getItem(key);
+                const list = raw ? JSON.parse(raw) : [];
+                const recent = list.filter(ts => (now - ts) < 3600000);
+                recent.push(now);
+                localStorage.setItem(key, JSON.stringify(recent));
+            } catch (e) {}
+        }
+
         async function handleContactSubmit(event) {
             event.preventDefault();
             const submitBtn = document.getElementById('contact-submit-btn');
@@ -5370,6 +5426,31 @@
             if (errorMsg) {
                 errorMsg.classList.add('hidden');
                 errorMsg.textContent = '';
+            }
+
+            // 1. Honeypot check (Bots automatically populate hidden fields)
+            const honeypotVal = (document.getElementById('contact-website-field')?.value || '').trim();
+            if (honeypotVal) {
+                // Silently drop bot submission, simulate success to avoid bot adapting
+                if (form) form.classList.add('hidden');
+                if (successBanner) successBanner.classList.remove('hidden');
+                form?.reset();
+                setTimeout(() => {
+                    closeContactModal();
+                    if (form) form.classList.remove('hidden');
+                    if (successBanner) successBanner.classList.add('hidden');
+                }, 3000);
+                return;
+            }
+
+            // 2. Client-side device submission quota & cooldown check
+            const limitCheck = checkClientContactRateLimit();
+            if (!limitCheck.allowed) {
+                if (errorMsg) {
+                    errorMsg.textContent = limitCheck.error;
+                    errorMsg.classList.remove('hidden');
+                }
+                return;
             }
 
             const name = (document.getElementById('contact-name')?.value || '').trim();
@@ -5395,6 +5476,8 @@
             if (currentContactType === 'bug' || topic === 'bug') reportType = 'bug';
             else if (currentContactType === 'enhancement' || topic === 'enhancement') reportType = 'enhancement';
 
+            const durationMs = contactModalOpenedAt > 0 ? (Date.now() - contactModalOpenedAt) : 5000;
+
             const payload = {
                 user_name: name,
                 user_email: email,
@@ -5403,10 +5486,12 @@
                 title: subject,
                 description: message,
                 severity: 'medium',
+                honeypot: honeypotVal,
                 diagnostics: {
                     phone: phone || null,
                     sender_name: name,
                     topic: topic,
+                    duration_ms: durationMs,
                     source_url: window.location.href,
                     userAgent: navigator.userAgent,
                     screenResolution: `${window.innerWidth}x${window.innerHeight}`,
@@ -5416,17 +5501,34 @@
 
             try {
                 let succeeded = false;
+                let isRateLimited = false;
+                let rateLimitMessage = '';
+
                 if (typeof supabase !== 'undefined' && supabase && supabase.functions) {
                     try {
                         const { data, error } = await supabase.functions.invoke('submit-feedback', { body: payload });
-                        if (!error) {
-                            succeeded = true;
+                        if (error) {
+                            const errMsg = (error.message || '').toLowerCase();
+                            if (errMsg.includes('rate limit') || errMsg.includes('hourly limit') || errMsg.includes('429') || errMsg.includes('too many') || errMsg.includes('limit reached')) {
+                                isRateLimited = true;
+                                rateLimitMessage = error.message;
+                            } else {
+                                console.warn('Edge function error, attempting fallback insert:', error);
+                            }
                         } else {
-                            console.warn('Edge function error, attempting fallback insert:', error);
+                            succeeded = true;
                         }
                     } catch (invokeErr) {
                         console.warn('Edge function invoke failed:', invokeErr);
                     }
+                }
+
+                if (isRateLimited) {
+                    if (errorMsg) {
+                        errorMsg.textContent = rateLimitMessage || 'You have reached the submission limit. Please wait before submitting another inquiry.';
+                        errorMsg.classList.remove('hidden');
+                    }
+                    return;
                 }
 
                 if (!succeeded) {
@@ -5441,6 +5543,9 @@
                     });
                     if (dbErr) throw dbErr;
                 }
+
+                // Record successful submission for client quota
+                recordClientContactSubmission();
 
                 if (form) form.classList.add('hidden');
                 if (successBanner) successBanner.classList.remove('hidden');

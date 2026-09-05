@@ -16,6 +16,7 @@ interface FeedbackPayload {
   title: string;
   description: string;
   severity?: "low" | "medium" | "high" | "critical";
+  honeypot?: string;
   diagnostics?: Record<string, unknown>;
 }
 
@@ -50,18 +51,100 @@ Deno.serve(async (req: Request) => {
 
     const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown_ip";
 
-    // Rate limit check: max 5 feedback submissions per 60 seconds per IP
-    const { data: isAllowed } = await supabase.rpc("check_rate_limit", {
-      p_key: `feedback:${clientIp}`,
-      p_max_hits: 5,
+    // 1. Honeypot Bot Trap Check
+    const honeypot = (payload.honeypot || (payload.diagnostics?.hp as string) || "").trim();
+    if (honeypot) {
+      console.warn(`[Bot Filter] Honeypot triggered from IP ${clientIp}: "${honeypot}"`);
+      // Return 200 OK fake success so bots do not adapt or retry, while discarding payload
+      return new Response(
+        JSON.stringify({
+          success: true,
+          report_id: "shielded_bot",
+          message: "Thank you! Your message has been sent directly to our dispatch team.",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // 2. Bot Speed Trap (real humans take > 1500ms to open, read, fill, and submit)
+    const formDurationMs = Number(payload.diagnostics?.duration_ms) || 0;
+    if (formDurationMs > 0 && formDurationMs < 1500) {
+      console.warn(`[Bot Filter] Speed trap triggered from IP ${clientIp}: completed in ${formDurationMs}ms`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          report_id: "shielded_speed",
+          message: "Thank you! Your message has been sent directly to our dispatch team.",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // 3. Multi-Tier Rate Limiting
+    // A. Burst rate limit per IP: max 2 submissions per 60 seconds
+    const { data: burstAllowed } = await supabase.rpc("check_rate_limit", {
+      p_key: `feedback_burst:${clientIp}`,
+      p_max_hits: 2,
       p_window_seconds: 60,
     });
 
-    if (isAllowed === false) {
-      return new Response(JSON.stringify({ error: "Too many feedback submissions. Please wait a minute." }), {
-        status: 429,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (burstAllowed === false) {
+      return new Response(
+        JSON.stringify({
+          error: "Rate limit exceeded. Please wait a moment before sending another message.",
+        }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // B. Hourly rate limit per IP: max 5 submissions per 3600 seconds
+    const { data: hourlyAllowed } = await supabase.rpc("check_rate_limit", {
+      p_key: `feedback_hour:${clientIp}`,
+      p_max_hits: 5,
+      p_window_seconds: 3600,
+    });
+
+    if (hourlyAllowed === false) {
+      return new Response(
+        JSON.stringify({
+          error: "Hourly limit reached (maximum 5 submissions per hour). Please try again later.",
+        }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // C. Email-based rate limit: max 3 submissions per 3600 seconds per email
+    const cleanEmail = (payload.user_email || "").toLowerCase().trim();
+    if (cleanEmail) {
+      const { data: emailAllowed } = await supabase.rpc("check_rate_limit", {
+        p_key: `feedback_email:${cleanEmail}`,
+        p_max_hits: 3,
+        p_window_seconds: 3600,
       });
+
+      if (emailAllowed === false) {
+        return new Response(
+          JSON.stringify({
+            error: "Submission limit reached for this email address (maximum 3 per hour). Please try again later.",
+          }),
+          {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
     }
 
     const reportType = payload.report_type === "contact_inquiry" ? "contact_inquiry" : (payload.report_type === "enhancement" ? "enhancement" : "bug");
