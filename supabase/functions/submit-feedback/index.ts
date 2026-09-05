@@ -11,7 +11,7 @@ interface FeedbackPayload {
   user_uid?: string;
   user_email?: string;
   user_name?: string;
-  report_type: "bug" | "enhancement";
+  report_type: "bug" | "enhancement" | "contact_inquiry";
   flow_area: string;
   title: string;
   description: string;
@@ -64,7 +64,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const reportType = payload.report_type === "enhancement" ? "enhancement" : "bug";
+    const reportType = payload.report_type === "contact_inquiry" ? "contact_inquiry" : (payload.report_type === "enhancement" ? "enhancement" : "bug");
     const flowArea = (payload.flow_area || "general").slice(0, 50);
     const severity = payload.severity || "medium";
     const title = payload.title.trim().slice(0, 200);
@@ -98,8 +98,8 @@ Deno.serve(async (req: Request) => {
     let githubIssueNumber: number | null = null;
     let githubIssueUrl: string | null = null;
 
-    // 2. Automatically create GitHub Issue if token is present
-    if (githubToken) {
+    // 2. Automatically create GitHub Issue if token is present (Bypass for private contact inquiries)
+    if (githubToken && reportType !== "contact_inquiry") {
       try {
         const ghRepoOwner = "aidanfranklin45-cyber";
         const ghRepoName = "CloudVault";
@@ -189,15 +189,46 @@ Deno.serve(async (req: Request) => {
     const discordWebhookUrl = Deno.env.get("DISCORD_WEBHOOK_URL");
     if (discordWebhookUrl) {
       try {
+        const isContact = reportType === "contact_inquiry";
         const isBug = reportType === "bug";
-        const embedTitle = isBug 
-          ? `🐛 New Bug Report [${severity.toUpperCase()}]` 
-          : `💡 New Feature Idea / Enhancement`;
-        const embedColor = isBug 
-          ? (severity === "critical" ? 0x991b1b : severity === "high" ? 0xef4444 : 0xf59e0b)
-          : 0x8b5cf6;
+        let embedTitle = `💡 New Feature Idea / Enhancement`;
+        let embedColor = 0x8b5cf6;
 
-        const fields: any[] = [
+        if (isContact) {
+          embedTitle = `📬 New Website Contact Inquiry`;
+          embedColor = 0x2563eb; // Royal Blue
+        } else if (isBug) {
+          embedTitle = `🐛 New Bug Report [${severity.toUpperCase()}]`;
+          embedColor = severity === "critical" ? 0x991b1b : severity === "high" ? 0xef4444 : 0xf59e0b;
+        }
+
+        const fields: any[] = isContact ? [
+          {
+            name: "👤 Submitter Name",
+            value: payload.user_name || "Website Visitor",
+            inline: true,
+          },
+          {
+            name: "📧 Email",
+            value: payload.user_email ? `\`${payload.user_email}\`` : "Not provided",
+            inline: true,
+          },
+          {
+            name: "📞 Phone",
+            value: (payload.diagnostics?.phone as string) || "Not provided",
+            inline: true,
+          },
+          {
+            name: "🏷️ Topic / Subject",
+            value: title,
+            inline: false,
+          },
+          {
+            name: "💬 Message",
+            value: description.length > 1000 ? description.slice(0, 997) + "..." : description,
+            inline: false,
+          },
+        ] : [
           {
             name: "📌 Title",
             value: title,
@@ -235,7 +266,7 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        if (diagnostics && typeof diagnostics === "object" && Object.keys(diagnostics).length > 0) {
+        if (!isContact && diagnostics && typeof diagnostics === "object" && Object.keys(diagnostics).length > 0) {
           const diagEntries = Object.entries(diagnostics)
             .filter(([_, v]) => v != null && typeof v !== "object")
             .slice(0, 4)
@@ -254,15 +285,15 @@ Deno.serve(async (req: Request) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            username: "CloudVault Feedback Bot",
-            avatar_url: "https://cloudvault-35a9b-6b3db.web.app/favicon.ico",
+            username: isContact ? "CloudVault Inquiries" : "CloudVault Feedback Bot",
+            avatar_url: "https://cloudvault-35a9b-6b3db.web.app/logo.png",
             embeds: [
               {
                 title: embedTitle,
                 color: embedColor,
                 fields: fields,
                 timestamp: new Date().toISOString(),
-                footer: { text: `Report ID: ${reportId} • CloudVault Feedback Hub` },
+                footer: { text: isContact ? `Inquiry ID: ${reportId} • CloudVault Dispatch` : `Report ID: ${reportId} • CloudVault Feedback Hub` },
               },
             ],
           }),
@@ -272,13 +303,17 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const successMsg = reportType === "contact_inquiry"
+      ? "Thank you! Your message has been sent directly to our dispatch team. We will get back to you shortly."
+      : "Feedback submitted successfully! Thank you for helping improve CloudVault.";
+
     return new Response(
       JSON.stringify({
         success: true,
         report_id: reportId,
         github_issue_number: githubIssueNumber,
         github_issue_url: githubIssueUrl,
-        message: "Feedback submitted successfully! Thank you for helping improve CloudVault.",
+        message: successMsg,
       }),
       {
         status: 200,
