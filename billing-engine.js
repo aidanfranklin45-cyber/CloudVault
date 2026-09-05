@@ -3164,7 +3164,7 @@
                     <span class="text-[8px] font-extrabold text-blue-600 uppercase tracking-[0.2em] block mt-0.5">Storage &amp; Logistics Solutions</span>
                   </div>
                 </div>
-                <p class="text-[11px] text-slate-500 font-mono">CloudVault Storage Inc. • support@cloudvault.io • Selah, WA 98942</p>
+                <p class="text-[11px] text-slate-500 font-mono">CloudVault Storage Inc. • Yakima &amp; Selah, WA 98942</p>
               </div>
 
               <div class="text-right space-y-0.5">
@@ -3299,7 +3299,7 @@
 
             <!-- Statement Footer -->
             <div class="border-t border-slate-100 pt-4 text-center text-[10px] text-slate-400 font-mono">
-              CloudVault Storage &amp; Logistics Solutions • Selah, WA 98942 • support@cloudvault.io • Official Statement
+              CloudVault Storage &amp; Logistics Solutions • Yakima &amp; Selah, WA 98942 • Official Statement
             </div>
           </div>
         </div>
