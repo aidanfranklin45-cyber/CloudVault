@@ -493,32 +493,37 @@ export async function handleWebhookRequest(
   console.log(`[StripeWebhook] Processing Event ${event.id} [${event.type}]...`);
 
   // Initialize Supabase Client with service role for full admin access
-  const supabase = customSupabaseClient || createClient(
-    Deno.env.get("SUPABASE_URL") || supabaseUrl,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || supabaseServiceRoleKey,
-    {
-      auth: { persistSession: false },
-    }
-  );
-
-  // 2. Strict Idempotency Check
-  const { data: existingEvent } = await supabase
-    .from("stripe_webhook_events")
-    .select("id, status")
-    .eq("stripe_event_id", event.id)
-    .maybeSingle();
-
-  if (existingEvent && existingEvent.status === "processed") {
-    console.log(`[StripeWebhook] Event ${event.id} already processed. Skipping for idempotency.`);
-    return new Response(JSON.stringify({ received: true, idempotent_skip: true }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
+  // Note: Deno.serve passes (req, info) where info is Deno.ServeHandlerInfo.
+  // Only use customSupabaseClient if it actually has a .from method (e.g. test mock).
+  const isCustomClient = customSupabaseClient && typeof customSupabaseClient.from === "function";
+  const supabase = isCustomClient
+    ? customSupabaseClient
+    : createClient(
+        Deno.env.get("SUPABASE_URL") || supabaseUrl,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || supabaseServiceRoleKey,
+        {
+          auth: { persistSession: false },
+        }
+      );
 
   let eventDiagnostics: Record<string, any> | null = null;
 
   try {
+    // 2. Strict Idempotency Check
+    const { data: existingEvent } = await supabase
+      .from("stripe_webhook_events")
+      .select("id, status")
+      .eq("stripe_event_id", event.id)
+      .maybeSingle();
+
+    if (existingEvent && existingEvent.status === "processed") {
+      console.log(`[StripeWebhook] Event ${event.id} already processed. Skipping for idempotency.`);
+      return new Response(JSON.stringify({ received: true, idempotent_skip: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const dataObject = event.data.object as any;
 
     switch (event.type as string) {
@@ -1498,9 +1503,11 @@ export async function handleWebhookRequest(
   }
 }
 
-export default handleWebhookRequest;
+const webhookEntryHandler = (req: Request) => handleWebhookRequest(req);
+
+export default webhookEntryHandler;
 
 if (import.meta.main) {
-  Deno.serve(handleWebhookRequest);
+  Deno.serve(webhookEntryHandler);
 }
 

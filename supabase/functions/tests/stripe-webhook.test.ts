@@ -439,3 +439,22 @@ Deno.test("Stripe Webhook - Event: customer.subscription.deleted", async () => {
   assertEquals(mockDb.state.cancellations[0].uid, "usr_cloudvault_test_03");
   assertEquals(mockDb.state.cancellations[0].account_status, "canceled");
 });
+
+Deno.test("Stripe Webhook - Runtime Invocation: handles Deno.serve info argument gracefully without crashing", async () => {
+  // When Deno.serve invokes the handler, it passes (req, info) where info is Deno.ServeHandlerInfo
+  // e.g. { remoteAddr: { hostname: "127.0.0.1", port: 54321, transport: "tcp" } }
+  const mockDenoServeInfo = {
+    remoteAddr: { hostname: "127.0.0.1", port: 54321, transport: "tcp" },
+  };
+
+  // Missing signature -> returns 400 cleanly, never crashes with TypeError: supabase.from is not a function
+  const reqNoSig = new Request("https://example.com/stripe-webhook", {
+    method: "POST",
+    body: JSON.stringify({ id: "evt_dummy" }),
+  });
+
+  const res = await handleWebhookRequest(reqNoSig, mockDenoServeInfo as any);
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.error, "Missing stripe-signature header");
+});
