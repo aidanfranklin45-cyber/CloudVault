@@ -5,9 +5,12 @@ package/
 *.tgz
 *.log
 repomix-output.xml
+repomix.config.json
 graphify-out/
 temp*.js
+scratch/
 .DS_Store
+skills-lock.json
 
 # Playwright
 /test-results/

@@ -31,7 +31,18 @@
       "deno.json",
       "deno.lock",
       "playwright.config.*",
-      "repomix.config.json"
+      "repomix.config.json",
+      "repomix-output.xml",
+      "**/*.xml",
+      "**/*.tgz",
+      "**/*.tgz/**",
+      "scratch/**",
+      "**/scratch/**",
+      "package/**",
+      "**/package/**",
+      "skills-lock.json",
+      "*.cursorrules",
+      "AGENTS.md"
     ],
     "headers": [
       {
