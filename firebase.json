@@ -33,7 +33,6 @@
       "playwright.config.*",
       "repomix.config.json",
       "repomix-output.xml",
-      "**/*.xml",
       "**/*.tgz",
       "**/*.tgz/**",
       "scratch/**",
