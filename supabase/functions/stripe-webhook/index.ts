@@ -2,9 +2,9 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "npm:stripe@^14.25.0";
 import { createClient } from "npm:@supabase/supabase-js@2.42.0";
 
-const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
-const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET") || "";
-const connectWebhookSecret = Deno.env.get("STRIPE_CONNECT_WEBHOOK_SECRET") || "";
+const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY") || Deno.env.get("Stripe_Secret_Key") || Deno.env.get("stripe_secret_key") || Deno.env.get("STRIPE_API_KEY") || "";
+const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET") || Deno.env.get("Stripe_Webhook_Secret") || Deno.env.get("stripe_webhook_secret") || "";
+const connectWebhookSecret = Deno.env.get("STRIPE_CONNECT_WEBHOOK_SECRET") || Deno.env.get("Stripe_Connect_Webhook_Secret") || "";
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
@@ -447,8 +447,8 @@ export async function handleWebhookRequest(
   const rawBody = await req.text();
   let event: Stripe.Event;
 
-  const currentWebhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET") || webhookSecret;
-  const currentConnectSecret = Deno.env.get("STRIPE_CONNECT_WEBHOOK_SECRET") || connectWebhookSecret;
+  const currentWebhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET") || Deno.env.get("Stripe_Webhook_Secret") || webhookSecret;
+  const currentConnectSecret = Deno.env.get("STRIPE_CONNECT_WEBHOOK_SECRET") || Deno.env.get("Stripe_Connect_Webhook_Secret") || connectWebhookSecret;
 
   try {
     event = await stripe.webhooks.constructEventAsync(
